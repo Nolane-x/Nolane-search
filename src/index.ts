@@ -93,11 +93,11 @@ async function handleSearch(env: Env, chatId: number, userId: number, query: str
       const payload: TelegramSearchSession = { ownerUserId: userId, chatId, query, mode, results };
       try {
         await env.DB.prepare(
-          \`INSERT INTO search_cache (cache_key, payload, expires_at, created_at)
+          `INSERT INTO search_cache (cache_key, payload, expires_at, created_at)
            VALUES (?, ?, ?, ?)
            ON CONFLICT(cache_key) DO UPDATE SET
-             payload = excluded.payload, expires_at = excluded.expires_at, created_at = excluded.created_at\`,
-        ).bind(\`telegram-search:\${candidateId}\`, JSON.stringify(payload), now + 15 * 60 * 1000, now).run();
+             payload = excluded.payload, expires_at = excluded.expires_at, created_at = excluded.created_at`,
+        ).bind(`telegram-search:${candidateId}`, JSON.stringify(payload), now + 15 * 60 * 1000, now).run();
         sessionId = candidateId;
       } catch (error) {
         console.warn("Search pagination session could not be stored:", error instanceof Error ? error.message : "unknown");
@@ -132,7 +132,7 @@ async function handleSearchCallback(env: Env, callback: TelegramCallbackQuery): 
   const message = callback.message;
   const row = await env.DB.prepare(
     "SELECT payload FROM search_cache WHERE cache_key = ? AND expires_at > ?",
-  ).bind(\`telegram-search:\${sessionId}\`, Date.now()).first<{ payload: string }>();
+  ).bind(`telegram-search:${sessionId}`, Date.now()).first<{ payload: string }>();
   if (!row?.payload) {
     await telegramApi(env, "answerCallbackQuery", {
       callback_query_id: callback.id, text: "Phiên tìm kiếm đã hết hạn. Hãy tìm lại từ khóa.", show_alert: true,
