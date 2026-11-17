@@ -1,4 +1,4 @@
-const HTML = String.raw\`<!doctype html>
+const HTML = String.raw`<!doctype html>
 <html lang="vi">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -82,7 +82,7 @@ document.addEventListener('keydown',function(e){if(e.key==='/'&&document.activeE
 renderRecent();loadChat();
 (async function boot(){var params=new URLSearchParams(location.search);var ticket=params.get('ticket');if(ticket){try{await api('/api/auth/exchange',{method:'POST',headers:authHeaders(),body:JSON.stringify({ticket:ticket})});history.replaceState({},'',location.pathname);showWorkspace()}catch(e){showAuth(e.message);return}}else{try{await api('/api/auth/me');showWorkspace()}catch(e){showAuth()}}})();
 })();
-</script></body></html>\`;
+</script></body></html>`;
 export function webAppResponse(): Response {
   return new Response(HTML, {
     headers: {
