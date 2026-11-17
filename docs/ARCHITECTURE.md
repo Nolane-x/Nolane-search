@@ -17,7 +17,7 @@ Telegram user → Telegram webhook → Cloudflare Worker
 - Enforce owner allowlist.
 - Parse command and select search mode.
 
-Quick Search → Tavily primary → (when unavailable or fewer than four results) parallel Exa/TinyFish/Brave fallback → merge → URL deduplication → heuristic ranking → Telegram reply.
+Quick Search → Tavily primary → (when unavailable or fewer than four results) parallel Exa/TinyFish/Brave/Wikipedia fallback → merge → normalized URL deduplication → token-overlap relevance + freshness + domain-diversity ranking → up to 12 candidates → Telegram pages of five results.
 
 Deep Search → D1 job record → Cloudflare Queue → bounded query expansion → parallel Tavily/Exa/Brave/TinyFish retrieval → deduplicate/rank → optional TinyFish Fetch enrichment of up to five sources → optional OpenRouter synthesis with ordered model fallback → Telegram report.
 - D1 records queued/running/completed/failed state, attempt count and last failure reason.
@@ -34,6 +34,7 @@ Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt polic
 - Brave: optional backup provider.
 - TinyFish Search: optional ranked web/news/academic discovery; TinyFish Fetch extracts clean Markdown from selected URLs and powers /read.
 - GitHub Search API: public repository search; optional user token raises limits.
+- MediaWiki Action API: free English/Vietnamese encyclopedia lookup; the query language is selected heuristically from Vietnamese diacritics. Wikipedia is an optional reference source and is not treated as primary evidence or current news.
 - OpenRouter: optional Deep Search synthesis. OPENROUTER_MODELS supplies ordered model fallbacks; the legacy OPENROUTER_MODEL remains supported.
 
 ## Modes
@@ -43,15 +44,16 @@ Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt polic
 - github: GitHub repositories.
 - research: configured Tavily, Exa and TinyFish academic discovery in parallel.
 - news: Tavily, Brave and TinyFish news search in parallel.
+- wiki: direct Wikipedia reference lookup, English by default and Vietnamese when the query contains Vietnamese diacritics.
 - local: FTS5 search over monitored-page extracts.
 
-The /site command prefixes a query with a site: operator. Coverage depends on the external provider. The /read command uses TinyFish Fetch to extract a single HTTPS page.
+The /site command prefixes a query with a site: operator. Coverage depends on the external provider. The /read command uses TinyFish Fetch to extract a single HTTPS page. General web search only queries fallback providers when Tavily fails or returns fewer than four results; Wikipedia joins that fallback set and is also available directly through /wiki.
 
 ## Ranking
 
-Current ranking is a small transparent heuristic using provider relevance, title/snippet term overlap, small freshness/domain adjustments, normalized URL deduplication and simple domain diversity.
+Current ranking is a transparent heuristic using provider scores, whole-token title/snippet overlap, exact-query title boost, freshness/domain adjustments, normalized URL deduplication and a two-results-per-domain first-pass diversity limit. It retains up to 12 candidates for Telegram pagination.
 
-It is not a learned ranking model, does not rigorously assess source reliability and does not identify syndicated copies at different URLs.
+It is not a learned ranking model, does not rigorously assess source reliability and does not identify syndicated copies at different URLs. Telegram displays five results per page with inline Previous/Next controls. The D1 session is bound to the requesting user and chat and expires after 15 minutes.
 
 ## Data placement
 
@@ -70,6 +72,7 @@ D1 stores compact operational information:
 - Watch definitions and ETag/Last-Modified/hash state.
 - Telegram update IDs for webhook deduplication, pruned after seven days.
 - Search cache with two-minute TTL, pruned during scheduled maintenance.
+- Owner-bound Telegram pagination sessions with a 15-minute TTL in the same table; session entries use a dedicated `telegram-search:` key prefix and are excluded from the cached-query status count.
 - URL/title/domain and a maximum 5 KB text extract per monitored page.
 - FTS5 index over title and short text extract.
 
