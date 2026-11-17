@@ -34,6 +34,8 @@ export interface Env {
   OPENROUTER_MODEL?: string;
   /** Comma- or newline-separated model IDs, tried in priority order by OpenRouter. */
   OPENROUTER_MODELS?: string;
+  /** JSON secret containing provider/key/model routes for the AI gateway. */
+  AI_ROUTER_CONFIG?: string;
   GITHUB_TOKEN?: string;
 }
 
