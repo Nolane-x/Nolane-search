@@ -88,13 +88,15 @@ export interface TelegramMessage {
   text?: string;
 }
 
+export interface TelegramCallbackQuery {
+  id: string;
+  from: TelegramUser;
+  data?: string;
+  message?: TelegramMessage;
+}
+
 export interface TelegramUpdate {
   update_id: number;
   message?: TelegramMessage;
-  callback_query?: {
-    id: string;
-    from: TelegramUser;
-    data?: string;
-    message?: TelegramMessage;
-  };
+  callback_query?: TelegramCallbackQuery;
 }

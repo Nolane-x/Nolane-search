@@ -1,9 +1,15 @@
 import { constantTimeEqual, htmlEscape } from "./security";
 import { performDeepSearch, performSearch } from "./search";
 import { fetchOpenRouterSummary, fetchTinyFishPage, parseOpenRouterModels } from "./providers";
-import { formatDeepReport, formatSearchResults, sendTelegram, sendToArchive } from "./telegram";
+import {
+  buildSearchKeyboard, formatDeepReport, formatSearchResults, SEARCH_PAGE_SIZE,
+  sendSearchPage, sendTelegram, sendToArchive, telegramApi,
+} from "./telegram";
 import { validateWatchUrl, checkWatchTargets } from "./watch";
-import type { DeepSearchJob, Env, ExecutionContext, MessageBatch, SearchMode, TelegramUpdate } from "./types";
+import type {
+  DeepSearchJob, Env, ExecutionContext, MessageBatch, SearchMode, SearchResult,
+  TelegramCallbackQuery, TelegramUpdate,
+} from "./types";
 
 function allowedUser(env: Env, userId: number): boolean {
   const allowed = (env.ALLOWED_TELEGRAM_USER_IDS || "")
@@ -50,7 +56,26 @@ function isDeepSearchJob(value: unknown): value is DeepSearchJob {
 function jobStatusLabel(status: string): string {
   return ({ queued: "Đang chờ", running: "Đang chạy", completed: "Hoàn tất", failed: "Thất bại" } as Record<string, string>)[status] || "Không rõ";
 }
-async function handleSearch(env: Env, chatId: number, query: string, mode: SearchMode): Promise<void> {
+interface TelegramSearchSession {
+  ownerUserId: number;
+  chatId: number;
+  query: string;
+  mode: SearchMode;
+  results: SearchResult[];
+}
+
+const VALID_SEARCH_MODES = new Set<SearchMode>(["web", "tech", "research", "news", "github", "local"]);
+
+function isTelegramSearchSession(value: unknown): value is TelegramSearchSession {
+  if (!value || typeof value !== "object") return false;
+  const session = value as Partial<TelegramSearchSession>;
+  return Number.isSafeInteger(session.ownerUserId) && Number.isSafeInteger(session.chatId) &&
+    typeof session.query === "string" && typeof session.mode === "string" &&
+    VALID_SEARCH_MODES.has(session.mode as SearchMode) && Array.isArray(session.results) &&
+    session.results.length > 0 && session.results.length <= 12;
+}
+
+async function handleSearch(env: Env, chatId: number, userId: number, query: string, mode: SearchMode): Promise<void> {
   if (!query || query.length < 2) {
     await reply(env, chatId, "Hãy nhập truy vấn cần tìm sau lệnh, ví dụ: <code>/search small language models</code>.");
     return;
@@ -61,15 +86,86 @@ async function handleSearch(env: Env, chatId: number, query: string, mode: Searc
   }
   try {
     const results = await performSearch(env, query, mode);
-    const message = formatSearchResults(query, mode, results);
-    await reply(env, chatId, message);
-    await sendToArchive(env, message);
+    let sessionId: string | null = null;
+    if (results.length > SEARCH_PAGE_SIZE) {
+      const candidateId = crypto.randomUUID();
+      const now = Date.now();
+      const payload: TelegramSearchSession = { ownerUserId: userId, chatId, query, mode, results };
+      try {
+        await env.DB.prepare(
+          \`INSERT INTO search_cache (cache_key, payload, expires_at, created_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(cache_key) DO UPDATE SET
+             payload = excluded.payload, expires_at = excluded.expires_at, created_at = excluded.created_at\`,
+        ).bind(\`telegram-search:\${candidateId}\`, JSON.stringify(payload), now + 15 * 60 * 1000, now).run();
+        sessionId = candidateId;
+      } catch (error) {
+        console.warn("Search pagination session could not be stored:", error instanceof Error ? error.message : "unknown");
+      }
+    }
+    const message = formatSearchResults(query, mode, results, 0, SEARCH_PAGE_SIZE);
+    const keyboard = sessionId ? buildSearchKeyboard(sessionId, 0, results.length) : undefined;
+    await sendSearchPage(env, chatId, message, keyboard);
+    await sendToArchive(env, formatSearchResults(query, mode, results, 0, results.length));
   } catch (error) {
     console.error("Search failed:", error instanceof Error ? error.message : "unknown");
     await reply(env, chatId, "Không thể hoàn tất tìm kiếm. Provider có thể đang lỗi hoặc hết quota. Kiểm tra cấu hình API key hoặc thử lại sau.");
   }
 }
 
+async function handleSearchCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
+  const match = callback.data?.match(/^ns:([0-9a-f-]{36}):(\d{1,2})$/i);
+  if (!match) {
+    await telegramApi(env, "answerCallbackQuery", {
+      callback_query_id: callback.id, text: "Nút này không còn hợp lệ.", show_alert: false,
+    });
+    return;
+  }
+  if (!allowedUser(env, callback.from.id) || !callback.message) {
+    await telegramApi(env, "answerCallbackQuery", {
+      callback_query_id: callback.id, text: "Bạn không có quyền mở phiên tìm kiếm này.", show_alert: true,
+    });
+    return;
+  }
+  const sessionId = match[1];
+  const requestedPage = Number(match[2]);
+  const message = callback.message;
+  const row = await env.DB.prepare(
+    "SELECT payload FROM search_cache WHERE cache_key = ? AND expires_at > ?",
+  ).bind(\`telegram-search:\${sessionId}\`, Date.now()).first<{ payload: string }>();
+  if (!row?.payload) {
+    await telegramApi(env, "answerCallbackQuery", {
+      callback_query_id: callback.id, text: "Phiên tìm kiếm đã hết hạn. Hãy tìm lại từ khóa.", show_alert: true,
+    });
+    return;
+  }
+  let session: unknown;
+  try { session = JSON.parse(row.payload); }
+  catch {
+    await telegramApi(env, "answerCallbackQuery", {
+      callback_query_id: callback.id, text: "Dữ liệu phiên tìm kiếm không hợp lệ.", show_alert: true,
+    });
+    return;
+  }
+  if (!isTelegramSearchSession(session) || session.ownerUserId !== callback.from.id ||
+      session.chatId !== message.chat.id) {
+    await telegramApi(env, "answerCallbackQuery", {
+      callback_query_id: callback.id, text: "Phiên tìm kiếm này không thuộc cuộc trò chuyện của bạn.", show_alert: true,
+    });
+    return;
+  }
+  const totalPages = Math.ceil(session.results.length / SEARCH_PAGE_SIZE);
+  const page = Math.max(0, Math.min(totalPages - 1, requestedPage));
+  await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id });
+  await telegramApi(env, "editMessageText", {
+    chat_id: message.chat.id,
+    message_id: message.message_id,
+    text: formatSearchResults(session.query, session.mode, session.results, page, SEARCH_PAGE_SIZE),
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    reply_markup: buildSearchKeyboard(sessionId, page, session.results.length),
+  });
+}
 async function handleCommand(env: Env, chatId: number, userId: number, text: string): Promise<void> {
   const { command, args } = parseCommand(text);
 
@@ -92,7 +188,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   if (command === "help") {
     await reply(env, chatId,
       "<b>Nolane Search commands</b>\n" +
-      "<code>/search từ khóa</code> — tìm web nhanh\n" +
+      "<code>/search từ khóa</code> — tìm web nhanh, có phân trang kết quả\n" +
       "<code>/tech từ khóa</code> — tìm công nghệ + GitHub\n" +
       "<code>/github từ khóa</code> — tìm repository\n" +
       "<code>/research chủ đề</code> — tìm nghiên cứu và nguồn liên quan\n" +
@@ -116,7 +212,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     const [watchCount, pageCount, cacheCount, deepJobRows] = await Promise.all([
       env.DB.prepare("SELECT COUNT(*) AS count FROM watches WHERE active = 1").first<{ count: number }>(),
       env.DB.prepare("SELECT COUNT(*) AS count FROM indexed_pages").first<{ count: number }>(),
-      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ?").bind(Date.now()).first<{ count: number }>(),
+      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ? AND cache_key NOT LIKE 'telegram-search:%'").bind(Date.now()).first<{ count: number }>(),
       env.DB.prepare("SELECT status, COUNT(*) AS count FROM deep_search_jobs WHERE created_at >= ? GROUP BY status")
         .bind(Date.now() - 7 * 24 * 60 * 60 * 1000).all<{ status: string; count: number }>(),
     ]);
@@ -216,12 +312,12 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     return;
   }
 
-  if (command === "search") return handleSearch(env, chatId, args, "web");
-  if (command === "tech") return handleSearch(env, chatId, args, "tech");
-  if (command === "github") return handleSearch(env, chatId, args, "github");
-  if (command === "research") return handleSearch(env, chatId, args, "research");
-  if (command === "news") return handleSearch(env, chatId, args, "news");
-  if (command === "local") return handleSearch(env, chatId, args, "local");
+  if (command === "search") return handleSearch(env, chatId, userId, args, "web");
+  if (command === "tech") return handleSearch(env, chatId, userId, args, "tech");
+  if (command === "github") return handleSearch(env, chatId, userId, args, "github");
+  if (command === "research") return handleSearch(env, chatId, userId, args, "research");
+  if (command === "news") return handleSearch(env, chatId, userId, args, "news");
+  if (command === "local") return handleSearch(env, chatId, userId, args, "local");
 
   if (command === "site") {
     const [domain, ...queryParts] = args.split(/\s+/);
@@ -230,7 +326,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       await reply(env, chatId, "Cú pháp: <code>/site example.com từ khóa</code>");
       return;
     }
-    return handleSearch(env, chatId, `site:${domain} ${query}`, "web");
+    return handleSearch(env, chatId, userId, `site:${domain} ${query}`, "web");
   }
 
   if (command === "deep") {
@@ -329,6 +425,10 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
 
 async function processUpdate(env: Env, update: TelegramUpdate): Promise<void> {
   if (!(await recordUpdate(env, update.update_id))) return;
+  if (update.callback_query) {
+    await handleSearchCallback(env, update.callback_query);
+    return;
+  }
   const message = update.message;
   if (!message?.text || !message.from) return;
   await handleCommand(env, message.chat.id, message.from.id, message.text);

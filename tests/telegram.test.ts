@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDeepReport, formatSearchResults } from "../src/telegram";
+import { buildSearchKeyboard, formatDeepReport, formatSearchResults, SEARCH_PAGE_SIZE } from "../src/telegram";
 import type { SearchResult } from "../src/types";
 
 const result: SearchResult = {
@@ -36,6 +36,30 @@ describe("Telegram HTML formatting", () => {
     for (const tag of ["b", "i", "a", "code"]) {
       expect(countTag(output, tag)).toBe(countTag(output, tag, true));
     }
+  });
+
+  it("paginates search results with stable numbering", () => {
+    const results = Array.from({ length: 12 }, (_, index) => ({
+      ...result, title: `Result ${index + 1}`, url: `https://example.com/${index + 1}`,
+    }));
+    const first = formatSearchResults("topic", "web", results, 0, SEARCH_PAGE_SIZE);
+    const second = formatSearchResults("topic", "web", results, 1, SEARCH_PAGE_SIZE);
+    const third = formatSearchResults("topic", "web", results, 2, SEARCH_PAGE_SIZE);
+    expect(first).toContain("Kết quả 1–5 / 12");
+    expect(first).toContain("1. <a");
+    expect(first).toContain("5. <a");
+    expect(first).not.toContain("6. <a");
+    expect(second).toContain("Kết quả 6–10 / 12");
+    expect(second).toContain("6. <a");
+    expect(third).toContain("Kết quả 11–12 / 12");
+    expect(third).toContain("12. <a");
+  });
+
+  it("creates owner-session pagination callbacks and omits keyboard for one page", () => {
+    const keyboard = buildSearchKeyboard("12345678-1234-1234-1234-123456789abc", 1, 12);
+    expect(keyboard?.inline_keyboard[0]?.map(button => button.text)).toEqual(["⬅️ Trước", "2/3", "Tiếp ➡️"]);
+    expect(keyboard?.inline_keyboard[0]?.[0]?.callback_data).toBe("ns:12345678-1234-1234-1234-123456789abc:0");
+    expect(buildSearchKeyboard("12345678-1234-1234-1234-123456789abc", 0, 5)).toBeUndefined();
   });
 
   it("bounds long Deep Search summaries without breaking markup", () => {

@@ -3,42 +3,61 @@ import type { Env, SearchMode, SearchResult } from "./types";
 import { fetchTinyFishPages, searchBrave, searchExa, searchGitHub, searchTavily, searchTinyFish } from "./providers";
 
 function queryTerms(query: string): string[] {
-  return query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((term) => term.length > 2).slice(0, 20);
+  return [...new Set(query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(term => term.length >= 2))].slice(0, 24);
+}
+
+function textTokens(value: string): Set<string> {
+  return new Set(value.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean));
 }
 
 function rankAndDeduplicate(query: string, items: SearchResult[], mode: SearchMode): SearchResult[] {
   const terms = queryTerms(query);
+  const normalizedQuery = query.trim().toLowerCase();
   const byUrl = new Map<string, SearchResult>();
   for (const item of items) {
     let key: string;
     try { key = normalizeUrl(item.url); } catch { continue; }
     const title = item.title.toLowerCase();
-    const snippet = item.snippet.toLowerCase();
-    const overlap = terms.length ? terms.filter((term) => title.includes(term) || snippet.includes(term)).length / terms.length : 0;
-    const domainBoost = /(^|\.)((gov|edu)(\.[a-z]{2,})?|docs\.[a-z]{2,})$/i.test(item.domain) ? 0.08 : 0;
+    const titleTokens = textTokens(item.title);
+    const snippetTokens = textTokens(item.snippet);
+    const titleHits = terms.filter(term => titleTokens.has(term)).length;
+    const snippetHits = terms.filter(term => snippetTokens.has(term)).length;
+    const overlap = terms.length ? (titleHits / terms.length) * 0.72 + (snippetHits / terms.length) * 0.28 : 0;
+    const phraseBoost = normalizedQuery.length >= 5 && title.includes(normalizedQuery) ? 0.08 : 0;
+    const domainBoost = /(^|\.)((gov|edu)(\.[a-z]{2,})+|docs\.[a-z]{2,})$/i.test(item.domain) ? 0.08 : 0;
     const age = item.publishedAt ? Date.parse(item.publishedAt) : NaN;
-    const freshness = Number.isFinite(age) ? Math.max(0, 1 - (Date.now() - age) / (1000 * 60 * 60 * 24 * 365)) : 0;
+    const freshness = Number.isFinite(age) && age <= Date.now()
+      ? Math.max(0, 1 - (Date.now() - age) / (1000 * 60 * 60 * 24 * 365))
+      : 0;
     const score = Math.max(0, Math.min(1.5,
-      item.score * 0.58 + overlap * 0.30 + domainBoost + (mode === "news" ? freshness * 0.12 : freshness * 0.035),
+      item.score * 0.55 + overlap * 0.32 + phraseBoost + domainBoost +
+      (mode === "news" ? freshness * 0.12 : freshness * 0.035),
     ));
     const normalized = { ...item, score };
     const previous = byUrl.get(key);
     if (!previous || normalized.score > previous.score) byUrl.set(key, normalized);
   }
   const results = [...byUrl.values()].sort((a, b) => b.score - a.score);
-  const domains = new Set<string>();
   const diversified: SearchResult[] = [];
+  const domainCounts = new Map<string, number>();
+  const selectedUrls = new Set<string>();
   for (const item of results) {
-    if (!domains.has(item.domain) || diversified.length < 3) {
-      diversified.push(item);
-      domains.add(item.domain);
-    }
+    if (diversified.length >= 12) break;
+    const count = domainCounts.get(item.domain) ?? 0;
+    if (count >= 2) continue;
+    diversified.push(item);
+    domainCounts.set(item.domain, count + 1);
+    try { selectedUrls.add(normalizeUrl(item.url)); } catch { /* already normalized */ }
   }
   for (const item of results) {
-    if (diversified.length >= 8) break;
-    if (!diversified.some((existing) => existing.url === item.url)) diversified.push(item);
+    if (diversified.length >= 12) break;
+    let key: string;
+    try { key = normalizeUrl(item.url); } catch { continue; }
+    if (selectedUrls.has(key)) continue;
+    diversified.push(item);
+    selectedUrls.add(key);
   }
-  return diversified.slice(0, 8);
+  return diversified;
 }
 
 async function localSearch(env: Env, query: string): Promise<SearchResult[]> {
@@ -51,7 +70,7 @@ async function localSearch(env: Env, query: string): Promise<SearchResult[]> {
        JOIN indexed_pages p ON p.id = indexed_pages_fts.rowid
       WHERE indexed_pages_fts MATCH ?
       ORDER BY bm25(indexed_pages_fts)
-      LIMIT 8`,
+      LIMIT 12`,
   ).bind(safeQuery).all<{ title: string; url: string; domain: string; snippet: string }>();
   return result.results.map((item) => ({
     title: item.title, url: item.url, domain: item.domain, snippet: item.snippet,

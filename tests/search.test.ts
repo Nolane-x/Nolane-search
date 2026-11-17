@@ -43,6 +43,7 @@ describe("web search fallback", () => {
     const results = await performSearch(env as never, "Cloudflare Workers", "web");
     expect(results.length).toBeGreaterThan(0);
     expect(results.every(item => item.provider === "Exa")).toBe(true);
+    expect(results.length).toBeLessThanOrEqual(12);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
