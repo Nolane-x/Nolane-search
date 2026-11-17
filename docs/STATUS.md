@@ -1,13 +1,13 @@
 # Verified Project Status
 
-Last updated: 2026-11-17. This file records observed state, not intended state. Deep Search reliability changes from commit aefca595ef0cd7f16ab4d6d42c9988e3934f2bb4 passed CI; the subsequent retention/status-detail patch is pending CI. Deployment remains blocked by the missing Cloudflare API token.
+Last updated: 2026-11-17. This file records observed state, not intended state. Commit 35afca2e133b770d2e244bc7e9a2c4b38f879127 passed CI: typecheck, unit tests and Cloudflare build. Deployment remains blocked at required-secret validation because CLOUDFLARE_API_TOKEN is empty.
 
 ## GitHub
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: main
-- Latest source implementation commit: a2452ca030d000e0de3229ee4af80d5cb0035c09
-- Documentation status commit: c7a3b64141f324b96513c267411acc156594345d
+- Latest source implementation commit: 35afca2e133b770d2e244bc7e9a2c4b38f879127
+- This commit includes the latest docs/STATUS.md update and D1 migration 0002.
 - Repository is public; connected GitHub integration has admin/push permission.
 
 ## CI verification
@@ -18,9 +18,10 @@ GitHub Actions verification:
 |---|---|---|
 | CI run 44054361397 (commit 47956d2) | PASS | Checkout, Node setup, dependency install, TypeScript typecheck, unit tests and Cloudflare build |
 | CI run 44054753094 (commit aefca59) | PASS | Same checks after isolating Queue enqueue from Telegram acknowledgement |
-| Deploy run 44054753269 | BLOCKED | Stopped at the first secret validation check; no migration/deploy/webhook step ran |
+| CI run 44054989848 (commit 35afca2) | PASS | Same checks after adding job failure detail and 30-day retention |
+| Deploy run 44054989671 | BLOCKED | Stopped at the first required-secret validation check; no migration/deploy/webhook step ran |
 
-The latest run confirms the same blocker previously observed. The validation loop exits on the first missing secret, so this run does not prove whether the other required values are present. A new CI run for the reliability changes must pass before release.
+The latest run confirms the same blocker previously observed. The validation loop exits on the first missing secret, so this run does not prove whether the other required values are present. The latest source commit passed all CI checks. The remaining technical blocker is deployment credentials, not a failing build or test.
 
 The deploy workflow did not proceed to Worker deployment, runtime secret upload or Telegram webhook registration. The bot is not deployed or live.
 
@@ -38,7 +39,7 @@ Account ID: 1172c01120a2470aa12f81e5b4778556
 | R2 | — | — | Not enabled; excluded from MVP |
 | KV | — | — | Not created; not used in MVP |
 
-D1 schema tables confirmed in APAC: watches, telegram_updates, indexed_pages, indexed_pages_fts (FTS5), search_cache and schema_migrations. The migration script will see 0001_core.sql in schema_migrations and skip it.
+D1 schema tables confirmed in APAC before deployment of this commit: watches, telegram_updates, indexed_pages, indexed_pages_fts (FTS5), search_cache and schema_migrations. Migration 0002_deep_search_jobs.sql is committed but not yet applied; 0001_core.sql is already recorded and will be skipped by the runner.
 Existing unrelated Workers in the account were not modified.
 
 ## Immediate blocker
@@ -66,7 +67,7 @@ Optional:
 
 - Migration 0002_deep_search_jobs.sql has not yet been applied to the live D1 database.
 - The updated main-queue retry and DLQ consumer have not yet been deployed or exercised.
-- The current commit adds 30-day pruning for completed/failed Deep Search job records; this cleanup behavior has not yet been deployed.
+- The current source commit adds 30-day pruning for completed/failed Deep Search job records; this cleanup behavior has not yet been deployed.
 - Deployment with a real Cloudflare API token.
 - Runtime secret upload.
 - Telegram webhook and command registration.
