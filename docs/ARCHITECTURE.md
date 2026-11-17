@@ -17,7 +17,7 @@ Telegram user → Telegram webhook → Cloudflare Worker
 - Enforce owner allowlist.
 - Parse command and select search mode.
 
-Quick Search → provider adapters → merge → URL deduplication → heuristic ranking → Telegram reply.
+Quick Search → Tavily primary → (when unavailable or fewer than four results) parallel Exa/TinyFish/Brave fallback → merge → URL deduplication → heuristic ranking → Telegram reply.
 
 Deep Search → D1 job record → Cloudflare Queue → bounded query expansion → parallel Tavily/Exa/Brave/TinyFish retrieval → deduplicate/rank → optional TinyFish Fetch enrichment of up to five sources → optional OpenRouter synthesis with ordered model fallback → Telegram report.
 - D1 records queued/running/completed/failed state, attempt count and last failure reason.
@@ -25,7 +25,7 @@ Deep Search → D1 job record → Cloudflare Queue → bounded query expansion �
 - Duplicate deliveries do not re-run jobs that are already completed or currently claimed.
 - /jobs lists recent work; /retry JOB_ID creates a new job from a failed query.
 
-Website monitoring → D1 watch metadata → 30-minute Cron → bounded HTTP checks → content hash → compact D1 extract/FTS5 → optional Telegram snapshot document and change alert.
+Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt policy check → bounded HTTP checks → content hash → compact D1 extract/FTS5 → optional Telegram snapshot document and change alert.
 
 ## Provider adapters
 
@@ -38,7 +38,7 @@ Website monitoring → D1 watch metadata → 30-minute Cron → bounded HTTP che
 
 ## Modes
 
-- web: Tavily first, then TinyFish and Brave fallback.
+- web: Tavily first; if it fails or returns fewer than four results, Exa, TinyFish and Brave are queried in parallel where configured. Results are merged before deduplication and ranking.
 - tech: Tavily, TinyFish and GitHub in parallel.
 - github: GitHub repositories.
 - research: configured Tavily, Exa and TinyFish academic discovery in parallel.
@@ -96,7 +96,7 @@ R2 is not enabled in the linked account and neither R2 nor KV is required for th
 - HTTPS public hostnames only; credentials, IP literals, custom ports and obvious local hosts are rejected.
 - Redirects are manual and limited to three hops; each redirect is checked.
 - ETag and Last-Modified are used where present.
-- At most 12 due pages per Cron invocation.
+- At most 12 due pages per Cron invocation. Applicable robots.txt user-agent groups are combined; the longest matching rule wins and Allow wins an equal-length tie. A 404/410 robots file means no policy was published; 401/403/429, 5xx and network/read failures defer the watch rather than fetching the page.
 - Response read cap is 500 KB; FTS extract cap is 5 KB.
 - First successful check establishes a baseline; later hash changes trigger alerts.
 - JavaScript-rendered apps, authenticated pages and anti-bot protected sites are not supported.
