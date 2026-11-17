@@ -2,6 +2,88 @@ import { htmlEscape, sha256Hex, isSafePublicUrl, normalizeUrl } from "./security
 import { sendArchiveDocument, sendTelegram, sendToArchive } from "./telegram";
 import type { Env } from "./types";
 
+export interface RobotsRule {
+  allow: boolean;
+  pattern: string;
+  specificity: number;
+  regex: RegExp;
+}
+
+interface RobotsGroup {
+  agents: string[];
+  rules: Array<{ allow: boolean; pattern: string }>;
+}
+
+function compileRobotsPattern(pattern: string): RegExp {
+  const anchored = pattern.endsWith("$");
+  const sourcePattern = anchored ? pattern.slice(0, -1) : pattern;
+  const regexMeta = new Set([".", "+", "?", "^", "$", "{", "}", "(", ")", "|", "[", "]", "\\\\"]);
+  let source = "^";
+  for (const character of sourcePattern) {
+    if (character === "*") source += ".*";
+    else source += regexMeta.has(character) ? "\\\\" + character : character;
+  }
+  if (anchored) source += "$";
+  return new RegExp(source);
+}
+
+/** Parse applicable RFC 9309 Allow/Disallow groups for the NolaneSearchBot product token. */
+export function parseRobotsRules(content: string, userAgent = "NolaneSearchBot"): RobotsRule[] {
+  const groups: RobotsGroup[] = [];
+  let current: RobotsGroup | null = null;
+  let hasRules = false;
+
+  for (const rawLine of content.split(/\\r?\\n/)) {
+    const line = rawLine.replace(/\\s*#.*$/, "").trim();
+    if (!line) continue;
+    const separator = line.indexOf(":");
+    if (separator < 0) continue;
+    const directive = line.slice(0, separator).trim().toLowerCase();
+    const value = line.slice(separator + 1).trim();
+
+    if (directive === "user-agent") {
+      if (current && hasRules) {
+        groups.push(current);
+        current = null;
+        hasRules = false;
+      }
+      current ??= { agents: [], rules: [] };
+      if (value) current.agents.push(value.toLowerCase());
+      continue;
+    }
+    if (!current?.agents.length || (directive !== "allow" && directive !== "disallow")) continue;
+    hasRules = true;
+    // An empty Disallow means no restriction; empty rules are ignored.
+    if (!value.startsWith("/")) continue;
+    current.rules.push({ allow: directive === "allow", pattern: value });
+  }
+
+  if (current?.agents.length) groups.push(current);
+  const token = userAgent.toLowerCase();
+  const matching = groups.filter(group => group.agents.some(agent => agent !== "*" && token.includes(agent)));
+  const selected = matching.length ? matching : groups.filter(group => group.agents.includes("*"));
+
+  return selected.flatMap(group => group.rules).map(rule => ({
+    ...rule,
+    specificity: new TextEncoder().encode(rule.pattern.replace(/[\\*$]/g, "")).length,
+    regex: compileRobotsPattern(rule.pattern),
+  }));
+}
+
+/** Longest matching rule wins; Allow wins an equal-length tie. */
+export function isAllowedByRobots(urlInput: string | URL, rules: RobotsRule[]): boolean {
+  const url = typeof urlInput === "string" ? new URL(urlInput) : urlInput;
+  const pathAndQuery = url.pathname + url.search;
+  let best: RobotsRule | null = null;
+  for (const rule of rules) {
+    if (!rule.regex.test(pathAndQuery)) continue;
+    if (!best || rule.specificity > best.specificity ||
+      (rule.specificity === best.specificity && rule.allow && !best.allow)) best = rule;
+  }
+  return best?.allow ?? true;
+}
+
+
 interface WatchRow {
   id: number;
   chat_id: string;
@@ -40,6 +122,22 @@ async function fetchSafe(urlInput: string, etag?: string | null, lastModified?: 
     return response;
   }
   throw new Error("Too many redirects.");
+}
+
+async function loadRobotsPolicy(origin: string): Promise<RobotsRule[] | null> {
+  try {
+    const response = await fetchSafe(origin + "/robots.txt");
+    if (response.status === 404 || response.status === 410) return [];
+    // Conservative handling for auth blocks, rate limits, server failures and unreadable policies.
+    if ([401, 403, 429].includes(response.status) || response.status >= 500 || response.status === 304) return null;
+    // Other 4xx responses mean the robots resource is unavailable under RFC 9309.
+    if (response.status >= 400) return [];
+    if (!response.ok) return null;
+    return parseRobotsRules(await readLimited(response, 64_000));
+  } catch (error) {
+    console.warn("Robots policy could not be loaded; deferring watch:", error instanceof Error ? error.message : "unknown");
+    return null;
+  }
 }
 
 async function readLimited(response: Response, maxBytes = 500_000): Promise<string> {
@@ -93,8 +191,24 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
   ).all<WatchRow>();
   let checked = 0;
   let changed = 0;
+  // Fetch robots.txt once per origin for this scheduled invocation.
+  const robotsPolicies = new Map<string, Promise<RobotsRule[] | null>>();
   for (const watch of rows.results) {
     try {
+      const origin = new URL(watch.url).origin;
+      let policyPromise = robotsPolicies.get(origin);
+      if (!policyPromise) {
+        policyPromise = loadRobotsPolicy(origin);
+        robotsPolicies.set(origin, policyPromise);
+      }
+      const robotsRules = await policyPromise;
+      if (robotsRules === null || !isAllowedByRobots(watch.url, robotsRules)) {
+        // -2 = disallowed by robots.txt; -3 = policy unavailable, so the check is deferred.
+        await env.DB.prepare("UPDATE watches SET last_checked_at = ?, last_status = ? WHERE id = ?")
+          .bind(new Date().toISOString(), robotsRules === null ? -3 : -2, watch.id).run();
+        checked += 1;
+        continue;
+      }
       const response = await fetchSafe(watch.url, watch.etag, watch.last_modified);
       const now = new Date().toISOString();
       if (response.status === 304) {
