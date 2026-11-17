@@ -196,7 +196,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/wiki từ khóa</code> — tra cứu Wikipedia Anh/Việt\n" +
       "<code>/ai câu hỏi</code> — hỏi AI qua router nhiều provider\n" +
       "<code>/ask câu hỏi</code> — tìm web rồi nhờ AI tổng hợp có nguồn\n" +
-      "<code>/ai-status</code> — xem provider/model đã cấu hình\n" +
+      "<code>/ai_status</code> — xem provider/model đã cấu hình\n" +
       "<code>/models</code> — danh sách model AI trong router\n" +
       "<code>/research chủ đề</code> — tìm nghiên cứu và nguồn liên quan\n" +
       "<code>/news chủ đề</code> — tìm tin tức\n" +
@@ -338,7 +338,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   }
 
 
-  if (command === "ai-status" || command === "models") {
+  if (command === "ai_status" || command === "models") {
     const status = getAiRouterStatus(env);
     if (!status.configured) {
       await reply(env, chatId,
@@ -394,7 +394,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       await reply(env, chatId, "<b>Nolane AI</b>\n" + routeLine + "\n\n" + boundedHtml(result.text, 10_000));
     } catch (error) {
       console.error("Direct AI request failed:", error instanceof Error ? error.message : "unknown");
-      await reply(env, chatId, "Không có AI route nào hoàn tất được yêu cầu. Hãy kiểm tra /ai-status, model access, API key và quota.");
+      await reply(env, chatId, "Không có AI route nào hoàn tất được yêu cầu. Hãy kiểm tra /ai_status, model access, API key và quota.");
     }
     return;
   }
@@ -439,7 +439,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       await reply(env, chatId, message);
     } catch (error) {
       console.error("/ask failed:", error instanceof Error ? error.message : "unknown");
-      await reply(env, chatId, "Không thể hoàn tất /ask. Hãy kiểm tra /ai-status, cấu hình provider và quota tìm kiếm.");
+      await reply(env, chatId, "Không thể hoàn tất /ask. Hãy kiểm tra /ai_status, cấu hình provider và quota tìm kiếm.");
     }
     return;
   }
