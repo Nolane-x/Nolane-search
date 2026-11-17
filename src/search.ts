@@ -1,4 +1,5 @@
 import { normalizeUrl, sha256Hex } from "./security";
+import { applySearchFilters, parseSearchQuery } from "./query";
 import type { Env, SearchMode, SearchResult } from "./types";
 import { fetchTinyFishPages, searchBrave, searchExa, searchGitHub, searchTavily, searchTinyFish, searchWikipedia } from "./providers";
 
@@ -98,13 +99,14 @@ async function cachedSearch(env: Env, query: string, mode: SearchMode): Promise<
     try { return JSON.parse(cached.payload) as SearchResult[]; } catch { /* discard malformed cache row */ }
   }
 
+  const parsedQuery = parseSearchQuery(query);
   let results: SearchResult[] = [];
   if (mode === "github") {
     results = await searchGitHub(env, query);
   } else if (mode === "wiki") {
     results = await searchWikipedia(query);
   } else if (mode === "local") {
-    results = await localSearch(env, query);
+    results = await localSearch(env, parsedQuery.localQuery);
   } else if (mode === "research") {
     results = await settledResults([
       ...(env.TAVILY_API_KEY ? [searchTavily(env, query)] : []),
@@ -153,7 +155,8 @@ async function cachedSearch(env: Env, query: string, mode: SearchMode): Promise<
     }
   }
 
-  const ranked = rankAndDeduplicate(query, results, mode);
+  const filtered = applySearchFilters(parsedQuery, results);
+  const ranked = rankAndDeduplicate(parsedQuery.rankingQuery || query, filtered, mode);
   if (ranked.length) {
     await env.DB.prepare(
       `INSERT INTO search_cache (cache_key, payload, expires_at, created_at)
