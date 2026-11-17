@@ -20,6 +20,14 @@ async function query(sql, params = []) {
   const data = await response.json();
   if (!response.ok || !data.success) {
     const message = (data.errors || []).map((item) => item.message).join("; ");
+    if (response.status === 403) {
+      throw new Error(
+        `D1 access denied (403). Check that CLOUDFLARE_API_TOKEN is scoped to account ${accountId} and includes Account > D1 > Edit. The token exists, but Cloudflare rejected this D1 operation. Original response: ${message || "no additional details"}`,
+      );
+    }
+    if (response.status === 401) {
+      throw new Error("Cloudflare rejected CLOUDFLARE_API_TOKEN (401). Replace it with a valid scoped API token; do not use the Global API Key.");
+    }
     throw new Error(`D1 query failed (${response.status}): ${message || "unknown Cloudflare error"}`);
   }
   return data.result?.[0]?.results ?? [];
