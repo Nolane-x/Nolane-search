@@ -8,7 +8,7 @@ const commands = [
   { command: "wiki", description: "Tra cứu Wikipedia Anh/Việt" },
   { command: "ai", description: "Hỏi AI qua router nhiều nhà cung cấp" },
   { command: "ask", description: "Tìm web rồi tổng hợp bằng AI" },
-  { command: "ai-status", description: "Trạng thái AI router và models" },
+  { command: "ai_status", description: "Trang thai AI router va models" },
   { command: "models", description: "Danh sách model AI" },
   { command: "research", description: "Tìm tài liệu nghiên cứu" },
   { command: "news", description: "Tìm tin tức" },
