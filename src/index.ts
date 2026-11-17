@@ -23,6 +23,16 @@ async function reply(env: Env, chatId: number, message: string): Promise<void> {
   await sendTelegram(env, chatId, message);
 }
 
+function boundedHtml(value: string, maxEscapedLength: number): string {
+  let output = "";
+  for (const character of value) {
+    const escaped = htmlEscape(character);
+    if (output.length + escaped.length > maxEscapedLength) return output + "…";
+    output += escaped;
+  }
+  return output;
+}
+
 async function recordUpdate(env: Env, updateId: number): Promise<boolean> {
   const result = await env.DB.prepare("INSERT OR IGNORE INTO telegram_updates (update_id) VALUES (?)")
     .bind(String(updateId)).run();
@@ -194,8 +204,10 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     }
     try {
       const page = await fetchTinyFishPage(env, validated.url.toString());
-      const body = htmlEscape(page.text.slice(0, 5_500));
-      await reply(env, chatId, `<b>${htmlEscape(page.title)}</b>\n<a href="${htmlEscape(page.finalUrl)}">Mở trang gốc</a>\n\n<pre>${body}</pre>`);
+      const title = boundedHtml(page.title, 180);
+      const url = boundedHtml(page.finalUrl, 260);
+      const body = boundedHtml(page.text, 3000);
+      await reply(env, chatId, `<b>${title}</b>\n<a href="${url}">Mở trang gốc</a>\n\n<pre>${body}</pre>`);
     } catch (error) {
       console.error("TinyFish read failed:", error instanceof Error ? error.message : "unknown");
       await reply(env, chatId, "TinyFish không thể đọc trang này. Trang có thể chặn truy cập, hết quota hoặc API key chưa hợp lệ.");
