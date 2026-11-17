@@ -19,7 +19,7 @@ Telegram user → Telegram webhook → Cloudflare Worker
 
 Quick Search → provider adapters → merge → URL deduplication → heuristic ranking → Telegram reply.
 
-Deep Search → D1 job record → Cloudflare Queue → bounded query expansion → parallel provider retrieval → merge → optional OpenRouter synthesis → Telegram report.
+Deep Search → D1 job record → Cloudflare Queue → bounded query expansion → parallel Tavily/Exa/Brave/TinyFish retrieval → deduplicate/rank → optional TinyFish Fetch enrichment of up to five sources → optional OpenRouter synthesis with ordered model fallback → Telegram report.
 - D1 records queued/running/completed/failed state, attempt count and last failure reason.
 - Queue deliveries use bounded retry delays; exhausted jobs enter the dead-letter queue and notify the originating user.
 - Duplicate deliveries do not re-run jobs that are already completed or currently claimed.
@@ -32,18 +32,20 @@ Website monitoring → D1 watch metadata → 30-minute Cron → bounded HTTP che
 - Tavily: primary general web search and news.
 - Exa: optional semantic discovery, especially research.
 - Brave: optional backup provider.
+- TinyFish Search: optional ranked web/news/academic discovery; TinyFish Fetch extracts clean Markdown from selected URLs and powers /read.
 - GitHub Search API: public repository search; optional user token raises limits.
+- OpenRouter: optional Deep Search synthesis. OPENROUTER_MODELS supplies ordered model fallbacks; the legacy OPENROUTER_MODEL remains supported.
 
 ## Modes
 
-- web: Tavily first, Brave fallback.
-- tech: Tavily and GitHub in parallel.
+- web: Tavily first, then TinyFish and Brave fallback.
+- tech: Tavily, TinyFish and GitHub in parallel.
 - github: GitHub repositories.
-- research: configured Tavily and Exa in parallel.
-- news: Tavily news, Brave fallback.
+- research: configured Tavily, Exa and TinyFish academic discovery in parallel.
+- news: Tavily, Brave and TinyFish news search in parallel.
 - local: FTS5 search over monitored-page extracts.
 
-The /site command prefixes a query with a site: operator. Coverage depends on the external provider.
+The /site command prefixes a query with a site: operator. Coverage depends on the external provider. The /read command uses TinyFish Fetch to extract a single HTTPS page.
 
 ## Ranking
 

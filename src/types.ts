@@ -28,8 +28,12 @@ export interface Env {
   TELEGRAM_ARCHIVE_CHAT_ID?: string;
   EXA_API_KEY?: string;
   BRAVE_SEARCH_API_KEY?: string;
+  TINYFISH_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
+  /** Legacy single-model setting. Kept for backward compatibility. */
   OPENROUTER_MODEL?: string;
+  /** Comma- or newline-separated model IDs, tried in priority order by OpenRouter. */
+  OPENROUTER_MODELS?: string;
   GITHUB_TOKEN?: string;
 }
 

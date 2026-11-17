@@ -37,8 +37,10 @@ Cloudflare account ID is already recorded in cloudflare.config.ts and the workfl
 |---|---|
 | EXA_API_KEY | Semantic research discovery |
 | BRAVE_SEARCH_API_KEY | Backup web/news search |
+| TINYFISH_API_KEY | TinyFish Search and Fetch; enables /read and Deep Search source enrichment |
 | OPENROUTER_API_KEY | AI synthesis for Deep Search |
-| OPENROUTER_MODEL | Model slug in your OpenRouter account; required only with OpenRouter key |
+| OPENROUTER_MODEL | Legacy single model ID; still supported |
+| OPENROUTER_MODELS | Optional comma- or newline-separated model IDs, tried in priority order |
 | GITHUB_TOKEN_SEARCH | Optional authenticated GitHub Search API |
 
 The workflow maps GITHUB_TOKEN_SEARCH to Worker secret GITHUB_TOKEN. It does not store a short-lived GitHub Actions job token in the deployed Worker.
@@ -54,6 +56,6 @@ No R2 credentials, KV namespace ID, VPS SSH key or local computer credentials ar
 3. When deploy succeeds, message the bot with /id.
 4. Add the numeric ID to ALLOWED_TELEGRAM_USER_IDS and redeploy.
 5. Optionally create a private archive channel and add TELEGRAM_ARCHIVE_CHAT_ID.
-6. Add optional providers only when needed.
+6. Add optional providers only when needed. For TinyFish, create a key at https://agent.tinyfish.ai/api-keys and add it as TINYFISH_API_KEY. For multi-model OpenRouter, set OPENROUTER_API_KEY and add OPENROUTER_MODELS, for example: provider-a/model-id, provider-b/model-id. Use model IDs shown in your OpenRouter model catalogue. Keep OPENROUTER_MODEL if you want the legacy single-model setting; OPENROUTER_MODELS takes priority and the legacy value is appended as a fallback if not duplicated.
 
 An existing secret can still be invalid or lack permissions. Deployment and runtime checks are the source of truth.

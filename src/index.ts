@@ -1,6 +1,6 @@
 import { constantTimeEqual, htmlEscape } from "./security";
 import { performDeepSearch, performSearch } from "./search";
-import { fetchOpenRouterSummary } from "./providers";
+import { fetchOpenRouterSummary, fetchTinyFishPage, parseOpenRouterModels } from "./providers";
 import { formatDeepReport, formatSearchResults, sendTelegram, sendToArchive } from "./telegram";
 import { validateWatchUrl, checkWatchTargets } from "./watch";
 import type { DeepSearchJob, Env, ExecutionContext, MessageBatch, SearchMode, TelegramUpdate } from "./types";
@@ -21,6 +21,16 @@ function parseCommand(text: string): { command: string; args: string } {
 
 async function reply(env: Env, chatId: number, message: string): Promise<void> {
   await sendTelegram(env, chatId, message);
+}
+
+function boundedHtml(value: string, maxEscapedLength: number): string {
+  let output = "";
+  for (const character of value) {
+    const escaped = htmlEscape(character);
+    if (output.length + escaped.length > maxEscapedLength) return output + "…";
+    output += escaped;
+  }
+  return output;
 }
 
 async function recordUpdate(env: Env, updateId: number): Promise<boolean> {
@@ -89,6 +99,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/news chủ đề</code> — tìm tin tức\n" +
       "<code>/deep câu hỏi</code> — tìm nhiều lượt, tổng hợp nguồn bất đồng bộ\n" +
       "<code>/site domain.com từ khóa</code> — giới hạn tìm kiếm vào website\n" +
+      "<code>/read https://example.com</code> — đọc nội dung trang bằng TinyFish\n" +
       "<code>/local từ khóa</code> — tìm trong trang đã được index\n" +
       "<code>/watch https://example.com</code> — theo dõi một trang\n" +
       "<code>/watches</code> — danh sách đang theo dõi\n" +
@@ -117,7 +128,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       `Web search: ${env.TAVILY_API_KEY ? "ready" : "missing"}\n` +
       `Semantic search: ${env.EXA_API_KEY ? "ready" : "not configured"}\n` +
       `Backup search: ${env.BRAVE_SEARCH_API_KEY ? "ready" : "not configured"}\n` +
-      `AI synthesis: ${env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL ? "ready" : "not configured"}\n` +
+      `TinyFish Search/Fetch: ${env.TINYFISH_API_KEY ? "ready" : "not configured"}\n` +
+      `AI synthesis: ${env.OPENROUTER_API_KEY && parseOpenRouterModels(env).length ? `ready (${parseOpenRouterModels(env).length} model(s))` : "not configured"}\n` +
       `Telegram archive: ${env.TELEGRAM_ARCHIVE_CHAT_ID ? "configured" : "not configured"}\n` +
       `Active watches: ${watchCount?.count ?? 0}\n` +
       `Indexed pages: ${pageCount?.count ?? 0}\n` +
@@ -180,6 +192,29 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     }
     return;
   }
+  if (command === "read") {
+    const validated = validateWatchUrl(args);
+    if (!validated) {
+      await reply(env, chatId, "Cú pháp: <code>/read https://example.com</code>. Chỉ hỗ trợ URL HTTPS public hợp lệ.");
+      return;
+    }
+    if (!env.TINYFISH_API_KEY) {
+      await reply(env, chatId, "Lệnh /read cần cấu hình GitHub Secret <code>TINYFISH_API_KEY</code> rồi triển khai lại.");
+      return;
+    }
+    try {
+      const page = await fetchTinyFishPage(env, validated.url.toString());
+      const title = boundedHtml(page.title, 180);
+      const url = boundedHtml(validated.url.toString(), 260);
+      const body = boundedHtml(page.text, 3000);
+      await reply(env, chatId, `<b>${title}</b>\n<a href="${url}">Mở trang gốc</a>\n\n<pre>${body}</pre>`);
+    } catch (error) {
+      console.error("TinyFish read failed:", error instanceof Error ? error.message : "unknown");
+      await reply(env, chatId, "TinyFish không thể đọc trang này. Trang có thể chặn truy cập, hết quota hoặc API key chưa hợp lệ.");
+    }
+    return;
+  }
+
   if (command === "search") return handleSearch(env, chatId, args, "web");
   if (command === "tech") return handleSearch(env, chatId, args, "tech");
   if (command === "github") return handleSearch(env, chatId, args, "github");
@@ -404,8 +439,10 @@ export default {
             tavily: Boolean(env.TAVILY_API_KEY),
             exa: Boolean(env.EXA_API_KEY),
             brave: Boolean(env.BRAVE_SEARCH_API_KEY),
+            tinyfish: Boolean(env.TINYFISH_API_KEY),
             github: true,
-            openrouter: Boolean(env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL),
+            openrouter: Boolean(env.OPENROUTER_API_KEY && parseOpenRouterModels(env).length),
+            openrouterModels: parseOpenRouterModels(env).length,
           },
           archiveEnabled: Boolean(env.TELEGRAM_ARCHIVE_CHAT_ID),
         });
