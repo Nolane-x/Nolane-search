@@ -335,6 +335,60 @@ async function notifyDeadLetter(env: Env, job: DeepSearchJob): Promise<void> {
   await sendToArchive(env, `<b>Deep Search dead-letter</b>\n${notice}`);
 }
 
+async function recoverStaleDeepJobs(env: Env): Promise<number> {
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  const stale = await env.DB.prepare(
+    `SELECT id, chat_id, user_id, query, created_at, status, updated_at
+       FROM deep_search_jobs
+      WHERE status IN ('queued', 'running') AND updated_at <= ?
+      ORDER BY updated_at ASC
+      LIMIT 10`,
+  ).bind(cutoff).all<{
+    id: string;
+    chat_id: string;
+    user_id: string;
+    query: string;
+    created_at: number;
+    status: "queued" | "running";
+    updated_at: number;
+  }>();
+
+  let recovered = 0;
+  for (const row of stale.results) {
+    const now = Date.now();
+    const claim = await env.DB.prepare(
+      `UPDATE deep_search_jobs
+          SET status = 'queued', updated_at = ?,
+              last_error = CASE
+                WHEN status = 'running' THEN 'Recovered after an interrupted or stale Queue delivery'
+                ELSE last_error
+              END
+        WHERE id = ? AND status = ? AND updated_at = ?`,
+    ).bind(now, row.id, row.status, row.updated_at).run();
+
+    if ((claim.meta?.changes ?? 0) === 0) continue;
+
+    const job: DeepSearchJob = {
+      id: row.id,
+      chatId: Number(row.chat_id),
+      userId: Number(row.user_id),
+      query: row.query,
+      createdAt: row.created_at,
+    };
+    try {
+      await env.SEARCH_JOBS.send(job);
+      recovered += 1;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message.slice(0, 300) : "Queue recovery send failed";
+      await env.DB.prepare(
+        "UPDATE deep_search_jobs SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ? AND status = 'queued'",
+      ).bind(reason, Date.now(), row.id).run();
+      console.error("Stale Deep Search recovery failed", row.id, reason);
+    }
+  }
+  return recovered;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -406,12 +460,14 @@ export default {
 
   async scheduled(_controller: { cron: string; scheduledTime: number }, env: Env): Promise<void> {
     try {
+      const recovered = await recoverStaleDeepJobs(env);
       const stats = await checkWatchTargets(env);
       await env.DB.prepare("DELETE FROM search_cache WHERE expires_at <= ?").bind(Date.now()).run();
       await env.DB.prepare("DELETE FROM telegram_updates WHERE processed_at < datetime('now', '-7 days')").run();
       await env.DB.prepare(
         "DELETE FROM deep_search_jobs WHERE status IN ('completed', 'failed') AND created_at < ?",
       ).bind(Date.now() - 30 * 24 * 60 * 60 * 1000).run();
+      if (recovered) console.log("Recovered stale Deep Search jobs", recovered);
       if (stats.checked) console.log("Watch run complete", stats);
     } catch (error) {
       console.error("Scheduled maintenance failed:", error instanceof Error ? error.message : "unknown");

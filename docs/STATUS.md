@@ -1,85 +1,96 @@
 # Verified Project Status
 
-Last updated: 2026-11-17. This file records observed state, not intended state. Commit 35afca2e133b770d2e244bc7e9a2c4b38f879127 passed CI: typecheck, unit tests and Cloudflare build. Deployment remains blocked at required-secret validation because CLOUDFLARE_API_TOKEN is empty.
+Last updated: 2026-11-17. This file distinguishes verified live resources from features that still require user credentials or end-to-end testing.
 
 ## GitHub
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: main
-- Latest source implementation commit: 35afca2e133b770d2e244bc7e9a2c4b38f879127
-- Latest repository HEAD before this documentation refresh: ec753fe6487d05166965e45ae1efb9010c0c0840
-- D1 migration 0002 is included in the source implementation commit; this migration has not been applied to the live D1 database yet.
-- Repository is public; connected GitHub integration has admin/push permission.
+- Latest implementation commit before stale-job recovery: 68655908d7e2484a37dde693191bc22e4566f387
+- Repository is public; the connected GitHub integration has admin/push permission.
+- `.github/workflows/export-worker.yml` builds the Cloudflare output and publishes it to the `cloudflare-build` branch. A later workflow run performs a live `/health` smoke test.
 
-## CI verification
+## CI and deployment checks
 
-GitHub Actions verification:
-
-| Run | Result | Verified steps |
+| GitHub Actions run | Result | Verified scope |
 |---|---|---|
-| CI run 44054361397 (commit 47956d2) | PASS | Checkout, Node setup, dependency install, TypeScript typecheck, unit tests and Cloudflare build |
-| CI run 44054753094 (commit aefca59) | PASS | Same checks after isolating Queue enqueue from Telegram acknowledgement |
-| CI run 44054989848 (commit 35afca2) | PASS | Same checks after adding job failure detail and 30-day retention |
-| Deploy run 44054989671 | BLOCKED | Stopped at the first required-secret validation check; no migration/deploy/webhook step ran |
+| CI run 44058641961 | PASS | TypeScript type-check, unit tests, Cloudflare build |
+| Export + smoke run 44058641881 | PASS | Build output exported to `cloudflare-build`; deployed Worker `/health` returned `ok: true` and database `reachable` |
+| Deploy run 44058641901 | BLOCKED | Required-secret validation stopped before GitHub Actions deployment, migration, secret upload or Telegram webhook registration |
 
-The latest run confirms the same blocker previously observed. The validation loop exits on the first missing secret, so this run does not prove whether the other required values are present. The latest source commit passed all CI checks. The remaining technical blocker is deployment credentials, not a failing build or test.
-
-The deploy workflow did not proceed to Worker deployment, runtime secret upload or Telegram webhook registration. The bot is not deployed or live.
+The stale-job recovery source change committed after these runs requires a fresh CI/build/export/smoke run. The Worker currently deployed is the last smoke-tested build, not yet the stale-recovery build.
 
 ## Cloudflare account
 
-Account ID: 1172c01120a2470aa12f81e5b4778556
+Account ID: `1172c01120a2470aa12f81e5b4778556`
 
 | Resource | Name | ID / details | Verified state |
 |---|---|---|---|
-| D1 | nolane-search-db | 4f6a8cbd-cc8c-42b9-be6a-ed45c709d3db | Created in APAC; 0001_core.sql manually applied and confirmed via Cloudflare D1 API |
-| Queue | nolane-search-jobs | 8a09dc04a6824faaa90f379f45f75ac0 | Created |
-| Dead-letter Queue | nolane-search-dlq | e44fe78242614ed1b448dbea7dbe94e0 | Created |
-| Workers subdomain | nolane-file.workers.dev | Account subdomain confirmed | Available |
-| Worker | nolane-search | Expected URL https://nolane-search.nolane-file.workers.dev | Not deployed / not verified |
+| Worker | `nolane-search` | Script tag `c1ef61d64bae4c6a96ed81c738fab9b8` | Uploaded from a verified `cf build` bundle; handlers fetch, queue and scheduled |
+| Worker URL | `https://nolane-search.nolane-file.workers.dev` | workers.dev subdomain enabled | Live health smoke test passed |
+| D1 | `nolane-search-db` | `4f6a8cbd-cc8c-42b9-be6a-ed45c709d3db` | APAC primary; both migrations applied |
+| Main Queue | `nolane-search-jobs` | `8a09dc04a6824faaa90f379f45f75ac0` | Created; Worker consumer attached |
+| Dead-letter Queue | `nolane-search-dlq` | `e44fe78242614ed1b448dbea7dbe94e0` | Created; Worker consumer attached |
+| Cron | `*/30 * * * *` | Worker schedule | Created and verified |
+| Git repository connection | `Nolane-x/Nolane-search` | `71f0889c-6700-4a25-9917-29749083eb09` | Repository connection created; automatic Workers Builds trigger is not yet configured |
 | R2 | — | — | Not enabled; excluded from MVP |
 | KV | — | — | Not created; not used in MVP |
 
-D1 schema tables confirmed in APAC before deployment of this commit: watches, telegram_updates, indexed_pages, indexed_pages_fts (FTS5), search_cache and schema_migrations. Migration 0002_deep_search_jobs.sql is committed but not yet applied; 0001_core.sql is already recorded and will be skipped by the runner.
-Existing unrelated Workers in the account were not modified.
+### D1 schema
 
-## Immediate blocker
+Confirmed live in APAC:
+- `0001_core.sql`
+- `0002_deep_search_jobs.sql`
+- `deep_search_jobs` table
+- `idx_deep_search_jobs_user_created`
+- `idx_deep_search_jobs_status_updated`
 
-The exact GitHub Actions deployment logs show CLOUDFLARE_API_TOKEN is empty. Add a repository Actions secret with this exact name. A differently named Cloudflare secret will not populate that environment variable.
+The `schema_migrations` table contains both migration names. The D1 database stores watch state, a compact FTS5 index, cache, Telegram update deduplication and Deep Search job metadata.
 
-Required GitHub Actions secrets:
-- CLOUDFLARE_API_TOKEN
-- TELEGRAM_BOT_TOKEN
-- TELEGRAM_WEBHOOK_SECRET
-- TAVILY_API_KEY
+### Queue consumers
+
+- Main consumer ID: `b0bbd368155949aeba589b36293e3c31`; batch size 3; max retries 3; retry delay 30 seconds; concurrency 1; DLQ configured.
+- DLQ consumer ID: `9f634f11f5704620a045c3d9727b1ea5`; batch size 3; max retries 1; retry delay 60 seconds; concurrency 1.
+
+### Worker bindings and secrets
+
+The uploaded Worker has D1 binding `DB` and producer Queue binding `SEARCH_JOBS`. No Telegram or search-provider secrets have been configured on this Worker. Health is therefore available, but Telegram Bot API calls and provider-backed searches are not ready.
+
+## Credentials still awaited from the owner
+
+The repository Deploy workflow expects these exact GitHub Actions secret names:
+
+Required:
+- `CLOUDFLARE_API_TOKEN` — for repeatable GitHub Actions deploys and migrations; the current Worker was uploaded through the connected Cloudflare integration instead.
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `TAVILY_API_KEY`
 
 Recommended:
-- ALLOWED_TELEGRAM_USER_IDS (can be added after first deploy by messaging /id)
-- TELEGRAM_ARCHIVE_CHAT_ID (private archive channel)
+- `ALLOWED_TELEGRAM_USER_IDS`
+- `TELEGRAM_ARCHIVE_CHAT_ID`
 
 Optional:
-- EXA_API_KEY
-- BRAVE_SEARCH_API_KEY
-- OPENROUTER_API_KEY
-- OPENROUTER_MODEL
-- GITHUB_TOKEN_SEARCH
+- `EXA_API_KEY`
+- `BRAVE_SEARCH_API_KEY`
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_MODEL`
+- `GITHUB_TOKEN_SEARCH`
+
+Do not paste secret values into chat, source files, issues or logs. Add them through GitHub repository Settings → Secrets and variables → Actions.
 
 ## Not yet verified
 
-- Migration 0002_deep_search_jobs.sql has not yet been applied to the live D1 database.
-- The updated main-queue retry and DLQ consumer have not yet been deployed or exercised.
-- The current source commit adds 30-day pruning for completed/failed Deep Search job records; this cleanup behavior has not yet been deployed.
-- Deployment with a real Cloudflare API token.
-- Runtime secret upload.
+- The latest stale-job recovery source patch has not yet passed a new CI/build/export/smoke cycle or been deployed.
 - Telegram webhook and command registration.
-- Owner allowlist and bot interaction.
-- Live provider request and quota.
-- /health against deployed Worker.
-- Search response delivered to Telegram.
-- Deep Search Queue retry/DLQ and /jobs + /retry end-to-end.
-- Website watch snapshot and change alert end-to-end.
-- Archive channel permissions and delivery.
+- Telegram bot replies and owner allowlist.
+- Live Tavily, Exa, Brave and OpenRouter API requests.
+- Quick Search response delivery to Telegram.
+- Deep Search job processing, retry/DLQ and `/jobs` + `/retry` end-to-end.
+- Website watch snapshot and subsequent change notification.
+- Telegram archive channel permissions and delivery.
+- Automatic Workers Builds trigger from Git pushes.
 
 ## Release gate
 
-Do not mark the service deployed or production-ready until CI and deploy are green, /health returns ok=true, the Telegram webhook points to the Worker, search works, a Deep Search job is processed, and a website watch produces an initial snapshot and a real change notification.
+The Worker and D1 health path are deployed and verified. Do not call the Telegram search bot fully live or production-ready until credentials are configured, the webhook is registered, provider-backed search works, a Deep Search job completes, and a website watch produces a baseline and a real change notification.

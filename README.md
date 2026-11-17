@@ -7,9 +7,10 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 ## Current status
 
 - Source tree is committed and CI has passed type-checking, unit tests and Cloudflare build validation.
-- Cloudflare D1 and two Queues have been provisioned; the first D1 schema migration is applied.
-- The deploy workflow is currently blocked because the GitHub Actions secret CLOUDFLARE_API_TOKEN is missing or not named exactly. The workflow log showed this environment variable was empty.
-- Worker deployment and Telegram webhook registration are not yet verified; the bot is not live.
+- Cloudflare Worker `nolane-search` has been deployed through the connected Cloudflare integration. Its `/health` endpoint has passed a GitHub Actions smoke test.
+- D1 migrations 0001 and 0002 are applied. The main Queue, dead-letter Queue, consumers and 30-minute Cron trigger are configured.
+- Telegram/provider secrets have not been configured yet, so the Worker is reachable but the Telegram bot is not live.
+- The GitHub Actions Deploy workflow is awaiting `CLOUDFLARE_API_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and `TAVILY_API_KEY` to enable repeatable deployment and end-to-end bot setup.
 - Follow docs/SECRETS.md to configure the required secrets. docs/STATUS.md records exact verified status and resource identifiers.
 
 ## Initial features
@@ -50,7 +51,7 @@ See docs/ARCHITECTURE.md, docs/SETUP.md, docs/SECRETS.md and docs/OPERATIONS.md.
 3. Deep Search is bounded multi-query retrieval, not exhaustive research or a guarantee of factual correctness.
 4. The initial crawler checks only URLs explicitly added by the owner. It does not crawl the whole web, render JavaScript-heavy sites, bypass login or defeat anti-bot controls.
 5. D1 keeps only a short extract per monitored page. If a Telegram archive channel is configured, the full extracted text snapshot is sent there on first capture and detected changes. Telegram is an archive, not a queryable database or an unlimited-storage guarantee.
-6. Do not call the service deployed or live until deployment and end-to-end tests pass.
+6. The Worker health endpoint is deployed and verified; do not call the Telegram bot live until webhook, credentials, provider search and end-to-end bot tests pass.
 
 ## Development
 

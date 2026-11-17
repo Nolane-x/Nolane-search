@@ -52,6 +52,7 @@ Plain text messages are treated as /search.
 - /deep uses configured providers in parallel and may use OpenRouter.
 - /jobs reads D1 job records; /retry only accepts a failed job owned by the requesting Telegram user.
 - Main Queue delivery retries up to three times with increasing delay. Exhausted jobs arrive at the DLQ and are marked failed; the user can then retry them manually.
+- Cron also checks for up to 10 stale queued/running jobs older than 10 minutes. It conditionally claims and re-enqueues them to recover from interrupted Worker executions. Recovery is bounded by the next 30-minute Cron invocation; it is not an exactly-once guarantee.
 - Provider failures are returned as an error message; they are not represented as successful zero-result searches.
 
 External search APIs have their own quotas and possible paid overages. Monitor provider dashboards.
