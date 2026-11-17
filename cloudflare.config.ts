@@ -23,12 +23,10 @@ export default defineConfig({
       TAVILY_API_KEY: bindings.secret(),
       TELEGRAM_ARCHIVE_CHAT_ID: bindings.secret(),
       EXA_API_KEY: bindings.secret(),
-      BRAVE_SEARCH_API_KEY: bindings.secret(),
       TINYFISH_API_KEY: bindings.secret(),
       OPENROUTER_API_KEY: bindings.secret(),
       OPENROUTER_MODEL: bindings.secret(),
       OPENROUTER_MODELS: bindings.secret(),
-      GITHUB_TOKEN: bindings.secret(),
     },
     triggers: [
       triggers.queue({ name: "nolane-search-jobs", deadLetterQueue: "nolane-search-dlq", maxBatchSize: 3, maxRetries: 3, retryDelay: 30, maxConcurrency: 1 }),
