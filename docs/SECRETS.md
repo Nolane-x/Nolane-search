@@ -40,7 +40,7 @@ Cloudflare account ID is already recorded in cloudflare.config.ts and the workfl
 | TINYFISH_API_KEY | TinyFish Search and Fetch; enables /read and Deep Search source enrichment |
 | OPENROUTER_API_KEY | AI synthesis for Deep Search |
 | OPENROUTER_MODEL | Legacy single model ID; still supported |
-| OPENROUTER_MODELS | Optional comma- or newline-separated model IDs, tried in priority order |
+| OPENROUTER_MODELS | Optional comma- or semicolon-separated model IDs, tried in priority order |
 | GITHUB_TOKEN_SEARCH | Optional authenticated GitHub Search API |
 
 The workflow maps GITHUB_TOKEN_SEARCH to Worker secret GITHUB_TOKEN. It does not store a short-lived GitHub Actions job token in the deployed Worker.
