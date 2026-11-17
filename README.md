@@ -10,7 +10,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 - Cloudflare Worker `nolane-search` is deployed from `main`; its live `/health` endpoint returns `ok: true` and `database: reachable`.
 - D1 migrations 0001 and 0002 are applied. The main Queue, dead-letter Queue, consumers and 30-minute Cron trigger are configured.
 - GitHub Actions deployment has succeeded, including runtime-secret upload, Telegram webhook registration and Telegram command-menu registration.
-- TinyFish Search/Fetch and OpenRouter multi-model routing are deployed. The live health endpoint reports TinyFish and OpenRouter configured, with six OpenRouter model IDs.
+- The AI Router is deployed with one legacy OpenRouter key route and six model IDs detected by `/health`. The separate `AI_ROUTER_CONFIG` secret is currently optional and has not yet been populated with the owner's additional provider keys.
 - CI, Worker build, deployment and health smoke checks passed. Real Telegram command execution and live provider-key acceptance still need owner-level end-to-end testing.
 - Runtime credentials are managed as GitHub Actions secrets and are never stored in source control. See `docs/SECRETS.md` and `docs/STATUS.md` for verified details.
 
@@ -27,7 +27,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Deep search | /deep question | Bounded multi-provider retrieval, TinyFish page extraction and AI Router synthesis across configured model/key routes |
 | Direct AI | /ai prompt | Task-aware multi-provider AI router with bounded key/model failover |
 | AI web answer | /ask question | Web retrieval, evidence-grounded AI synthesis and linked sources |
-| AI configuration | /ai-status, /models | Inspect configured providers, key-route count, models and task tags without exposing keys |
+| AI configuration | /ai_status, /models | Inspect configured providers, key-route count, models and task tags without exposing keys |
 | Search within a site | /site example.com words | Provider site restriction |
 | Read a page | /read https://example.com | TinyFish Fetch extracts clean page text |
 | Personal index | /local words | D1 FTS5 over monitored-page extracts |
@@ -36,7 +36,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Status | /status | Provider configuration and compact index counters |
 
-Plain text messages are interpreted as web search. Results show five items per page; inline Previous/Next buttons browse up to 12 ranked candidates. Pagination sessions are private to the requesting user/chat and expire after 15 minutes. `/wiki` is a reference lookup, not a substitute for primary sources or current reporting.
+Plain text messages are interpreted as web search. Use `/ai prompt` for direct AI, `/ai fast prompt` or `/ai reasoning prompt` for task routing, `/ask question` for web-grounded AI synthesis, and `/ai_status` to inspect configured routes. Results show five items per page; inline Previous/Next buttons browse up to 12 ranked candidates. Pagination sessions are private to the requesting user/chat and expire after 15 minutes. `/wiki` is a reference lookup, not a substitute for primary sources or current reporting.
 
 ### Search operators
 
