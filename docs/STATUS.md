@@ -6,20 +6,21 @@ Last verified: 2026-11-17. This document distinguishes successful deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest deployed source commit: `0b2f3b9bca33d9fed7dffe3c915ad4ed0fc8945a`
+- Latest deployed source commit: `735e8d22cf4267ba37244ae750cd364ef8af7f60`
 - PR #1 merged: https://github.com/Nolane-x/Nolane-search/pull/1
-- Source changes include TinyFish Search/Fetch, OpenRouter multi-model fallback, Telegram `/read`, deployment fixes, and expanded tests.
+- Source changes include TinyFish Search/Fetch, OpenRouter multi-model fallback, Telegram `/read`, deployment fixes, Exa/TinyFish/Brave federated fallback for thin or failed `/search` results, and robots.txt-aware website monitoring with visible watch statuses.
 
 ## Latest verification
 
 | Check | Run | Result |
 |---|---:|---|
-| CI: typecheck, unit tests, script syntax checks, Worker build | [44078400343](https://github.com/Nolane-x/Nolane-search/actions/runs/44078400343) | PASS |
-| Export Worker bundle and health smoke test | [44078400338](https://github.com/Nolane-x/Nolane-search/actions/runs/44078400338) | PASS |
-| Production deployment, secret upload, webhook and command registration | [44078400367](https://github.com/Nolane-x/Nolane-search/actions/runs/44078400367) | PASS |
+| CI: typecheck, unit tests, script syntax checks, Worker build | [44082740802](https://github.com/Nolane-x/Nolane-search/actions/runs/44082740802) | PASS |
+| Export Worker bundle and health smoke test | [44082740504](https://github.com/Nolane-x/Nolane-search/actions/runs/44082740504) | PASS |
+| Production deployment, secret upload, webhook and command registration | [44082740676](https://github.com/Nolane-x/Nolane-search/actions/runs/44082740676) | PASS |
 
-The production deployment completed with Worker version ID `d13ffe93-6335-4113-b0c7-b7c7b62a979e`. GitHub Actions confirmed:
+The production deployment completed with Worker version ID `eb547f98-8e58-4902-8853-9357267ca2e0`. GitHub Actions confirmed:
 - Worker uploaded successfully using the repository source and configured runtime secrets.
+- Production `/health` was fetched after deployment and returned `ok: true`, `database: reachable`, and all expected configured providers (Tavily, Exa, TinyFish, OpenRouter with six model IDs); Brave remained optional and unconfigured.
 - D1 and Queue bindings are attached.
 - Main Queue and DLQ consumers plus the 30-minute Cron trigger are registered.
 - Telegram webhook registration succeeded.
@@ -72,6 +73,8 @@ Both were already applied. No new D1 migration was required for the latest featu
 - TinyFish Fetch: extracts page content; used by `/read https://...` and to enrich up to five Deep Search sources.
 - OpenRouter: synthesis with ordered model fallback through `OPENROUTER_MODELS`; legacy `OPENROUTER_MODEL` remains supported. The parser accepts up to eight model IDs and the current health endpoint reports six configured IDs.
 - GitHub: public repository search works without an optional token; `GITHUB_TOKEN_SEARCH` can raise rate limits.
+- General `/search`: Tavily is the primary provider. If it fails or returns fewer than four results, configured Exa, TinyFish and Brave providers are queried in parallel and their results are merged before ranking. This reduces unnecessary calls on healthy full Tavily responses.
+- Website Watch: each origin's robots.txt is checked before the watched page is fetched. Applicable groups are combined, longest-match wins, and Allow wins an equal-length tie. A blocked target is shown as `robots disallow`; an unreadable/temporarily unavailable policy is deferred and shown as `robots unavailable · deferred`.
 - Brave: optional and currently not configured.
 
 ## Deployment workflow behavior
