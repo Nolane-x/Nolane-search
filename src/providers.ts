@@ -1,3 +1,4 @@
+import { isSafePublicUrl } from "./security";
 import type { Env, SearchResult } from "./types";
 
 const USER_AGENT = "NolaneSearch/0.2 (+https://github.com/Nolane-x/Nolane-search)";
@@ -115,7 +116,7 @@ export async function searchTinyFish(
 export async function fetchTinyFishPages(env: Env, urls: string[]): Promise<Map<string, { title?: string; text: string }>> {
   const output = new Map<string, { title?: string; text: string }>();
   if (!env.TINYFISH_API_KEY || urls.length === 0) return output;
-  const unique = [...new Set(urls.filter((url) => /^https:\/\//i.test(url)))].slice(0, 10);
+  const unique = [...new Set(urls.map((url) => isSafePublicUrl(url)?.toString()).filter((url): url is string => Boolean(url)))].slice(0, 10);
   if (!unique.length) return output;
   const data = await postJson<{
     results?: Array<{ url?: string; final_url?: string; title?: string; text?: string }>;
@@ -130,10 +131,12 @@ export async function fetchTinyFishPages(env: Env, urls: string[]): Promise<Map<
 
 export async function fetchTinyFishPage(env: Env, url: string): Promise<{ title: string; text: string; finalUrl: string }> {
   if (!env.TINYFISH_API_KEY) throw new Error("TINYFISH_API_KEY is not configured");
+  const safeUrl = isSafePublicUrl(url);
+  if (!safeUrl) throw new Error("TinyFish Fetch only accepts safe public HTTPS URLs.");
   const data = await postJson<{
     results?: Array<{ url?: string; final_url?: string; title?: string; text?: string }>;
     errors?: Array<{ url?: string; error?: string }>;
-  }>("https://api.fetch.tinyfish.ai/", { urls: [url], format: "markdown" }, { "X-API-Key": env.TINYFISH_API_KEY }, 45_000);
+  }>("https://api.fetch.tinyfish.ai/", { urls: [safeUrl.toString()], format: "markdown" }, { "X-API-Key": env.TINYFISH_API_KEY }, 45_000);
   const page = data.results?.[0];
   if (!page?.text) throw new Error(data.errors?.[0]?.error || "TinyFish could not extract this page.");
   return { title: page.title || new URL(page.final_url || url).hostname, text: page.text.slice(0, 12_000), finalUrl: page.final_url || url };
