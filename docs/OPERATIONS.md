@@ -11,6 +11,7 @@
 | /search query | General web search |
 | /tech query | Technology + GitHub search |
 | /github query | GitHub repository search |
+| /wiki query | Free English/Vietnamese Wikipedia reference search |
 | /research query | Research discovery |
 | /news query | News search |
 | /deep question | Queue multi-query research |
@@ -26,7 +27,7 @@ Plain text messages are treated as /search.
 
 ## Result delivery and archive
 
-- Search results go to the conversation where the query was sent.
+- Search results go to the conversation where the query was sent. Up to 12 ranked candidates are displayed five per page; inline Previous/Next buttons edit the same message. Sessions expire after 15 minutes and are bound to the requesting Telegram user and chat.
 - If TELEGRAM_ARCHIVE_CHAT_ID is configured, search and Deep Search results are copied to the archive channel.
 - Page snapshots are sent as TXT documents on first capture and detected content changes.
 - Change alerts go to the requesting chat and archive.
@@ -45,7 +46,8 @@ Plain text messages are treated as /search.
 
 ## Search quotas and provider errors
 
-- /search tries Tavily first. If Tavily fails or returns fewer than four results, it queries configured Exa, TinyFish and Brave providers in parallel and merges available results.
+- /search tries Tavily first. If Tavily fails or returns fewer than four results, it queries configured Exa, TinyFish and Brave providers plus the free Wikipedia reference API in parallel and merges available results. A healthy Tavily response with at least four hits avoids this fallback fan-out.
+- /wiki directly searches Wikipedia: Vietnamese diacritics select vi.wikipedia.org; other queries use en.wikipedia.org. Treat it as an encyclopedia reference, not primary research or live reporting.
 - /research calls configured Tavily and/or Exa providers.
 - /tech calls GitHub and Tavily where configured.
 - /github uses public GitHub API unless optional token is configured.
@@ -55,7 +57,7 @@ Plain text messages are treated as /search.
 - Cron also checks for up to 10 stale queued/running jobs older than 10 minutes. It conditionally claims and re-enqueues them to recover from interrupted Worker executions. Recovery is bounded by the next 30-minute Cron invocation; it is not an exactly-once guarantee.
 - Provider failures are returned as an error message; they are not represented as successful zero-result searches.
 
-External search APIs have their own quotas and possible paid overages. Monitor provider dashboards.
+External search APIs have their own quotas and possible paid overages. Wikipedia uses the public MediaWiki Action API without a secret; requests include an identifying User-Agent and a short timeout. Monitor paid-provider dashboards.
 
 ## Cloudflare resources
 
