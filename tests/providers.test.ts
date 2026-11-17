@@ -97,6 +97,8 @@ describe("TinyFish Fetch adapter", () => {
       ["http://127.0.0.1/admin", "https://example.com/valid"],
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(pages.size).toBe(0);
+    const request = fetchMock.mock.calls[0]?.[1];
+    expect(JSON.parse(String(request?.body)).urls).toEqual(["https://example.com/valid"]);
+    expect(pages.has("https://example.com/valid")).toBe(true);
   });
 });
