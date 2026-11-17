@@ -1,4 +1,4 @@
-import { isSafePublicUrl } from "./security";
+import { isSafePublicUrl, normalizeUrl } from "./security";
 import type { Env, SearchResult } from "./types";
 
 const USER_AGENT = "NolaneSearch/0.2 (+https://github.com/Nolane-x/Nolane-search)";
@@ -90,12 +90,20 @@ export async function searchTinyFish(
   options: { domainType?: "web" | "news" | "research_paper"; purpose?: string; location?: string; language?: string } = {},
 ): Promise<SearchResult[]> {
   if (!env.TINYFISH_API_KEY) throw new Error("TINYFISH_API_KEY is not configured");
+
+  // TinyFish Search's public REST API accepts query, location and language.
+  // Express source intent in the query instead of sending undocumented parameters.
+  const intent = options.domainType === "research_paper"
+    ? "academic papers scholarly research and primary studies"
+    : options.domainType === "news"
+      ? "latest news reporting"
+      : "";
+  const searchTerms = [query.trim(), intent, options.purpose?.trim().slice(0, 240)].filter(Boolean);
   const url = new URL("https://api.search.tinyfish.ai/");
-  url.searchParams.set("query", query);
-  if (options.domainType) url.searchParams.set("domain_type", options.domainType);
-  if (options.purpose) url.searchParams.set("purpose", options.purpose.slice(0, 2000));
+  url.searchParams.set("query", searchTerms.join(" "));
   if (options.location) url.searchParams.set("location", options.location);
   if (options.language) url.searchParams.set("language", options.language);
+
   const response = await fetch(url, {
     headers: { "X-API-Key": env.TINYFISH_API_KEY, accept: "application/json" },
     signal: AbortSignal.timeout(20_000),
@@ -122,10 +130,15 @@ export async function fetchTinyFishPages(env: Env, urls: string[]): Promise<Map<
     results?: Array<{ url?: string; final_url?: string; title?: string; text?: string }>;
     errors?: Array<{ url?: string; error?: string }>;
   }>("https://api.fetch.tinyfish.ai/", { urls: unique, format: "markdown" }, { "X-API-Key": env.TINYFISH_API_KEY }, 45_000);
-  for (const item of data.results ?? []) {
-    const key = item.url || item.final_url;
-    if (key && item.text) output.set(key, { title: item.title, text: item.text.slice(0, 6000) });
-  }
+  for (const [index, item] of (data.results ?? []).entries()) {
+    const original = item.url || unique[index];
+    const candidates = [original, item.final_url].filter((value): value is string => Boolean(value));
+    if (!item.text) continue;
+    const page = { title: item.title, text: item.text.slice(0, 6000) };
+    for (const candidate of candidates) {
+      output.set(candidate, page);
+      try { output.set(normalizeUrl(candidate), page); } catch { /* ignore malformed provider URL */ }
+    }
   return output;
 }
 
