@@ -7,12 +7,12 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 ## Current status
 
 - Source tree is committed and CI has passed type-checking, unit tests and Cloudflare build validation.
-- Cloudflare Worker `nolane-search` has been deployed through the connected Cloudflare integration. Its `/health` endpoint has passed a GitHub Actions smoke test.
+- Cloudflare Worker `nolane-search` is deployed from `main`; its live `/health` endpoint returns `ok: true` and `database: reachable`.
 - D1 migrations 0001 and 0002 are applied. The main Queue, dead-letter Queue, consumers and 30-minute Cron trigger are configured.
-- The latest code includes stale Deep Search job recovery on the 30-minute Cron schedule. CI, bundle validation and the live /health smoke test passed for this implementation.
-- Runtime credentials are managed as GitHub Actions secrets and are intentionally not stored in source control. Their presence and validity must be confirmed by the latest Deploy workflow and end-to-end bot checks.
-- The Deploy workflow requires `CLOUDFLARE_API_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and `TAVILY_API_KEY`; optional TinyFish and OpenRouter settings are documented in `docs/SECRETS.md`.
-- Follow docs/SECRETS.md to configure the required secrets. docs/STATUS.md records exact verified status and resource identifiers.
+- GitHub Actions deployment has succeeded, including runtime-secret upload, Telegram webhook registration and Telegram command-menu registration.
+- TinyFish Search/Fetch and OpenRouter multi-model routing are deployed. The live health endpoint reports TinyFish and OpenRouter configured, with six OpenRouter model IDs.
+- CI, Worker build, deployment and health smoke checks passed. Real Telegram command execution and live provider-key acceptance still need owner-level end-to-end testing.
+- Runtime credentials are managed as GitHub Actions secrets and are never stored in source control. See `docs/SECRETS.md` and `docs/STATUS.md` for verified details.
 
 ## Initial features
 
@@ -54,7 +54,7 @@ See docs/ARCHITECTURE.md, docs/SETUP.md, docs/SECRETS.md and docs/OPERATIONS.md.
 3. Deep Search is bounded multi-query retrieval, not exhaustive research or a guarantee of factual correctness.
 4. The initial crawler checks only URLs explicitly added by the owner. It does not crawl the whole web, render JavaScript-heavy sites, bypass login or defeat anti-bot controls.
 5. D1 keeps only a short extract per monitored page. If a Telegram archive channel is configured, the full extracted text snapshot is sent there on first capture and detected changes. Telegram is an archive, not a queryable database or an unlimited-storage guarantee.
-6. The Worker health endpoint is deployed and verified; do not call the Telegram bot live until webhook, credentials, provider search and end-to-end bot tests pass.
+6. The Worker, health endpoint, Telegram webhook and command menu are deployed. A successful configuration/health check does not guarantee that every provider key or user-level command works; test the bot in Telegram before relying on search or archive delivery.
 
 ## Development
 
