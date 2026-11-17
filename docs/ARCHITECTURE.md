@@ -19,7 +19,7 @@ Telegram user → Telegram webhook → Cloudflare Worker
 
 Quick Search → provider adapters → merge → URL deduplication → heuristic ranking → Telegram reply.
 
-Deep Search → D1 job record → Cloudflare Queue → bounded query expansion → parallel provider retrieval → merge → optional OpenRouter synthesis → Telegram report.
+Deep Search → D1 job record → Cloudflare Queue → bounded query expansion → parallel Tavily/Exa/Brave/TinyFish retrieval → deduplicate/rank → optional TinyFish Fetch enrichment of up to five sources → optional OpenRouter synthesis with ordered model fallback → Telegram report.
 - D1 records queued/running/completed/failed state, attempt count and last failure reason.
 - Queue deliveries use bounded retry delays; exhausted jobs enter the dead-letter queue and notify the originating user.
 - Duplicate deliveries do not re-run jobs that are already completed or currently claimed.
