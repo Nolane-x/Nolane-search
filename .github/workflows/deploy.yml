@@ -114,6 +114,9 @@ jobs:
           : > .cloudflare-secrets
           for key in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET ALLOWED_TELEGRAM_USER_IDS TAVILY_API_KEY TELEGRAM_ARCHIVE_CHAT_ID EXA_API_KEY BRAVE_SEARCH_API_KEY TINYFISH_API_KEY OPENROUTER_API_KEY OPENROUTER_MODEL OPENROUTER_MODELS AI_ROUTER_CONFIG GITHUB_TOKEN; do
             value="${!key:-}"
+            if [[ "$key" == "AI_ROUTER_CONFIG" && -z "$value" ]]; then
+              value='{"strategy":"balanced","maxAttempts":12,"providers":[]}'
+            fi
             if [ -n "$value" ]; then printf '%s=%s\n' "$key" "$value" >> .cloudflare-secrets; fi
           done
           npx cf deploy --prebuilt --mode production --secrets-file .cloudflare-secrets --force
