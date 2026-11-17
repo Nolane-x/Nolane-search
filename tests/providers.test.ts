@@ -47,6 +47,11 @@ describe("TinyFish Search adapter", () => {
           title: "A Research Paper",
           snippet: "An abstract excerpt",
           url: "https://arxiv.org/abs/1234.5678",
+        }, {
+          position: 2,
+          title: "Credential URL must be rejected",
+          url: "https://user:password@example.com/private",
+          snippet: "untrusted result",
         }],
       }), { status: 200, headers: { "content-type": "application/json" } });
     });
