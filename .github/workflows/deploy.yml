@@ -67,8 +67,10 @@ jobs:
           TELEGRAM_ARCHIVE_CHAT_ID: ${{ secrets.TELEGRAM_ARCHIVE_CHAT_ID }}
           EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
           BRAVE_SEARCH_API_KEY: ${{ secrets.BRAVE_SEARCH_API_KEY }}
+          TINYFISH_API_KEY: ${{ secrets.TINYFISH_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          OPENROUTER_MODELS: ${{ secrets.OPENROUTER_MODELS }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN_SEARCH }}
         shell: bash
         run: |
