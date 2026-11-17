@@ -18,9 +18,10 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 
 | Feature | Command | Scope |
 |---|---|---|
-| General web search | /search words | Tavily first; Exa, TinyFish and optional Brave fallback when the primary result set is thin or unavailable |
+| General web search | /search words | Federated Tavily/Exa/TinyFish/Brave/Wikipedia fallback, relevance and domain-diversity ranking, up to 12 candidates with Telegram pagination |
 | Technology search | /tech words | Web search plus GitHub repositories |
 | GitHub repositories | /github words | GitHub repository Search API |
+| Encyclopedia reference | /wiki words | Free English/Vietnamese Wikipedia lookup via MediaWiki API |
 | Research discovery | /research topic | Tavily, Exa and TinyFish Search |
 | News search | /news topic | Tavily, Brave and TinyFish news discovery |
 | Deep search | /deep question | Bounded multi-provider retrieval, TinyFish page extraction and optional OpenRouter multi-model synthesis |
@@ -32,7 +33,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Status | /status | Provider configuration and compact index counters |
 
-Plain text messages are interpreted as web search. Use /help in the bot for the current command list.
+Plain text messages are interpreted as web search. Results show five items per page; inline Previous/Next buttons browse up to 12 ranked candidates. Pagination sessions are private to the requesting user/chat and expire after 15 minutes. `/wiki` is a reference lookup, not a substitute for primary sources or current reporting. Use /help in the bot for the current command list.
 
 ## Architecture
 
@@ -41,7 +42,7 @@ Plain text messages are interpreted as web search. Use /help in the bot for the 
 - Cloudflare D1: compact operational metadata, short cache, watch state and small FTS5 index.
 - Cloudflare Queues: asynchronous Deep Search jobs, retries with backoff and dead-letter handling. D1 tracks job state so users can inspect or retry failed work.
 - Cloudflare Cron: periodic website checks and housekeeping.
-- Tavily / Exa / Brave / TinyFish / GitHub: external discovery providers, enabled only when their keys exist.
+- Tavily / Exa / Brave / TinyFish / GitHub: external discovery providers, enabled only when their keys exist. The public MediaWiki API adds a free bilingual encyclopedia reference source without another API secret.
 - OpenRouter: optional AI synthesis with ordered model fallback via OPENROUTER_MODELS; OPENROUTER_MODEL remains supported for older deployments.
 - GitHub Actions: tests, build validation, migrations and deployment. It is not a permanent bot server.
 
@@ -50,7 +51,7 @@ See docs/ARCHITECTURE.md, docs/SETUP.md, docs/SECRETS.md and docs/OPERATIONS.md.
 ## Important limitations
 
 1. Search coverage and freshness depend on external providers and their quotas.
-2. Ranking is currently a transparent heuristic, not a trained relevance model.
+2. Ranking is currently a transparent heuristic, not a trained relevance model. Search retains up to 12 candidates, displays five per page and caps the first-pass contribution at two results per domain.
 3. Deep Search is bounded multi-query retrieval, not exhaustive research or a guarantee of factual correctness.
 4. The initial crawler checks only URLs explicitly added by the owner. It does not crawl the whole web, render JavaScript-heavy sites, bypass login or defeat anti-bot controls.
 5. Website monitoring reads and applies the origin's robots.txt policy before fetching a watched page. D1 keeps only a short extract per monitored page. If a Telegram archive channel is configured, the full extracted text snapshot is sent there on first capture and detected changes. Telegram is an archive, not a queryable database or an unlimited-storage guarantee.
