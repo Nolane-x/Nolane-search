@@ -57,9 +57,9 @@ The D1 schema_migrations table contains both migration names. D1 stores watch st
 
 ### Worker bindings and secrets
 
-The live Worker currently has D1 binding DB and Queue producer binding SEARCH_JOBS. No Telegram or search-provider secrets have been configured on it yet. Consequently, health is available but Telegram Bot API calls, provider-backed search, archive delivery and authenticated webhook processing are not ready.
+At the last verified pre-feature deployment snapshot, the Worker had D1 binding DB and Queue producer binding SEARCH_JOBS. That snapshot did not verify Telegram/provider runtime secrets. PR #1 has since been merged; re-check the Deploy workflow and /health before treating the new provider bindings or Telegram flow as live.
 
-## Credentials still awaited from the owner
+## Expected deployment credentials
 
 The repository Deploy workflow expects these exact GitHub Actions secret names:
 
