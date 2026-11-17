@@ -132,7 +132,7 @@ export async function fetchTinyFishPages(env: Env, urls: string[]): Promise<Map<
   }>("https://api.fetch.tinyfish.ai/", { urls: unique, format: "markdown" }, { "X-API-Key": env.TINYFISH_API_KEY }, 45_000);
   for (const [index, item] of (data.results ?? []).entries()) {
     const original = item.url || unique[index];
-    const candidates = [original, item.final_url].filter((value): value is string => Boolean(value));
+    const candidates = [unique[index], original, item.final_url].filter((value): value is string => Boolean(value));
     if (!item.text) continue;
     const page = { title: item.title, text: item.text.slice(0, 6000) };
     for (const candidate of candidates) {
