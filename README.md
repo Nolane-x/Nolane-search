@@ -24,7 +24,10 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Encyclopedia reference | /wiki words | Free English/Vietnamese Wikipedia lookup via MediaWiki API |
 | Research discovery | /research topic | Tavily, Exa and TinyFish Search |
 | News search | /news topic | Tavily, Brave and TinyFish news discovery |
-| Deep search | /deep question | Bounded multi-provider retrieval, TinyFish page extraction and optional OpenRouter multi-model synthesis |
+| Deep search | /deep question | Bounded multi-provider retrieval, TinyFish page extraction and AI Router synthesis across configured model/key routes |
+| Direct AI | /ai prompt | Task-aware multi-provider AI router with bounded key/model failover |
+| AI web answer | /ask question | Web retrieval, evidence-grounded AI synthesis and linked sources |
+| AI configuration | /ai-status, /models | Inspect configured providers, key-route count, models and task tags without exposing keys |
 | Search within a site | /site example.com words | Provider site restriction |
 | Read a page | /read https://example.com | TinyFish Fetch extracts clean page text |
 | Personal index | /local words | D1 FTS5 over monitored-page extracts |
@@ -49,10 +52,10 @@ Use /help in the bot for the current command list.
 - Cloudflare Queues: asynchronous Deep Search jobs, retries with backoff and dead-letter handling. D1 tracks job state so users can inspect or retry failed work.
 - Cloudflare Cron: periodic website checks and housekeeping.
 - Tavily / Exa / Brave / TinyFish / GitHub: external discovery providers, enabled only when their keys exist. The public MediaWiki API adds a free bilingual encyclopedia reference source without another API secret.
-- OpenRouter: optional AI synthesis with ordered model fallback via OPENROUTER_MODELS; OPENROUTER_MODEL remains supported for older deployments.
+- AI Router: configured through encrypted GitHub Actions secret `AI_ROUTER_CONFIG`; supports multiple keys per provider and OpenAI-compatible, Anthropic Messages and Gemini Interactions APIs. It routes by task and falls back between configured key/model routes. Legacy OpenRouter secrets remain supported.
 - GitHub Actions: tests, build validation, migrations and deployment. It is not a permanent bot server.
 
-See docs/ARCHITECTURE.md, docs/SETUP.md, docs/SECRETS.md and docs/OPERATIONS.md.
+See docs/ARCHITECTURE.md, docs/SETUP.md, docs/SECRETS.md and docs/OPERATIONS.md. Add AI provider credentials only through GitHub Actions Secrets; never commit or paste keys into chat.
 
 ## Important limitations
 
