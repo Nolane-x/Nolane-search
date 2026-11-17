@@ -107,3 +107,12 @@ Secret values are masked by GitHub and cannot be inspected through repository so
 ## Release gate
 
 The Worker, D1 schema, Queue consumers, Cron schedule and health path are deployed and verified. Do not call the Telegram search bot fully live or production-ready until credentials are configured, the webhook is registered, provider-backed search works, a Deep Search job completes, and a website watch produces a baseline and a real change notification.
+
+
+## Deployment blocker observed after PR #1 merge
+
+GitHub Actions run [44075036421](https://github.com/Nolane-x/Nolane-search/actions/runs/44075036421) passed required-secret validation, type-check, unit tests, Worker build and dry-run bundle validation. It then failed at the D1 migration API with HTTP 403: Cloudflare rejected access to the configured account/database. The Worker upload and Telegram webhook registration steps were skipped.
+
+This indicates the `CLOUDFLARE_API_TOKEN` secret is present but does not currently have effective access to D1 on account `1172c01120a2470aa12f81e5b4778556` (or is scoped to a different account). Recreate/update that token with Account > D1 > Edit, Workers Scripts > Edit and Queues > Edit, then update the GitHub secret. Do not paste the token into chat.
+
+A follow-up code fix improves the migration script's 403 message and aligns TinyFish Search parameters with the documented API. The latest CI run must pass before the updated source is considered validated; a successful CI run alone does not resolve the Cloudflare token permission.
