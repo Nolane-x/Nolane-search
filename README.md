@@ -22,7 +22,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Technology search | /tech words | Web search plus GitHub repositories |
 | GitHub repositories | /github words | GitHub repository Search API |
 | Research discovery | /research topic | Tavily, Exa and TinyFish Search |
-| News search | /news topic | Tavily News, optional Brave fallback |
+| News search | /news topic | Tavily, Brave and TinyFish news discovery |
 | Deep search | /deep question | Bounded multi-provider retrieval, TinyFish page extraction and optional OpenRouter multi-model synthesis |
 | Search within a site | /site example.com words | Provider site restriction |\n| Read a page | /read https://example.com | TinyFish Fetch extracts clean page text |
 | Personal index | /local words | D1 FTS5 over monitored-page extracts |
