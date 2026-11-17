@@ -8,7 +8,7 @@ Last updated: 2026-11-17. This file separates verified live resources from funct
 - Default branch: main
 - Latest tested source implementation before this feature: 6ca9584732a68d951f13d5cd4a404dd19dd65132
 - Latest feature implementation merged: PR #1, head 61674f70559c9091517bcade266cd247f7de1f1b
-- Latest repository HEAD: b5dcf0f5140336d6f0d5e469d34b66b2c3015d2e (squash merge of PR #1)
+- Feature merge commit: b5dcf0f5140336d6f0d5e469d34b66b2c3015d2e (PR #1; later commits only refresh documentation)
 - The repository is public; the connected GitHub integration has admin/push permission.
 - .github/workflows/export-worker.yml installs dependencies, type-checks, tests, builds with cf build, verifies the stale-job recovery marker in the compiled bundle, publishes output to cloudflare-build and smoke-tests the live Worker health endpoint.
 
