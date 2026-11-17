@@ -1,6 +1,6 @@
 import { normalizeUrl, sha256Hex } from "./security";
 import type { Env, SearchMode, SearchResult } from "./types";
-import { fetchTinyFishPages, searchBrave, searchExa, searchGitHub, searchTavily, searchTinyFish } from "./providers";
+import { fetchTinyFishPages, searchBrave, searchExa, searchGitHub, searchTavily, searchTinyFish, searchWikipedia } from "./providers";
 
 function queryTerms(query: string): string[] {
   return [...new Set(query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(term => term.length >= 2))].slice(0, 24);
@@ -101,6 +101,8 @@ async function cachedSearch(env: Env, query: string, mode: SearchMode): Promise<
   let results: SearchResult[] = [];
   if (mode === "github") {
     results = await searchGitHub(env, query);
+  } else if (mode === "wiki") {
+    results = await searchWikipedia(query);
   } else if (mode === "local") {
     results = await localSearch(env, query);
   } else if (mode === "research") {
@@ -142,11 +144,12 @@ async function cachedSearch(env: Env, query: string, mode: SearchMode): Promise<
         ...(env.EXA_API_KEY ? [searchExa(env, query)] : []),
         ...(env.TINYFISH_API_KEY ? [searchTinyFish(env, query)] : []),
         ...(env.BRAVE_SEARCH_API_KEY ? [searchBrave(env, query)] : []),
+        searchWikipedia(query),
       ]);
       results = [...primary, ...fallback];
     }
     if (!results.length) {
-      throw new Error("Web search providers unavailable. Configure Tavily, Exa, TinyFish or Brave.");
+      throw new Error("No web provider returned results. Check provider availability or retry later.");
     }
   }
 

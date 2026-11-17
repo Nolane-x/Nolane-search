@@ -65,7 +65,7 @@ export async function sendArchiveDocument(env: Env, filename: string, content: s
 
 const MODE_LABELS: Record<SearchMode, string> = {
   web: "Web Search", tech: "Technology Search", research: "Research Search",
-  news: "News Search", github: "GitHub Search", local: "My Sites Index",
+  news: "News Search", github: "GitHub Search", wiki: "Wikipedia Reference", local: "My Sites Index",
 };
 
 // Limit escaped output, not raw input: HTML entities can expand substantially.

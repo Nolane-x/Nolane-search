@@ -64,7 +64,7 @@ interface TelegramSearchSession {
   results: SearchResult[];
 }
 
-const VALID_SEARCH_MODES = new Set<SearchMode>(["web", "tech", "research", "news", "github", "local"]);
+const VALID_SEARCH_MODES = new Set<SearchMode>(["web", "tech", "research", "news", "github", "wiki", "local"]);
 
 function isTelegramSearchSession(value: unknown): value is TelegramSearchSession {
   if (!value || typeof value !== "object") return false;
@@ -191,6 +191,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/search từ khóa</code> — tìm web nhanh, có phân trang kết quả\n" +
       "<code>/tech từ khóa</code> — tìm công nghệ + GitHub\n" +
       "<code>/github từ khóa</code> — tìm repository\n" +
+      "<code>/wiki từ khóa</code> — tra cứu Wikipedia Anh/Việt\n" +
       "<code>/research chủ đề</code> — tìm nghiên cứu và nguồn liên quan\n" +
       "<code>/news chủ đề</code> — tìm tin tức\n" +
       "<code>/deep câu hỏi</code> — tìm nhiều lượt, tổng hợp nguồn bất đồng bộ\n" +
@@ -315,6 +316,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   if (command === "search") return handleSearch(env, chatId, userId, args, "web");
   if (command === "tech") return handleSearch(env, chatId, userId, args, "tech");
   if (command === "github") return handleSearch(env, chatId, userId, args, "github");
+  if (command === "wiki") return handleSearch(env, chatId, userId, args, "wiki");
   if (command === "research") return handleSearch(env, chatId, userId, args, "research");
   if (command === "news") return handleSearch(env, chatId, userId, args, "news");
   if (command === "local") return handleSearch(env, chatId, userId, args, "local");

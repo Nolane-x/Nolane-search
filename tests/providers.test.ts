@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchTinyFishPages, parseOpenRouterModels, searchTinyFish } from "../src/providers";
+import { fetchTinyFishPages, parseOpenRouterModels, searchTinyFish, searchWikipedia, wikipediaLanguageForQuery } from "../src/providers";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -105,5 +105,45 @@ describe("TinyFish Fetch adapter", () => {
     const request = fetchMock.mock.calls[0]?.[1];
     expect(JSON.parse(String(request?.body)).urls).toEqual(["https://example.com/valid"]);
     expect(pages.has("https://example.com/valid")).toBe(true);
+  });
+});
+
+describe("Wikipedia reference search", () => {
+  it("selects Vietnamese Wikipedia for Vietnamese queries and English otherwise", () => {
+    expect(wikipediaLanguageForQuery("trí tuệ nhân tạo")).toBe("vi");
+    expect(wikipediaLanguageForQuery("artificial intelligence")).toBe("en");
+  });
+
+  it("uses the public MediaWiki search API and sanitizes result snippets", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("vi.wikipedia.org");
+      expect(url.pathname).toBe("/w/api.php");
+      expect(url.searchParams.get("action")).toBe("query");
+      expect(url.searchParams.get("list")).toBe("search");
+      expect(url.searchParams.get("srsearch")).toBe("trí tuệ nhân tạo");
+      expect(url.searchParams.get("srlimit")).toBe("6");
+      expect(new Headers(init?.headers).get("user-agent")).toContain("NolaneSearch");
+      return new Response(JSON.stringify({
+        query: {
+          search: [{
+            title: "Trí tuệ nhân tạo",
+            snippet: "Đây là <span class=\"searchmatch\">trí tuệ</span> nhân tạo &amp; học máy.",
+            timestamp: "2026-11-01T10:00:00Z",
+          }],
+        },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const results = await searchWikipedia("trí tuệ nhân tạo");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      title: "Trí tuệ nhân tạo",
+      url: "https://vi.wikipedia.org/wiki/Tr%C3%AD_tu%E1%BB%87_nh%C3%A2n_t%E1%BA%A1o",
+      snippet: "Đây là trí tuệ nhân tạo & học máy.",
+      domain: "vi.wikipedia.org",
+      provider: "Wikipedia (vi)",
+    });
   });
 });

@@ -1,4 +1,4 @@
-export type SearchMode = "web" | "tech" | "research" | "news" | "github" | "local";
+export type SearchMode = "web" | "tech" | "research" | "news" | "github" | "wiki" | "local";
 
 export interface SearchResult {
   title: string;

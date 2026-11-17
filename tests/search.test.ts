@@ -47,3 +47,24 @@ describe("web search fallback", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("Wikipedia search mode", () => {
+  it("can search the encyclopedia without any paid provider key", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("en.wikipedia.org");
+      return new Response(JSON.stringify({
+        query: { search: [{ title: "Artificial intelligence", snippet: "A field of computer science.", timestamp: "2026-10-01T00:00:00Z" }] },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    const statement = {
+      bind() { return this; },
+      first: async () => null,
+      run: async () => ({ meta: { changes: 1 } }),
+      all: async () => ({ results: [] }),
+    };
+    const env = { DB: { prepare: () => statement } };
+    const results = await performSearch(env as never, "artificial intelligence", "wiki");
+    expect(results[0]?.provider).toBe("Wikipedia (en)");
+  });
+});

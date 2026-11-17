@@ -85,6 +85,60 @@ export async function searchExa(env: Env, query: string): Promise<SearchResult[]
   }, "Exa")).filter((item): item is SearchResult => item !== null);
 }
 
+export function wikipediaLanguageForQuery(query: string): "en" | "vi" {
+  return /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởợúùủũụứừửữựýỳỷỹỵ]/i.test(query)
+    ? "vi"
+    : "en";
+}
+
+/**
+ * Free reference discovery from the public MediaWiki Action API.
+ * This is a fallback/reference source, not a substitute for web reporting or primary research.
+ */
+export async function searchWikipedia(query: string, language: "en" | "vi" = wikipediaLanguageForQuery(query)): Promise<SearchResult[]> {
+  const url = new URL(\`https://\${language}.wikipedia.org/w/api.php\`);
+  url.searchParams.set("action", "query");
+  url.searchParams.set("list", "search");
+  url.searchParams.set("srsearch", query);
+  url.searchParams.set("srlimit", "6");
+  url.searchParams.set("srprop", "snippet|timestamp");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("formatversion", "2");
+  url.searchParams.set("utf8", "1");
+  url.searchParams.set("maxlag", "5");
+
+  const response = await fetch(url, {
+    headers: { "user-agent": USER_AGENT, accept: "application/json" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error(\`Wikipedia Search failed (\${response.status})\`);
+  const data = await response.json() as {
+    query?: {
+      search?: Array<{ title?: string; snippet?: string; timestamp?: string }>;
+    };
+  };
+  return (data.query?.search ?? []).map(item => {
+    const title = String(item.title || "Untitled");
+    const snippet = String(item.snippet || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/\s+/g, " ")
+      .trim();
+    const articlePath = encodeURIComponent(title.replace(/ /g, "_"));
+    return normalizeResult({
+      title,
+      url: \`https://\${language}.wikipedia.org/wiki/\${articlePath}\`,
+      snippet,
+      score: 0.52,
+      publishedAt: item.timestamp,
+    }, \`Wikipedia (\${language})\`);
+  }).filter((item): item is SearchResult => item !== null);
+}
+
 export async function searchTinyFish(
   env: Env,
   query: string,

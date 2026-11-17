@@ -5,6 +5,7 @@ const commands = [
   { command: "search", description: "Tìm kiếm web nhanh" },
   { command: "tech", description: "Tìm kiếm công nghệ và GitHub" },
   { command: "github", description: "Tìm repositories" },
+  { command: "wiki", description: "Tra cứu Wikipedia Anh/Việt" },
   { command: "research", description: "Tìm tài liệu nghiên cứu" },
   { command: "news", description: "Tìm tin tức" },
   { command: "deep", description: "Tìm kiếm chuyên sâu nhiều nguồn" },
