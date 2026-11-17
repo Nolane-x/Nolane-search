@@ -75,7 +75,7 @@ jobs:
           set -euo pipefail
           umask 077
           : > .cloudflare-secrets
-          for key in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET ALLOWED_TELEGRAM_USER_IDS TAVILY_API_KEY TELEGRAM_ARCHIVE_CHAT_ID EXA_API_KEY BRAVE_SEARCH_API_KEY OPENROUTER_API_KEY OPENROUTER_MODEL GITHUB_TOKEN; do
+          for key in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET ALLOWED_TELEGRAM_USER_IDS TAVILY_API_KEY TELEGRAM_ARCHIVE_CHAT_ID EXA_API_KEY BRAVE_SEARCH_API_KEY TINYFISH_API_KEY OPENROUTER_API_KEY OPENROUTER_MODEL OPENROUTER_MODELS GITHUB_TOKEN; do
             value="${!key:-}"
             if [ -n "$value" ]; then printf '%s=%s\n' "$key" "$value" >> .cloudflare-secrets; fi
           done
