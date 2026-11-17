@@ -104,18 +104,19 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           OPENROUTER_MODELS: ${{ secrets.OPENROUTER_MODELS }}
+          AI_ROUTER_CONFIG: ${{ secrets.AI_ROUTER_CONFIG }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN_SEARCH }}
         shell: bash
         run: |
           set -euo pipefail
           umask 077
+          trap 'rm -f .cloudflare-secrets' EXIT
           : > .cloudflare-secrets
-          for key in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET ALLOWED_TELEGRAM_USER_IDS TAVILY_API_KEY TELEGRAM_ARCHIVE_CHAT_ID EXA_API_KEY BRAVE_SEARCH_API_KEY TINYFISH_API_KEY OPENROUTER_API_KEY OPENROUTER_MODEL OPENROUTER_MODELS GITHUB_TOKEN; do
+          for key in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET ALLOWED_TELEGRAM_USER_IDS TAVILY_API_KEY TELEGRAM_ARCHIVE_CHAT_ID EXA_API_KEY BRAVE_SEARCH_API_KEY TINYFISH_API_KEY OPENROUTER_API_KEY OPENROUTER_MODEL OPENROUTER_MODELS AI_ROUTER_CONFIG GITHUB_TOKEN; do
             value="${!key:-}"
             if [ -n "$value" ]; then printf '%s=%s\n' "$key" "$value" >> .cloudflare-secrets; fi
           done
           npx cf deploy --prebuilt --mode production --secrets-file .cloudflare-secrets --force
-          rm -f .cloudflare-secrets
       - name: Register Telegram webhook and commands
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
