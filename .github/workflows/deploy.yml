@@ -54,6 +54,9 @@ jobs:
         run: |
           npm run typecheck
           npm test
+          node --check scripts/migrate.mjs
+          node --check scripts/set-webhook.mjs
+          node --check scripts/set-commands.mjs
       - name: Build once
         run: npx cf build
       - name: Validate deployment bundle
