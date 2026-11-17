@@ -205,7 +205,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     try {
       const page = await fetchTinyFishPage(env, validated.url.toString());
       const title = boundedHtml(page.title, 180);
-      const url = boundedHtml(page.finalUrl, 260);
+      const url = boundedHtml(validated.url.toString(), 260);
       const body = boundedHtml(page.text, 3000);
       await reply(env, chatId, `<b>${title}</b>\n<a href="${url}">Mở trang gốc</a>\n\n<pre>${body}</pre>`);
     } catch (error) {
