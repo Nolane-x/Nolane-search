@@ -71,7 +71,7 @@ Create a scoped Cloudflare API token with the permissions documented in SECRETS.
 
 Once the required secrets have been added:
 1. Push a source change to main or open Actions → Deploy Cloudflare Worker → Run workflow.
-2. The workflow runs typecheck/tests/build validation, applies unapplied D1 migrations, deploys the Worker and runtime secrets, then registers the Telegram webhook and command menu.
+2. The workflow runs typecheck/tests/build validation, applies D1 migrations only when migration files changed, deploys the Worker and runtime secrets, then registers the Telegram webhook and command menu. For a manual deployment, enable the `apply_migrations` input only when you have added a new migration and the Cloudflare token has Account > D1 > Edit permission. The currently applied migrations are `0001_core.sql` and `0002_deep_search_jobs.sql`.
 3. Confirm the Deploy workflow is green.
 4. Open the health URL above. Expected JSON includes ok: true and database: reachable.
 
