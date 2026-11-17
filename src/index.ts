@@ -163,11 +163,16 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     ).bind(job.id, String(job.chatId), String(userId), job.query, job.createdAt, job.createdAt).run();
     try {
       await env.SEARCH_JOBS.send(job);
-      await reply(env, chatId, `Đã tạo job mới từ truy vấn cũ. Job ID: <code>${job.id}</code>`);
     } catch (error) {
       await env.DB.prepare("UPDATE deep_search_jobs SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ?")
         .bind(error instanceof Error ? error.message.slice(0, 300) : "Queue send failed", Date.now(), job.id).run();
       await reply(env, chatId, "Không thể đưa job chạy lại vào Queue. Hãy kiểm tra Cloudflare Queue.");
+      return;
+    }
+    try {
+      await reply(env, chatId, `Đã tạo job mới từ truy vấn cũ. Job ID: <code>${job.id}</code>`);
+    } catch (error) {
+      console.error("Job queued but acknowledgement reply failed:", error instanceof Error ? error.message : "unknown");
     }
     return;
   }
@@ -202,16 +207,22 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
          VALUES (?, ?, ?, ?, 'queued', 0, ?, ?)`,
       ).bind(job.id, String(chatId), String(userId), args, job.createdAt, job.createdAt).run();
       await env.SEARCH_JOBS.send(job);
-      const message = `<b>Deep Search đã được xếp hàng.</b>\nJob ID: <code>${job.id}</code>\nMình sẽ chạy nhiều truy vấn, khử trùng lặp và gửi báo cáo vào cuộc trò chuyện này khi hoàn tất.`;
-      await reply(env, chatId, message);
-      await sendToArchive(env, `<b>Deep Search queued</b>\n${htmlEscape(args)}\nJob: <code>${htmlEscape(job.id)}</code>`);
     } catch (error) {
-      console.error("Queue send failed:", error instanceof Error ? error.message : "unknown");
+      console.error("Deep Search enqueue failed:", error instanceof Error ? error.message : "unknown");
       await env.DB.prepare("UPDATE deep_search_jobs SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ?")
         .bind(error instanceof Error ? error.message.slice(0, 300) : "Queue send failed", Date.now(), job.id)
         .run().catch(() => undefined);
       await reply(env, chatId, "Không thể tạo Deep Search job. Hãy kiểm tra cấu hình Cloudflare Queue.");
+      return;
     }
+
+    const message = `<b>Deep Search đã được xếp hàng.</b>\nJob ID: <code>${job.id}</code>\nMình sẽ chạy nhiều truy vấn, khử trùng lặp và gửi báo cáo vào cuộc trò chuyện này khi hoàn tất.`;
+    try {
+      await reply(env, chatId, message);
+    } catch (error) {
+      console.error("Deep Search queued but acknowledgement reply failed:", error instanceof Error ? error.message : "unknown");
+    }
+    await sendToArchive(env, `<b>Deep Search queued</b>\n${htmlEscape(args)}\nJob: <code>${htmlEscape(job.id)}</code>`);
     return;
   }
 
