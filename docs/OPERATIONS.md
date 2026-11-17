@@ -12,6 +12,7 @@
 | /tech query | Technology + GitHub search |
 | /github query | GitHub repository search |
 | /wiki query | Free English/Vietnamese Wikipedia reference search |
+| /wiki query | Free English/Vietnamese Wikipedia reference search |
 | /research query | Research discovery |
 | /news query | News search |
 | /deep question | Queue multi-query research |
@@ -23,7 +24,17 @@
 | /jobs | List the latest eight Deep Search jobs |
 | /retry JOB_ID | Re-enqueue a failed Deep Search query as a new job |
 
-Plain text messages are treated as /search.
+Plain text messages are treated as /search. Search results show five items per page and up to 12 candidates; pagination sessions are user/chat-bound and expire after 15 minutes.
+
+## Search operators
+
+- `site:example.com` limits results to the specified domain and its subdomains.
+- `filetype:pdf` filters results whose URL path ends with `.pdf`.
+- `intitle:workers` requires all specified tokens to occur in the result title.
+- `after:2026-01-10` accepts published timestamps from 2026-01-11 onward; `before:2026-02-01` accepts timestamps before 2026-02-01. Combined, they define a strict date interval.
+- Date filters exclude results without a parseable publication timestamp. Only ISO `YYYY-MM-DD` dates are currently accepted.
+
+Examples: `/search cloudflare site:developers.cloudflare.com`, `/search workers filetype:pdf`, `/search cloudflare intitle:workers`, `/search AI after:2026-01-10 before:2026-02-01`.
 
 ## Result delivery and archive
 
