@@ -8,6 +8,12 @@ on:
       - 'README.md'
       - 'AGENTS.md'
   workflow_dispatch:
+    inputs:
+      apply_migrations:
+        description: "Apply D1 migrations (requires Account > D1 > Edit permission)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -36,6 +42,8 @@ jobs:
           done
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
@@ -50,7 +58,29 @@ jobs:
         run: npx cf build
       - name: Validate deployment bundle
         run: npx cf deploy --prebuilt --mode production --dry-run
+      - name: Detect whether D1 migrations are required
+        id: migrations
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          EVENT_SHA: ${{ github.sha }}
+          MANUAL_APPLY_MIGRATIONS: ${{ inputs.apply_migrations }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=false
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            [[ "$MANUAL_APPLY_MIGRATIONS" == "true" ]] && required=true
+          elif [[ "$EVENT_BEFORE" =~ ^0+$ ]]; then
+            required=true
+          elif git diff --name-only "$EVENT_BEFORE" "$EVENT_SHA" -- database/migrations | grep -q .; then
+            required=true
+          fi
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+          echo "D1 migration required: $required"
+
       - name: Apply D1 migrations
+        if: steps.migrations.outputs.required == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: "1172c01120a2470aa12f81e5b4778556"
