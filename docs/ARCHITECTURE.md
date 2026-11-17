@@ -81,6 +81,7 @@ Deep Search jobs are asynchronous and are recorded in D1 before enqueueing.
 - The dead-letter consumer marks the D1 job failed and attempts to notify the originating Telegram chat.
 - /jobs exposes the latest eight jobs for the requesting user; /retry JOB_ID re-enqueues a failed query as a new job.
 - Duplicate or stale deliveries are guarded by a conditional D1 claim. This reduces duplicate work but does not guarantee exactly-once Telegram delivery if an external send succeeds immediately before a Worker crash.
+- Completed and failed job records are pruned after 30 days; queued/running jobs are not automatically deleted.
 
 ### No R2 or KV in MVP
 

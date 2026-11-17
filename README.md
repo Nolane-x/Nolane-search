@@ -26,7 +26,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Personal index | /local words | D1 FTS5 over monitored-page extracts |
 | Website monitoring | /watch https://example.com | Scheduled HTTP checks and change alerts |
 | Watch management | /watches, /unwatch ID | List and disable watches |
-| Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs and retry failed jobs |
+| Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Status | /status | Provider configuration and compact index counters |
 
 Plain text messages are interpreted as web search. Use /help in the bot for the current command list.

@@ -129,8 +129,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
 
   if (command === "jobs") {
     const rows = await env.DB.prepare(
-      `SELECT id, query, status, attempts FROM deep_search_jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT 8`,
-    ).bind(String(userId)).all<{ id: string; query: string; status: string; attempts: number }>();
+      `SELECT id, query, status, attempts, last_error FROM deep_search_jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT 8`,
+    ).bind(String(userId)).all<{ id: string; query: string; status: string; attempts: number; last_error: string | null }>();
     if (!rows.results.length) {
       await reply(env, chatId, "Chưa có Deep Search job nào. Dùng <code>/deep câu hỏi</code> để bắt đầu.");
       return;
@@ -138,7 +138,11 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     const lines = ["<b>Deep Search jobs gần đây</b>"];
     for (const row of rows.results) {
       lines.push(`<code>${htmlEscape(row.id)}</code> · <b>${jobStatusLabel(row.status)}</b> · ${row.attempts} lần thử`);
-      lines.push(htmlEscape(row.query.slice(0, 180)), "");
+      lines.push(htmlEscape(row.query.slice(0, 180)));
+      if (row.last_error && row.status === "failed") {
+        lines.push(`<i>Lỗi: ${htmlEscape(row.last_error.slice(0, 180))}</i>`);
+      }
+      lines.push("");
     }
     lines.push("Dùng <code>/retry JOB_ID</code> để chạy lại job thất bại.");
     await reply(env, chatId, lines.join("\n"));
@@ -405,6 +409,9 @@ export default {
       const stats = await checkWatchTargets(env);
       await env.DB.prepare("DELETE FROM search_cache WHERE expires_at <= ?").bind(Date.now()).run();
       await env.DB.prepare("DELETE FROM telegram_updates WHERE processed_at < datetime('now', '-7 days')").run();
+      await env.DB.prepare(
+        "DELETE FROM deep_search_jobs WHERE status IN ('completed', 'failed') AND created_at < ?",
+      ).bind(Date.now() - 30 * 24 * 60 * 60 * 1000).run();
       if (stats.checked) console.log("Watch run complete", stats);
     } catch (error) {
       console.error("Scheduled maintenance failed:", error instanceof Error ? error.message : "unknown");

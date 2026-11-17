@@ -1,6 +1,6 @@
 # Verified Project Status
 
-Last updated: 2026-11-17. This file records observed state, not intended state. Reliability changes in the current commit are pending fresh CI validation and deployment.
+Last updated: 2026-11-17. This file records observed state, not intended state. Deep Search reliability changes from commit aefca595ef0cd7f16ab4d6d42c9988e3934f2bb4 passed CI; the subsequent retention/status-detail patch is pending CI. Deployment remains blocked by the missing Cloudflare API token.
 
 ## GitHub
 
@@ -16,8 +16,9 @@ GitHub Actions verification:
 
 | Run | Result | Verified steps |
 |---|---|---|
-| CI run 44031953705 | PASS | Checkout, Node setup, dependency install, TypeScript typecheck, unit tests and Cloudflare build |
-| Deploy run 44031953891 | BLOCKED | Stopped at the first secret validation check because CLOUDFLARE_API_TOKEN was empty; no migration/deploy/webhook step ran |
+| CI run 44054361397 (commit 47956d2) | PASS | Checkout, Node setup, dependency install, TypeScript typecheck, unit tests and Cloudflare build |
+| CI run 44054753094 (commit aefca59) | PASS | Same checks after isolating Queue enqueue from Telegram acknowledgement |
+| Deploy run 44054753269 | BLOCKED | Stopped at the first secret validation check; no migration/deploy/webhook step ran |
 
 The latest run confirms the same blocker previously observed. The validation loop exits on the first missing secret, so this run does not prove whether the other required values are present. A new CI run for the reliability changes must pass before release.
 
@@ -65,6 +66,7 @@ Optional:
 
 - Migration 0002_deep_search_jobs.sql has not yet been applied to the live D1 database.
 - The updated main-queue retry and DLQ consumer have not yet been deployed or exercised.
+- The current commit adds 30-day pruning for completed/failed Deep Search job records; this cleanup behavior has not yet been deployed.
 - Deployment with a real Cloudflare API token.
 - Runtime secret upload.
 - Telegram webhook and command registration.
