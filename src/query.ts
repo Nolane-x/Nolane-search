@@ -4,6 +4,8 @@ export interface SearchFilters {
   sites: string[];
   filetypes: string[];
   titleTerms: string[];
+  urlTerms: string[];
+  excludedTerms: string[];
   after: number | null;
   beforeExclusive: number | null;
 }
@@ -31,11 +33,13 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
     sites: [],
     filetypes: [],
     titleTerms: [],
+    urlTerms: [],
+    excludedTerms: [],
     after: null,
     beforeExclusive: null,
   };
   const removable: Array<[number, number]> = [];
-  const pattern = /(?:^|\s)(site|filetype|intitle|after|before):([^\s]+)/gi;
+  const pattern = /(?:^|\s)(site|filetype|intitle|inurl|after|before):([^\s]+)/gi;
 
   for (const match of query.matchAll(pattern)) {
     const full = match[0];
@@ -61,6 +65,11 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
         filters.titleTerms.push(value.toLowerCase());
         valid = true;
       }
+    } else if (operator === "inurl") {
+      if (value.length >= 2 && value.length <= 100 && /^[a-z0-9._/-]+$/i.test(value)) {
+        filters.urlTerms.push(value.toLowerCase());
+        valid = true;
+      }
     } else if (operator === "after") {
       const date = validDateStart(value);
       if (date !== null) {
@@ -79,6 +88,16 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
     }
 
     if (valid) removable.push([index, index + full.length]);
+  }
+
+  const negativePattern = /(?:^|\s)-([^\s]+)/g;
+  for (const match of query.matchAll(negativePattern)) {
+    const term = (match[1] || "").toLowerCase();
+    if (term.length >= 2 && term.length <= 80) {
+      filters.excludedTerms.push(term);
+      const index = match.index ?? 0;
+      removable.push([index, index + match[0].length]);
+    }
   }
 
   let rankingQuery = query;
@@ -105,8 +124,8 @@ function tokens(value: string): string[] {
 
 /** Apply parsed operators locally as a second guard, even if a provider ignores them. */
 export function applySearchFilters(parsed: ParsedSearchQuery, results: SearchResult[]): SearchResult[] {
-  const { sites, filetypes, titleTerms, after, beforeExclusive } = parsed.filters;
-  if (!sites.length && !filetypes.length && !titleTerms.length && after === null && beforeExclusive === null) {
+  const { sites, filetypes, titleTerms, urlTerms, excludedTerms, after, beforeExclusive } = parsed.filters;
+  if (!sites.length && !filetypes.length && !titleTerms.length && !urlTerms.length && !excludedTerms.length && after === null && beforeExclusive === null) {
     return results;
   }
 
@@ -122,6 +141,12 @@ export function applySearchFilters(parsed: ParsedSearchQuery, results: SearchRes
     if (titleTerms.length) {
       const titleTokens = new Set(tokens(item.title));
       if (!titleTerms.every(term => tokens(term).every(token => titleTokens.has(token)))) return false;
+    }
+
+    if (urlTerms.length && !urlTerms.every(term => item.url.toLowerCase().includes(term))) return false;
+    if (excludedTerms.length) {
+      const searchable = new Set([...tokens(item.title), ...tokens(item.snippet), ...tokens(item.url)]);
+      if (excludedTerms.some(term => tokens(term).some(token => searchable.has(token)))) return false;
     }
 
     if (after !== null || beforeExclusive !== null) {

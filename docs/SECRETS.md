@@ -31,6 +31,10 @@ Cloudflare account ID is already recorded in cloudflare.config.ts and the workfl
 | ALLOWED_TELEGRAM_USER_IDS | Restrict use to the owner's numeric Telegram ID | Comma-separated IDs. Initially optional so first deploy can occur; message /id, then add your ID and redeploy. Without IDs, only /id and /start bootstrap responses work. |
 | TELEGRAM_ARCHIVE_CHAT_ID | Destination for result archives and website snapshot documents | Create a private channel, add bot as administrator with post permission, then obtain channel ID (usually starts with -100). |
 
+## Private browser search portal
+
+No additional browser secret is required. After `ALLOWED_TELEGRAM_USER_IDS` contains the owner's Telegram numeric ID, open the private bot chat and send `/web`. The bot returns a one-time browser login link that expires after five minutes. Do not share it. Browser sessions last up to seven days and can be revoked with the web UI's Logout action. The portal's search and AI endpoints are authenticated and rate-limited per user; it is not a public anonymous search API.
+
 ## Optional search and AI providers
 
 | Secret | Feature |

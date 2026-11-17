@@ -17,9 +17,9 @@ Telegram user → Telegram webhook → Cloudflare Worker
 - Enforce owner allowlist.
 - Parse command and select search mode.
 
-Quick Search → Tavily primary → (when unavailable or fewer than four results) parallel Exa/TinyFish/Brave/Wikipedia fallback → merge → local operator enforcement → normalized URL deduplication → token-overlap relevance + freshness + domain-diversity ranking → up to 12 candidates → Telegram pages of five results.
+Quick Search → Tavily primary → (when unavailable or fewer than six results) parallel Exa/TinyFish/Brave/Wikipedia fallback → merge → local operator enforcement → normalized URL deduplication → IDF-weighted title/snippet/URL coverage + provider prior + snippet quality + query-aware freshness + exact-phrase/source-type priors → domain-diversity ranking → up to 20 candidates. The ranking remains a transparent heuristic, not a learned relevance model.
 
-Deep Search → D1 job record → Cloudflare Queue → bounded query expansion → parallel Tavily/Exa/Brave/TinyFish retrieval → deduplicate/rank → optional TinyFish Fetch enrichment of up to five sources → AI Router research synthesis across configured model/key routes → Telegram report.
+Deep Search → D1 job record → Cloudflare Queue → AI-assisted complementary query planning (with deterministic fallback) → bounded parallel Tavily/Exa/Brave/TinyFish retrieval → deduplicate/rank → optional TinyFish Fetch enrichment of up to seven sources → re-rank enriched evidence → AI Router research synthesis across configured model/key routes → Telegram report.
 
 Direct AI → `/ai` command → task-aware AI Router → rotated/priority provider-key/model candidates → protocol adapter → bounded failover → Telegram reply. Search-grounded AI → `/ask` → federated search → evidence-only prompt → AI Router → numbered source list.
 - D1 records queued/running/completed/failed state, attempt count and last failure reason.
@@ -28,6 +28,15 @@ Direct AI → `/ai` command → task-aware AI Router → rotated/priority provid
 - /jobs lists recent work; /retry JOB_ID creates a new job from a failed query.
 
 Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt policy check → bounded HTTP checks → content hash → compact D1 extract/FTS5 → optional Telegram snapshot document and change alert.
+
+## Private browser portal
+
+- `/web` can be used only by an allowlisted owner in a private Telegram chat. It creates a cryptographically random, one-time ticket, stores only the SHA-256 hash in D1, expires it after five minutes, and sends the owner a private link.
+- `POST /api/auth/exchange` consumes the ticket with a conditional D1 update and creates a seven-day server-side session. The browser receives only a Secure, HttpOnly, SameSite=Strict cookie; only its hash is stored in D1.
+- `GET /api/auth/me` checks session state. `POST /api/auth/logout` revokes the current session. Expired tickets/sessions and stale rate-limit rows are removed by the scheduled maintenance task.
+- `GET /api/search`, `POST /api/ask` and `POST /api/chat` require an authenticated session whose Telegram user remains on the allowlist. Search, AI Overview and chat have separate per-user D1-backed per-minute limits. Unsafe or oversized inputs are rejected.
+- The UI is served inline from the Worker at `/` and uses no external script/font dependencies. Chat history is bounded in browser local storage and sent as context only when the user sends a message; it is not stored as a server transcript.
+- This is a private browser search interface backed by external retrieval providers. It is not an independent full-Web crawl/index and should not be described as Google-equivalent coverage.
 
 ## Provider adapters
 
@@ -50,7 +59,7 @@ Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt polic
 - wiki: direct Wikipedia reference lookup, English by default and Vietnamese when the query contains Vietnamese diacritics.
 - local: FTS5 search over monitored-page extracts.
 
-The `/search` command accepts a small Google-style operator set: `site:domain`, `filetype:pdf`, `intitle:words`, `after:YYYY-MM-DD` and `before:YYYY-MM-DD`. The Worker enforces these filters locally even if a provider ignores them. Date filters use strict boundaries and require a parseable `publishedAt` timestamp; results without one are excluded. The `/site` command is a shortcut that prefixes the query with `site:`. The `/read` command uses TinyFish Fetch to extract a single HTTPS page. General web search only queries fallback providers when Tavily fails or returns fewer than four results; Wikipedia joins that fallback set and is also available directly through `/wiki`.
+The `/search` command accepts Google-style operators: `site:domain`, `filetype:pdf`, `intitle:words`, `inurl:path`, negative terms such as `-deprecated`, `after:YYYY-MM-DD` and `before:YYYY-MM-DD`. The Worker enforces these filters locally even if a provider ignores them. Date filters use strict boundaries and require a parseable `publishedAt` timestamp; results without one are excluded. The `/site` command is a shortcut that prefixes the query with `site:`. The `/read` command uses TinyFish Fetch to extract a single HTTPS page. General web search only queries fallback providers when Tavily fails or returns fewer than four results; Wikipedia joins that fallback set and is also available directly through `/wiki`.
 
 ## AI routing and credential handling
 
