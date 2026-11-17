@@ -7,7 +7,7 @@ Last updated: 2026-11-17. This file separates verified live resources from funct
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: main
 - Latest tested source implementation: 6ca9584732a68d951f13d5cd4a404dd19dd65132
-- Latest repository HEAD: a99292366860df24e6c1629703e045b41d4ed2fb (workflow assertion follow-up)
+- Latest repository HEAD: 156be1babcb36050ad94b5a737c3becd297d33bb (documentation-only status/setup refresh)
 - The repository is public; the connected GitHub integration has admin/push permission.
 - .github/workflows/export-worker.yml installs dependencies, type-checks, tests, builds with cf build, verifies the stale-job recovery marker in the compiled bundle, publishes output to cloudflare-build and smoke-tests the live Worker health endpoint.
 
