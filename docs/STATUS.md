@@ -6,8 +6,9 @@ Last updated: 2026-11-17. This file separates verified live resources from funct
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: main
-- Latest tested source implementation: 6ca9584732a68d951f13d5cd4a404dd19dd65132
-- Latest repository HEAD: 156be1babcb36050ad94b5a737c3becd297d33bb (documentation-only status/setup refresh)
+- Latest tested source implementation before this feature: 6ca9584732a68d951f13d5cd4a404dd19dd65132
+- Latest feature implementation merged: PR #1, head 61674f70559c9091517bcade266cd247f7de1f1b
+- Latest repository HEAD: b5dcf0f5140336d6f0d5e469d34b66b2c3015d2e (squash merge of PR #1)
 - The repository is public; the connected GitHub integration has admin/push permission.
 - .github/workflows/export-worker.yml installs dependencies, type-checks, tests, builds with cf build, verifies the stale-job recovery marker in the compiled bundle, publishes output to cloudflare-build and smoke-tests the live Worker health endpoint.
 
@@ -16,6 +17,7 @@ Last updated: 2026-11-17. This file separates verified live resources from funct
 | GitHub Actions run | Result | Verified scope |
 |---|---|---|
 | CI run 44059740938 | PASS | TypeScript type-check, unit tests and Cloudflare build for stale-job recovery implementation |
+| CI run 44074939761 | PASS | TypeScript type-check, unit tests including TinyFish/OpenRouter tests, and Cloudflare Worker build for PR #1 |
 | Export + smoke run 44059740893 | PASS | Compiled bundle contains stale-job recovery, output exported and live /health returned ok: true with database reachable |
 | Deploy run 44059740833 | BLOCKED | Required-secret validation stopped before GitHub Actions deployment, migration, secret upload or Telegram webhook registration |
 
@@ -74,17 +76,27 @@ Recommended:
 Optional:
 - EXA_API_KEY
 - BRAVE_SEARCH_API_KEY
+- TINYFISH_API_KEY
 - OPENROUTER_API_KEY
-- OPENROUTER_MODEL
+- OPENROUTER_MODEL (legacy)
+- OPENROUTER_MODELS (ordered fallback list)
 - GITHUB_TOKEN_SEARCH
 
-Do not paste secret values into chat, source files, issues or logs. Add them through GitHub repository Settings → Secrets and variables → Actions.
+Secret values are masked by GitHub and cannot be inspected through repository source. Confirm configuration through the Deploy workflow and `/health`/`/status`; do not paste secret values into chat, source files, issues or logs.
+
+## New capabilities merged but not yet live-verified
+
+- TinyFish Search is integrated into web fallback, technology, research and news search.
+- TinyFish Fetch enriches up to five Deep Search sources and powers the private `/read https://...` command.
+- OpenRouter accepts ordered model fallbacks through `OPENROUTER_MODELS`; legacy `OPENROUTER_MODEL` remains supported.
+- GitHub Actions deployment now uploads `TINYFISH_API_KEY` and `OPENROUTER_MODELS` when present.
+- PR #1 CI passed type-check, unit tests and Cloudflare build. This is build validation, not proof of live API credentials or a production deployment.
 
 ## Not yet verified
 
 - Telegram webhook and command registration.
 - Telegram bot replies and owner allowlist.
-- Live Tavily, Exa, Brave and OpenRouter API requests.
+- Live Tavily, Exa, Brave, TinyFish and OpenRouter API requests.
 - Quick Search response delivery to Telegram.
 - Deep Search Queue processing, retries, DLQ and /jobs + /retry end-to-end.
 - Stale-job recovery on an actual interrupted job (source is deployed and build-verified, but no induced failure test has been performed).
