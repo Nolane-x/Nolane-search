@@ -19,7 +19,9 @@ Telegram user → Telegram webhook → Cloudflare Worker
 
 Quick Search → Tavily primary → (when unavailable or fewer than four results) parallel Exa/TinyFish/Brave/Wikipedia fallback → merge → local operator enforcement → normalized URL deduplication → token-overlap relevance + freshness + domain-diversity ranking → up to 12 candidates → Telegram pages of five results.
 
-Deep Search → D1 job record → Cloudflare Queue → bounded query expansion → parallel Tavily/Exa/Brave/TinyFish retrieval → deduplicate/rank → optional TinyFish Fetch enrichment of up to five sources → optional OpenRouter synthesis with ordered model fallback → Telegram report.
+Deep Search → D1 job record → Cloudflare Queue → bounded query expansion → parallel Tavily/Exa/Brave/TinyFish retrieval → deduplicate/rank → optional TinyFish Fetch enrichment of up to five sources → AI Router research synthesis across configured model/key routes → Telegram report.
+
+Direct AI → `/ai` command → task-aware AI Router → rotated/priority provider-key/model candidates → protocol adapter → bounded failover → Telegram reply. Search-grounded AI → `/ask` → federated search → evidence-only prompt → AI Router → numbered source list.
 - D1 records queued/running/completed/failed state, attempt count and last failure reason.
 - Queue deliveries use bounded retry delays; exhausted jobs enter the dead-letter queue and notify the originating user.
 - Duplicate deliveries do not re-run jobs that are already completed or currently claimed.
@@ -35,7 +37,8 @@ Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt polic
 - TinyFish Search: optional ranked web/news/academic discovery; TinyFish Fetch extracts clean Markdown from selected URLs and powers /read.
 - GitHub Search API: public repository search; optional user token raises limits.
 - MediaWiki Action API: free English/Vietnamese encyclopedia lookup; the query language is selected heuristically from Vietnamese diacritics. Wikipedia is an optional reference source and is not treated as primary evidence or current news.
-- OpenRouter: optional Deep Search synthesis. OPENROUTER_MODELS supplies ordered model fallbacks; the legacy OPENROUTER_MODEL remains supported.
+- AI Router: multi-key model routes using OpenAI-compatible Chat Completions, Anthropic Messages or Gemini Interactions. Task tags, balanced/priority/cheapest strategy, per-route timeout, bounded failover and optional cost estimates are configured through encrypted `AI_ROUTER_CONFIG`; legacy OpenRouter is retained as a fallback.
+- OpenRouter: existing ordered model fallback through `OPENROUTER_MODELS`; the legacy `OPENROUTER_MODEL` remains supported.
 
 ## Modes
 
@@ -48,6 +51,15 @@ Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt polic
 - local: FTS5 search over monitored-page extracts.
 
 The `/search` command accepts a small Google-style operator set: `site:domain`, `filetype:pdf`, `intitle:words`, `after:YYYY-MM-DD` and `before:YYYY-MM-DD`. The Worker enforces these filters locally even if a provider ignores them. Date filters use strict boundaries and require a parseable `publishedAt` timestamp; results without one are excluded. The `/site` command is a shortcut that prefixes the query with `site:`. The `/read` command uses TinyFish Fetch to extract a single HTTPS page. General web search only queries fallback providers when Tavily fails or returns fewer than four results; Wikipedia joins that fallback set and is also available directly through `/wiki`.
+
+## AI routing and credential handling
+
+- `AI_ROUTER_CONFIG` is an encrypted Worker secret containing provider entries. Each entry represents one API key; multiple entries may share the same base URL and models to rotate keys from one vendor.
+- Supported wire protocols are OpenAI-compatible Chat Completions, Anthropic Messages and Gemini Interactions. Provider entries have a public HTTPS base URL, key, label, priority, model list and optional task/cost metadata.
+- Candidate models are filtered by requested task. Strategies are balanced rotation, configured priority order, or cheapest based on declared per-million-token prices.
+- Each route is tried at most once per request, with a hard maximum of 24 candidates. HTTP errors, timeouts and empty responses trigger fallback. API-key values are never returned in status or written to logs.
+- Optional cost metadata produces estimates only. The current version surfaces token usage when returned by a vendor, but does not yet persist a complete cross-provider billing ledger.
+- Balanced rotation is per Worker isolate. Cloudflare may run several isolates, so this is not a globally synchronized round-robin scheduler.
 
 ## Ranking
 
