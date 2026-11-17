@@ -33,7 +33,13 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Status | /status | Provider configuration and compact index counters |
 
-Plain text messages are interpreted as web search. Results show five items per page; inline Previous/Next buttons browse up to 12 ranked candidates. Pagination sessions are private to the requesting user/chat and expire after 15 minutes. `/wiki` is a reference lookup, not a substitute for primary sources or current reporting. Use /help in the bot for the current command list.
+Plain text messages are interpreted as web search. Results show five items per page; inline Previous/Next buttons browse up to 12 ranked candidates. Pagination sessions are private to the requesting user/chat and expire after 15 minutes. `/wiki` is a reference lookup, not a substitute for primary sources or current reporting.
+
+### Search operators
+
+`/search cloudflare site:developers.cloudflare.com` restricts results to a domain and its subdomains. `filetype:pdf` filters by URL extension; `intitle:workers` requires those title tokens. `after:2026-01-10 before:2026-02-01` restricts results to publication timestamps strictly after 10 January and strictly before 1 February. Date filters exclude results without a parseable publication timestamp. Use ISO dates (`YYYY-MM-DD`).
+
+Use /help in the bot for the current command list.
 
 ## Architecture
 
