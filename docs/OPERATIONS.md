@@ -72,6 +72,20 @@ Examples: `/search cloudflare site:developers.cloudflare.com`, `/search workers 
 
 External search APIs have their own quotas and possible paid overages. Wikipedia uses the public MediaWiki Action API without a secret; requests include an identifying User-Agent and a short timeout. Monitor paid-provider dashboards.
 
+
+## AI Router
+
+- `AI_ROUTER_CONFIG` is a single encrypted Worker secret containing provider/key/model routes. The deployment workflow supplies an empty safe configuration if the owner has not added this secret yet.
+- Each provider entry represents one API key. Multiple keys from one vendor must be separate entries with different `id` labels; they may share the same base URL and model list.
+- Supported protocols: OpenAI-compatible Chat Completions, Anthropic Messages and Gemini Interactions. Custom endpoints must be public HTTPS.
+- `balanced` rotates the starting candidate per Worker isolate; `priority` tries higher configured priority first; `cheapest` uses supplied per-model token prices. Each candidate is attempted at most once, up to `maxAttempts` (maximum 24).
+- 429/5xx/auth/model errors, timeout or empty response moves to the next candidate. Failover does not guarantee that the rejected request is unbilled; check each provider's billing and quota.
+- `/ai prompt` routes a direct prompt; task prefixes include `fast`, `reasoning`, `coding`, `creative`, `translation`, `research`, `summary` and `classification`.
+- `/ask question` retrieves web evidence, asks the AI Router for an evidence-grounded synthesis and lists source links.
+- `/ai_status` and `/models` show configured route labels, protocols and model IDs without exposing keys. Configuration status does not prove API-key validity; a real `/ai` request is required to test upstream access.
+- Existing `OPENROUTER_API_KEY` and model variables remain a fallback route. Current production health reports one legacy OpenRouter key route and six model candidates until the owner adds their own `AI_ROUTER_CONFIG`.
+- Cost fields produce estimates only; a durable cross-provider billing ledger is not implemented. Balanced rotation is not globally synchronized across Worker isolates.
+
 ## Cloudflare resources
 
 - Worker: nolane-search
