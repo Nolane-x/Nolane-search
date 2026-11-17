@@ -181,7 +181,7 @@ async function invoke(candidate: Candidate, input: AiCompletionInput): Promise<{
     }
   } else if (provider.protocol === "anthropic-messages") {
     url = provider.baseUrl + "/v1/messages";
-    headers = { authorization: "Bearer " + provider.apiKey, "anthropic-version": "2026-10-21" };
+    headers = { "x-api-key": provider.apiKey, "anthropic-version": "2026-10-21" };
     const system = input.messages.filter(m => m.role === "system").map(m => m.content).join("\n\n");
     body = {
       model: model.id, max_tokens: maxTokens, temperature,
