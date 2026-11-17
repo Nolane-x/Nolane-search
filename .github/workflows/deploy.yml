@@ -70,7 +70,7 @@ jobs:
           set -euo pipefail
           required=false
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            [[ "$MANUAL_APPLY_MIGRATIONS" == "true" ]] && required=true
+            if [[ "$MANUAL_APPLY_MIGRATIONS" == "true" ]]; then required=true; fi
           elif [[ "$EVENT_BEFORE" =~ ^0+$ ]]; then
             required=true
           elif git diff --name-only "$EVENT_BEFORE" "$EVENT_SHA" -- database/migrations | grep -q .; then
