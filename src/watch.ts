@@ -17,24 +17,26 @@ interface RobotsGroup {
 function compileRobotsPattern(pattern: string): RegExp {
   const anchored = pattern.endsWith("$");
   const sourcePattern = anchored ? pattern.slice(0, -1) : pattern;
-  const regexMeta = new Set([".", "+", "?", "^", "$", "{", "}", "(", ")", "|", "[", "]", "\\\\"]);
+  const regexMeta = new Set([".", "+", "?", "^", "$", "{", "}", "(", ")", "|", "[", "]", String.fromCharCode(92)]);
   let source = "^";
   for (const character of sourcePattern) {
     if (character === "*") source += ".*";
-    else source += regexMeta.has(character) ? "\\\\" + character : character;
+    else source += regexMeta.has(character) ? String.fromCharCode(92) + character : character;
   }
   if (anchored) source += "$";
   return new RegExp(source);
 }
 
-/** Parse applicable RFC 9309 Allow/Disallow groups for the NolaneSearchBot product token. */
+/** Parse the core RFC 9309 Allow/Disallow groups for NolaneSearchBot. */
 export function parseRobotsRules(content: string, userAgent = "NolaneSearchBot"): RobotsRule[] {
   const groups: RobotsGroup[] = [];
   let current: RobotsGroup | null = null;
   let hasRules = false;
 
-  for (const rawLine of content.split(/\\r?\\n/)) {
-    const line = rawLine.replace(/\\s*#.*$/, "").trim();
+  for (const rawLine of content.split("\n")) {
+    const withoutCarriageReturn = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+    const commentAt = withoutCarriageReturn.indexOf("#");
+    const line = (commentAt >= 0 ? withoutCarriageReturn.slice(0, commentAt) : withoutCarriageReturn).trim();
     if (!line) continue;
     const separator = line.indexOf(":");
     if (separator < 0) continue;
@@ -63,11 +65,14 @@ export function parseRobotsRules(content: string, userAgent = "NolaneSearchBot")
   const matching = groups.filter(group => group.agents.some(agent => agent !== "*" && token.includes(agent)));
   const selected = matching.length ? matching : groups.filter(group => group.agents.includes("*"));
 
-  return selected.flatMap(group => group.rules).map(rule => ({
-    ...rule,
-    specificity: new TextEncoder().encode(rule.pattern.replace(/[\\*$]/g, "")).length,
-    regex: compileRobotsPattern(rule.pattern),
-  }));
+  return selected.flatMap(group => group.rules).map(rule => {
+    const withoutEndAnchor = rule.pattern.endsWith("$") ? rule.pattern.slice(0, -1) : rule.pattern;
+    return {
+      ...rule,
+      specificity: new TextEncoder().encode(withoutEndAnchor.replaceAll("*", "")).length,
+      regex: compileRobotsPattern(rule.pattern),
+    };
+  });
 }
 
 /** Longest matching rule wins; Allow wins an equal-length tie. */
@@ -82,7 +87,6 @@ export function isAllowedByRobots(urlInput: string | URL, rules: RobotsRule[]): 
   }
   return best?.allow ?? true;
 }
-
 
 interface WatchRow {
   id: number;
