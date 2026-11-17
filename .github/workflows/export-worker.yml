@@ -71,3 +71,24 @@ jobs:
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
               commit -m "build: export Cloudflare Worker bundle from $GITHUB_SHA"
           git push --force origin HEAD:refs/heads/cloudflare-build
+
+      - name: Smoke test deployed Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(curl --fail --silent --show-error \
+            --retry 5 --retry-connrefused --retry-delay 2 --max-time 15 \
+            https://nolane-search.nolane-file.workers.dev/health)"
+          printf '%s\n' "$body"
+          printf '%s' "$body" | node --input-type=commonjs -e '
+            let raw = "";
+            process.stdin.on("data", chunk => raw += chunk);
+            process.stdin.on("end", () => {
+              const data = JSON.parse(raw);
+              if (data.ok !== true || data.database !== "reachable") {
+                console.error("Worker health check failed:", data);
+                process.exit(1);
+              }
+              console.log("Nolane Search Worker health check passed.");
+            });
+          '
