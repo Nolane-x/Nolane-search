@@ -27,6 +27,7 @@ export default defineConfig({
       OPENROUTER_API_KEY: bindings.secret(),
       OPENROUTER_MODEL: bindings.secret(),
       OPENROUTER_MODELS: bindings.secret(),
+      AI_ROUTER_CONFIG: bindings.secret(),
     },
     triggers: [
       triggers.queue({ name: "nolane-search-jobs", deadLetterQueue: "nolane-search-dlq", maxBatchSize: 3, maxRetries: 3, retryDelay: 30, maxConcurrency: 1 }),
