@@ -6,11 +6,11 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 
 ## Current status
 
-- Cloudflare D1 and two Queues have been provisioned in the linked account.
-- Source implementation is being assembled and must pass CI before deployment.
-- Worker deployment and Telegram webhook registration are not yet verified.
-- Required user secrets are listed in docs/SECRETS.md.
-- Verified resource details and release gates are in docs/STATUS.md.
+- Source tree is committed and CI has passed type-checking, unit tests and Cloudflare build validation.
+- Cloudflare D1 and two Queues have been provisioned; the first D1 schema migration is applied.
+- The deploy workflow is currently blocked because the GitHub Actions secret CLOUDFLARE_API_TOKEN is missing or not named exactly. The workflow log showed this environment variable was empty.
+- Worker deployment and Telegram webhook registration are not yet verified; the bot is not live.
+- Follow docs/SECRETS.md to configure the required secrets. docs/STATUS.md records exact verified status and resource identifiers.
 
 ## Initial features
 
