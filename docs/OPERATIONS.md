@@ -13,7 +13,7 @@
 | /github query | GitHub repository search |
 | /ai prompt | Direct AI request through the multi-provider router |
 | /ask question | Web search followed by AI evidence synthesis |
-| /ai-status, /models | AI provider/key-route and model configuration overview |
+| /ai_status, /models | AI provider/key-route and model configuration overview |
 | /wiki query | Free English/Vietnamese Wikipedia reference search |
 | /wiki query | Free English/Vietnamese Wikipedia reference search |
 | /research query | Research discovery |
