@@ -4,6 +4,24 @@ import type { Env, SearchResult } from "./types";
 
 const USER_AGENT = "NolaneSearch/0.2 (+https://github.com/Nolane-x/Nolane-search)";
 
+function normalizePublishedAt(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const parsed = Date.parse(value);
+  if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
+  const relative = value.trim().toLowerCase();
+  if (relative === "just now" || relative === "moments ago") return new Date().toISOString();
+  if (relative === "yesterday") return new Date(Date.now() - 86_400_000).toISOString();
+  const match = relative.match(/^(\d+|an?|one)\s+(second|minute|hour|day|week|month|year)s?\s+ago$/);
+  if (!match) return undefined;
+  const amount = match[1] === "a" || match[1] === "an" || match[1] === "one" ? 1 : Number(match[1]);
+  if (!Number.isFinite(amount) || amount < 0 || amount > 100_000) return undefined;
+  const units: Record<string, number> = {
+    second: 1_000, minute: 60_000, hour: 3_600_000, day: 86_400_000,
+    week: 604_800_000, month: 2_592_000_000, year: 31_536_000_000,
+  };
+  return new Date(Date.now() - amount * (units[match[2]] || 0)).toISOString();
+}
+
 function domainOf(value: string): string {
   try { return new URL(value).hostname.replace(/^www\./, ""); } catch { return ""; }
 }
@@ -20,7 +38,7 @@ function normalizeResult(input: Partial<SearchResult> & { url?: string; title?: 
     domain: domainOf(url.toString()),
     provider,
     score: Number.isFinite(input.score) ? Number(input.score) : 0.5,
-    publishedAt: input.publishedAt,
+    publishedAt: normalizePublishedAt(input.publishedAt),
   };
 }
 

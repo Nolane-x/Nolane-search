@@ -39,20 +39,23 @@ describe("Telegram HTML formatting", () => {
   });
 
   it("paginates search results with stable numbering", () => {
-    const results = Array.from({ length: 12 }, (_, index) => ({
+    const results = Array.from({ length: 20 }, (_, index) => ({
       ...result, title: `Result ${index + 1}`, url: `https://example.com/${index + 1}`,
     }));
     const first = formatSearchResults("topic", "web", results, 0, SEARCH_PAGE_SIZE);
     const second = formatSearchResults("topic", "web", results, 1, SEARCH_PAGE_SIZE);
     const third = formatSearchResults("topic", "web", results, 2, SEARCH_PAGE_SIZE);
-    expect(first).toContain("Kết quả 1–5 / 12");
+    expect(first).toContain("Kết quả 1–5 / 20");
     expect(first).toContain("1. <a");
     expect(first).toContain("5. <a");
     expect(first).not.toContain("6. <a");
-    expect(second).toContain("Kết quả 6–10 / 12");
+    expect(second).toContain("Kết quả 6–10 / 20");
     expect(second).toContain("6. <a");
-    expect(third).toContain("Kết quả 11–12 / 12");
-    expect(third).toContain("12. <a");
+    expect(third).toContain("Kết quả 11–15 / 20");
+    expect(third).toContain("15. <a");
+    const fourth = formatSearchResults("topic", "web", results, 3, SEARCH_PAGE_SIZE);
+    expect(fourth).toContain("Kết quả 16–20 / 20");
+    expect(fourth).toContain("20. <a");
   });
 
   it("creates owner-session pagination callbacks and omits keyboard for one page", () => {

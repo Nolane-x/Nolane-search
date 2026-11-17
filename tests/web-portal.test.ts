@@ -1,0 +1,36 @@
+import { describe, expect, it } from "vitest";
+import worker from "../src/index";
+import type { Env, ExecutionContext } from "../src/types";
+
+const env = {} as Env;
+const context = { waitUntil() {} } as ExecutionContext;
+
+describe("private browser search portal", () => {
+  it("serves a responsive search and chat interface with no-store security headers", async () => {
+    const response = await worker.fetch(new Request("https://nolane-search.example/"), env, context);
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+    expect(html).toContain("Nolane Search");
+    expect(html).toContain("AI Overview");
+    expect(html).toContain("Nolane Chat");
+    expect(html).toContain("data-mode=\"research\"");
+  });
+
+  it("does not expose search results to anonymous browser requests", async () => {
+    const response = await worker.fetch(new Request("https://nolane-search.example/api/search?q=hello"), env, context);
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining("Phiên đăng nhập") });
+  });
+
+  it("rejects cross-origin ticket exchanges before accessing D1", async () => {
+    const response = await worker.fetch(new Request("https://nolane-search.example/api/auth/exchange", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://attacker.example" },
+      body: JSON.stringify({ ticket: "a".repeat(64) }),
+    }), env, context);
+    expect(response.status).toBe(403);
+  });
+});

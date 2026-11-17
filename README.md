@@ -1,6 +1,6 @@
 # Nolane Search
 
-**Telegram-first hybrid Internet search engine** built on Cloudflare Workers.
+**Private hybrid web search and AI research workspace** built on Cloudflare Workers, with Telegram as the secure login and bot interface.
 
 Nolane Search is a personal search interface inside Telegram. It combines external search providers with a small independent index of selected websites. It is not a general-purpose crawler indexing the entire Internet.
 
@@ -10,7 +10,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 - Cloudflare Worker `nolane-search` is deployed from `main`; its live `/health` endpoint returns `ok: true` and `database: reachable`.
 - D1 migrations 0001 and 0002 are applied. The main Queue, dead-letter Queue, consumers and 30-minute Cron trigger are configured.
 - GitHub Actions deployment has succeeded, including runtime-secret upload, Telegram webhook registration and Telegram command-menu registration.
-- The AI Router is deployed with one legacy OpenRouter key route and six model IDs detected by `/health`. The separate `AI_ROUTER_CONFIG` secret is currently optional and has not yet been populated with the owner's additional provider keys.
+- The AI Router accepts the owner's multi-provider `AI_ROUTER_CONFIG` secret plus the legacy OpenRouter fallback. A successful configuration check shows loaded routes, not proof that every upstream model key or quota is currently healthy.
 - CI, Worker build, deployment and health smoke checks passed. Real Telegram command execution and live provider-key acceptance still need owner-level end-to-end testing.
 - Runtime credentials are managed as GitHub Actions secrets and are never stored in source control. See `docs/SECRETS.md` and `docs/STATUS.md` for verified details.
 
@@ -18,7 +18,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 
 | Feature | Command | Scope |
 |---|---|---|
-| General web search | /search words | Federated Tavily/Exa/TinyFish/Brave/Wikipedia fallback, relevance and domain-diversity ranking, up to 12 candidates with Telegram pagination |
+| General web search | /search words or browser portal | Federated Tavily/Exa/TinyFish/Brave/Wikipedia fallback, multi-signal reranking, up to 20 candidates |
 | Technology search | /tech words | Web search plus GitHub repositories |
 | GitHub repositories | /github words | GitHub repository Search API |
 | Encyclopedia reference | /wiki words | Free English/Vietnamese Wikipedia lookup via MediaWiki API |
@@ -26,7 +26,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | News search | /news topic | Tavily, Brave and TinyFish news discovery |
 | Deep search | /deep question | Bounded multi-provider retrieval, TinyFish page extraction and AI Router synthesis across configured model/key routes |
 | Direct AI | /ai prompt | Task-aware multi-provider AI router with bounded key/model failover |
-| AI web answer | /ask question | Web retrieval, evidence-grounded AI synthesis and linked sources |
+| AI web answer | /ask question or Web AI Overview | Web retrieval, evidence-grounded AI synthesis and linked sources |
 | AI configuration | /ai_status, /models | Inspect configured providers, key-route count, models and task tags without exposing keys |
 | Search within a site | /site example.com words | Provider site restriction |
 | Read a page | /read https://example.com | TinyFish Fetch extracts clean page text |
@@ -36,7 +36,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Status | /status | Provider configuration and compact index counters |
 
-Plain text messages are interpreted as web search. Use `/ai prompt` for direct AI, `/ai fast prompt` or `/ai reasoning prompt` for task routing, `/ask question` for web-grounded AI synthesis, and `/ai_status` to inspect configured routes. Results show five items per page; inline Previous/Next buttons browse up to 12 ranked candidates. Pagination sessions are private to the requesting user/chat and expire after 15 minutes. `/wiki` is a reference lookup, not a substitute for primary sources or current reporting.
+Plain text messages are interpreted as web search. Use `/web` in the private Telegram conversation to create a one-time, five-minute browser login link. The web portal offers category search, ranked result cards, AI Overview and a multi-turn chat panel. Browser sessions are stored server-side, use HttpOnly/Secure/SameSite cookies, expire after seven days, and are revocable. Search APIs require an authenticated allowlisted Telegram user and have per-user rate limits. Use `/ai prompt` for direct AI, `/ai fast prompt` or `/ai reasoning prompt` for task routing, `/ask question` for web-grounded AI synthesis, and `/ai_status` to inspect configured routes. Telegram results show five items per page; inline Previous/Next buttons browse up to 20 ranked candidates. Pagination sessions are private to the requesting user/chat and expire after 15 minutes. `/wiki` is a reference lookup, not a substitute for primary sources or current reporting.
 
 ### Search operators
 
@@ -62,7 +62,7 @@ See docs/ARCHITECTURE.md, docs/SETUP.md, docs/SECRETS.md and docs/OPERATIONS.md.
 1. Search coverage and freshness depend on external providers and their quotas.
 2. Ranking is currently a transparent heuristic, not a trained relevance model. Search retains up to 12 candidates, displays five per page and caps the first-pass contribution at two results per domain.
 3. Deep Search is bounded multi-query retrieval, not exhaustive research or a guarantee of factual correctness.
-4. The initial crawler checks only URLs explicitly added by the owner. It does not crawl the whole web, render JavaScript-heavy sites, bypass login or defeat anti-bot controls.
+4. The browser portal is a private search UI, not a public anonymous search API. The initial crawler checks only URLs explicitly added by the owner. It does not crawl the whole web, render JavaScript-heavy sites, bypass login or defeat anti-bot controls.
 5. Website monitoring reads and applies the origin's robots.txt policy before fetching a watched page. D1 keeps only a short extract per monitored page. If a Telegram archive channel is configured, the full extracted text snapshot is sent there on first capture and detected changes. Telegram is an archive, not a queryable database or an unlimited-storage guarantee.
 6. The Worker, health endpoint, Telegram webhook and command menu are deployed. A successful configuration/health check does not guarantee that every provider key or user-level command works; test the bot in Telegram before relying on search or archive delivery.
 

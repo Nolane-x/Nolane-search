@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchTinyFishPages, parseOpenRouterModels, searchTinyFish, searchWikipedia, wikipediaLanguageForQuery } from "../src/providers";
+import { fetchTinyFishPages, parseOpenRouterModels, searchBrave, searchTinyFish, searchWikipedia, wikipediaLanguageForQuery } from "../src/providers";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -105,6 +105,21 @@ describe("TinyFish Fetch adapter", () => {
     const request = fetchMock.mock.calls[0]?.[1];
     expect(JSON.parse(String(request?.body)).urls).toEqual(["https://example.com/valid"]);
     expect(pages.has("https://example.com/valid")).toBe(true);
+  });
+});
+
+describe("publication date normalization", () => {
+  it("converts Brave relative ages into comparable timestamps", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      web: { results: [{ title: "Recent result", url: "https://example.com/recent", description: "Fresh information", age: "2 days ago" }] },
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const results = await searchBrave({ BRAVE_SEARCH_API_KEY: "brave-test-key" } as never, "latest news");
+    expect(results).toHaveLength(1);
+    const timestamp = Date.parse(results[0]!.publishedAt || "");
+    expect(Number.isFinite(timestamp)).toBe(true);
+    expect(Date.now() - timestamp).toBeGreaterThanOrEqual(2 * 86_400_000 - 3000);
+    expect(Date.now() - timestamp).toBeLessThan(2 * 86_400_000 + 3000);
   });
 });
 

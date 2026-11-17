@@ -45,6 +45,20 @@ describe("Google-style search operators", () => {
     expect(results.map(item => item.domain)).toEqual(["github.com", "docs.github.com"]);
   });
 
+  it("supports inurl and exclusion operators", () => {
+    const parsed = parseSearchQuery("workers inurl:docs -deprecated");
+    expect(parsed.rankingQuery).toBe("workers");
+    expect(parsed.filters.urlTerms).toEqual(["docs"]);
+    expect(parsed.filters.excludedTerms).toEqual(["deprecated"]);
+    const results = applySearchFilters(parsed, [
+      result({ url: "https://example.com/docs/workers", domain: "example.com", snippet: "Current guide" }),
+      result({ url: "https://example.com/blog/workers", domain: "example.com", snippet: "Current guide" }),
+      result({ url: "https://example.com/docs/workers-old", domain: "example.com", snippet: "Deprecated guide" }),
+    ]);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.url).toContain("/docs/");
+  });
+
   it("filters file extensions and title tokens", () => {
     const parsed = parseSearchQuery("workers filetype:pdf intitle:Cloudflare");
     const results = applySearchFilters(parsed, [

@@ -6,6 +6,7 @@ const commands = [
   { command: "tech", description: "Tìm kiếm công nghệ và GitHub" },
   { command: "github", description: "Tìm repositories" },
   { command: "wiki", description: "Tra cứu Wikipedia Anh/Việt" },
+  { command: "web", description: "Mở giao diện tìm kiếm và chat" },
   { command: "ai", description: "Hỏi AI qua router nhiều nhà cung cấp" },
   { command: "ask", description: "Tìm web rồi tổng hợp bằng AI" },
   { command: "ai_status", description: "Trang thai AI router va models" },
