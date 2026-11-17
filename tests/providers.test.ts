@@ -71,7 +71,7 @@ describe("TinyFish Search adapter", () => {
 
 describe("TinyFish Fetch adapter", () => {
   it("maps extracted content to both original and final URLs", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       results: [{
         url: "https://example.com/article",
         final_url: "https://www.example.com/article",
@@ -90,7 +90,7 @@ describe("TinyFish Fetch adapter", () => {
   });
 
   it("does not send private or unsafe URLs to TinyFish", async () => {
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ results: [] }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const pages = await fetchTinyFishPages(
       { TINYFISH_API_KEY: "tinyfish-test-key" } as never,
