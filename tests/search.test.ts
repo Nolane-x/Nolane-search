@@ -26,6 +26,15 @@ describe("web search fallback", () => {
           { title: "Workers runtime overview", url: "https://exa.example/three", text: "Workers runtime documentation" },
         ],
       }), { status: 200, headers: { "content-type": "application/json" } });
+      if (url.hostname === "en.wikipedia.org") return new Response(JSON.stringify({
+        query: {
+          search: [{
+            title: "Cloudflare Workers",
+            snippet: "Cloudflare Workers is a serverless platform for application execution.",
+            timestamp: "2026-10-01T00:00:00Z",
+          }],
+        },
+      }), { status: 200, headers: { "content-type": "application/json" } });
       throw new Error(`Unexpected provider: ${url.hostname}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -42,9 +51,10 @@ describe("web search fallback", () => {
     };
     const results = await performSearch(env as never, "Cloudflare Workers", "web");
     expect(results.length).toBeGreaterThan(0);
-    expect(results.every(item => item.provider === "Exa")).toBe(true);
+    expect(results.some(item => item.provider === "Exa")).toBe(true);
+    expect(results.some(item => item.provider === "Wikipedia (en)")).toBe(true);
     expect(results.length).toBeLessThanOrEqual(12);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 
