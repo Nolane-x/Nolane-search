@@ -182,7 +182,28 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     }
     return;
   }
-  if (command === "read") {\n    const validated = validateWatchUrl(args);\n    if (!validated) {\n      await reply(env, chatId, "Cú pháp: <code>/read https://example.com</code>. Chỉ hỗ trợ URL HTTPS public hợp lệ.");\n      return;\n    }\n    if (!env.TINYFISH_API_KEY) {\n      await reply(env, chatId, "Lệnh /read cần cấu hình GitHub Secret <code>TINYFISH_API_KEY</code> rồi triển khai lại.");\n      return;\n    }\n    try {\n      const page = await fetchTinyFishPage(env, validated.url.toString());\n      const body = htmlEscape(page.text.slice(0, 5_500));\n      await reply(env, chatId, `<b>${htmlEscape(page.title)}</b>\\n<a href="${htmlEscape(page.finalUrl)}">Mở trang gốc</a>\\n\\n<pre>${body}</pre>`);\n    } catch (error) {\n      console.error("TinyFish read failed:", error instanceof Error ? error.message : "unknown");\n      await reply(env, chatId, "TinyFish không thể đọc trang này. Trang có thể chặn truy cập, hết quota hoặc API key chưa hợp lệ.");\n    }\n    return;\n  }\n\n  if (command === "search") return handleSearch(env, chatId, args, "web");
+  if (command === "read") {
+    const validated = validateWatchUrl(args);
+    if (!validated) {
+      await reply(env, chatId, "Cú pháp: <code>/read https://example.com</code>. Chỉ hỗ trợ URL HTTPS public hợp lệ.");
+      return;
+    }
+    if (!env.TINYFISH_API_KEY) {
+      await reply(env, chatId, "Lệnh /read cần cấu hình GitHub Secret <code>TINYFISH_API_KEY</code> rồi triển khai lại.");
+      return;
+    }
+    try {
+      const page = await fetchTinyFishPage(env, validated.url.toString());
+      const body = htmlEscape(page.text.slice(0, 5_500));
+      await reply(env, chatId, `<b>${htmlEscape(page.title)}</b>\n<a href="${htmlEscape(page.finalUrl)}">Mở trang gốc</a>\n\n<pre>${body}</pre>`);
+    } catch (error) {
+      console.error("TinyFish read failed:", error instanceof Error ? error.message : "unknown");
+      await reply(env, chatId, "TinyFish không thể đọc trang này. Trang có thể chặn truy cập, hết quota hoặc API key chưa hợp lệ.");
+    }
+    return;
+  }
+
+  if (command === "search") return handleSearch(env, chatId, args, "web");
   if (command === "tech") return handleSearch(env, chatId, args, "tech");
   if (command === "github") return handleSearch(env, chatId, args, "github");
   if (command === "research") return handleSearch(env, chatId, args, "research");
