@@ -6,7 +6,7 @@ Last verified: 2026-11-17. This document distinguishes successful deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest deployed source commit: `b52efb107c185c34f12b7c10d3e6c0a72b379a94`
+- Latest deployed source commit: `0b2f3b9bca33d9fed7dffe3c915ad4ed0fc8945a`
 - PR #1 merged: https://github.com/Nolane-x/Nolane-search/pull/1
 - Source changes include TinyFish Search/Fetch, OpenRouter multi-model fallback, Telegram `/read`, deployment fixes, and expanded tests.
 
@@ -14,11 +14,11 @@ Last verified: 2026-11-17. This document distinguishes successful deployment and
 
 | Check | Run | Result |
 |---|---:|---|
-| CI: typecheck, unit tests, script syntax checks, Worker build | [44077942577](https://github.com/Nolane-x/Nolane-search/actions/runs/44077942577) | PASS |
-| Export Worker bundle and health smoke test | [44077942573](https://github.com/Nolane-x/Nolane-search/actions/runs/44077942573) | PASS |
-| Production deployment, secret upload, webhook and command registration | [44077942554](https://github.com/Nolane-x/Nolane-search/actions/runs/44077942554) | PASS |
+| CI: typecheck, unit tests, script syntax checks, Worker build | [44078400343](https://github.com/Nolane-x/Nolane-search/actions/runs/44078400343) | PASS |
+| Export Worker bundle and health smoke test | [44078400338](https://github.com/Nolane-x/Nolane-search/actions/runs/44078400338) | PASS |
+| Production deployment, secret upload, webhook and command registration | [44078400367](https://github.com/Nolane-x/Nolane-search/actions/runs/44078400367) | PASS |
 
-The production deployment completed with Worker version ID `104e17ad-4b16-4bfe-8ad8-791f731af8f7`. GitHub Actions confirmed:
+The production deployment completed with Worker version ID `d13ffe93-6335-4113-b0c7-b7c7b62a979e`. GitHub Actions confirmed:
 - Worker uploaded successfully using the repository source and configured runtime secrets.
 - D1 and Queue bindings are attached.
 - Main Queue and DLQ consumers plus the 30-minute Cron trigger are registered.
@@ -29,7 +29,7 @@ The production deployment completed with Worker version ID `104e17ad-4b16-4bfe-8
 
 Worker: https://nolane-search.nolane-file.workers.dev
 
-The deployed `/health` endpoint was fetched after deployment and returned:
+The deployed `/health` endpoint was fetched after the latest deployment and returned:
 - `ok: true`
 - `database: reachable`
 - Tavily: configured
@@ -40,7 +40,7 @@ The deployed `/health` endpoint was fetched after deployment and returned:
 - Brave: not configured (optional)
 - GitHub: public search path enabled; no optional GitHub token was supplied in the latest deployment
 
-This verifies Worker reachability, D1 connectivity and runtime binding presence. It does not prove that every external provider key is accepted by its provider or that every Telegram command has been exercised end-to-end.
+This verifies Worker reachability, D1 connectivity and runtime binding presence. It does not prove that every external provider key is accepted by its provider or that every Telegram command has been exercised end-to-end. The latest provider hardening also rejects search-result URLs containing embedded username/password credentials and avoids associating TinyFish Fetch content with a request URL unless the provider identifies that URL.
 
 ## Cloudflare resources
 
@@ -81,7 +81,7 @@ Both were already applied. No new D1 migration was required for the latest featu
 - The deployment uses `cf deploy --force` because the existing Worker had previously been updated through the Script API; this makes the Git repository source the deployment source of truth.
 - Optional `BRAVE_SEARCH_API_KEY` and `GITHUB_TOKEN_SEARCH` are not required to deploy when absent.
 
-The GitHub Actions Cloudflare token previously received HTTP 403 from the D1 Query API. The latest deployment succeeded because no migration was pending and the migration step was skipped. If a future commit adds a D1 migration, the token must have Account > D1 > Edit in addition to the Worker and Queue permissions documented in `docs/SECRETS.md`.
+The GitHub Actions Cloudflare token previously received HTTP 403 from the D1 Query API. Routine deployments now skip migrations when no migration file changed; this is safe for the current schema because both live migrations were verified as applied. If a future commit adds a D1 migration, the token must have Account > D1 > Edit in addition to the Worker and Queue permissions documented in `docs/SECRETS.md`.
 
 ## Remaining end-to-end checks
 
