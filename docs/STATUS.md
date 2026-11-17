@@ -6,20 +6,22 @@ Last verified: 2026-11-17. This document distinguishes successful deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest deployed source commit: `735e8d22cf4267ba37244ae750cd364ef8af7f60`
+- Latest deployed source commit: `0fe221cf17416bb74a9db53b5da5e99e4e79de54`
 - PR #1 merged: https://github.com/Nolane-x/Nolane-search/pull/1
-- Source changes include TinyFish Search/Fetch, OpenRouter multi-model fallback, Telegram `/read`, deployment fixes, Exa/TinyFish/Brave federated fallback for thin or failed `/search` results, and robots.txt-aware website monitoring with visible watch statuses.
+- Source changes include TinyFish Search/Fetch, OpenRouter multi-model fallback, Telegram `/read`, Exa/TinyFish/Brave/Wikipedia federated fallback, free bilingual `/wiki`, Telegram search pagination (five items per page, up to 12 candidates, owner-bound 15-minute sessions), improved token-overlap/domain-diversity ranking, and robots.txt-aware website monitoring.
 
 ## Latest verification
 
 | Check | Run | Result |
 |---|---:|---|
-| CI: typecheck, unit tests, script syntax checks, Worker build | [44082740802](https://github.com/Nolane-x/Nolane-search/actions/runs/44082740802) | PASS |
-| Export Worker bundle and health smoke test | [44082740504](https://github.com/Nolane-x/Nolane-search/actions/runs/44082740504) | PASS |
-| Production deployment, secret upload, webhook and command registration | [44082740676](https://github.com/Nolane-x/Nolane-search/actions/runs/44082740676) | PASS |
+| CI: typecheck, unit tests, script syntax checks, Worker build | [44097246622](https://github.com/Nolane-x/Nolane-search/actions/runs/44097246622) | PASS |
+| Export Worker bundle and health smoke test | [44097246553](https://github.com/Nolane-x/Nolane-search/actions/runs/44097246553) | PASS |
+| Production deployment, secret upload, webhook and command registration | [44097248284](https://github.com/Nolane-x/Nolane-search/actions/runs/44097248284) | PASS |
 
-The production deployment completed with Worker version ID `eb547f98-8e58-4902-8853-9357267ca2e0`. GitHub Actions confirmed:
+The production deployment completed with Worker version ID `61d20be9-17b4-468b-9b66-7c6eff155a96`. GitHub Actions confirmed:
 - Worker uploaded successfully using the repository source and configured runtime secrets.
+- The deployed version includes Telegram five-result pages with owner-bound inline pagination and the free bilingual Wikipedia provider/mode.
+- The public `/health` endpoint was fetched after deployment and returned `ok: true` and `database: reachable`.
 - Production `/health` was fetched after deployment and returned `ok: true`, `database: reachable`, and all expected configured providers (Tavily, Exa, TinyFish, OpenRouter with six model IDs); Brave remained optional and unconfigured.
 - D1 and Queue bindings are attached.
 - Main Queue and DLQ consumers plus the 30-minute Cron trigger are registered.
@@ -73,7 +75,9 @@ Both were already applied. No new D1 migration was required for the latest featu
 - TinyFish Fetch: extracts page content; used by `/read https://...` and to enrich up to five Deep Search sources.
 - OpenRouter: synthesis with ordered model fallback through `OPENROUTER_MODELS`; legacy `OPENROUTER_MODEL` remains supported. The parser accepts up to eight model IDs and the current health endpoint reports six configured IDs.
 - GitHub: public repository search works without an optional token; `GITHUB_TOKEN_SEARCH` can raise rate limits.
-- General `/search`: Tavily is the primary provider. If it fails or returns fewer than four results, configured Exa, TinyFish and Brave providers are queried in parallel and their results are merged before ranking. This reduces unnecessary calls on healthy full Tavily responses.
+- General `/search`: Tavily is the primary provider. If it fails or returns fewer than four results, configured Exa, TinyFish, Brave and free Wikipedia providers are queried in parallel and merged before ranking. This reduces unnecessary calls on healthy full Tavily responses.
+- `/wiki`: public MediaWiki Action API lookup, with Vietnamese diacritics selecting Vietnamese Wikipedia and other queries defaulting to English. Wikipedia is a reference/overview source, not a current-news or primary-evidence source.
+- Telegram result pagination: up to 12 candidates, five shown at a time, D1 session TTL 15 minutes, callbacks checked against both allowlisted user ID and chat ID. Session keys use `telegram-search:`.
 - Website Watch: each origin's robots.txt is checked before the watched page is fetched. Applicable groups are combined, longest-match wins, and Allow wins an equal-length tie. A blocked target is shown as `robots disallow`; an unreadable/temporarily unavailable policy is deferred and shown as `robots unavailable · deferred`.
 - Brave: optional and currently not configured.
 
@@ -90,7 +94,7 @@ The GitHub Actions Cloudflare token previously received HTTP 403 from the D1 Que
 
 These need a real message from the owner's Telegram account; they cannot be truthfully marked complete from CI or health checks alone:
 - Send `/start`, `/help` and `/status`; confirm the bot responds.
-- Try `/search Cloudflare Workers`, `/research small language models`, `/read https://example.com` and `/deep compare open-source search engines`.
+- Try `/search Cloudflare Workers` and tap Next/Previous when multiple pages appear; test `/wiki trí tuệ nhân tạo`, `/wiki artificial intelligence`, `/research small language models`, `/read https://example.com` and `/deep compare open-source search engines`.
 - Confirm the six configured OpenRouter model IDs are valid and that fallback occurs when a model is unavailable.
 - Confirm archive delivery to the configured Telegram archive chat.
 - Test `/watch https://example.com`, then verify a later change notification.
