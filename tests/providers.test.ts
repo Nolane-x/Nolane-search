@@ -33,8 +33,10 @@ describe("TinyFish Search adapter", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
       expect(url.hostname).toBe("api.search.tinyfish.ai");
-      expect(url.searchParams.get("query")).toBe("Cloudflare Workers");
-      expect(url.searchParams.get("domain_type")).toBe("research_paper");
+      expect(url.searchParams.get("query")).toContain("Cloudflare Workers");
+      expect(url.searchParams.get("query")).toContain("academic papers");
+      expect(url.searchParams.has("domain_type")).toBe(false);
+      expect(url.searchParams.has("purpose")).toBe(false);
       expect(new Headers(init?.headers).get("X-API-Key")).toBe("tinyfish-test-key");
       return new Response(JSON.stringify({
         results: [{
