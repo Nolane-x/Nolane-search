@@ -19,6 +19,8 @@
 | /watch https://example.com | Monitor public HTTPS page |
 | /watches | List active watches |
 | /unwatch 12 | Disable watch ID 12 |
+| /jobs | List the latest eight Deep Search jobs |
+| /retry JOB_ID | Re-enqueue a failed Deep Search query as a new job |
 
 Plain text messages are treated as /search.
 
@@ -48,6 +50,8 @@ Plain text messages are treated as /search.
 - /tech calls GitHub and Tavily where configured.
 - /github uses public GitHub API unless optional token is configured.
 - /deep uses configured providers in parallel and may use OpenRouter.
+- /jobs reads D1 job records; /retry only accepts a failed job owned by the requesting Telegram user.
+- Main Queue delivery retries up to three times with increasing delay. Exhausted jobs arrive at the DLQ and are marked failed; the user can then retry them manually.
 - Provider failures are returned as an error message; they are not represented as successful zero-result searches.
 
 External search APIs have their own quotas and possible paid overages. Monitor provider dashboards.
@@ -71,7 +75,7 @@ D1 stores small operational records and a compact index. Search cache expires af
 4. Verify provider secret and provider quota.
 5. If Telegram does not respond, inspect Bot API getWebhookInfo.
 6. Check Cloudflare Worker logs.
-7. For stuck Deep Search, inspect Queue and DLQ metrics.
+7. For stuck Deep Search, inspect /jobs, then Queue and DLQ metrics. Retry failed jobs with /retry JOB_ID.
 8. For watch failures, inspect last status, response headers and site's crawling policy.
 
 Never print secrets in logs. Avoid logging raw user content unless necessary for a specific diagnosis.

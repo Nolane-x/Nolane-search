@@ -19,7 +19,11 @@ Telegram user → Telegram webhook → Cloudflare Worker
 
 Quick Search → provider adapters → merge → URL deduplication → heuristic ranking → Telegram reply.
 
-Deep Search → Cloudflare Queue → bounded query expansion → parallel provider retrieval → merge → optional OpenRouter synthesis → Telegram report.
+Deep Search → D1 job record → Cloudflare Queue → bounded query expansion → parallel provider retrieval → merge → optional OpenRouter synthesis → Telegram report.
+- D1 records queued/running/completed/failed state, attempt count and last failure reason.
+- Queue deliveries use bounded retry delays; exhausted jobs enter the dead-letter queue and notify the originating user.
+- Duplicate deliveries do not re-run jobs that are already completed or currently claimed.
+- /jobs lists recent work; /retry JOB_ID creates a new job from a failed query.
 
 Website monitoring → D1 watch metadata → 30-minute Cron → bounded HTTP checks → content hash → compact D1 extract/FTS5 → optional Telegram snapshot document and change alert.
 
@@ -69,9 +73,14 @@ D1 stores compact operational information:
 
 Full extracted text (up to 100 KB after parsing, with a 500 KB response-read cap) is sent to Telegram archive if configured. D1 does not keep the full page body.
 
-### Queues
+### Queues and job lifecycle
 
-Deep Search jobs are asynchronous. The dead-letter Queue receives failed messages after configured retries.
+Deep Search jobs are asynchronous and are recorded in D1 before enqueueing.
+- Main Queue retries failed deliveries up to three times with increasing delays.
+- Exhausted messages move to the dead-letter Queue.
+- The dead-letter consumer marks the D1 job failed and attempts to notify the originating Telegram chat.
+- /jobs exposes the latest eight jobs for the requesting user; /retry JOB_ID re-enqueues a failed query as a new job.
+- Duplicate or stale deliveries are guarded by a conditional D1 claim. This reduces duplicate work but does not guarantee exactly-once Telegram delivery if an external send succeeds immediately before a Worker crash.
 
 ### No R2 or KV in MVP
 

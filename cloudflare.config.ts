@@ -40,6 +40,13 @@ export default defineConfig({
         retryDelay: 30,
         maxConcurrency: 1,
       }),
+      triggers.queue({
+        name: "nolane-search-dlq",
+        maxBatchSize: 3,
+        maxRetries: 1,
+        retryDelay: 60,
+        maxConcurrency: 1,
+      }),
       triggers.scheduled({ schedule: "*/30 * * * *" }),
     ],
   },

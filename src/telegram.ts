@@ -1,12 +1,12 @@
 import { htmlEscape } from "./security";
 import type { Env, SearchMode, SearchResult } from "./types";
 
+const MAX_FORMATTED_LENGTH = 3600;
+
 export async function telegramApi<T = Record<string, unknown>>(env: Env, method: string, body: Record<string, unknown>): Promise<T> {
   if (!env.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is not configured");
   const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     signal: AbortSignal.timeout(15_000),
   });
   const data = await response.json() as { ok?: boolean; description?: string; result?: T };
@@ -27,21 +27,15 @@ export async function sendTelegram(env: Env, chatId: number | string, text: stri
   if (remaining) chunks.push(remaining);
   for (const chunk of chunks) {
     await telegramApi(env, "sendMessage", {
-      chat_id: chatId,
-      text: chunk,
-      parse_mode: "HTML",
-      disable_web_page_preview: true,
+      chat_id: chatId, text: chunk, parse_mode: "HTML", disable_web_page_preview: true,
     });
   }
 }
 
 export async function sendToArchive(env: Env, text: string): Promise<void> {
   if (!env.TELEGRAM_ARCHIVE_CHAT_ID) return;
-  try {
-    await sendTelegram(env, env.TELEGRAM_ARCHIVE_CHAT_ID, text);
-  } catch (error) {
-    console.error("Telegram archive delivery failed:", error instanceof Error ? error.message : "unknown error");
-  }
+  try { await sendTelegram(env, env.TELEGRAM_ARCHIVE_CHAT_ID, text); }
+  catch (error) { console.error("Telegram archive delivery failed:", error instanceof Error ? error.message : "unknown error"); }
 }
 
 export async function sendArchiveDocument(env: Env, filename: string, content: string, caption: string): Promise<void> {
@@ -51,63 +45,78 @@ export async function sendArchiveDocument(env: Env, filename: string, content: s
   form.set("caption", caption.slice(0, 900));
   form.set("document", new Blob([content], { type: "text/plain;charset=utf-8" }), filename);
   const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, {
-    method: "POST",
-    body: form,
-    signal: AbortSignal.timeout(20_000),
+    method: "POST", body: form, signal: AbortSignal.timeout(20_000),
   });
   const data = await response.json() as { ok?: boolean; description?: string };
   if (!response.ok || !data.ok) throw new Error(data.description || `Telegram sendDocument failed (${response.status})`);
 }
 
 const MODE_LABELS: Record<SearchMode, string> = {
-  web: "Web Search",
-  tech: "Technology Search",
-  research: "Research Search",
-  news: "News Search",
-  github: "GitHub Search",
-  local: "My Sites Index",
+  web: "Web Search", tech: "Technology Search", research: "Research Search",
+  news: "News Search", github: "GitHub Search", local: "My Sites Index",
 };
 
+// Limit escaped output, not raw input: HTML entities can expand substantially.
+function safeHtmlText(value: string, maxEscapedLength: number): string {
+  let output = "";
+  let truncated = false;
+  for (const character of value) {
+    const escaped = htmlEscape(character);
+    if (output.length + escaped.length > maxEscapedLength) { truncated = true; break; }
+    output += escaped;
+  }
+  return truncated ? output + "…" : output;
+}
+
+function appendBlock(output: string, block: string, footer: string): string {
+  const next = output + "\n\n" + block;
+  return next.length + footer.length + 2 <= MAX_FORMATTED_LENGTH ? next : output;
+}
+
 export function formatSearchResults(query: string, mode: SearchMode, results: SearchResult[]): string {
-  if (!results.length) return `<b>Nolane Search</b>\nKhông tìm thấy kết quả phù hợp cho: <code>${htmlEscape(query)}</code>`;
-  const lines = [
+  if (!results.length) {
+    return `<b>Nolane Search</b>\nKhông tìm thấy kết quả phù hợp cho: <code>${safeHtmlText(query, 260)}</code>`;
+  }
+  let output = [
     `<b>Nolane Search · ${MODE_LABELS[mode]}</b>`,
-    `<i>${htmlEscape(query)}</i>`,
+    `<i>${safeHtmlText(query, 260)}</i>`,
     `Tìm thấy ${results.length} kết quả`,
-    "",
-  ];
-  results.slice(0, 7).forEach((item, index) => {
-    lines.push(`<b>${index + 1}. <a href="${htmlEscape(item.url)}">${htmlEscape(item.title)}</a></b>`);
-    if (item.snippet) lines.push(htmlEscape(item.snippet.slice(0, 350)));
-    lines.push(`<code>${htmlEscape(item.domain)}</code> · ${htmlEscape(item.provider)}`);
-    lines.push("");
-  });
-  lines.push("<i>Điểm xếp hạng là heuristic nội bộ, không phải xác suất độ đúng.</i>");
-  return lines.join("\n").slice(0, 3900);
+  ].join("\n");
+  const footer = "<i>Điểm xếp hạng là heuristic nội bộ, không phải xác suất độ đúng.</i>";
+  for (const [index, item] of results.slice(0, 7).entries()) {
+    const block = [
+      `<b>${index + 1}. <a href="${htmlEscape(item.url)}">${safeHtmlText(item.title, 150)}</a></b>`,
+      safeHtmlText(item.snippet, 230),
+      `<code>${safeHtmlText(item.domain, 90)}</code> · ${safeHtmlText(item.provider, 50)}`,
+    ].join("\n");
+    const next = appendBlock(output, block, footer);
+    if (next === output) break;
+    output = next;
+  }
+  return output + "\n\n" + footer;
 }
 
 export function formatDeepReport(query: string, results: SearchResult[], summary: string | null): string {
-  const lines = [
+  let output = [
     "<b>Nolane Search · Deep Search</b>",
-    `<i>${htmlEscape(query)}</i>`,
+    `<i>${safeHtmlText(query, 240)}</i>`,
     `Đã tổng hợp ${results.length} kết quả duy nhất từ nhiều lượt truy vấn.`,
-    "",
-  ];
+  ].join("\n");
+  const footer = "<i>Deep Search là tổng hợp các nguồn truy xuất được; không bảo đảm bao quát toàn bộ tài liệu hiện có.</i>";
   if (summary) {
-    lines.push("<b>Tổng hợp AI</b>");
-    lines.push(htmlEscape(summary.slice(0, 2200)));
-    lines.push("");
+    output = appendBlock(output, `<b>Tổng hợp AI</b>\n${safeHtmlText(summary, 1050)}`, footer);
   } else {
-    lines.push("<b>Evidence digest</b>");
-    lines.push("Chưa bật AI synthesis. Dưới đây là các nguồn thu thập được; hãy mở nguồn để tự kiểm chứng.");
-    lines.push("");
+    output = appendBlock(output, "<b>Evidence digest</b>\nChưa bật AI synthesis. Dưới đây là các nguồn thu thập được; hãy mở nguồn để tự kiểm chứng.", footer);
   }
-  results.slice(0, 8).forEach((item, index) => {
-    lines.push(`<b>${index + 1}. <a href="${htmlEscape(item.url)}">${htmlEscape(item.title)}</a></b>`);
-    if (item.snippet) lines.push(htmlEscape(item.snippet.slice(0, 240)));
-    lines.push(`<code>${htmlEscape(item.domain)}</code> · ${htmlEscape(item.provider)}`);
-    lines.push("");
-  });
-  lines.push("<i>Deep Search là tổng hợp các nguồn truy xuất được; không bảo đảm bao quát toàn bộ tài liệu hiện có.</i>");
-  return lines.join("\n").slice(0, 3900);
+  for (const [index, item] of results.slice(0, 7).entries()) {
+    const block = [
+      `<b>${index + 1}. <a href="${htmlEscape(item.url)}">${safeHtmlText(item.title, 145)}</a></b>`,
+      safeHtmlText(item.snippet, 190),
+      `<code>${safeHtmlText(item.domain, 90)}</code> · ${safeHtmlText(item.provider, 45)}`,
+    ].join("\n");
+    const next = appendBlock(output, block, footer);
+    if (next === output) break;
+    output = next;
+  }
+  return output + "\n\n" + footer;
 }

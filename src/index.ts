@@ -29,6 +29,17 @@ async function recordUpdate(env: Env, updateId: number): Promise<boolean> {
   return (result.meta?.changes ?? 0) > 0;
 }
 
+function isDeepSearchJob(value: unknown): value is DeepSearchJob {
+  if (!value || typeof value !== "object") return false;
+  const job = value as Partial<DeepSearchJob>;
+  return typeof job.id === "string" && job.id.length >= 8 && job.id.length <= 80 &&
+    typeof job.query === "string" && job.query.length >= 2 && job.query.length <= 400 &&
+    Number.isSafeInteger(job.chatId) && Number.isSafeInteger(job.userId) &&
+    Number.isFinite(job.createdAt);
+}
+function jobStatusLabel(status: string): string {
+  return ({ queued: "Đang chờ", running: "Đang chạy", completed: "Hoàn tất", failed: "Thất bại" } as Record<string, string>)[status] || "Không rõ";
+}
 async function handleSearch(env: Env, chatId: number, query: string, mode: SearchMode): Promise<void> {
   if (!query || query.length < 2) {
     await reply(env, chatId, "Hãy nhập truy vấn cần tìm sau lệnh, ví dụ: <code>/search small language models</code>.");
@@ -83,17 +94,24 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/watches</code> — danh sách đang theo dõi\n" +
       "<code>/unwatch ID</code> — bỏ theo dõi\n" +
       "<code>/status</code> — trạng thái cấu hình bot\n" +
+      "<code>/jobs</code> — lịch sử Deep Search gần đây\n" +
+      "<code>/retry ID</code> — chạy lại job thất bại\n" +
       "<code>/id</code> — Telegram ID\n\n" +
       "Gửi văn bản không kèm lệnh cũng được hiểu là tìm web.");
     return;
   }
 
   if (command === "status") {
-    const [watchCount, pageCount, cacheCount] = await Promise.all([
+    const [watchCount, pageCount, cacheCount, deepJobRows] = await Promise.all([
       env.DB.prepare("SELECT COUNT(*) AS count FROM watches WHERE active = 1").first<{ count: number }>(),
       env.DB.prepare("SELECT COUNT(*) AS count FROM indexed_pages").first<{ count: number }>(),
       env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ?").bind(Date.now()).first<{ count: number }>(),
+      env.DB.prepare("SELECT status, COUNT(*) AS count FROM deep_search_jobs WHERE created_at >= ? GROUP BY status")
+        .bind(Date.now() - 7 * 24 * 60 * 60 * 1000).all<{ status: string; count: number }>(),
     ]);
+    const jobCounts = new Map(deepJobRows.results.map(row => [row.status, row.count]));
+    const jobSummary = ["queued", "running", "completed", "failed"]
+      .map(status => jobStatusLabel(status) + ": " + (jobCounts.get(status) ?? 0)).join(" · ");
     await reply(env, chatId,
       "<b>Nolane Search status</b>\n" +
       `Web search: ${env.TAVILY_API_KEY ? "ready" : "missing"}\n` +
@@ -103,11 +121,56 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       `Telegram archive: ${env.TELEGRAM_ARCHIVE_CHAT_ID ? "configured" : "not configured"}\n` +
       `Active watches: ${watchCount?.count ?? 0}\n` +
       `Indexed pages: ${pageCount?.count ?? 0}\n` +
-      `Cached queries: ${cacheCount?.count ?? 0}\n\n` +
+      `Cached queries: ${cacheCount?.count ?? 0}\n` +
+      `Deep Search (7 days): ${jobSummary}\n\n` +
       "<i>Ready means a secret is configured; it does not guarantee the upstream API is healthy.</i>");
     return;
   }
 
+  if (command === "jobs") {
+    const rows = await env.DB.prepare(
+      `SELECT id, query, status, attempts FROM deep_search_jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT 8`,
+    ).bind(String(userId)).all<{ id: string; query: string; status: string; attempts: number }>();
+    if (!rows.results.length) {
+      await reply(env, chatId, "Chưa có Deep Search job nào. Dùng <code>/deep câu hỏi</code> để bắt đầu.");
+      return;
+    }
+    const lines = ["<b>Deep Search jobs gần đây</b>"];
+    for (const row of rows.results) {
+      lines.push(`<code>${htmlEscape(row.id)}</code> · <b>${jobStatusLabel(row.status)}</b> · ${row.attempts} lần thử`);
+      lines.push(htmlEscape(row.query.slice(0, 180)), "");
+    }
+    lines.push("Dùng <code>/retry JOB_ID</code> để chạy lại job thất bại.");
+    await reply(env, chatId, lines.join("\n"));
+    return;
+  }
+  if (command === "retry") {
+    if (!/^[a-f0-9-]{8,80}$/i.test(args)) {
+      await reply(env, chatId, "Cú pháp: <code>/retry JOB_ID</code>. Xem ID bằng /jobs.");
+      return;
+    }
+    const previous = await env.DB.prepare(
+      "SELECT query, chat_id FROM deep_search_jobs WHERE id = ? AND user_id = ? AND status = 'failed'",
+    ).bind(args, String(userId)).first<{ query: string; chat_id: string }>();
+    if (!previous) {
+      await reply(env, chatId, "Không tìm thấy job thất bại thuộc tài khoản của bạn.");
+      return;
+    }
+    const job: DeepSearchJob = { id: crypto.randomUUID(), chatId: Number(previous.chat_id), userId, query: previous.query, createdAt: Date.now() };
+    await env.DB.prepare(
+      `INSERT INTO deep_search_jobs (id, chat_id, user_id, query, status, attempts, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'queued', 0, ?, ?)`,
+    ).bind(job.id, String(job.chatId), String(userId), job.query, job.createdAt, job.createdAt).run();
+    try {
+      await env.SEARCH_JOBS.send(job);
+      await reply(env, chatId, `Đã tạo job mới từ truy vấn cũ. Job ID: <code>${job.id}</code>`);
+    } catch (error) {
+      await env.DB.prepare("UPDATE deep_search_jobs SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ?")
+        .bind(error instanceof Error ? error.message.slice(0, 300) : "Queue send failed", Date.now(), job.id).run();
+      await reply(env, chatId, "Không thể đưa job chạy lại vào Queue. Hãy kiểm tra Cloudflare Queue.");
+    }
+    return;
+  }
   if (command === "search") return handleSearch(env, chatId, args, "web");
   if (command === "tech") return handleSearch(env, chatId, args, "tech");
   if (command === "github") return handleSearch(env, chatId, args, "github");
@@ -134,12 +197,19 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       id: crypto.randomUUID(), chatId, userId, query: args, createdAt: Date.now(),
     };
     try {
+      await env.DB.prepare(
+        `INSERT INTO deep_search_jobs (id, chat_id, user_id, query, status, attempts, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'queued', 0, ?, ?)`,
+      ).bind(job.id, String(chatId), String(userId), args, job.createdAt, job.createdAt).run();
       await env.SEARCH_JOBS.send(job);
-      const message = "<b>Deep Search đã được xếp hàng.</b>\nMình sẽ chạy nhiều truy vấn, khử trùng lặp và gửi báo cáo vào cuộc trò chuyện này khi hoàn tất.";
+      const message = `<b>Deep Search đã được xếp hàng.</b>\nJob ID: <code>${job.id}</code>\nMình sẽ chạy nhiều truy vấn, khử trùng lặp và gửi báo cáo vào cuộc trò chuyện này khi hoàn tất.`;
       await reply(env, chatId, message);
-      await sendToArchive(env, `<b>Deep Search queued</b>\n${htmlEscape(args)}\nJob: <code>${job.id}</code>`);
+      await sendToArchive(env, `<b>Deep Search queued</b>\n${htmlEscape(args)}\nJob: <code>${htmlEscape(job.id)}</code>`);
     } catch (error) {
       console.error("Queue send failed:", error instanceof Error ? error.message : "unknown");
+      await env.DB.prepare("UPDATE deep_search_jobs SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ?")
+        .bind(error instanceof Error ? error.message.slice(0, 300) : "Queue send failed", Date.now(), job.id)
+        .run().catch(() => undefined);
       await reply(env, chatId, "Không thể tạo Deep Search job. Hãy kiểm tra cấu hình Cloudflare Queue.");
     }
     return;
@@ -208,16 +278,46 @@ async function processUpdate(env: Env, update: TelegramUpdate): Promise<void> {
 }
 
 async function processDeepJob(env: Env, job: DeepSearchJob): Promise<void> {
+  const now = Date.now();
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO deep_search_jobs
+      (id, chat_id, user_id, query, status, attempts, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'queued', 0, ?, ?)`,
+  ).bind(job.id, String(job.chatId), String(job.userId), job.query, job.createdAt, now).run();
+  const claimed = await env.DB.prepare(
+    `UPDATE deep_search_jobs SET status = 'running', attempts = attempts + 1, updated_at = ?, last_error = NULL
+      WHERE id = ? AND (status = 'queued' OR (status = 'running' AND updated_at <= ?))`,
+  ).bind(now, job.id, now - 15 * 60 * 1000).run();
+  if ((claimed.meta?.changes ?? 0) === 0) return;
   try {
     const results = await performDeepSearch(env, job.query);
     const summary = await fetchOpenRouterSummary(env, job.query, results);
     const report = formatDeepReport(job.query, results, summary);
     await sendTelegram(env, job.chatId, report);
-    await sendToArchive(env, `<b>Deep Search archive</b>\nJob: <code>${job.id}</code>\n${report}`);
+    await sendToArchive(env, `<b>Deep Search archive</b>\nJob: <code>${htmlEscape(job.id)}</code>\n${report}`);
+    const completedAt = Date.now();
+    await env.DB.prepare(
+      "UPDATE deep_search_jobs SET status = 'completed', updated_at = ?, completed_at = ?, last_error = NULL WHERE id = ?",
+    ).bind(completedAt, completedAt, job.id).run();
   } catch (error) {
-    console.error("Deep Search job failed:", error instanceof Error ? error.message : "unknown");
-    await sendTelegram(env, job.chatId, "Deep Search gặp lỗi khi truy xuất nguồn. Không có báo cáo hoàn chỉnh được tạo; hãy thử lại sau.");
+    const reason = error instanceof Error ? error.message.slice(0, 300) : "Unknown Deep Search error";
+    await env.DB.prepare(
+      "UPDATE deep_search_jobs SET status = 'queued', updated_at = ?, last_error = ? WHERE id = ? AND status = 'running'",
+    ).bind(Date.now(), reason, job.id).run();
+    throw error;
   }
+}
+async function notifyDeadLetter(env: Env, job: DeepSearchJob): Promise<void> {
+  const row = await env.DB.prepare("SELECT status FROM deep_search_jobs WHERE id = ?")
+    .bind(job.id).first<{ status: string }>();
+  if (row?.status === "completed" || row?.status === "failed") return;
+  await env.DB.prepare(
+    "UPDATE deep_search_jobs SET status = 'failed', updated_at = ?, last_error = 'Delivery retries exhausted' WHERE id = ?",
+  ).bind(Date.now(), job.id).run();
+  const notice = `Deep Search job <code>${htmlEscape(job.id)}</code> đã thất bại sau nhiều lần thử.\nBạn có thể xem trong /jobs và chạy lại bằng /retry JOB_ID.`;
+  try { await sendTelegram(env, job.chatId, notice); }
+  catch (error) { console.error("Dead-letter user notification failed:", error instanceof Error ? error.message : "unknown"); }
+  await sendToArchive(env, `<b>Deep Search dead-letter</b>\n${notice}`);
 }
 
 export default {
@@ -267,8 +367,25 @@ export default {
 
   async queue(batch: MessageBatch<DeepSearchJob>, env: Env): Promise<void> {
     for (const message of batch.messages) {
-      await processDeepJob(env, message.body);
-      message.ack();
+      const job = message.body;
+      if (!isDeepSearchJob(job)) {
+        console.error("Discarding malformed Deep Search queue message.");
+        message.ack();
+        continue;
+      }
+      if (batch.queue === "nolane-search-dlq") {
+        try { await notifyDeadLetter(env, job); message.ack(); }
+        catch (error) {
+          console.error("Dead-letter handling failed:", error instanceof Error ? error.message : "unknown");
+          message.retry({ delaySeconds: 60 });
+        }
+        continue;
+      }
+      try { await processDeepJob(env, job); message.ack(); }
+      catch (error) {
+        console.error("Deep Search queue attempt failed:", error instanceof Error ? error.message : "unknown");
+        message.retry({ delaySeconds: Math.min(300, 15 * (2 ** Math.max(0, message.attempts - 1))) });
+      }
     }
   },
 

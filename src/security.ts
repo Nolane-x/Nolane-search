@@ -24,7 +24,9 @@ export function isSafePublicUrl(input: string): URL | null {
     const host = url.hostname.toLowerCase().replace(/\.$/, "");
     if (!host || host === "localhost" || host.endsWith(".localhost") ||
       host.endsWith(".local") || host.endsWith(".internal") ||
-      host.endsWith(".test") || host.endsWith(".invalid")) return null;
+      host.endsWith(".test") || host.endsWith(".invalid") ||
+      host.endsWith(".lan") || host.endsWith(".home") || host.endsWith(".arpa") ||
+      host.endsWith(".corp") || host.endsWith(".intranet") || host.endsWith(".onion")) return null;
     if (host.startsWith("[") || host.includes(":")) return null;
     if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) && isPrivateIpv4(host)) return null;
     if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) return null;

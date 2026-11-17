@@ -1,6 +1,6 @@
 # Verified Project Status
 
-Last updated: 2026-11-17. This file records observed state, not intended state.
+Last updated: 2026-11-17. This file records observed state, not intended state. Reliability changes in the current commit are pending fresh CI validation and deployment.
 
 ## GitHub
 
@@ -16,10 +16,10 @@ GitHub Actions verification:
 
 | Run | Result | Verified steps |
 |---|---|---|
-| CI run 44031058307 | PASS | Checkout, Node setup, dependency install, TypeScript typecheck, unit tests, cf build |
-| CI run 44031623739 | PASS | Same checks after status documentation update |
-| Deploy run 44031058318 | BLOCKED | Source verification, cf build and cf deploy --dry-run passed; stopped at D1 migration because CLOUDFLARE_API_TOKEN was empty |
-| Deploy run 44031623713 | BLOCKED | Same missing CLOUDFLARE_API_TOKEN blocker |
+| CI run 44031953705 | PASS | Checkout, Node setup, dependency install, TypeScript typecheck, unit tests and Cloudflare build |
+| Deploy run 44031953891 | BLOCKED | Stopped at the first secret validation check because CLOUDFLARE_API_TOKEN was empty; no migration/deploy/webhook step ran |
+
+The latest run confirms the same blocker previously observed. The validation loop exits on the first missing secret, so this run does not prove whether the other required values are present. A new CI run for the reliability changes must pass before release.
 
 The deploy workflow did not proceed to Worker deployment, runtime secret upload or Telegram webhook registration. The bot is not deployed or live.
 
@@ -63,6 +63,8 @@ Optional:
 
 ## Not yet verified
 
+- Migration 0002_deep_search_jobs.sql has not yet been applied to the live D1 database.
+- The updated main-queue retry and DLQ consumer have not yet been deployed or exercised.
 - Deployment with a real Cloudflare API token.
 - Runtime secret upload.
 - Telegram webhook and command registration.
@@ -70,7 +72,7 @@ Optional:
 - Live provider request and quota.
 - /health against deployed Worker.
 - Search response delivered to Telegram.
-- Deep Search Queue end-to-end.
+- Deep Search Queue retry/DLQ and /jobs + /retry end-to-end.
 - Website watch snapshot and change alert end-to-end.
 - Archive channel permissions and delivery.
 

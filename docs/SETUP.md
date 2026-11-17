@@ -94,6 +94,7 @@ The archive is not guaranteed unlimited storage and does not replace D1 operatio
 - /research small language models reasoning
 - /news artificial intelligence
 - /deep compare open-source search engines
+- /jobs
 - /watch https://example.com
 - /watches
 - /status

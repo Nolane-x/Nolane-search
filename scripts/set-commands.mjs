@@ -13,6 +13,8 @@ const commands = [
   { command: "watch", description: "Theo dõi thay đổi website" },
   { command: "watches", description: "Danh sách website theo dõi" },
   { command: "unwatch", description: "Ngừng theo dõi một website" },
+  { command: "jobs", description: "Xem lịch sử Deep Search" },
+  { command: "retry", description: "Chạy lại Deep Search thất bại" },
   { command: "help", description: "Xem hướng dẫn" },
   { command: "id", description: "Hiển thị Telegram ID" },
 ];

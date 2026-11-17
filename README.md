@@ -26,6 +26,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Personal index | /local words | D1 FTS5 over monitored-page extracts |
 | Website monitoring | /watch https://example.com | Scheduled HTTP checks and change alerts |
 | Watch management | /watches, /unwatch ID | List and disable watches |
+| Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs and retry failed jobs |
 | Status | /status | Provider configuration and compact index counters |
 
 Plain text messages are interpreted as web search. Use /help in the bot for the current command list.
@@ -35,7 +36,7 @@ Plain text messages are interpreted as web search. Use /help in the bot for the 
 - Telegram Bot API: user interface, result delivery and optional archive channel.
 - Cloudflare Worker: webhook, authorization, provider routing and response formatting.
 - Cloudflare D1: compact operational metadata, short cache, watch state and small FTS5 index.
-- Cloudflare Queues: asynchronous Deep Search jobs and dead-letter handling.
+- Cloudflare Queues: asynchronous Deep Search jobs, retries with backoff and dead-letter handling. D1 tracks job state so users can inspect or retry failed work.
 - Cloudflare Cron: periodic website checks and housekeeping.
 - Tavily / Exa / Brave / GitHub: external discovery providers, enabled only when their keys exist.
 - GitHub Actions: tests, build validation, migrations and deployment. It is not a permanent bot server.

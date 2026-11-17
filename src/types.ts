@@ -61,11 +61,13 @@ export interface ExecutionContext {
 
 export interface QueueMessage<T> {
   body: T;
+  attempts: number;
   ack(): void;
   retry(options?: { delaySeconds?: number }): void;
 }
 
 export interface MessageBatch<T> {
+  queue: string;
   messages: QueueMessage<T>[];
 }
 

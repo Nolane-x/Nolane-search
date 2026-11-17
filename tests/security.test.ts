@@ -14,6 +14,10 @@ describe("isSafePublicUrl", () => {
     expect(isSafePublicUrl("https://localhost")).toBeNull();
     expect(isSafePublicUrl("https://printer.local")).toBeNull();
     expect(isSafePublicUrl("https://service.internal")).toBeNull();
+    expect(isSafePublicUrl("https://nas.home.arpa")).toBeNull();
+    expect(isSafePublicUrl("https://printer.lan")).toBeNull();
+    expect(isSafePublicUrl("https://corp.intranet")).toBeNull();
+    expect(isSafePublicUrl("https://example.onion")).toBeNull();
   });
 
   it("rejects IP literals and private targets", () => {
