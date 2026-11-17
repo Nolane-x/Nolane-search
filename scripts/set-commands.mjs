@@ -21,7 +21,7 @@ const commands = [
   { command: "id", description: "Hiển thị Telegram ID" },
 ];
 
-const response = await fetch(\`https://api.telegram.org/bot\${token}/setMyCommands\`, {
+const response = await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ commands }),
