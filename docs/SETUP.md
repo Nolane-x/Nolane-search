@@ -104,7 +104,8 @@ The archive is not guaranteed unlimited storage and does not replace D1 operatio
 - /search Cloudflare Workers
 - /tech browser automation agents
 - /github telegram database
-- /research small language models reasoning\n- /read https://example.com
+- /research small language models reasoning
+- /read https://example.com
 - /news artificial intelligence
 - /deep compare open-source search engines
 - /jobs
