@@ -24,8 +24,8 @@ describe("Google-style search operators", () => {
     expect(parsed.filters.sites).toEqual(["github.com"]);
     expect(parsed.filters.filetypes).toEqual(["pdf"]);
     expect(parsed.filters.titleTerms).toEqual(["workers"]);
-    expect(parsed.filters.after).toBe(Date.parse("2026-01-01T00:00:00.000Z"));
-    expect(parsed.filters.beforeExclusive).toBe(Date.parse("2026-02-02T00:00:00.000Z"));
+    expect(parsed.filters.after).toBe(Date.parse("2026-01-02T00:00:00.000Z"));
+    expect(parsed.filters.beforeExclusive).toBe(Date.parse("2026-02-01T00:00:00.000Z"));
   });
 
   it("preserves invalid operator values as ordinary query text", () => {
@@ -64,7 +64,7 @@ describe("Google-style search operators", () => {
       result({ publishedAt: undefined }),
       result({ publishedAt: "2026-01-15T12:00:00Z" }),
     ]);
-    expect(results).toHaveLength(2);
+    expect(results).toHaveLength(1);
     expect(results.map(item => item.publishedAt)).toEqual([
       "2026-01-15T12:00:00Z",
     ]);
