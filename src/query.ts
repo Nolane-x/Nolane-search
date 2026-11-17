@@ -64,16 +64,16 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
     } else if (operator === "after") {
       const date = validDateStart(value);
       if (date !== null) {
-        filters.after = filters.after === null ? date : Math.max(filters.after, date);
+        const exclusive = date + 86_400_000;
+        filters.after = filters.after === null ? exclusive : Math.max(filters.after, exclusive);
         valid = true;
       }
     } else if (operator === "before") {
       const date = validDateStart(value);
       if (date !== null) {
-        const exclusive = date + 86_400_000;
         filters.beforeExclusive = filters.beforeExclusive === null
-          ? exclusive
-          : Math.min(filters.beforeExclusive, exclusive);
+          ? date
+          : Math.min(filters.beforeExclusive, date);
         valid = true;
       }
     }
