@@ -56,17 +56,17 @@ describe("Google-style search operators", () => {
     expect(results[0]?.url).toContain(".pdf");
   });
 
-  it("uses inclusive after/before calendar dates and excludes unknown dates", () => {
+  it("uses exclusive after/before date boundaries and excludes unknown dates", () => {
     const parsed = parseSearchQuery("workers after:2026-01-10 before:2026-01-20");
     const results = applySearchFilters(parsed, [
-      result({ publishedAt: "2026-01-10T00:00:00Z" }),
+      result({ publishedAt: "2026-01-10T23:59:59Z" }),
       result({ publishedAt: "2026-01-20T00:00:00Z" }),
       result({ publishedAt: undefined }),
       result({ publishedAt: "2026-01-15T12:00:00Z" }),
     ]);
     expect(results).toHaveLength(2);
     expect(results.map(item => item.publishedAt)).toEqual([
-      "2026-01-10T00:00:00Z", "2026-01-15T12:00:00Z",
+      "2026-01-15T12:00:00Z",
     ]);
   });
 });
