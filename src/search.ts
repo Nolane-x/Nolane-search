@@ -1,6 +1,6 @@
 import { normalizeUrl, sha256Hex } from "./security";
 import type { Env, SearchMode, SearchResult } from "./types";
-import { searchBrave, searchExa, searchGitHub, searchTavily } from "./providers";
+import { fetchTinyFishPages, searchBrave, searchExa, searchGitHub, searchTavily, searchTinyFish } from "./providers";
 
 function queryTerms(query: string): string[] {
   return query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((term) => term.length > 2).slice(0, 20);
@@ -59,8 +59,15 @@ async function localSearch(env: Env, query: string): Promise<SearchResult[]> {
   }));
 }
 
+async function settledResults(calls: Promise<SearchResult[]>[]): Promise<SearchResult[]> {
+  const settled = await Promise.allSettled(calls);
+  const results: SearchResult[] = [];
+  for (const call of settled) if (call.status === "fulfilled") results.push(...call.value);
+  return results;
+}
+
 async function cachedSearch(env: Env, query: string, mode: SearchMode): Promise<SearchResult[]> {
-  const cacheKey = await sha256Hex(`${mode}\\n${query.trim().toLowerCase()}`);
+  const cacheKey = await sha256Hex(`${mode}\n${query.trim().toLowerCase()}`);
   const now = Date.now();
   const cached = await env.DB.prepare(
     "SELECT payload FROM search_cache WHERE cache_key = ? AND expires_at > ?",
@@ -75,31 +82,37 @@ async function cachedSearch(env: Env, query: string, mode: SearchMode): Promise<
   } else if (mode === "local") {
     results = await localSearch(env, query);
   } else if (mode === "research") {
-    const calls = await Promise.allSettled([
+    results = await settledResults([
       ...(env.TAVILY_API_KEY ? [searchTavily(env, query)] : []),
       ...(env.EXA_API_KEY ? [searchExa(env, query)] : []),
+      ...(env.TINYFISH_API_KEY ? [searchTinyFish(env, query, { domainType: "research_paper", purpose: "Find academic papers and evidence relevant to this research question." })] : []),
     ]);
-    for (const call of calls) if (call.status === "fulfilled") results.push(...call.value);
-    if (!results.length) throw new Error("Research providers unavailable. Configure TAVILY_API_KEY or EXA_API_KEY.");
+    if (!results.length) throw new Error("Research providers unavailable. Configure TAVILY_API_KEY, EXA_API_KEY or TINYFISH_API_KEY.");
   } else if (mode === "tech") {
-    const calls = await Promise.allSettled([
+    results = await settledResults([
       ...(env.TAVILY_API_KEY ? [searchTavily(env, query)] : []),
+      ...(env.TINYFISH_API_KEY ? [searchTinyFish(env, query, { purpose: "Find technical documentation, tools and reliable engineering resources." })] : []),
       searchGitHub(env, query),
     ]);
-    for (const call of calls) if (call.status === "fulfilled") results.push(...call.value);
     if (!results.length) throw new Error("Technology search providers unavailable.");
   } else if (mode === "news") {
-    if (env.TAVILY_API_KEY) {
-      try { results = await searchTavily(env, query, "news"); } catch { /* use fallback */ }
-    }
-    if (!results.length && env.BRAVE_SEARCH_API_KEY) results = await searchBrave(env, query, true);
+    results = await settledResults([
+      ...(env.TAVILY_API_KEY ? [searchTavily(env, query, "news")] : []),
+      ...(env.BRAVE_SEARCH_API_KEY ? [searchBrave(env, query, true)] : []),
+      ...(env.TINYFISH_API_KEY ? [searchTinyFish(env, query, { domainType: "news", purpose: "Find recent news coverage about this topic." })] : []),
+    ]);
     if (!results.length) throw new Error("News search providers unavailable.");
   } else {
     if (env.TAVILY_API_KEY) {
-      try { results = await searchTavily(env, query); } catch { /* use fallback */ }
+      try { results = await searchTavily(env, query); } catch { /* try backup providers */ }
     }
-    if (!results.length && env.BRAVE_SEARCH_API_KEY) results = await searchBrave(env, query);
-    if (!results.length) throw new Error("Web search providers unavailable.");
+    if (!results.length) {
+      results = await settledResults([
+        ...(env.TINYFISH_API_KEY ? [searchTinyFish(env, query)] : []),
+        ...(env.BRAVE_SEARCH_API_KEY ? [searchBrave(env, query)] : []),
+      ]);
+    }
+    if (!results.length) throw new Error("Web search providers unavailable. Configure Tavily, TinyFish or Brave.");
   }
 
   const ranked = rankAndDeduplicate(query, results, mode);
@@ -129,9 +142,26 @@ export async function performDeepSearch(env: Env, query: string): Promise<Search
     ...(env.TAVILY_API_KEY ? variations.map((item) => searchTavily(env, item)) : []),
     ...(env.EXA_API_KEY ? [searchExa(env, query)] : []),
     ...(env.BRAVE_SEARCH_API_KEY ? [searchBrave(env, query)] : []),
+    ...(env.TINYFISH_API_KEY ? [
+      searchTinyFish(env, query, { purpose: "Conduct broad research; find primary sources, technical documentation, and credible evidence." }),
+      searchTinyFish(env, query, { domainType: "research_paper", purpose: "Find relevant academic papers, benchmarks and primary research." }),
+    ] : []),
   ]);
   const combined: SearchResult[] = [];
   for (const call of calls) if (call.status === "fulfilled") combined.push(...call.value);
   if (!combined.length) throw new Error("No configured search provider returned results.");
-  return rankAndDeduplicate(query, combined, "research");
+
+  let ranked = rankAndDeduplicate(query, combined, "research");
+  if (env.TINYFISH_API_KEY && ranked.length) {
+    try {
+      const pages = await fetchTinyFishPages(env, ranked.slice(0, 5).map((item) => item.url));
+      ranked = ranked.map((item) => {
+        const page = pages.get(item.url);
+        return page ? { ...item, title: page.title || item.title, snippet: page.text.slice(0, 1100), provider: `${item.provider} + TinyFish Fetch` } : item;
+      });
+    } catch (error) {
+      console.error("TinyFish deep fetch enrichment failed:", error instanceof Error ? error.message : "unknown");
+    }
+  }
+  return ranked;
 }
