@@ -1,6 +1,6 @@
 import { constantTimeEqual, htmlEscape } from "./security";
 import { performDeepSearch, performSearch } from "./search";
-import { fetchOpenRouterPage, fetchOpenRouterSummary, fetchTinyFishPage, parseOpenRouterModels } from "./providers";
+import { fetchOpenRouterSummary, fetchTinyFishPage, parseOpenRouterModels } from "./providers";
 import { formatDeepReport, formatSearchResults, sendTelegram, sendToArchive } from "./telegram";
 import { validateWatchUrl, checkWatchTargets } from "./watch";
 import type { DeepSearchJob, Env, ExecutionContext, MessageBatch, SearchMode, TelegramUpdate } from "./types";
@@ -88,7 +88,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/research chủ đề</code> — tìm nghiên cứu và nguồn liên quan\n" +
       "<code>/news chủ đề</code> — tìm tin tức\n" +
       "<code>/deep câu hỏi</code> — tìm nhiều lượt, tổng hợp nguồn bất đồng bộ\n" +
-      "<code>/site domain.com từ khóa</code> — giới hạn tìm kiếm vào website\n" +\n      "<code>/read https://example.com</code> — đọc nội dung trang bằng TinyFish\n" +
+      "<code>/site domain.com từ khóa</code> — giới hạn tìm kiếm vào website\n" +
+      "<code>/read https://example.com</code> — đọc nội dung trang bằng TinyFish\n" +
       "<code>/local từ khóa</code> — tìm trong trang đã được index\n" +
       "<code>/watch https://example.com</code> — theo dõi một trang\n" +
       "<code>/watches</code> — danh sách đang theo dõi\n" +
@@ -117,7 +118,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       `Web search: ${env.TAVILY_API_KEY ? "ready" : "missing"}\n` +
       `Semantic search: ${env.EXA_API_KEY ? "ready" : "not configured"}\n` +
       `Backup search: ${env.BRAVE_SEARCH_API_KEY ? "ready" : "not configured"}\n` +
-      `AI synthesis: ${env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL ? "ready" : "not configured"}\n` +
+      `TinyFish Search/Fetch: ${env.TINYFISH_API_KEY ? "ready" : "not configured"}\n` +
+      `AI synthesis: ${env.OPENROUTER_API_KEY && parseOpenRouterModels(env).length ? `ready (${parseOpenRouterModels(env).length} model(s))` : "not configured"}\n` +
       `Telegram archive: ${env.TELEGRAM_ARCHIVE_CHAT_ID ? "configured" : "not configured"}\n` +
       `Active watches: ${watchCount?.count ?? 0}\n` +
       `Indexed pages: ${pageCount?.count ?? 0}\n` +
@@ -404,8 +406,10 @@ export default {
             tavily: Boolean(env.TAVILY_API_KEY),
             exa: Boolean(env.EXA_API_KEY),
             brave: Boolean(env.BRAVE_SEARCH_API_KEY),
+            tinyfish: Boolean(env.TINYFISH_API_KEY),
             github: true,
-            openrouter: Boolean(env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL),
+            openrouter: Boolean(env.OPENROUTER_API_KEY && parseOpenRouterModels(env).length),
+            openrouterModels: parseOpenRouterModels(env).length,
           },
           archiveEnabled: Boolean(env.TELEGRAM_ARCHIVE_CHAT_ID),
         });
