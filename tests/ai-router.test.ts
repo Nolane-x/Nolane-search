@@ -74,6 +74,7 @@ describe("AI Router protocol adapters and failover", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(String(input)).toBe("https://api.anthropic.com/v1/messages");
       expect(new Headers(init?.headers).get("anthropic-version")).toBe("2026-10-21");
+      expect(new Headers(init?.headers).get("x-api-key")).toBe("anthropic-secret-key");
       const body=JSON.parse(String(init?.body));
       expect(body.system).toBe("System prompt");
       expect(body.messages).toEqual([{role:"user",content:"Question"}]);
