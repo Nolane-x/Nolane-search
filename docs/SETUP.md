@@ -1,6 +1,6 @@
 # Setup guide
 
-The Cloudflare Worker and core storage resources have already been provisioned. No home PC must stay on. The current Worker health endpoint is live; the Telegram bot is waiting for the owner's credentials.
+The Cloudflare Worker and core storage resources have already been provisioned. No home PC must stay on. Runtime credentials are managed through GitHub Actions secrets; confirm the current state through the Deploy workflow, /health, /status and end-to-end Telegram tests.
 
 ## Current deployment
 
