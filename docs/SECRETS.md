@@ -6,7 +6,7 @@ Add these values in GitHub repository Settings → Secrets and variables → Act
 
 | GitHub Actions secret | Purpose | Where to obtain |
 |---|---|---|
-| CLOUDFLARE_API_TOKEN | Deploy Worker, apply D1 migrations and configure Queue consumer | Cloudflare Dashboard → My Profile → API Tokens |
+| CLOUDFLARE_API_TOKEN | Deploy Worker and configure Queue consumer | Cloudflare Dashboard → My Profile → API Tokens |
 | TELEGRAM_BOT_TOKEN | Telegram bot authentication | Create a bot with https://t.me/BotFather |
 | TELEGRAM_WEBHOOK_SECRET | Authenticate Telegram webhook requests | Generate a random 32+ character value using A-Z, a-z, 0-9, underscore or hyphen |
 | TAVILY_API_KEY | Main web search provider | https://app.tavily.com/ |
@@ -15,14 +15,21 @@ Generate a webhook secret with OpenSSL: openssl rand -hex 32.
 
 ## Cloudflare token permissions
 
-Create a scoped API token for this repository. The workflow needs:
+Create a scoped deployment token for this repository. The deploy workflow needs:
 - Account → Workers Scripts: Edit
-- Account → D1: Edit
 - Account → Queues: Edit
 
-If Cloudflare's current token UI requires an additional read scope, add only the minimum scope requested by the CLI/API error. Do not use the Global API Key.
+D1 permissions are intentionally separated into an additional secret named `CLOUDFLARE_D1_API_TOKEN`. Grant that token Account → D1: Edit and use it only for migration runs. This keeps the runtime Worker deployment token from needing database write access. If Cloudflare's current token UI requires an additional read scope, add only the minimum scope requested by the CLI/API error. Do not use the Global API Key.
 
 Cloudflare account ID is already recorded in cloudflare.config.ts and the workflow: 1172c01120a2470aa12f81e5b4778556.
+
+## Optional deployment permissions
+
+| GitHub Actions secret | Purpose | Required permission |
+|---|---|---|
+| `CLOUDFLARE_D1_API_TOKEN` | Apply new D1 migrations when a migration file changes | Account → D1: Edit |
+
+The deploy workflow only uses this secret when changed files under `database/migrations/` require a migration. It will fail with a direct setup message when the secret is missing; ordinary Worker deployments do not need this token.
 
 ## Recommended
 
