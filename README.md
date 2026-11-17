@@ -10,8 +10,8 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 - Cloudflare Worker `nolane-search` has been deployed through the connected Cloudflare integration. Its `/health` endpoint has passed a GitHub Actions smoke test.
 - D1 migrations 0001 and 0002 are applied. The main Queue, dead-letter Queue, consumers and 30-minute Cron trigger are configured.
 - The latest code includes stale Deep Search job recovery on the 30-minute Cron schedule. CI, bundle validation and the live /health smoke test passed for this implementation.
-- Telegram/provider secrets have not been configured yet, so the Worker is reachable but the Telegram bot is not live.
-- The GitHub Actions Deploy workflow is awaiting `CLOUDFLARE_API_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and `TAVILY_API_KEY` to enable repeatable deployment and end-to-end bot setup.
+- Runtime credentials are managed as GitHub Actions secrets and are intentionally not stored in source control. Their presence and validity must be confirmed by the latest Deploy workflow and end-to-end bot checks.
+- The Deploy workflow requires `CLOUDFLARE_API_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and `TAVILY_API_KEY`; optional TinyFish and OpenRouter settings are documented in `docs/SECRETS.md`.
 - Follow docs/SECRETS.md to configure the required secrets. docs/STATUS.md records exact verified status and resource identifiers.
 
 ## Initial features
