@@ -17,7 +17,7 @@ Telegram user → Telegram webhook → Cloudflare Worker
 - Enforce owner allowlist.
 - Parse command and select search mode.
 
-Quick Search → Tavily primary → (when unavailable or fewer than four results) parallel Exa/TinyFish/Brave/Wikipedia fallback → merge → normalized URL deduplication → token-overlap relevance + freshness + domain-diversity ranking → up to 12 candidates → Telegram pages of five results.
+Quick Search → Tavily primary → (when unavailable or fewer than four results) parallel Exa/TinyFish/Brave/Wikipedia fallback → merge → local operator enforcement → normalized URL deduplication → token-overlap relevance + freshness + domain-diversity ranking → up to 12 candidates → Telegram pages of five results.
 
 Deep Search → D1 job record → Cloudflare Queue → bounded query expansion → parallel Tavily/Exa/Brave/TinyFish retrieval → deduplicate/rank → optional TinyFish Fetch enrichment of up to five sources → optional OpenRouter synthesis with ordered model fallback → Telegram report.
 - D1 records queued/running/completed/failed state, attempt count and last failure reason.
@@ -47,7 +47,7 @@ Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt polic
 - wiki: direct Wikipedia reference lookup, English by default and Vietnamese when the query contains Vietnamese diacritics.
 - local: FTS5 search over monitored-page extracts.
 
-The /site command prefixes a query with a site: operator. Coverage depends on the external provider. The /read command uses TinyFish Fetch to extract a single HTTPS page. General web search only queries fallback providers when Tavily fails or returns fewer than four results; Wikipedia joins that fallback set and is also available directly through /wiki.
+The `/search` command accepts a small Google-style operator set: `site:domain`, `filetype:pdf`, `intitle:words`, `after:YYYY-MM-DD` and `before:YYYY-MM-DD`. The Worker enforces these filters locally even if a provider ignores them. Date filters use strict boundaries and require a parseable `publishedAt` timestamp; results without one are excluded. The `/site` command is a shortcut that prefixes the query with `site:`. The `/read` command uses TinyFish Fetch to extract a single HTTPS page. General web search only queries fallback providers when Tavily fails or returns fewer than four results; Wikipedia joins that fallback set and is also available directly through `/wiki`.
 
 ## Ranking
 
