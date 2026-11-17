@@ -84,12 +84,12 @@ function extractPage(html: string): { title: string; text: string } {
 
 export async function checkWatchTargets(env: Env): Promise<{ checked: number; changed: number }> {
   const rows = await env.DB.prepare(
-    \`SELECT id, chat_id, user_id, url, normalized_url, interval_minutes, etag, last_modified, content_hash
+    `SELECT id, chat_id, user_id, url, normalized_url, interval_minutes, etag, last_modified, content_hash
        FROM watches
       WHERE active = 1
         AND (last_checked_at IS NULL OR datetime(last_checked_at, '+' || interval_minutes || ' minutes') <= datetime('now'))
       ORDER BY last_checked_at IS NULL DESC, last_checked_at ASC
-      LIMIT 12\`,
+      LIMIT 12`,
   ).all<WatchRow>();
   let checked = 0;
   let changed = 0;
@@ -129,31 +129,31 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
         .bind(watch.normalized_url).first<{ id: number }>();
       const statements = [
         env.DB.prepare(
-          \`UPDATE watches SET last_checked_at = ?, last_status = ?, etag = ?, last_modified = ?, content_hash = ?
-            WHERE id = ?\`,
+          `UPDATE watches SET last_checked_at = ?, last_status = ?, etag = ?, last_modified = ?, content_hash = ?
+            WHERE id = ?`,
         ).bind(now, response.status, etag, lastModified, hash, watch.id),
         env.DB.prepare(
-          \`INSERT INTO indexed_pages (url, normalized_url, domain, title, content, content_hash, updated_at)
+          `INSERT INTO indexed_pages (url, normalized_url, domain, title, content, content_hash, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(normalized_url) DO UPDATE SET
              url = excluded.url, domain = excluded.domain, title = excluded.title,
-             content = excluded.content, content_hash = excluded.content_hash, updated_at = excluded.updated_at\`,
+             content = excluded.content, content_hash = excluded.content_hash, updated_at = excluded.updated_at`,
         ).bind(watch.url, watch.normalized_url, hostname, page.title, page.text.slice(0, 5000), hash, now),
       ];
       if (existing) statements.push(env.DB.prepare("DELETE FROM indexed_pages_fts WHERE rowid = ?").bind(existing.id));
       statements.push(env.DB.prepare(
-        \`INSERT INTO indexed_pages_fts (rowid, title, content, url, domain)
-         SELECT id, title, content, url, domain FROM indexed_pages WHERE normalized_url = ?\`,
+        `INSERT INTO indexed_pages_fts (rowid, title, content, url, domain)
+         SELECT id, title, content, url, domain FROM indexed_pages WHERE normalized_url = ?`,
       ).bind(watch.normalized_url));
       await env.DB.batch(statements);
 
       if (isFirstSnapshot || isChanged) {
-        const caption = \`Nolane Search snapshot · \${isFirstSnapshot ? "initial capture" : "detected change"} · \${hostname} · \${now}\`;
+        const caption = `Nolane Search snapshot · ${isFirstSnapshot ? "initial capture" : "detected change"} · ${hostname} · ${now}`;
         try {
           await sendArchiveDocument(
             env,
-            \`nolane-\${watch.id}-\${Date.now()}.txt\`,
-            \`TITLE: \${page.title}\nURL: \${watch.url}\nCAPTURED: \${now}\nCONTENT HASH: \${hash}\n\n\${page.text}\`,
+            `nolane-${watch.id}-${Date.now()}.txt`,
+            `TITLE: ${page.title}\nURL: ${watch.url}\nCAPTURED: ${now}\nCONTENT HASH: ${hash}\n\n${page.text}`,
             caption,
           );
         } catch (error) {
@@ -162,12 +162,12 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
       }
       if (isChanged) {
         const message =
-          \`<b>Website changed · Nolane Search</b>\n\` +
-          \`<a href="\${htmlEscape(watch.url)}">\${htmlEscape(page.title)}</a>\n\` +
-          \`Domain: <code>\${htmlEscape(hostname)}</code>\n\` +
-          \`Watch ID: <code>\${watch.id}</code>\n\` +
-          \`Detected: \${now}\n\n\` +
-          \`Trang đã thay đổi so với lần kiểm tra trước. Bản snapshot mới đã được gửi vào kênh lưu trữ nếu bạn đã cấu hình.\`;
+          `<b>Website changed · Nolane Search</b>\n` +
+          `<a href="${htmlEscape(watch.url)}">${htmlEscape(page.title)}</a>\n` +
+          `Domain: <code>${htmlEscape(hostname)}</code>\n` +
+          `Watch ID: <code>${watch.id}</code>\n` +
+          `Detected: ${now}\n\n` +
+          `Trang đã thay đổi so với lần kiểm tra trước. Bản snapshot mới đã được gửi vào kênh lưu trữ nếu bạn đã cấu hình.`;
         await sendTelegram(env, watch.chat_id, message);
         await sendToArchive(env, message);
         changed += 1;

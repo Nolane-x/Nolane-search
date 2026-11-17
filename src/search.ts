@@ -45,13 +45,13 @@ async function localSearch(env: Env, query: string): Promise<SearchResult[]> {
   const safeQuery = query.replace(/[^\p{L}\p{N}\s_-]/gu, " ").trim().split(/\s+/).filter(Boolean).join(" ");
   if (!safeQuery) return [];
   const result = await env.DB.prepare(
-    \`SELECT p.title, p.url, p.domain,
+    `SELECT p.title, p.url, p.domain,
             snippet(indexed_pages_fts, 1, '', '', ' … ', 18) AS snippet
        FROM indexed_pages_fts
        JOIN indexed_pages p ON p.id = indexed_pages_fts.rowid
       WHERE indexed_pages_fts MATCH ?
       ORDER BY bm25(indexed_pages_fts)
-      LIMIT 8\`,
+      LIMIT 8`,
   ).bind(safeQuery).all<{ title: string; url: string; domain: string; snippet: string }>();
   return result.results.map((item) => ({
     title: item.title, url: item.url, domain: item.domain, snippet: item.snippet,
@@ -60,7 +60,7 @@ async function localSearch(env: Env, query: string): Promise<SearchResult[]> {
 }
 
 async function cachedSearch(env: Env, query: string, mode: SearchMode): Promise<SearchResult[]> {
-  const cacheKey = await sha256Hex(\`\${mode}\\n\${query.trim().toLowerCase()}\`);
+  const cacheKey = await sha256Hex(`${mode}\\n${query.trim().toLowerCase()}`);
   const now = Date.now();
   const cached = await env.DB.prepare(
     "SELECT payload FROM search_cache WHERE cache_key = ? AND expires_at > ?",
@@ -105,10 +105,10 @@ async function cachedSearch(env: Env, query: string, mode: SearchMode): Promise<
   const ranked = rankAndDeduplicate(query, results, mode);
   if (ranked.length) {
     await env.DB.prepare(
-      \`INSERT INTO search_cache (cache_key, payload, expires_at, created_at)
+      `INSERT INTO search_cache (cache_key, payload, expires_at, created_at)
        VALUES (?, ?, ?, ?)
        ON CONFLICT(cache_key) DO UPDATE SET
-         payload = excluded.payload, expires_at = excluded.expires_at, created_at = excluded.created_at\`,
+         payload = excluded.payload, expires_at = excluded.expires_at, created_at = excluded.created_at`,
     ).bind(cacheKey, JSON.stringify(ranked), now + 2 * 60 * 1000, now).run();
   }
   return ranked;
@@ -121,9 +121,9 @@ export async function performSearch(env: Env, query: string, mode: SearchMode = 
 export async function performDeepSearch(env: Env, query: string): Promise<SearchResult[]> {
   const variations = [
     query,
-    \`\${query} official documentation\`,
-    \`\${query} research benchmarks evidence\`,
-    \`\${query} open source projects\`,
+    `${query} official documentation`,
+    `${query} research benchmarks evidence`,
+    `${query} open source projects`,
   ];
   const calls = await Promise.allSettled([
     ...(env.TAVILY_API_KEY ? variations.map((item) => searchTavily(env, item)) : []),

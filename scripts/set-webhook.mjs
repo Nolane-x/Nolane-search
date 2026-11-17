@@ -8,7 +8,7 @@ if (!/^[A-Za-z0-9_-]{1,256}$/.test(secret)) {
   throw new Error("TELEGRAM_WEBHOOK_SECRET must use only A-Z, a-z, 0-9, underscore or hyphen and be 1-256 characters.");
 }
 
-const response = await fetch(\`https://api.telegram.org/bot\${token}/setWebhook\`, {
+const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
@@ -20,5 +20,5 @@ const response = await fetch(\`https://api.telegram.org/bot\${token}/setWebhook\
   }),
 });
 const data = await response.json();
-if (!response.ok || !data.ok) throw new Error(\`Telegram setWebhook failed: \${data.description || response.status}\`);
-console.log(\`Telegram webhook configured: \${url}\`);
+if (!response.ok || !data.ok) throw new Error(`Telegram setWebhook failed: ${data.description || response.status}`);
+console.log(`Telegram webhook configured: ${url}`);

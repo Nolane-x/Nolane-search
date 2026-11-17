@@ -55,7 +55,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   if (command === "id" || command === "start") {
     if (!allowedUser(env, userId)) {
       await reply(env, chatId,
-        \`Telegram ID của bạn: <code>\${userId}</code>\n\nBot đang ở chế độ private. Chủ bot cần thêm ID này vào GitHub Actions Secret <code>ALLOWED_TELEGRAM_USER_IDS</code> rồi triển khai lại. Không gửi bot token cho bất kỳ ai.\`);
+        `Telegram ID của bạn: <code>${userId}</code>\n\nBot đang ở chế độ private. Chủ bot cần thêm ID này vào GitHub Actions Secret <code>ALLOWED_TELEGRAM_USER_IDS</code> rồi triển khai lại. Không gửi bot token cho bất kỳ ai.`);
       return;
     }
     await reply(env, chatId,
@@ -96,14 +96,14 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     ]);
     await reply(env, chatId,
       "<b>Nolane Search status</b>\n" +
-      \`Web search: \${env.TAVILY_API_KEY ? "ready" : "missing"}\n\` +
-      \`Semantic search: \${env.EXA_API_KEY ? "ready" : "not configured"}\n\` +
-      \`Backup search: \${env.BRAVE_SEARCH_API_KEY ? "ready" : "not configured"}\n\` +
-      \`AI synthesis: \${env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL ? "ready" : "not configured"}\n\` +
-      \`Telegram archive: \${env.TELEGRAM_ARCHIVE_CHAT_ID ? "configured" : "not configured"}\n\` +
-      \`Active watches: \${watchCount?.count ?? 0}\n\` +
-      \`Indexed pages: \${pageCount?.count ?? 0}\n\` +
-      \`Cached queries: \${cacheCount?.count ?? 0}\n\n\` +
+      `Web search: ${env.TAVILY_API_KEY ? "ready" : "missing"}\n` +
+      `Semantic search: ${env.EXA_API_KEY ? "ready" : "not configured"}\n` +
+      `Backup search: ${env.BRAVE_SEARCH_API_KEY ? "ready" : "not configured"}\n` +
+      `AI synthesis: ${env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL ? "ready" : "not configured"}\n` +
+      `Telegram archive: ${env.TELEGRAM_ARCHIVE_CHAT_ID ? "configured" : "not configured"}\n` +
+      `Active watches: ${watchCount?.count ?? 0}\n` +
+      `Indexed pages: ${pageCount?.count ?? 0}\n` +
+      `Cached queries: ${cacheCount?.count ?? 0}\n\n` +
       "<i>Ready means a secret is configured; it does not guarantee the upstream API is healthy.</i>");
     return;
   }
@@ -122,7 +122,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       await reply(env, chatId, "Cú pháp: <code>/site example.com từ khóa</code>");
       return;
     }
-    return handleSearch(env, chatId, \`site:\${domain} \${query}\`, "web");
+    return handleSearch(env, chatId, `site:${domain} ${query}`, "web");
   }
 
   if (command === "deep") {
@@ -137,7 +137,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       await env.SEARCH_JOBS.send(job);
       const message = "<b>Deep Search đã được xếp hàng.</b>\nMình sẽ chạy nhiều truy vấn, khử trùng lặp và gửi báo cáo vào cuộc trò chuyện này khi hoàn tất.";
       await reply(env, chatId, message);
-      await sendToArchive(env, \`<b>Deep Search queued</b>\n\${htmlEscape(args)}\nJob: <code>\${job.id}</code>\`);
+      await sendToArchive(env, `<b>Deep Search queued</b>\n${htmlEscape(args)}\nJob: <code>${job.id}</code>`);
     } catch (error) {
       console.error("Queue send failed:", error instanceof Error ? error.message : "unknown");
       await reply(env, chatId, "Không thể tạo Deep Search job. Hãy kiểm tra cấu hình Cloudflare Queue.");
@@ -153,13 +153,13 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     }
     try {
       await env.DB.prepare(
-        \`INSERT INTO watches (chat_id, user_id, url, normalized_url)
+        `INSERT INTO watches (chat_id, user_id, url, normalized_url)
          VALUES (?, ?, ?, ?)
-         ON CONFLICT(user_id, normalized_url) DO UPDATE SET active = 1\`,
+         ON CONFLICT(user_id, normalized_url) DO UPDATE SET active = 1`,
       ).bind(String(chatId), String(userId), validated.url.toString(), validated.normalized).run();
       const row = await env.DB.prepare("SELECT id FROM watches WHERE user_id = ? AND normalized_url = ?")
         .bind(String(userId), validated.normalized).first<{ id: number }>();
-      const message = \`<b>Website đã được thêm vào danh sách theo dõi.</b>\nID: <code>\${row?.id ?? "unknown"}</code>\nURL: \${htmlEscape(validated.url.toString())}\nKiểm tra định kỳ khoảng mỗi 30 phút trở lên; đây không phải giám sát thời gian thực.\`;
+      const message = `<b>Website đã được thêm vào danh sách theo dõi.</b>\nID: <code>${row?.id ?? "unknown"}</code>\nURL: ${htmlEscape(validated.url.toString())}\nKiểm tra định kỳ khoảng mỗi 30 phút trở lên; đây không phải giám sát thời gian thực.`;
       await reply(env, chatId, message);
       await sendToArchive(env, message);
     } catch (error) {
@@ -179,7 +179,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     }
     const lines = ["<b>Website đang theo dõi</b>"];
     for (const row of rows.results) {
-      lines.push(\`<code>\${row.id}</code> · <a href="\${htmlEscape(row.url)}">\${htmlEscape(new URL(row.url).hostname)}</a> · mỗi \${row.interval_minutes} phút\`);
+      lines.push(`<code>${row.id}</code> · <a href="${htmlEscape(row.url)}">${htmlEscape(new URL(row.url).hostname)}</a> · mỗi ${row.interval_minutes} phút`);
     }
     await reply(env, chatId, lines.join("\n"));
     return;
@@ -213,7 +213,7 @@ async function processDeepJob(env: Env, job: DeepSearchJob): Promise<void> {
     const summary = await fetchOpenRouterSummary(env, job.query, results);
     const report = formatDeepReport(job.query, results, summary);
     await sendTelegram(env, job.chatId, report);
-    await sendToArchive(env, \`<b>Deep Search archive</b>\nJob: <code>\${job.id}</code>\n\${report}\`);
+    await sendToArchive(env, `<b>Deep Search archive</b>\nJob: <code>${job.id}</code>\n${report}`);
   } catch (error) {
     console.error("Deep Search job failed:", error instanceof Error ? error.message : "unknown");
     await sendTelegram(env, job.chatId, "Deep Search gặp lỗi khi truy xuất nguồn. Không có báo cáo hoàn chỉnh được tạo; hãy thử lại sau.");
