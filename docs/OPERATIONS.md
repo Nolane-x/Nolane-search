@@ -65,7 +65,7 @@ External search APIs have their own quotas and possible paid overages. Monitor p
 - Dead-letter Queue: nolane-search-dlq
 - Cron: every 30 minutes
 
-D1 stores small operational records and a compact index. Search cache expires after two minutes and is pruned by scheduled maintenance. Telegram update IDs are pruned after seven days.
+D1 stores small operational records and a compact index. Search cache expires after two minutes and is pruned by scheduled maintenance. Telegram update IDs are pruned after seven days. Completed/failed Deep Search job records are pruned after 30 days; queued/running jobs are retained.
 
 ## Debugging checklist
 
