@@ -1,0 +1,24 @@
+{
+  "name": "nolane-search",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Telegram-first hybrid Internet search engine on Cloudflare Workers.",
+  "scripts": {
+    "dev": "cf dev",
+    "build": "cf build",
+    "deploy": "cf deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "migrate": "node scripts/migrate.mjs",
+    "set:webhook": "node scripts/set-webhook.mjs",
+    "set:commands": "node scripts/set-commands.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "2.0.0-beta.v.17",
+    "cf": "1.0.0-beta.32",
+    "typescript": "5.9.3",
+    "vite": "7.2.2",
+    "vitest": "3.2.4"
+  }
+}

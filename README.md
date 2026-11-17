@@ -1,5 +1,62 @@
 # Nolane Search
 
-A Telegram-first hybrid web search engine built on Cloudflare Workers. This repository is the canonical source of truth for product goals, architecture, setup, secrets, and operational status.
+**Telegram-first hybrid Internet search engine** built on Cloudflare Workers.
 
-> Current status: foundation implementation in progress. See `docs/STATUS.md` for verified status and `docs/SECRETS.md` for required configuration. Do not describe the service as deployed or operational until its CI deployment and Telegram webhook checks pass.
+Nolane Search is a personal search interface inside Telegram. It combines external search providers with a small independent index of selected websites. It is not a general-purpose crawler indexing the entire Internet.
+
+## Current status
+
+- Cloudflare D1 and two Queues have been provisioned in the linked account.
+- Source implementation is being assembled and must pass CI before deployment.
+- Worker deployment and Telegram webhook registration are not yet verified.
+- Required user secrets are listed in docs/SECRETS.md.
+- Verified resource details and release gates are in docs/STATUS.md.
+
+## Initial features
+
+| Feature | Command | Scope |
+|---|---|---|
+| General web search | /search words | Tavily, with optional Brave fallback |
+| Technology search | /tech words | Web search plus GitHub repositories |
+| GitHub repositories | /github words | GitHub repository Search API |
+| Research discovery | /research topic | Configured Tavily and Exa providers |
+| News search | /news topic | Tavily News, optional Brave fallback |
+| Deep search | /deep question | Bounded query expansion, merge and optional OpenRouter synthesis |
+| Search within a site | /site example.com words | Provider site restriction |
+| Personal index | /local words | D1 FTS5 over monitored-page extracts |
+| Website monitoring | /watch https://example.com | Scheduled HTTP checks and change alerts |
+| Watch management | /watches, /unwatch ID | List and disable watches |
+| Status | /status | Provider configuration and compact index counters |
+
+Plain text messages are interpreted as web search. Use /help in the bot for the current command list.
+
+## Architecture
+
+- Telegram Bot API: user interface, result delivery and optional archive channel.
+- Cloudflare Worker: webhook, authorization, provider routing and response formatting.
+- Cloudflare D1: compact operational metadata, short cache, watch state and small FTS5 index.
+- Cloudflare Queues: asynchronous Deep Search jobs and dead-letter handling.
+- Cloudflare Cron: periodic website checks and housekeeping.
+- Tavily / Exa / Brave / GitHub: external discovery providers, enabled only when their keys exist.
+- GitHub Actions: tests, build validation, migrations and deployment. It is not a permanent bot server.
+
+See docs/ARCHITECTURE.md, docs/SETUP.md, docs/SECRETS.md and docs/OPERATIONS.md.
+
+## Important limitations
+
+1. Search coverage and freshness depend on external providers and their quotas.
+2. Ranking is currently a transparent heuristic, not a trained relevance model.
+3. Deep Search is bounded multi-query retrieval, not exhaustive research or a guarantee of factual correctness.
+4. The initial crawler checks only URLs explicitly added by the owner. It does not crawl the whole web, render JavaScript-heavy sites, bypass login or defeat anti-bot controls.
+5. D1 keeps only a short extract per monitored page. If a Telegram archive channel is configured, the full extracted text snapshot is sent there on first capture and detected changes. Telegram is an archive, not a queryable database or an unlimited-storage guarantee.
+6. Do not call the service deployed or live until deployment and end-to-end tests pass.
+
+## Development
+
+Requires Node.js 22. Run npm install, npm run typecheck, npm test and npx cf build.
+
+Cloudflare project configuration uses the Cloudflare CLI cf and cloudflare.config.ts. This project does not use Wrangler configuration.
+
+## License
+
+No license has been selected. Do not assume this repository grants rights to reuse the code until a license is added.

@@ -1,0 +1,78 @@
+name: Deploy Cloudflare Worker
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-nolane-search
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CF_SEND_TELEMETRY: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Verify source
+        run: |
+          npm run typecheck
+          npm test
+      - name: Build once
+        run: npx cf build
+      - name: Validate deployment bundle
+        run: npx cf deploy --prebuilt --mode production --dry-run
+      - name: Apply D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: "1172c01120a2470aa12f81e5b4778556"
+          CLOUDFLARE_D1_DATABASE_ID: "4f6a8cbd-cc8c-42b9-be6a-ed45c709d3db"
+        run: npm run migrate
+      - name: Upload Worker and runtime secrets
+        env:
+          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: "1172c01120a2470aa12f81e5b4778556"
+          TELEGRAM_BOT_TOKEN: \${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: \${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+          ALLOWED_TELEGRAM_USER_IDS: \${{ secrets.ALLOWED_TELEGRAM_USER_IDS }}
+          TAVILY_API_KEY: \${{ secrets.TAVILY_API_KEY }}
+          TELEGRAM_ARCHIVE_CHAT_ID: \${{ secrets.TELEGRAM_ARCHIVE_CHAT_ID }}
+          EXA_API_KEY: \${{ secrets.EXA_API_KEY }}
+          BRAVE_SEARCH_API_KEY: \${{ secrets.BRAVE_SEARCH_API_KEY }}
+          OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: \${{ secrets.OPENROUTER_MODEL }}
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN_SEARCH }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET TAVILY_API_KEY; do
+            if [ -z "\${!key:-}" ]; then echo "Missing required GitHub Actions secret: $key"; exit 1; fi
+          done
+          umask 077
+          : > .cloudflare-secrets
+          for key in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET ALLOWED_TELEGRAM_USER_IDS TAVILY_API_KEY TELEGRAM_ARCHIVE_CHAT_ID EXA_API_KEY BRAVE_SEARCH_API_KEY OPENROUTER_API_KEY OPENROUTER_MODEL GITHUB_TOKEN; do
+            value="\${!key:-}"
+            if [ -n "$value" ]; then printf '%s=%s\n' "$key" "$value" >> .cloudflare-secrets; fi
+          done
+          npx cf deploy --prebuilt --mode production --secrets-file .cloudflare-secrets
+          rm -f .cloudflare-secrets
+      - name: Register Telegram webhook and commands
+        env:
+          TELEGRAM_BOT_TOKEN: \${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: \${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+          WEBHOOK_URL: "https://nolane-search.nolane-file.workers.dev/telegram/webhook"
+        run: |
+          npm run set:webhook
+          npm run set:commands
