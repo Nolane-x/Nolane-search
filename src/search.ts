@@ -62,7 +62,10 @@ async function localSearch(env: Env, query: string): Promise<SearchResult[]> {
 async function settledResults(calls: Promise<SearchResult[]>[]): Promise<SearchResult[]> {
   const settled = await Promise.allSettled(calls);
   const results: SearchResult[] = [];
-  for (const call of settled) if (call.status === "fulfilled") results.push(...call.value);
+  for (const call of settled) {
+    if (call.status === "fulfilled") results.push(...call.value);
+    else console.warn("A federated search provider failed:", call.reason instanceof Error ? call.reason.message : "unknown error");
+  }
   return results;
 }
 
@@ -103,16 +106,29 @@ async function cachedSearch(env: Env, query: string, mode: SearchMode): Promise<
     ]);
     if (!results.length) throw new Error("News search providers unavailable.");
   } else {
+    // Keep ordinary searches economical: Tavily alone is enough when it returns a useful set.
+    // If it fails or returns fewer than four results, query configured fallbacks in parallel.
+    let primary: SearchResult[] = [];
     if (env.TAVILY_API_KEY) {
-      try { results = await searchTavily(env, query); } catch { /* try backup providers */ }
+      try { primary = await searchTavily(env, query); }
+      catch (error) {
+        console.warn("Tavily primary search failed:", error instanceof Error ? error.message : "unknown error");
+      }
     }
-    if (!results.length) {
-      results = await settledResults([
+
+    if (primary.length >= 4) {
+      results = primary;
+    } else {
+      const fallback = await settledResults([
+        ...(env.EXA_API_KEY ? [searchExa(env, query)] : []),
         ...(env.TINYFISH_API_KEY ? [searchTinyFish(env, query)] : []),
         ...(env.BRAVE_SEARCH_API_KEY ? [searchBrave(env, query)] : []),
       ]);
+      results = [...primary, ...fallback];
     }
-    if (!results.length) throw new Error("Web search providers unavailable. Configure Tavily, TinyFish or Brave.");
+    if (!results.length) {
+      throw new Error("Web search providers unavailable. Configure Tavily, Exa, TinyFish or Brave.");
+    }
   }
 
   const ranked = rankAndDeduplicate(query, results, mode);
