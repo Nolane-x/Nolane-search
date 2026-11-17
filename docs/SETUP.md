@@ -59,8 +59,10 @@ Recommended:
 Optional:
 - EXA_API_KEY
 - BRAVE_SEARCH_API_KEY
+- TINYFISH_API_KEY
 - OPENROUTER_API_KEY
-- OPENROUTER_MODEL
+- OPENROUTER_MODEL (legacy)
+- OPENROUTER_MODELS (ordered comma- or newline-separated model IDs)
 - GITHUB_TOKEN_SEARCH
 
 Create a scoped Cloudflare API token with the permissions documented in SECRETS.md. The existing Worker was uploaded through the connected Cloudflare integration; the GitHub secret is needed so future pushes can deploy automatically.
