@@ -18,7 +18,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 
 | Feature | Command | Scope |
 |---|---|---|
-| General web search | /search words | Tavily, with optional Brave fallback |
+| General web search | /search words | Tavily first; Exa, TinyFish and optional Brave fallback when the primary result set is thin or unavailable |
 | Technology search | /tech words | Web search plus GitHub repositories |
 | GitHub repositories | /github words | GitHub repository Search API |
 | Research discovery | /research topic | Tavily, Exa and TinyFish Search |
@@ -53,7 +53,7 @@ See docs/ARCHITECTURE.md, docs/SETUP.md, docs/SECRETS.md and docs/OPERATIONS.md.
 2. Ranking is currently a transparent heuristic, not a trained relevance model.
 3. Deep Search is bounded multi-query retrieval, not exhaustive research or a guarantee of factual correctness.
 4. The initial crawler checks only URLs explicitly added by the owner. It does not crawl the whole web, render JavaScript-heavy sites, bypass login or defeat anti-bot controls.
-5. D1 keeps only a short extract per monitored page. If a Telegram archive channel is configured, the full extracted text snapshot is sent there on first capture and detected changes. Telegram is an archive, not a queryable database or an unlimited-storage guarantee.
+5. Website monitoring reads and applies the origin's robots.txt policy before fetching a watched page. D1 keeps only a short extract per monitored page. If a Telegram archive channel is configured, the full extracted text snapshot is sent there on first capture and detected changes. Telegram is an archive, not a queryable database or an unlimited-storage guarantee.
 6. The Worker, health endpoint, Telegram webhook and command menu are deployed. A successful configuration/health check does not guarantee that every provider key or user-level command works; test the bot in Telegram before relying on search or archive delivery.
 
 ## Development
