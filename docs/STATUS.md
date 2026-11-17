@@ -7,7 +7,8 @@ Last updated: 2026-11-17. This file records observed state, not intended state. 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: main
 - Latest source implementation commit: 35afca2e133b770d2e244bc7e9a2c4b38f879127
-- This commit includes the latest docs/STATUS.md update and D1 migration 0002.
+- Latest repository HEAD (documentation-only follow-up): e4e738d634e4a524da0c73d3cc8d3fede8200b0d
+- D1 migration 0002 is included in the source implementation commit; this migration has not been applied to the live D1 database yet.
 - Repository is public; connected GitHub integration has admin/push permission.
 
 ## CI verification
