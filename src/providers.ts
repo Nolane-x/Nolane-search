@@ -96,7 +96,7 @@ export function wikipediaLanguageForQuery(query: string): "en" | "vi" {
  * This is a fallback/reference source, not a substitute for web reporting or primary research.
  */
 export async function searchWikipedia(query: string, language: "en" | "vi" = wikipediaLanguageForQuery(query)): Promise<SearchResult[]> {
-  const url = new URL(\`https://\${language}.wikipedia.org/w/api.php\`);
+  const url = new URL(`https://${language}.wikipedia.org/w/api.php`);
   url.searchParams.set("action", "query");
   url.searchParams.set("list", "search");
   url.searchParams.set("srsearch", query);
@@ -111,7 +111,7 @@ export async function searchWikipedia(query: string, language: "en" | "vi" = wik
     headers: { "user-agent": USER_AGENT, accept: "application/json" },
     signal: AbortSignal.timeout(10_000),
   });
-  if (!response.ok) throw new Error(\`Wikipedia Search failed (\${response.status})\`);
+  if (!response.ok) throw new Error(`Wikipedia Search failed (${response.status})`);
   const data = await response.json() as {
     query?: {
       search?: Array<{ title?: string; snippet?: string; timestamp?: string }>;
@@ -131,11 +131,11 @@ export async function searchWikipedia(query: string, language: "en" | "vi" = wik
     const articlePath = encodeURIComponent(title.replace(/ /g, "_"));
     return normalizeResult({
       title,
-      url: \`https://\${language}.wikipedia.org/wiki/\${articlePath}\`,
+      url: `https://${language}.wikipedia.org/wiki/${articlePath}`,
       snippet,
       score: 0.52,
       publishedAt: item.timestamp,
-    }, \`Wikipedia (\${language})\`);
+    }, `Wikipedia (${language})`);
   }).filter((item): item is SearchResult => item !== null);
 }
 
