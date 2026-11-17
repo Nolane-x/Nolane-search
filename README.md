@@ -24,7 +24,8 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Research discovery | /research topic | Tavily, Exa and TinyFish Search |
 | News search | /news topic | Tavily, Brave and TinyFish news discovery |
 | Deep search | /deep question | Bounded multi-provider retrieval, TinyFish page extraction and optional OpenRouter multi-model synthesis |
-| Search within a site | /site example.com words | Provider site restriction |\n| Read a page | /read https://example.com | TinyFish Fetch extracts clean page text |
+| Search within a site | /site example.com words | Provider site restriction |
+| Read a page | /read https://example.com | TinyFish Fetch extracts clean page text |
 | Personal index | /local words | D1 FTS5 over monitored-page extracts |
 | Website monitoring | /watch https://example.com | Scheduled HTTP checks and change alerts |
 | Watch management | /watches, /unwatch ID | List and disable watches |
@@ -40,7 +41,8 @@ Plain text messages are interpreted as web search. Use /help in the bot for the 
 - Cloudflare D1: compact operational metadata, short cache, watch state and small FTS5 index.
 - Cloudflare Queues: asynchronous Deep Search jobs, retries with backoff and dead-letter handling. D1 tracks job state so users can inspect or retry failed work.
 - Cloudflare Cron: periodic website checks and housekeeping.
-- Tavily / Exa / Brave / TinyFish / GitHub: external discovery providers, enabled only when their keys exist.\n- OpenRouter: optional AI synthesis with ordered model fallback via OPENROUTER_MODELS; OPENROUTER_MODEL remains supported for older deployments.
+- Tavily / Exa / Brave / TinyFish / GitHub: external discovery providers, enabled only when their keys exist.
+- OpenRouter: optional AI synthesis with ordered model fallback via OPENROUTER_MODELS; OPENROUTER_MODEL remains supported for older deployments.
 - GitHub Actions: tests, build validation, migrations and deployment. It is not a permanent bot server.
 
 See docs/ARCHITECTURE.md, docs/SETUP.md, docs/SECRETS.md and docs/OPERATIONS.md.
