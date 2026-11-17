@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { constantTimeEqual, isSafePublicUrl, normalizeUrl } from "../src/security";
+import { isAllowedByRobots, parseRobotsRules } from "../src/watch";
 
 describe("isSafePublicUrl", () => {
   it("accepts HTTPS public websites", () => {
@@ -49,5 +50,33 @@ describe("constantTimeEqual", () => {
     expect(constantTimeEqual("secret", "secret")).toBe(true);
     expect(constantTimeEqual("secret", "Secret")).toBe(false);
     expect(constantTimeEqual("short", "longer")).toBe(false);
+  });
+});
+
+describe("robots.txt policy", () => {
+  it("uses the specific NolaneSearchBot group instead of the wildcard group", () => {
+    const rules = parseRobotsRules("User-agent: *\\nDisallow: /private\\n\\nUser-agent: NolaneSearchBot\\nDisallow: /internal");
+    expect(isAllowedByRobots("https://example.com/public", rules)).toBe(true);
+    expect(isAllowedByRobots("https://example.com/private", rules)).toBe(true);
+    expect(isAllowedByRobots("https://example.com/internal", rules)).toBe(false);
+  });
+
+  it("combines matching groups and picks the longest rule", () => {
+    const rules = parseRobotsRules("User-agent: NolaneSearchBot\\nDisallow: /docs\\nAllow: /docs/public\\n\\nUser-agent: nolanesearchbot\\nDisallow: /account");
+    expect(isAllowedByRobots("https://example.com/docs/private", rules)).toBe(false);
+    expect(isAllowedByRobots("https://example.com/docs/public/start", rules)).toBe(true);
+    expect(isAllowedByRobots("https://example.com/account", rules)).toBe(false);
+  });
+
+  it("supports wildcard and end-anchored rules", () => {
+    const rules = parseRobotsRules("User-agent: *\\nDisallow: /*.pdf$\\nAllow: /open/report.pdf");
+    expect(isAllowedByRobots("https://example.com/private/report.pdf", rules)).toBe(false);
+    expect(isAllowedByRobots("https://example.com/open/report.pdf", rules)).toBe(true);
+    expect(isAllowedByRobots("https://example.com/private/report.pdf?download=1", rules)).toBe(true);
+  });
+
+  it("allows URLs when no applicable rules exist", () => {
+    const rules = parseRobotsRules("User-agent: OtherBot\\nDisallow: /");
+    expect(isAllowedByRobots("https://example.com/page", rules)).toBe(true);
   });
 });
