@@ -1,6 +1,6 @@
 import { constantTimeEqual, htmlEscape } from "./security";
 import { performDeepSearch, performSearch } from "./search";
-import { fetchOpenRouterSummary } from "./providers";
+import { fetchOpenRouterPage, fetchOpenRouterSummary, fetchTinyFishPage, parseOpenRouterModels } from "./providers";
 import { formatDeepReport, formatSearchResults, sendTelegram, sendToArchive } from "./telegram";
 import { validateWatchUrl, checkWatchTargets } from "./watch";
 import type { DeepSearchJob, Env, ExecutionContext, MessageBatch, SearchMode, TelegramUpdate } from "./types";
@@ -88,7 +88,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/research chủ đề</code> — tìm nghiên cứu và nguồn liên quan\n" +
       "<code>/news chủ đề</code> — tìm tin tức\n" +
       "<code>/deep câu hỏi</code> — tìm nhiều lượt, tổng hợp nguồn bất đồng bộ\n" +
-      "<code>/site domain.com từ khóa</code> — giới hạn tìm kiếm vào website\n" +
+      "<code>/site domain.com từ khóa</code> — giới hạn tìm kiếm vào website\n" +\n      "<code>/read https://example.com</code> — đọc nội dung trang bằng TinyFish\n" +
       "<code>/local từ khóa</code> — tìm trong trang đã được index\n" +
       "<code>/watch https://example.com</code> — theo dõi một trang\n" +
       "<code>/watches</code> — danh sách đang theo dõi\n" +
@@ -180,7 +180,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     }
     return;
   }
-  if (command === "search") return handleSearch(env, chatId, args, "web");
+  if (command === "read") {\n    const validated = validateWatchUrl(args);\n    if (!validated) {\n      await reply(env, chatId, "Cú pháp: <code>/read https://example.com</code>. Chỉ hỗ trợ URL HTTPS public hợp lệ.");\n      return;\n    }\n    if (!env.TINYFISH_API_KEY) {\n      await reply(env, chatId, "Lệnh /read cần cấu hình GitHub Secret <code>TINYFISH_API_KEY</code> rồi triển khai lại.");\n      return;\n    }\n    try {\n      const page = await fetchTinyFishPage(env, validated.url.toString());\n      const body = htmlEscape(page.text.slice(0, 5_500));\n      await reply(env, chatId, `<b>${htmlEscape(page.title)}</b>\\n<a href="${htmlEscape(page.finalUrl)}">Mở trang gốc</a>\\n\\n<pre>${body}</pre>`);\n    } catch (error) {\n      console.error("TinyFish read failed:", error instanceof Error ? error.message : "unknown");\n      await reply(env, chatId, "TinyFish không thể đọc trang này. Trang có thể chặn truy cập, hết quota hoặc API key chưa hợp lệ.");\n    }\n    return;\n  }\n\n  if (command === "search") return handleSearch(env, chatId, args, "web");
   if (command === "tech") return handleSearch(env, chatId, args, "tech");
   if (command === "github") return handleSearch(env, chatId, args, "github");
   if (command === "research") return handleSearch(env, chatId, args, "research");
