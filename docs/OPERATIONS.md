@@ -41,11 +41,11 @@ Plain text messages are treated as /search.
 - Content hash detects changes when validators are absent or unreliable.
 - First successful capture is a baseline and does not send a change alert.
 - Non-2xx or unsupported content types are recorded as status, not indexed as page content.
-- Do not add sources that forbid automated access or require login.
+- Before fetching a watched page, the Worker reads the origin's robots.txt and applies the NolaneSearchBot/wildcard rules. Disallowed pages are skipped. 401/403/429, 5xx or robots-fetch failures defer the watch; /watches labels these as robots disallow or robots unavailable. The parser handles core Allow/Disallow, wildcard and end-anchor rules; it does not implement every robots.txt extension such as Crawl-delay. Do not add sources that forbid automated access or require login.
 
 ## Search quotas and provider errors
 
-- /search tries Tavily first and Brave only if configured and needed.
+- /search tries Tavily first. If Tavily fails or returns fewer than four results, it queries configured Exa, TinyFish and Brave providers in parallel and merges available results.
 - /research calls configured Tavily and/or Exa providers.
 - /tech calls GitHub and Tavily where configured.
 - /github uses public GitHub API unless optional token is configured.
