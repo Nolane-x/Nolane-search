@@ -41,6 +41,10 @@ jobs:
           npx cf build
           test -d .cloudflare/output/v0
           test -n "$(find .cloudflare/output/v0 -type f -print -quit)"
+          bundle="$(find .cloudflare/output/v0 -path '*/workers/default/bundle/index.js' -type f -print -quit)"
+          test -n "$bundle"
+          grep -q "Recovered after an interrupted or stale Queue delivery" "$bundle"
+          echo "Verified stale Deep Search recovery is included in the compiled Worker."
           echo "Build output file inventory:"
           find .cloudflare/output/v0 -type f -printf '%P (%s bytes)\n' | sort
           du -sh .cloudflare/output/v0
