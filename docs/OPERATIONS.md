@@ -15,7 +15,6 @@
 | /ask question | Web search followed by AI evidence synthesis |
 | /ai_status, /models | AI provider/key-route and model configuration overview |
 | /wiki query | Free English/Vietnamese Wikipedia reference search |
-| /wiki query | Free English/Vietnamese Wikipedia reference search |
 | /research query | Research discovery |
 | /news query | News search |
 | /deep question | Queue multi-query research |
