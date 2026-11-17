@@ -139,6 +139,7 @@ export async function fetchTinyFishPages(env: Env, urls: string[]): Promise<Map<
       output.set(candidate, page);
       try { output.set(normalizeUrl(candidate), page); } catch { /* ignore malformed provider URL */ }
     }
+  }
   return output;
 }
 
