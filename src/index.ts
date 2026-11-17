@@ -127,7 +127,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<b>Nolane Search status</b>\n" +
       `Web search: ${env.TAVILY_API_KEY ? "ready" : "missing"}\n` +
       `Semantic search: ${env.EXA_API_KEY ? "ready" : "not configured"}\n` +
-      `Backup search: ${env.BRAVE_SEARCH_API_KEY ? "ready" : "not configured"}\n` +
+      `Brave backup: ${env.BRAVE_SEARCH_API_KEY ? "ready" : "not configured"}\n` +
+      `Web fallback: ${[env.EXA_API_KEY ? "Exa" : "", env.TINYFISH_API_KEY ? "TinyFish" : "", env.BRAVE_SEARCH_API_KEY ? "Brave" : ""].filter(Boolean).join(", ") || "none"}\n` +
       `TinyFish Search/Fetch: ${env.TINYFISH_API_KEY ? "ready" : "not configured"}\n` +
       `AI synthesis: ${env.OPENROUTER_API_KEY && parseOpenRouterModels(env).length ? `ready (${parseOpenRouterModels(env).length} model(s))` : "not configured"}\n` +
       `Telegram archive: ${env.TELEGRAM_ARCHIVE_CHAT_ID ? "configured" : "not configured"}\n` +
@@ -291,15 +292,21 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
 
   if (command === "watches") {
     const rows = await env.DB.prepare(
-      "SELECT id, url, interval_minutes, last_checked_at FROM watches WHERE user_id = ? AND active = 1 ORDER BY id DESC LIMIT 30",
-    ).bind(String(userId)).all<{ id: number; url: string; interval_minutes: number; last_checked_at: string | null }>();
+      "SELECT id, url, interval_minutes, last_checked_at, last_status FROM watches WHERE user_id = ? AND active = 1 ORDER BY id DESC LIMIT 30",
+    ).bind(String(userId)).all<{ id: number; url: string; interval_minutes: number; last_checked_at: string | null; last_status: number | null }>();
     if (!rows.results.length) {
       await reply(env, chatId, "Bạn chưa theo dõi website nào. Dùng <code>/watch https://example.com</code>.");
       return;
     }
     const lines = ["<b>Website đang theo dõi</b>"];
     for (const row of rows.results) {
-      lines.push(`<code>${row.id}</code> · <a href="${htmlEscape(row.url)}">${htmlEscape(new URL(row.url).hostname)}</a> · mỗi ${row.interval_minutes} phút`);
+      const status = row.last_status === -2 ? "robots disallow"
+        : row.last_status === -3 ? "robots unavailable · deferred"
+        : row.last_status === -1 ? "fetch error"
+        : row.last_status === 304 ? "unchanged"
+        : row.last_status === null ? "not checked yet"
+        : `HTTP ${row.last_status}`;
+      lines.push(`<code>${row.id}</code> · <a href="${htmlEscape(row.url)}">${htmlEscape(new URL(row.url).hostname)}</a> · ${row.interval_minutes}m · ${status}`);
     }
     await reply(env, chatId, lines.join("\n"));
     return;
