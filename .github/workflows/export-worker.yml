@@ -1,0 +1,73 @@
+name: Export Cloudflare Worker Build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AGENTS.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: export-cloudflare-worker
+  cancel-in-progress: false
+
+jobs:
+  build-and-export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Verify source
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Build Cloudflare output
+        run: |
+          npx cf build
+          test -d .cloudflare/output/v0
+          test -n "$(find .cloudflare/output/v0 -type f -print -quit)"
+          echo "Build output file inventory:"
+          find .cloudflare/output/v0 -type f -printf '%P (%s bytes)\n' | sort
+          du -sh .cloudflare/output/v0
+
+      - name: Stage build output
+        run: |
+          mkdir -p "$RUNNER_TEMP/nolane-search-cloudflare-output"
+          cp -a .cloudflare/output/v0/. "$RUNNER_TEMP/nolane-search-cloudflare-output/"
+          printf 'source_commit=%s\nbuilt_at=%s\n' "$GITHUB_SHA" "$(date -u +%FT%TZ)" \
+            > "$RUNNER_TEMP/nolane-search-cloudflare-output/BUILD-INFO.txt"
+
+      - name: Publish build output branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          target="$RUNNER_TEMP/nolane-search-build-repo"
+          gh repo clone "$GITHUB_REPOSITORY" "$target" -- --quiet
+          cd "$target"
+          git switch --orphan cloudflare-build
+          git rm -rf . >/dev/null 2>&1 || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a "$RUNNER_TEMP/nolane-search-cloudflare-output/." .
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "build: export Cloudflare Worker bundle from $GITHUB_SHA"
+          git push --force origin HEAD:refs/heads/cloudflare-build
