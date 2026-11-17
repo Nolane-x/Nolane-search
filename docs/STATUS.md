@@ -1,51 +1,72 @@
 # Verified Project Status
 
-Last verified: 2026-11-17. This document distinguishes successful deployment and configuration checks from user-level end-to-end behavior that still needs a Telegram message.
+Last verified: 2026-11-17. This document distinguishes production deployment and configuration checks from user-level behavior that still requires a real Telegram interaction.
 
-## Repository and source
+## Repository and production release
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest deployed source commit: `2ae5e473cc6579a34c83bebebc840b01ce92fade`
-- PR #1 merged: https://github.com/Nolane-x/Nolane-search/pull/1
-- Source changes include TinyFish Search/Fetch, OpenRouter legacy fallback, the multi-provider AI Router (`AI_ROUTER_CONFIG`) with per-key routes and task-aware model selection, `/ai`, `/ask`, `/ai_status` and `/models`, plus Exa/TinyFish/Brave/Wikipedia federated fallback, free bilingual `/wiki`, Telegram search pagination (five items per page, up to 12 candidates, owner-bound 15-minute sessions), improved token-overlap/domain-diversity ranking, Google-style search operators and robots.txt-aware website monitoring.
+- Latest production source commit: `9c2432b8298f9e24c30508456dfd7f329a97e9d1`
+- Search portal and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
+- Production Worker: https://nolane-search.nolane-file.workers.dev
+- Cloudflare Worker version ID: `e9607143-7310-45d2-935c-6ca9184ca1d8`
 
-## Latest verification
+The release adds a private browser search portal at `/`, entered through the Telegram `/web` command, AI Overview, multi-turn browser chat, multi-signal retrieval ranking, relevance-aware provider fallback, relative publication-date normalization, `inurl:` and negative search operators, a 20-result candidate ceiling with compatible Telegram pagination, and AI-assisted Deep Search query planning.
+
+## CI and deployment verification
 
 | Check | Run | Result |
 |---|---:|---|
-| CI: typecheck, 42 unit tests, script syntax checks, Worker build | [44108758196](https://github.com/Nolane-x/Nolane-search/actions/runs/44108758196) | PASS |
-| Export Worker bundle and health smoke test | [44108750157](https://github.com/Nolane-x/Nolane-search/actions/runs/44108750157) | PASS |
-| Production deployment, secret upload, webhook and command registration | [44108749665](https://github.com/Nolane-x/Nolane-search/actions/runs/44108749665) | PASS |
+| PR CI: typecheck, 51 unit tests, script syntax checks and Worker build | [44118842734](https://github.com/Nolane-x/Nolane-search/actions/runs/44118842734) | PASS |
+| Main CI: typecheck, 51 unit tests, script syntax checks and Worker build | [44119582728](https://github.com/Nolane-x/Nolane-search/actions/runs/44119582728) | PASS |
+| Worker bundle export and production smoke test | [44119582985](https://github.com/Nolane-x/Nolane-search/actions/runs/44119582985) | PASS |
+| Production Worker deployment, runtime secret upload, webhook and command registration | [44119582847](https://github.com/Nolane-x/Nolane-search/actions/runs/44119582847) | PASS |
 
-The production deployment completed with Worker version ID `9147abc8-b689-40d9-94ea-2fab51748fbb`. GitHub Actions confirmed:
-- Worker uploaded successfully using the repository source and configured runtime secrets.
-- The deployed version includes Telegram five-result pages with owner-bound inline pagination, free bilingual Wikipedia lookup, local Google-style search operators, AI Router multi-key architecture and direct/search-grounded AI commands.
-- The public `/health` endpoint was fetched after deployment and returned `ok: true` and `database: reachable`.
-- CI passed with 42 unit tests, type-check, deployment-script syntax checks and Worker build. Export bundle generation and production smoke test passed.
-- Production `/health` was fetched after deployment and returned `ok: true`, `database: reachable`, and all expected configured providers (Tavily, Exa, TinyFish, OpenRouter with six model IDs); Brave remained optional and unconfigured.
-- D1 and Queue bindings are attached.
-- Main Queue and DLQ consumers plus the 30-minute Cron trigger are registered.
+The deployment log confirms:
+- Worker `nolane-search` was uploaded and deployed.
+- Runtime `AI_ROUTER_CONFIG` was uploaded as a hidden secret.
+- Cron `*/30 * * * *` and Queue producer/consumer bindings remained attached.
 - Telegram webhook registration succeeded.
-- Telegram command registration succeeded, including `/read` and `/status`.
+- Telegram bot command registration succeeded, including `/web`.
 
-## Live Worker health
+## Live health verification
 
-Worker: https://nolane-search.nolane-file.workers.dev
+Fetched production endpoints on 2026-11-17:
+- `GET /health` returned `ok: true` and `database: reachable`.
+- Configured search sources: Tavily, Exa, TinyFish and GitHub public search.
+- Brave remains optional and is not configured.
+- OpenRouter legacy key route is present with six configured model IDs.
+- AI Router reports `aiRouter: true`, **4 provider-key routes** and **9 model routes**.
+- Telegram archive is enabled.
 
-The deployed `/health` endpoint was fetched after the latest deployment and returned:
-- `ok: true`
-- `database: reachable`
-- Tavily: configured
-- Exa: configured
-- TinyFish: configured
-- OpenRouter legacy route: configured with **6 model IDs**
-- AI Router: `true`; one active key route (legacy OpenRouter) and six model candidates
-- Telegram archive: configured
-- Brave: not configured (optional)
-- GitHub: public search path enabled; no optional GitHub token was supplied in the latest deployment
+The four configured AI routes correspond to the additional provider configuration plus the retained OpenRouter legacy fallback. Health verifies that routes and model entries were loaded; it does not prove that each upstream API key, model entitlement, quota or live inference is working. No billable live inference probe was run during deployment.
 
-This verifies Worker reachability, D1 connectivity and runtime binding presence. The AI Router currently has one active legacy OpenRouter key route with six model IDs. The optional `AI_ROUTER_CONFIG` JSON secret has not yet been populated with the owner's additional provider keys; the deployment workflow supplies an empty safe config until then. Health verifies configured presence, not upstream key validity or real inference success. The latest provider hardening also rejects search-result URLs containing embedded username/password credentials and avoids associating TinyFish Fetch content with a request URL unless the provider identifies that URL.
+The browser root returns the new Nolane Search HTML page, identifies itself as `noindex,nofollow`, and prompts anonymous visitors to authenticate through the Telegram `/web` command.
+
+## Browser portal and access controls
+
+- `/web` is available only to an allowlisted Telegram user in a private bot chat.
+- Login ticket: 256-bit random token, SHA-256 hash stored in D1, five-minute expiry and one-time atomic consumption.
+- Browser session: random token whose SHA-256 hash is stored in D1; seven-day expiry; Secure, HttpOnly and SameSite=Strict cookie.
+- `/api/search`, `/api/ask` and `/api/chat` require an active session whose Telegram user remains on the allowlist.
+- Per-user minute limits: search 30, AI Overview 8, chat 12.
+- POST requests are same-origin checked; JSON bodies are capped at 30 KB.
+- Logout revokes the server-side session. Scheduled cleanup removes expired tickets/sessions and stale rate-limit rows.
+- Chat history and recent searches are bounded in browser local storage; conversation transcripts are not persisted as server-side chat records.
+
+The web interface includes Web, News, Research, Technology, GitHub, Wikipedia and private-site search categories, result cards, AI Overview with linked sources, multi-turn Nolane Chat, responsive layout, recent searches and a light/dark theme.
+
+## Search and retrieval behavior
+
+- Search remains a federated metasearch engine backed by external provider APIs, not an independent crawler/index of the entire Internet.
+- General web search queries Tavily first. If Tavily fails, returns fewer than six links, or the result set is lexically weak for the user's query, independent Exa, TinyFish, Brave and Wikipedia sources are queried as available.
+- Technology search uses Tavily, Exa, TinyFish and GitHub; research uses Tavily, Exa and TinyFish research discovery; news uses Tavily, Brave, TinyFish and Exa as available.
+- Ranking now uses IDF-weighted query coverage across title/snippet/URL, a weak provider-score prior, snippet quality, phrase matching, a small .gov/.edu source-type prior, freshness weighted by query intent, URL deduplication and domain diversity. It is a transparent heuristic, not a learned Google-scale ranking system.
+- Candidate limit is 20. Telegram continues to display five results per page, with pagination sessions bound to owner user ID and chat ID and a 15-minute TTL.
+- Relative publication ages are normalized to ISO timestamps when their format is recognized.
+- Supported query operators: `site:`, `filetype:`, `intitle:`, `inurl:`, negative terms such as `-deprecated`, `after:YYYY-MM-DD` and `before:YYYY-MM-DD`. Operators are also enforced locally, even when an external provider does not implement them.
+- Deep Search uses AI to propose complementary query angles when AI routes are configured, falls back to deterministic queries if planning fails, gathers results across configured providers, fetches/enriches up to seven selected pages with TinyFish and re-ranks the extracted evidence before synthesis.
+- Search cache TTLs are mode-sensitive: news is short-lived, research is cached longer than general web search.
 
 ## Cloudflare resources
 
@@ -58,49 +79,35 @@ Account ID: `1172c01120a2470aa12f81e5b4778556`
 | Main Queue | `nolane-search-jobs` | `8a09dc04a6824faaa90f379f45f75ac0` | Producer and consumer attached |
 | Dead-letter Queue | `nolane-search-dlq` | `e44fe78242614ed1b448dbea7dbe94e0` | Consumer attached |
 | Cron | `*/30 * * * *` | Every 30 minutes | Active |
-| R2 | — | — | Not enabled; not required |
-| KV | — | — | Not used |
+| R2 / KV | — | — | Not used |
 
 ### D1 schema
 
-The live `schema_migrations` table confirms:
+The live D1 `schema_migrations` table contains:
 - `0001_core.sql`
 - `0002_deep_search_jobs.sql`
+- `0003_web_portal.sql`
 
-Both were already applied. No new D1 migration was required for the latest feature release.
+The new migration creates `web_login_tickets`, `web_sessions` and `web_rate_limits`, plus supporting indexes. All three tables and the migration record were queried after applying the migration.
 
-## Provider implementation
+### D1 permission handling
 
-- Tavily: primary web/news search.
-- Exa: semantic/research discovery.
-- TinyFish Search: web, technology, research and news discovery; source intent is expressed through documented query/location/language parameters.
-- TinyFish Fetch: extracts page content; used by `/read https://...` and to enrich up to five Deep Search sources.
-- AI Router: accepts `AI_ROUTER_CONFIG` with multiple provider/key entries and model/task routes. Supports OpenAI-compatible Chat Completions, Anthropic Messages (`x-api-key`) and Gemini Interactions. Strategies: balanced per-Worker-isolate rotation, priority and cheapest when cost metadata is supplied. Failover is bounded to 1–24 candidate routes. The existing OpenRouter API key/model configuration remains a legacy fallback (currently one route, six model IDs).
-- GitHub: public repository search works without an optional token; `GITHUB_TOKEN_SEARCH` can raise rate limits.
-- Google-style filters: `site:`, `filetype:`, `intitle:`, `after:` and `before:` are parsed and enforced locally. Site matching includes subdomains but not lookalike suffixes; filetype matches URL path extension; date filters use strict boundaries and drop records with unknown publication dates. Only ISO `YYYY-MM-DD` is accepted.
-- General `/search`: Tavily is the primary provider. If it fails or returns fewer than four results, configured Exa, TinyFish, Brave and free Wikipedia providers are queried in parallel and merged before ranking. This reduces unnecessary calls on healthy full Tavily responses.
-- `/wiki`: public MediaWiki Action API lookup, with Vietnamese diacritics selecting Vietnamese Wikipedia and other queries defaulting to English. Wikipedia is a reference/overview source, not a current-news or primary-evidence source.
-- Telegram result pagination: up to 12 candidates, five shown at a time, D1 session TTL 15 minutes, callbacks checked against both allowlisted user ID and chat ID. Session keys use `telegram-search:`.
-- Website Watch: each origin's robots.txt is checked before the watched page is fetched. Applicable groups are combined, longest-match wins, and Allow wins an equal-length tie. A blocked target is shown as `robots disallow`; an unreadable/temporarily unavailable policy is deferred and shown as `robots unavailable · deferred`.
-- Brave: optional and currently not configured.
+The first automatic deployment attempt found that `CLOUDFLARE_API_TOKEN` can deploy Workers but is not authorized for D1 Query API calls (HTTP 403). The migration was then successfully applied and verified directly against the connected Cloudflare D1 database. A subsequent Worker deployment succeeded with the migration step skipped because the migration had already been applied.
 
-## Deployment workflow behavior
+The deploy workflow now separates permissions:
+- `CLOUDFLARE_API_TOKEN`: Worker deployment and Queue configuration.
+- `CLOUDFLARE_D1_API_TOKEN`: optional separate token with Account → D1 → Edit, required only when a future changed migration needs to run.
 
-- Routine deployments skip D1 migration calls when no files under `database/migrations/` changed.
-- Manual `workflow_dispatch` exposes an `apply_migrations` input. Enable it only when a new migration is present and the Cloudflare token has Account > D1 > Edit.
-- The deployment uses `cf deploy --force` because the existing Worker had previously been updated through the Script API; this makes the Git repository source the deployment source of truth.
-- Optional `BRAVE_SEARCH_API_KEY` and `GITHUB_TOKEN_SEARCH` are not required to deploy when absent.
+Create the second secret before the next commit that introduces a new file under `database/migrations/`. Ordinary code deployments do not need the D1 token.
 
-The GitHub Actions Cloudflare token previously received HTTP 403 from the D1 Query API. Routine deployments now skip migrations when no migration file changed; this is safe for the current schema because both live migrations were verified as applied. If a future commit adds a D1 migration, the token must have Account > D1 > Edit in addition to the Worker and Queue permissions documented in `docs/SECRETS.md`.
+## Remaining owner-level end-to-end checks
 
-## Remaining end-to-end checks
+These need a real interaction from the owner's Telegram account; CI and the public health endpoint cannot complete them:
+1. Open the private Telegram chat and send `/web`. Open the returned one-time link and confirm browser login works, then test logout and a fresh login link.
+2. Run a browser search in Web, News, Research and GitHub categories. Confirm results open and the result count / timing are sensible.
+3. Use AI Overview on a current topic and check that inline source numbers correspond to the linked sources.
+4. Send a few chat messages to verify conversation continuity and verify that chat does not claim it performed live web search.
+5. Run `/ai_status`, then one low-cost `/ai fast ...` request to verify live API-key acceptance. Test failover only if needed; it can spend provider quota.
+6. Try a 20-result Telegram search pagination case, `/deep`, `/read`, `/watch` and archive delivery.
 
-These need a real message from the owner's Telegram account; they cannot be truthfully marked complete from CI or health checks alone:
-- Send `/start`, `/help` and `/status`; confirm the bot responds.
-- Try `/search Cloudflare Workers` and tap Next/Previous when multiple pages appear; test `/ai_status`, `/ai fast hello`, `/ai reasoning explain how LLM inference works`, `/ask what changed in recent AI model APIs`, `/search cloudflare site:developers.cloudflare.com`, `/search workers filetype:pdf`, `/search AI after:2026-01-10 before:2026-02-01`, `/wiki trí tuệ nhân tạo`, `/wiki artificial intelligence`, `/research small language models`, `/read https://example.com` and `/deep compare open-source search engines`.
-- Add the owner’s additional routes/keys through GitHub Actions secret `AI_ROUTER_CONFIG`, then verify `/ai_status` lists them and run a real `/ai` request to confirm provider acceptance and failover. The router’s mocked protocol/fallback tests already pass, but live requests using the owner’s additional keys have not been run.
-- Confirm archive delivery to the configured Telegram archive chat.
-- Test `/watch https://example.com`, then verify a later change notification.
-- Exercise Deep Search Queue retry and DLQ behavior under an induced failure.
-
-Do not paste API keys, bot tokens, webhook secrets or other credentials into chat, source files, issues or logs.
+No API key, bot token, webhook secret or session token should be pasted into chat, committed to the repository, or included in screenshots/logs.
