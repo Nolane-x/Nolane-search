@@ -1,6 +1,18 @@
 # Setup guide
 
-This repository deploys through GitHub Actions. No home PC must stay on.
+The Cloudflare Worker and core storage resources have already been provisioned. No home PC must stay on. The current Worker health endpoint is live; the Telegram bot is waiting for the owner's credentials.
+
+## Current deployment
+
+- Worker: nolane-search
+- URL: https://nolane-search.nolane-file.workers.dev
+- Health: https://nolane-search.nolane-file.workers.dev/health
+- D1: nolane-search-db (APAC)
+- Main Queue: nolane-search-jobs
+- Dead-letter Queue: nolane-search-dlq
+- Cron: every 30 minutes
+
+The D1 migrations are already applied and both Queue consumers are attached. Do not create duplicate Cloudflare resources.
 
 ## 1. Create Telegram bot
 
@@ -10,7 +22,7 @@ This repository deploys through GitHub Actions. No home PC must stay on.
 4. Copy the bot token.
 5. Add it as TELEGRAM_BOT_TOKEN in GitHub Actions secrets.
 
-Never commit the token.
+Never commit or paste the token into chat.
 
 ## 2. Create search provider key
 
@@ -22,31 +34,27 @@ Tavily is the required initial search provider. Optional providers are described
 
 ## 3. Create webhook secret
 
-Generate a random 32+ character hex secret with: openssl rand -hex 32.
+Generate a random 32+ character hex secret with:
+
+```sh
+openssl rand -hex 32
+```
+
 Add it as TELEGRAM_WEBHOOK_SECRET. Do not reuse a password.
 
-## 4. Cloudflare API token
+## 4. Configure GitHub Actions secrets
 
-Create a scoped token with permissions described in SECRETS.md and add it as CLOUDFLARE_API_TOKEN.
+Open GitHub → Nolane-search → Settings → Secrets and variables → Actions.
 
-The linked account already contains:
-- D1: nolane-search-db
-- Queue: nolane-search-jobs
-- Dead-letter queue: nolane-search-dlq
-
-Do not create duplicate resources.
-
-## 5. Add GitHub Actions secrets
-
-Minimum:
+Required for the repeatable Deploy workflow:
 - CLOUDFLARE_API_TOKEN
 - TELEGRAM_BOT_TOKEN
 - TELEGRAM_WEBHOOK_SECRET
 - TAVILY_API_KEY
 
 Recommended:
-- ALLOWED_TELEGRAM_USER_IDS (can be added after first deployment)
-- TELEGRAM_ARCHIVE_CHAT_ID (private archive channel)
+- ALLOWED_TELEGRAM_USER_IDS
+- TELEGRAM_ARCHIVE_CHAT_ID
 
 Optional:
 - EXA_API_KEY
@@ -55,38 +63,41 @@ Optional:
 - OPENROUTER_MODEL
 - GITHUB_TOKEN_SEARCH
 
-## 6. Deploy
+Create a scoped Cloudflare API token with the permissions documented in SECRETS.md. The existing Worker was uploaded through the connected Cloudflare integration; the GitHub secret is needed so future pushes can deploy automatically.
 
-1. Push changes to main or run Actions → Deploy Cloudflare Worker.
-2. Workflow installs dependencies, type-checks, tests, builds, dry-runs, applies D1 migrations, deploys Worker + secrets and registers Telegram webhook/commands.
-3. Confirm the Actions run is green.
-4. Open https://nolane-search.nolane-file.workers.dev/health. Expected response includes ok=true.
+## 5. Deploy and register the webhook
 
-If deployment fails, inspect its failing step. Do not assume the bot is live.
+Once the required secrets have been added:
+1. Push a source change to main or open Actions → Deploy Cloudflare Worker → Run workflow.
+2. The workflow runs typecheck/tests/build validation, applies unapplied D1 migrations, deploys the Worker and runtime secrets, then registers the Telegram webhook and command menu.
+3. Confirm the Deploy workflow is green.
+4. Open the health URL above. Expected JSON includes ok: true and database: reachable.
 
-## 7. Allowlist owner
+The health endpoint is already verified for the current Worker; after adding secrets, rerun deployment to install runtime secret bindings and configure Telegram.
 
-If ALLOWED_TELEGRAM_USER_IDS was not configured:
+## 6. Allowlist the owner
+
+After the bot token and webhook are configured:
 1. Open the bot and send /id.
 2. It replies with your numeric Telegram ID.
-3. Add this number as ALLOWED_TELEGRAM_USER_IDS.
-4. Redeploy so Worker receives the secret.
+3. Add the ID as ALLOWED_TELEGRAM_USER_IDS.
+4. Redeploy so the Worker receives the secret.
 5. Send /start and /help.
 
-Before allowlisting, normal search commands are blocked.
+Before allowlisting, normal bot functions are blocked.
 
-## 8. Telegram archive channel
+## 7. Optional Telegram archive channel
 
 1. Create a private channel, for example Nolane Search Archive.
 2. Add the bot as administrator with permission to post.
-3. Obtain its numeric channel ID, typically starts with -100. A bot such as @RawDataBot can help when forwarding a channel post; verify the returned ID.
+3. Obtain its numeric channel ID, typically starting with -100.
 4. Add it as TELEGRAM_ARCHIVE_CHAT_ID.
 5. Redeploy.
-6. Test a search and /watch https://example.com. Confirm result messages and first snapshot files appear in the archive channel.
+6. Test a search and /watch https://example.com. Confirm result messages and snapshot documents appear in the archive channel.
 
 The archive is not guaranteed unlimited storage and does not replace D1 operational metadata.
 
-## 9. Test commands
+## 8. Test commands
 
 - /search Cloudflare Workers
 - /tech browser automation agents
