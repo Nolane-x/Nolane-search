@@ -137,7 +137,7 @@ Behavior:
 - The router does not yet maintain a durable cross-provider billing ledger. Usage token counts are returned when the API supplies them; estimated cost is included only when both price fields are configured.
 - Existing `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` and `OPENROUTER_MODELS` remain supported as a legacy fallback.
 
-After saving the secret, run Deploy Cloudflare Worker. Test `/ai-status`, then `/ai fast ...`, `/ai reasoning ...` and `/ask ...`. `/ai-status` lists configured labels/models but does not validate keys; a real /ai request is the upstream acceptance test.
+After saving the secret, run Deploy Cloudflare Worker. Test `/ai_status`, then `/ai fast ...`, `/ai reasoning ...` and `/ask ...`. `/ai_status` lists configured labels/models but does not validate keys; a real /ai request is the upstream acceptance test.
 
 ## Not required
 
