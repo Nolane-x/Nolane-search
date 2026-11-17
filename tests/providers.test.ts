@@ -90,7 +90,7 @@ describe("TinyFish Fetch adapter", () => {
   });
 
   it("does not send private or unsafe URLs to TinyFish", async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ results: [] }), { status: 200 }));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ results: [{ url: "https://example.com/valid", title: "Valid", text: "safe content" }] }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const pages = await fetchTinyFishPages(
       { TINYFISH_API_KEY: "tinyfish-test-key" } as never,
