@@ -960,7 +960,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       `AI router: ${getAiRouterStatus(env).configured ? "ready (" + getAiRouterStatus(env).providerKeys + " key route(s), " + getAiRouterStatus(env).models + " model(s))" : "not configured"}\\n` +
       `Telegram archive: ${env.TELEGRAM_ARCHIVE_CHAT_ID ? "configured" : "not configured"}\n` +
       `Active watches: ${watchCount?.count ?? 0}\n` +
-      `Indexed pages: ${pageCount?.count ?? 0}\n` +\n      `Personal memories: ${memoryCount?.count ?? 0}\n` +
+      `Indexed pages: ${pageCount?.count ?? 0}\n` +
+      `Personal memories: ${memoryCount?.count ?? 0}\n` +
       `Cached queries: ${cacheCount?.count ?? 0}\n` +
       `Deep Search (7 days): ${jobSummary}\n\n` +
       "<i>Ready means a secret is configured; it does not guarantee the upstream API is healthy.</i>");
@@ -1072,7 +1073,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     const lines = [
       "<b>Nolane AI Router</b>",
       "Strategy: <code>" + htmlEscape(status.strategy) + "</code>",
-      "Key routes: <b>" + status.providerKeys + "</b> · Models: <b>" + status.models + "</b>",\n      "Failover cap: <b>" + status.maxAttempts + "</b> route(s) per request",
+      "Key routes: <b>" + status.providerKeys + "</b> · Models: <b>" + status.models + "</b>",
+      "Failover cap: <b>" + status.maxAttempts + "</b> route(s) per request",
     ];
     for (const provider of status.providers) {
       lines.push("");
