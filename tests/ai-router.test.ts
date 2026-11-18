@@ -70,6 +70,33 @@ describe("AI Router protocol adapters and failover", () => {
     expect(calls).toHaveLength(2);
   });
 
+  it("sends native function tools and parses a bounded tool call", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.tools[0].function.name).toBe("lookup");
+      expect(body.tool_choice).toBe("required");
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: null, tool_calls: [
+          { id: "call_1", type: "function", function: { name: "lookup", arguments: JSON.stringify({ query: "Nolane" }) } },
+        ] } }],
+        usage: { prompt_tokens: 15, completion_tokens: 4 },
+      }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await completeAi(env({ strategy: "priority", providers: [
+      route("function-route", "openai-compatible", "https://api.example.ai/v1", "function-call-key", ["tool-model"]),
+      route("non-function-route", "anthropic-messages", "https://api.anthropic.com", "anthropic-key-123", ["claude-model"]),
+    ] }), {
+      task: "chat", messages: [{ role: "user", content: "Use tool" }],
+      tools: [{ type: "function", function: { name: "lookup", description: "lookup", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"], additionalProperties: false } } }],
+      toolChoice: "required",
+    });
+    expect(result.toolCalls?.[0]).toMatchObject({
+      id: "call_1", function: { name: "lookup", arguments: JSON.stringify({ query: "Nolane" }) },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("uses Anthropic Messages request shape", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(String(input)).toBe("https://api.anthropic.com/v1/messages");

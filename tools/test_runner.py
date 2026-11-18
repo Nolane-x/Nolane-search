@@ -247,9 +247,70 @@ class ToolRunnerUnitTests(unittest.TestCase):
                 runner.video_compress(path)
 
 
+    def test_new_csv_json_and_excel_converters(self):
+        import zipfile
+        csv_path=self.write("people.csv","name,score\nAn,7\nBình,8\n")
+        cleaned=runner.csv_clean(csv_path)
+        self.assertTrue(Path(cleaned["output_path"]).is_file())
+        xlsx=runner.csv_to_xlsx(csv_path)
+        self.assertTrue(Path(xlsx["output_path"]).is_file())
+        exported=runner.xlsx_to_csv(Path(xlsx["output_path"]))
+        with zipfile.ZipFile(exported["output_path"]) as archive:
+            self.assertEqual(len(archive.namelist()),1)
+            self.assertIn("Bình",archive.read(archive.namelist()[0]).decode("utf-8-sig"))
+        json_path=self.write("records.json",'[{"name":"An","score":7},{"name":"Bình","score":8}]')
+        converted=runner.json_to_csv(json_path)
+        self.assertIn("Bình",Path(converted["output_path"]).read_text(encoding="utf-8-sig"))
+        unsafe=self.write("formula.csv","name\n=HYPERLINK(\"https://evil.example\")\n")
+        safe=runner.csv_clean(unsafe)
+        self.assertIn("'=HYPERLINK",Path(safe["output_path"]).read_text(encoding="utf-8"))
+        bad_header=self.write("formula-header.csv","=HYPERLINK,score\nhttps://evil.example,1\n")
+        safe_header=runner.csv_clean(bad_header)
+        self.assertIn("'=HYPERLINK",Path(safe_header["output_path"]).read_text(encoding="utf-8"))
+
+    def test_image_png_preserves_alpha(self):
+        from PIL import Image
+        source=self.input_dir/"transparent.png"
+        Image.new("RGBA",(32,32),(255,0,0,120)).save(source)
+        result=runner.image_png(source)
+        with Image.open(result["output_path"]) as converted:
+            self.assertEqual(converted.format,"PNG")
+            self.assertIn("A",converted.getbands())
+
+    def test_pdf_split_creates_one_pdf_per_page(self):
+        import fitz,zipfile
+        path=self.input_dir/"pages.pdf"
+        doc=fitz.open()
+        for number in range(3):
+            page=doc.new_page()
+            page.insert_text((72,72),f"Page {number+1}")
+        doc.save(path); doc.close()
+        result=runner.pdf_split(path)
+        with zipfile.ZipFile(result["output_path"]) as archive:
+            self.assertEqual(len(archive.namelist()),3)
+            for name in archive.namelist():
+                page=fitz.open(stream=archive.read(name),filetype="pdf")
+                self.assertEqual(page.page_count,1)
+                page.close()
+
+    def test_audio_convert_uses_bounded_mono_wav_command(self):
+        path=self.write("speech.mp3","fake audio")
+        captured=[]
+        def fake_cmd(name,args,timeout=180):
+            captured.append((name,args,timeout))
+            Path(args[-1]).write_bytes(b"wav")
+            return ""
+        with patch.object(runner,"ffprobe",return_value={"format":{"duration":"120"}}),patch.object(runner,"cmd",side_effect=fake_cmd):
+            result=runner.audio_convert(path)
+        args=captured[0][1]
+        self.assertIn("16000",args)
+        self.assertIn("pcm_s16le",args)
+        self.assertIn("1",args)
+        self.assertTrue(result["output_path"].endswith(".wav"))
+
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
-        self.assertGreaterEqual(len(runner.TOOLS),38)
+        self.assertGreaterEqual(len(runner.TOOLS),45)
 
 
 if __name__ == "__main__":

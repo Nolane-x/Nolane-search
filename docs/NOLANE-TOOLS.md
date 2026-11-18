@@ -76,6 +76,14 @@ Web Workspace có tab Tools để xem catalog và sao chép lệnh; thao tác g�
 | `/tool code-check` | Kiểm tra cú pháp code | Parse Python/JS/Shell/JSON/YAML/XML mà không thực thi mã được tải lên. | Báo cáo kiểm tra cú pháp |
 | `/tool archive-safe-extract` | Giải nén archive an toàn | Giải nén ZIP/TAR với kiểm tra path traversal, symlink, số lượng tệp, zip bomb và đóng gói sạch. | ZIP nội dung đã làm sạch |
 
+## AI Agent
+
+- Telegram: dùng `/ai câu hỏi` để AI tự quyết định có gọi tìm kiếm web, đọc trang công khai, tra danh mục Nolane Tools, xử lý text/CSV/JSON/HTML/phụ đề hoặc tính SHA-256 hay không.
+- Xử lý tệp: dùng `/ai_file yêu cầu`, sau đó gửi một tệp trong vòng 5 phút; hoặc gửi tệp với caption `/ai_file yêu cầu`. AI gọi function chọn đúng một processor trong toàn catalog 45 công cụ, Worker kiểm tra MIME/extension lần nữa rồi dispatch GitHub Actions. Sau khi chạy, file kết quả được gửi về Telegram và AI tổng hợp nội dung text/metadata processor thực sự trích xuất.
+- Web Workspace `/api/chat` dùng cùng agent loop; phản hồi API kèm danh sách `toolsUsed`.
+- Native function calling hiện dùng các route OpenAI-compatible (ví dụ các endpoint Chat Completions có hỗ trợ tools). Khi không có route tương thích hoặc model không trả tool call hợp lệ, agent sẽ fallback về chat thường; AI File dùng nhận diện định dạng xác định thay vì giả vờ đã chạy một tool.
+- Agent giới hạn tối đa 6 lần gọi tool, 4 vòng điều phối, mỗi kết quả tool tối đa 12.000 ký tự. Nội dung tệp/web là dữ liệu không tin cậy; agent không làm theo prompt injection trong tài liệu. Không có shell/command execution tool.
+
 ## Giới hạn và bảo vệ
 
 - Kích thước đầu vào tối đa **20 MB** do giới hạn Telegram Bot API getFile; đầu ra gửi về Telegram tối đa **45 MB**.

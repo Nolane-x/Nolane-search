@@ -17,6 +17,10 @@ export interface ToolJob {
   notifiedAt?: number;
   resultSummary?: string;
   error?: string;
+  /** Temporary request context used only to synthesize an AI-assisted file job. */
+  agentPrompt?: string;
+  agentTask?: string;
+  agentToolReason?: string;
 }
 
 const PREFIX = "tool-job:";
@@ -40,7 +44,7 @@ async function saveToolJob(env: Env, job: ToolJob): Promise<void> {
 export async function updateToolJob(
   env: Env,
   id: string,
-  patch: Partial<Pick<ToolJob, "status" | "updatedAt" | "finishedAt" | "resultSummary" | "error" | "fileId" | "notifiedAt">>,
+  patch: Partial<Pick<ToolJob, "status" | "updatedAt" | "finishedAt" | "resultSummary" | "error" | "fileId" | "notifiedAt" | "agentPrompt" | "agentTask" | "agentToolReason">>,
 ): Promise<ToolJob | null> {
   const previous = await getToolJob(env, id);
   if (!previous) return null;
