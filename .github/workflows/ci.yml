@@ -41,6 +41,8 @@ jobs:
         run: |
           node --check scripts/migrate.mjs
           node --check scripts/set-webhook.mjs
+          node --check scripts/check-telegram-webhook.mjs
+          node scripts/check-telegram-webhook.mjs
           node --check scripts/set-commands.mjs
       - name: Build Worker
         run: npx cf build

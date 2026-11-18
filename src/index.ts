@@ -518,48 +518,25 @@ async function handleSearch(env: Env, chatId: number, userId: number, query: str
 
 async function handleSearchCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
   const match = callback.data?.match(/^ns:([0-9a-f-]{36}):(\d{1,2})$/i);
-  if (!match) {
-    await telegramApi(env, "answerCallbackQuery", {
-      callback_query_id: callback.id, text: "Nút này không còn hợp lệ.", show_alert: false,
-    });
-    return;
-  }
-  if (!allowedUser(env, callback.from.id) || !callback.message) {
-    await telegramApi(env, "answerCallbackQuery", {
-      callback_query_id: callback.id, text: "Bạn không có quyền mở phiên tìm kiếm này.", show_alert: true,
-    });
-    return;
-  }
-  const sessionId = match[1];
+  if (!match || !callback.message || !allowedUser(env, callback.from.id)) return;
+  const sessionId = match[1]!;
   const requestedPage = Number(match[2]);
   const message = callback.message;
   const row = await env.DB.prepare(
     "SELECT payload FROM search_cache WHERE cache_key = ? AND expires_at > ?",
-  ).bind(`telegram-search:${sessionId}`, Date.now()).first<{ payload: string }>();
+  ).bind("telegram-search:" + sessionId, Date.now()).first<{ payload: string }>();
   if (!row?.payload) {
-    await telegramApi(env, "answerCallbackQuery", {
-      callback_query_id: callback.id, text: "Phiên tìm kiếm đã hết hạn. Hãy tìm lại từ khóa.", show_alert: true,
-    });
+    await reply(env, message.chat.id, "Phiên tìm kiếm đã hết hạn. Hãy gửi lại từ khóa để tìm kiếm mới.");
     return;
   }
   let session: unknown;
-  try { session = JSON.parse(row.payload); }
-  catch {
-    await telegramApi(env, "answerCallbackQuery", {
-      callback_query_id: callback.id, text: "Dữ liệu phiên tìm kiếm không hợp lệ.", show_alert: true,
-    });
-    return;
-  }
-  if (!isTelegramSearchSession(session) || session.ownerUserId !== callback.from.id ||
-      session.chatId !== message.chat.id) {
-    await telegramApi(env, "answerCallbackQuery", {
-      callback_query_id: callback.id, text: "Phiên tìm kiếm này không thuộc cuộc trò chuyện của bạn.", show_alert: true,
-    });
+  try { session = JSON.parse(row.payload); } catch { session = null; }
+  if (!isTelegramSearchSession(session) || session.ownerUserId !== callback.from.id || session.chatId !== message.chat.id) {
+    await reply(env, message.chat.id, "Phiên tìm kiếm không hợp lệ hoặc không thuộc cuộc trò chuyện này.");
     return;
   }
   const totalPages = Math.ceil(session.results.length / SEARCH_PAGE_SIZE);
   const page = Math.max(0, Math.min(totalPages - 1, requestedPage));
-  await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id });
   await telegramApi(env, "editMessageText", {
     chat_id: message.chat.id,
     message_id: message.message_id,
@@ -569,36 +546,37 @@ async function handleSearchCallback(env: Env, callback: TelegramCallbackQuery): 
     reply_markup: buildSearchKeyboard(sessionId, page, session.results.length),
   });
 }
+
 async function handleSearchActionCallback(env: Env, callback: TelegramCallbackQuery, action: "ask" | "deep", sessionId: string): Promise<void> {
   const message = callback.message;
   if (!allowedUser(env, callback.from.id) || !message || message.chat.id !== callback.from.id) {
-    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Hành động này chỉ khả dụng trong chat riêng được cấp quyền.", show_alert: true });
+    if (message) await reply(env, message.chat.id, "Hành động này chỉ khả dụng trong chat riêng được cấp quyền.");
     return;
   }
-  const row = await env.DB.prepare("SELECT payload FROM search_cache WHERE cache_key = ? AND expires_at > ?").bind("telegram-search:" + sessionId, Date.now()).first<{ payload: string }>();
+  const row = await env.DB.prepare(
+    "SELECT payload FROM search_cache WHERE cache_key = ? AND expires_at > ?",
+  ).bind("telegram-search:" + sessionId, Date.now()).first<{ payload: string }>();
   if (!row?.payload) {
-    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Phiên tìm kiếm đã hết hạn. Hãy tìm lại từ khóa.", show_alert: true });
+    await reply(env, message.chat.id, "Phiên tìm kiếm đã hết hạn. Hãy tìm lại từ khóa.");
     return;
   }
   let session: unknown;
   try { session = JSON.parse(row.payload); } catch { session = null; }
   if (!isTelegramSearchSession(session) || session.ownerUserId !== callback.from.id || session.chatId !== message.chat.id) {
-    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Phiên tìm kiếm này không thuộc cuộc trò chuyện của bạn.", show_alert: true });
+    await reply(env, message.chat.id, "Phiên tìm kiếm này không thuộc cuộc trò chuyện của bạn.");
     return;
   }
-  await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: action === "ask" ? "Đang tổng hợp câu trả lời có nguồn…" : "Đang xếp hàng Deep Search…" });
   await handleCommand(env, message.chat.id, callback.from.id, "/" + action + " " + session.query);
 }
 
 async function handleUiCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
   const message = callback.message;
   if (!allowedUser(env, callback.from.id) || !message || message.chat.id !== callback.from.id) {
-    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Menu chỉ khả dụng trong chat riêng được cấp quyền.", show_alert: true });
+    if (message) await reply(env, message.chat.id, "Menu chỉ khả dụng trong cuộc trò chuyện riêng được cấp quyền.");
     return;
   }
   const data = callback.data || "";
   if (data === "ui:home" || data === "ui:cancel") {
-    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: data === "ui:cancel" ? "Đã huỷ lựa chọn." : "" });
     await clearPendingTelegramMode(env, callback.from.id, message.chat.id);
     await editTelegramDashboard(env, message.chat.id, message.message_id, formatHomeMenu(), buildHomeKeyboard());
     return;
@@ -606,24 +584,22 @@ async function handleUiCallback(env: Env, callback: TelegramCallbackQuery): Prom
   if (data.startsWith("ui:mode:")) {
     const mode = data.slice("ui:mode:".length) as TelegramInputMode;
     if (!TELEGRAM_INPUT_MODES.has(mode)) {
-      await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Chế độ không hợp lệ.", show_alert: true });
+      await reply(env, message.chat.id, "Chế độ không hợp lệ. Hãy mở lại /menu.");
       return;
     }
     await setPendingTelegramMode(env, callback.from.id, message.chat.id, mode);
-    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Đã chọn chế độ. Gửi câu hỏi tiếp theo." });
     await editTelegramDashboard(env, message.chat.id, message.message_id, formatModePrompt(mode), buildModePromptKeyboard());
     return;
   }
   if (data === "ui:status") {
-    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Đang tải trạng thái…" });
     await handleCommand(env, message.chat.id, callback.from.id, "/status");
     return;
   }
   if (data === "ui:help") {
-    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id });
     const help = [
       "<b>◈ Nolane Search · Hướng dẫn nhanh</b>",
-      "", "<b>Lệnh nhanh</b>",
+      "",
+      "<b>Lệnh nhanh</b>",
       "1. Chọn chế độ trên menu.",
       "2. Gửi câu hỏi hoặc từ khóa ở tin nhắn tiếp theo.",
       "3. Dùng nút dưới kết quả để hỏi AI có nguồn hoặc chuyển sang Deep Search.",
@@ -637,7 +613,7 @@ async function handleUiCallback(env: Env, callback: TelegramCallbackQuery): Prom
     await editTelegramDashboard(env, message.chat.id, message.message_id, help, buildBackHomeKeyboard());
     return;
   }
-  await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Thao tác không được hỗ trợ." });
+  await reply(env, message.chat.id, "Nút này không còn được hỗ trợ. Hãy mở /menu.");
 }
 
 async function handleTelegramCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
@@ -1124,12 +1100,40 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   await reply(env, chatId, "Không nhận diện được lệnh. Gõ /help để xem các chức năng.");
 }
 
-async function processUpdate(env: Env, update: TelegramUpdate): Promise<void> {
-  if (!(await recordUpdate(env, update.update_id))) return;
+export async function processUpdate(env: Env, update: TelegramUpdate): Promise<void> {
   if (update.callback_query) {
-    await handleTelegramCallback(env, update.callback_query);
+    const callback = update.callback_query;
+    if (!allowedUser(env, callback.from.id)) {
+      await telegramApi(env, "answerCallbackQuery", {
+        callback_query_id: callback.id,
+        text: "Bạn không có quyền sử dụng bot này.",
+        show_alert: true,
+      }).catch(() => undefined);
+      return;
+    }
+
+    // Acknowledge immediately, before D1 or any other I/O, to stop Telegram's spinner.
+    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id }).catch(error => {
+      console.warn("Telegram callback acknowledgement failed:", error instanceof Error ? error.message : "unknown");
+    });
+
+    try {
+      if (!(await recordUpdate(env, update.update_id))) return;
+      await handleTelegramCallback(env, callback);
+    } catch (error) {
+      console.error("Telegram callback processing failed:", error instanceof Error ? error.message : "unknown");
+      if (callback.message) {
+        await reply(
+          env,
+          callback.message.chat.id,
+          "Mình đã nhận được nút bấm nhưng không thể hoàn tất thao tác. Hãy thử lại hoặc gửi /menu.",
+        ).catch(() => undefined);
+      }
+    }
     return;
   }
+
+  if (!(await recordUpdate(env, update.update_id))) return;
   const message = update.message;
   if (!message?.text || !message.from) return;
   const chatId = message.chat.id;
