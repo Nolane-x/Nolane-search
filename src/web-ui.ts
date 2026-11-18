@@ -60,7 +60,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}a{color:inherit}.shell{
 <button class="chip active" data-mode="web">Tất cả</button><button class="chip" data-mode="news">Tin tức</button><button class="chip" data-mode="research">Nghiên cứu</button><button class="chip" data-mode="tech">Công nghệ</button><button class="chip" data-mode="github">GitHub</button><button class="chip" data-mode="wiki">Wikipedia</button><button class="chip" data-mode="local">Website của tôi</button>
 </div><div id="recent" class="recent"></div>
 </div>
-<section class="content">
+<section id="searchContent" class="content">
 <div id="resultLayout" class="layout">
 <div class="maincol"><div class="summarybar"><span id="resultSummary">Sẵn sàng tìm kiếm</span><div class="search-mode"><button id="answerBtn" class="quiet hidden">✧ Tổng hợp bằng AI</button></div></div><div id="results"><div class="empty"><strong>Chào mừng đến Nolane Search</strong>Nhập một câu hỏi hoặc từ khóa để bắt đầu khám phá.</div></div></div>
 <aside class="side">
@@ -89,7 +89,7 @@ function safeUrl(raw){try{var u=new URL(raw);return (u.protocol==='https:'||u.pr
 function authHeaders(){return {'content-type':'application/json','x-nolane-request':'1'}}
 function setBusy(on,label){state.busy=on;$('searchBtn').disabled=on;$('searchBtn').textContent=on?'Đang tìm…':'Tìm kiếm';if(on){results.innerHTML='<div class="loading"><span class="spinner"></span><span></span></div>';results.querySelector('.loading span:last-child').textContent=label||'Đang tìm kiếm qua nhiều nguồn…'}}
 function showAuth(message){workspace.classList.add('hidden');auth.classList.remove('hidden');if(message){$('authError').classList.remove('hidden');text($('authError'),message)}}
-function showWorkspace(){auth.classList.add('hidden');workspace.classList.remove('hidden');$('logoutBtn').classList.remove('hidden')}
+function showWorkspace(){auth.classList.add('hidden');workspace.classList.remove('hidden');$('logoutBtn').classList.remove('hidden');$('toolsBtn').classList.remove('hidden')}
 function saveRecent(q){try{var arr=JSON.parse(localStorage.getItem('nolane.recent')||'[]');arr=[q].concat(arr.filter(function(x){return x!==q})).slice(0,6);localStorage.setItem('nolane.recent',JSON.stringify(arr));renderRecent()}catch(e){}}
 function renderRecent(){var box=$('recent');box.replaceChildren();var arr=[];try{arr=JSON.parse(localStorage.getItem('nolane.recent')||'[]')}catch(e){}arr.forEach(function(item){var b=document.createElement('button');text(b,item);b.addEventListener('click',function(){query.value=item;runSearch()});box.appendChild(b)})}
 function addResult(item,index,eventId){
