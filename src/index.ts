@@ -5,6 +5,7 @@ import {
 import type { MemoryCategory } from "./memory";
 import { compactChatHistory } from "./chat-context";
 import { parseJsonObjectBody } from "./http";
+import { deleteIndexedContent, listIndexedPages, normalizeIndexDomain, normalizeIndexPageUrl } from "./index-management";
 import { webAppResponse } from "./web-ui";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import type { AiTask } from "./ai-router";
@@ -413,6 +414,45 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     return jsonResponse({ jobs });
   }
 
+  if (url.pathname === "/api/index" && request.method === "GET") {
+    const limit = Number(url.searchParams.get("limit") || 20);
+    const offset = Number(url.searchParams.get("offset") || 0);
+    if ((url.searchParams.has("limit") && (!Number.isInteger(limit) || limit < 1 || limit > 40)) ||
+        (url.searchParams.has("offset") && (!Number.isInteger(offset) || offset < 0 || offset > 5000))) {
+      return jsonResponse({ error: "Phân trang chỉ mục không hợp lệ." }, 400);
+    }
+    try {
+      const listing = await listIndexedPages(env, { query: url.searchParams.get("q") || "", limit, offset });
+      return jsonResponse(listing);
+    } catch (error) {
+      console.error("Personal index listing failed:", error instanceof Error ? error.message : "unknown");
+      return jsonResponse({ error: "Không thể tải chỉ mục website lúc này." }, 502);
+    }
+  }
+
+  if (url.pathname === "/api/index/delete" && request.method === "POST") {
+    const body = await parseJsonBody(request);
+    const pageUrl = typeof body?.url === "string" ? body.url.trim() : "";
+    const domainInput = typeof body?.domain === "string" ? body.domain.trim() : "";
+    if (Boolean(pageUrl) === Boolean(domainInput)) {
+      return jsonResponse({ error: "Chọn chính xác một trang URL hoặc một tên miền để gỡ." }, 400);
+    }
+    const target = pageUrl
+      ? (normalizeIndexPageUrl(pageUrl) ? { kind: "url" as const, value: pageUrl } : null)
+      : (normalizeIndexDomain(domainInput) ? { kind: "domain" as const, value: domainInput } : null);
+    if (!target) return jsonResponse({ error: "URL hoặc tên miền không hợp lệ. Chỉ chấp nhận địa chỉ HTTPS public." }, 400);
+    if (!(await consumeWebRateLimit(env, session.userId, "index-delete", 10))) {
+      return jsonResponse({ error: "Bạn đang gỡ nội dung quá nhanh. Hãy thử lại sau một phút." }, 429);
+    }
+    try {
+      const result = await deleteIndexedContent(env, target);
+      return jsonResponse({ ok: true, ...result });
+    } catch (error) {
+      console.error("Personal index deletion failed:", error instanceof Error ? error.message : "unknown");
+      return jsonResponse({ error: error instanceof Error ? error.message : "Không thể gỡ nội dung khỏi chỉ mục." }, 502);
+    }
+  }
+
   if (url.pathname === "/api/ask" && request.method === "POST") {
     const body = await parseJsonBody(request);
     const query = typeof body?.q === "string" ? body.q.trim() : "";
@@ -794,6 +834,70 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     return;
   }
 
+  if (command === "indexed") {
+    try {
+      const listing = await listIndexedPages(env, { query: args, limit: 15, offset: 0 });
+      if (!listing.pages.length) {
+        await reply(env, chatId, args
+          ? "Không tìm thấy trang phù hợp trong chỉ mục."
+          : "Chưa có trang nào được lập chỉ mục. Dùng /crawl https://example.com 10.");
+        return;
+      }
+      const lines = ["<b>Personal Web Index</b> · " + listing.total + " trang" + (args ? " phù hợp" : "")];
+      for (const page of listing.pages) {
+        lines.push("<b>" + page.id + ". <a href=\"" + htmlEscape(page.url) + "\">" + boundedHtml(page.title, 120) + "</a></b>");
+        lines.push("<code>" + htmlEscape(page.domain) + "</code> · " + page.contentChars + " ký tự");
+      }
+      lines.push("\nDùng <code>/unindex URL</code> để gỡ một trang hoặc <code>/unindex_domain example.com</code> để gỡ toàn domain.");
+      await reply(env, chatId, lines.join("\n"));
+    } catch (error) {
+      console.error("Personal index listing failed:", error instanceof Error ? error.message : "unknown");
+      await reply(env, chatId, "Không thể đọc chỉ mục website lúc này.");
+    }
+    return;
+  }
+
+  if (command === "unindex") {
+    const normalized = normalizeIndexPageUrl(args);
+    if (!normalized) {
+      await reply(env, chatId, "Cú pháp: <code>/unindex https://example.com/page</code>. Chỉ nhận URL HTTPS public.");
+      return;
+    }
+    try {
+      const removed = await deleteIndexedContent(env, { kind: "url", value: normalized });
+      if (!removed.pagesDeleted) {
+        await reply(env, chatId, "Không tìm thấy trang này trong chỉ mục: <code>" + htmlEscape(normalized) + "</code>");
+        return;
+      }
+      await reply(env, chatId, "Đã gỡ trang khỏi chỉ mục. Watch liên quan đã tắt: " + removed.watchesDisabled + ".");
+    } catch (error) {
+      console.error("Personal index page deletion failed:", error instanceof Error ? error.message : "unknown");
+      await reply(env, chatId, "Không thể gỡ trang khỏi chỉ mục lúc này.");
+    }
+    return;
+  }
+
+  if (command === "unindex_domain") {
+    const domain = normalizeIndexDomain(args);
+    if (!domain) {
+      await reply(env, chatId, "Cú pháp: <code>/unindex_domain example.com</code>. Chỉ nhận tên miền public hợp lệ.");
+      return;
+    }
+    try {
+      const removed = await deleteIndexedContent(env, { kind: "domain", value: domain });
+      if (!removed.pagesDeleted) {
+        await reply(env, chatId, "Không tìm thấy trang nào của domain <code>" + htmlEscape(domain) + "</code> trong chỉ mục.");
+        return;
+      }
+      await reply(env, chatId, "Đã gỡ " + removed.pagesDeleted + " trang của <code>" + htmlEscape(domain) +
+        "</code>. Watch liên quan đã tắt: " + removed.watchesDisabled + ".");
+    } catch (error) {
+      console.error("Personal index domain deletion failed:", error instanceof Error ? error.message : "unknown");
+      await reply(env, chatId, "Không thể gỡ website khỏi chỉ mục lúc này.");
+    }
+    return;
+  }
+
   if (command === "web") {
     if (chatId !== userId) {
       await reply(env, chatId, "Hãy mở cuộc trò chuyện riêng với bot rồi gửi /web để nhận liên kết đăng nhập.");
@@ -898,6 +1002,9 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/site domain.com từ khóa</code> — giới hạn tìm kiếm vào website\n" +
       "<code>/read https://example.com</code> — đọc nội dung trang bằng TinyFish\n" +
       "<code>/local từ khóa</code> — tìm trong trang đã được index\n" +
+      "<code>/indexed [từ khóa]</code> — xem các trang trong chỉ mục riêng\n" +
+      "<code>/unindex URL</code> — gỡ một trang khỏi chỉ mục\n" +
+      "<code>/unindex_domain domain.com</code> — gỡ tất cả trang của một website\n" +
       "<code>/watch https://example.com</code> — theo dõi một trang\n" +
       "<code>/watches</code> — danh sách đang theo dõi\n" +
       "<code>/unwatch ID</code> — bỏ theo dõi\n" +

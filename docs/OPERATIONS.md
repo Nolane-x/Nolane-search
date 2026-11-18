@@ -137,3 +137,12 @@ Never print secrets in logs. Avoid logging raw user content unless necessary for
 - Website Watch checks the configured site's robots.txt and refuses redirects to another origin. If a site redirects to a different hostname, the check is marked as a fetch failure; update the watch target to the canonical URL if appropriate.
 - The selected-site crawler continues to allow only same-origin redirects, and redirect bodies are cancelled before the next request.
 - TinyFish page extraction is matched back to the safe public URL actually requested. Its returned final URL is only used when it is itself a safe public HTTPS URL.
+
+
+## Personal Web Index management
+
+- In the private browser workspace, the Personal Web Index panel lists the most recently updated indexed pages. Filter by page title, URL or hostname and use the page/domain removal controls to prune the local index.
+- Telegram: `/indexed [filter]` lists up to 15 matching indexed pages; `/unindex https://example.com/page` removes one normalized page; `/unindex_domain example.com` removes pages on the exact domain, its `www` host and subdomains.
+- Removal deletes the corresponding FTS5 row and `indexed_pages` row in a single D1 batch. It also deactivates watches whose normalized URL is among the removed pages, preventing scheduled watch checks from immediately re-indexing those exact URLs.
+- Removing a domain does not delete crawl-job history, Telegram archive snapshots or pages on unrelated domains. A crawl already running may still write pages after a deletion completes; refresh the index after the job finishes and remove again if necessary.
+- This feature reuses existing D1 tables and needs no migration, new secret or additional Cloudflare resource.
