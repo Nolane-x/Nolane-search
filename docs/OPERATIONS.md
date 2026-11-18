@@ -148,15 +148,8 @@ Never print secrets in logs. Avoid logging raw user content unless necessary for
 - This feature reuses existing D1 tables and needs no migration, new secret or additional Cloudflare resource.
 
 
-## Telegram request and provider quota limits
+## Single-owner usage and upstream quotas
 
-Telegram limits are enforced per Telegram user in fixed one-minute windows using the existing D1 `web_rate_limits` table. Current caps:
+Nolane Search is a private, single-owner service. It does not impose application-level per-minute request caps on Telegram commands or authenticated Web Workspace actions. Provider-side quotas, model access, upstream billing, Cloudflare platform limits and Queue capacity still apply.
 
-- General search commands and free-text search: 20 requests/minute.
-- `/ai`: 8 requests/minute.
-- `/ask`: 4 requests/minute.
-- `/deep`: 2 new queue jobs/minute.
-- `/crawl`: 2 new site-crawl jobs/minute.
-- `/read`: 5 TinyFish page extractions/minute.
-
-The limits apply to interactive-menu actions as well as slash commands because the menu routes through the same command handlers. Browser actions retain their existing, separately named limits. Exceeding a cap is rejected before provider calls or queue creation. Existing scheduled maintenance removes rate-limit rows older than 24 hours; no migration or new secret is required.
+Crawling remains bounded per job (up to 20 pages), rejects unsafe/private destinations, stays on the original public origin and respects robots.txt. These are safety and execution bounds for an individual crawl, not per-user request throttles.

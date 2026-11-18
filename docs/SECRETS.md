@@ -40,7 +40,7 @@ The deploy workflow only uses this secret when changed files under `database/mig
 
 ## Private browser search portal
 
-No additional browser secret is required. After `ALLOWED_TELEGRAM_USER_IDS` contains the owner's Telegram numeric ID, open the private bot chat and send `/web`. The bot returns a one-time browser login link that expires after five minutes. Do not share it. Browser sessions last up to seven days and can be revoked with the web UI's Logout action. The portal's search and AI endpoints are authenticated and rate-limited per user; it is not a public anonymous search API.
+No additional browser secret is required. After `ALLOWED_TELEGRAM_USER_IDS` contains the owner's Telegram numeric ID, open the private bot chat and send `/web`. The bot returns a one-time browser login link that expires after five minutes. Do not share it. Browser sessions last up to seven days and can be revoked with the web UI's Logout action. The portal's search and AI endpoints are authenticated for the single allowlisted owner; it is not a public anonymous search API and has no application-level per-minute request caps.
 
 ## Optional search and AI providers
 
