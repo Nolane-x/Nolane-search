@@ -247,5 +247,10 @@ class ToolRunnerUnitTests(unittest.TestCase):
                 runner.video_compress(path)
 
 
+    def test_runner_allowlist_and_handler_registry_are_identical(self):
+        self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
+        self.assertGreaterEqual(len(runner.TOOLS),38)
+
+
 if __name__ == "__main__":
     unittest.main()
