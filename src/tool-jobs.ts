@@ -1,5 +1,6 @@
 import type { Env } from "./types";
-import { getTool, isToolCompatible } from "./tools";
+import { getTool, validateToolPipeline } from "./tools";
+import type { ToolPipelineStep } from "./tools";
 
 export interface ToolJob {
   id: string;
@@ -21,6 +22,7 @@ export interface ToolJob {
   agentPrompt?: string;
   agentTask?: string;
   agentToolReason?: string;
+  pipeline?: ToolPipelineStep[];
 }
 
 const PREFIX = "tool-job:";
@@ -70,8 +72,13 @@ export async function listToolJobs(env: Env, userId: number, limit = 20): Promis
 export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "status" | "createdAt" | "updatedAt">): Promise<ToolJob> {
   const tool = getTool(input.toolId);
   if (!tool?.ready) throw new Error("Công cụ này chưa được kích hoạt.");
-  if (!isToolCompatible(tool, input.mimeType, input.fileName)) {
-    throw new Error("Định dạng tệp không phù hợp với công cụ " + tool.name + ".");
+  const pipeline = validateToolPipeline(
+    { mimeType: input.mimeType, fileName: input.fileName },
+    input.pipeline || [{ toolId: input.toolId }],
+  );
+  if (!pipeline.ok) throw new Error("Tool pipeline không hợp lệ: " + pipeline.error);
+  if (pipeline.steps[0]?.toolId !== input.toolId) {
+    throw new Error("Tool ID phải trùng với bước đầu tiên trong pipeline.");
   }
   if (!env.NOLANE_GH_ACTIONS_TOKEN) {
     throw new Error("Thiếu GitHub Actions token. Hãy thêm GitHub Secret NOLANE_GH_ACTIONS_TOKEN với quyền Actions: write cho repository Nolane-x/Nolane-search.");
@@ -81,7 +88,7 @@ export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "statu
   }
   if (input.fileSize > 20 * 1024 * 1024) throw new Error("Telegram Bot API chỉ tải được tệp tối đa 20 MB qua getFile.");
   const now = Date.now();
-  const job: ToolJob = { ...input, id: crypto.randomUUID(), status: "queued", createdAt: now, updatedAt: now };
+  const job: ToolJob = { ...input, pipeline: pipeline.steps, id: crypto.randomUUID(), status: "queued", createdAt: now, updatedAt: now };
   await saveToolJob(env, job);
   try {
     const response = await fetch(

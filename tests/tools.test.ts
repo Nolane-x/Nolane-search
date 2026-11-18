@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TOOL_CATALOG, getTool, inferToolForUpload, isToolCompatible } from "../src/tools";
+import { TOOL_CATALOG, getTool, inferToolForUpload, isToolCompatible, validateToolPipeline } from "../src/tools";
 
 describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
@@ -29,6 +29,27 @@ describe("Nolane Tools registry", () => {
     expect(inferToolForUpload({ mimeType: "text/csv", fileName: "data.csv" })).toBe("csv-profile");
     expect(inferToolForUpload({ mimeType: "application/json", fileName: "data.json" })).toBe("json-format");
     expect(inferToolForUpload({ mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", fileName: "notes.docx" })).toBe("office-text");
+  });
+
+  it("validates multi-step pipelines against explicit file types and data-flow edges", () => {
+    const video = { mimeType: "video/mp4", fileName: "clip.mp4" };
+    const valid = validateToolPipeline(video, [
+      { toolId: "video-audio", reason: "extract audio" },
+      { toolId: "audio-convert", reason: "normalize for speech recognition" },
+      { toolId: "audio-transcribe", reason: "transcribe" },
+    ]);
+    expect(valid.ok).toBe(true);
+    if (valid.ok) expect(valid.steps.map(step => step.toolId)).toEqual(["video-audio","audio-convert","audio-transcribe"]);
+
+    expect(validateToolPipeline(video, [{toolId:"pdf-text"}]).ok).toBe(false);
+    expect(validateToolPipeline(video, [{toolId:"video-info"},{toolId:"audio-transcribe"}]).ok).toBe(false);
+    expect(validateToolPipeline(video, [{toolId:"video-audio"},{toolId:"video-audio"}]).ok).toBe(false);
+    expect(validateToolPipeline(video, [
+      {toolId:"video-audio"},{toolId:"audio-convert"},{toolId:"audio-transcribe"},{toolId:"text-clean"},{toolId:"text-clean"},
+    ]).ok).toBe(false);
+    expect(validateToolPipeline({mimeType:"application/json",fileName:"rows.json"}, [
+      {toolId:"json-to-csv"},{toolId:"csv-clean"},{toolId:"csv-to-xlsx"},
+    ]).ok).toBe(true);
   });
 
   it("validates explicit tool selection against MIME types and extensions", () => {
