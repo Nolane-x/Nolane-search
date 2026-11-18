@@ -255,86 +255,6 @@ def file_hash(p):
     mime=mimetypes.guess_type(p.name)[0] or "application/octet-stream"
     return tool_text(f"File: {p.name}\nBytes: {p.stat().st_size:,}\nMIME: {mime}\nSHA-256: {sha.hexdigest()}\nMD5: {md5.hexdigest()}","File fingerprint")
 
-TOOLS={
- "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
- "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
- "audio-transcribe":audio_transcribe,"audio-info":audio_info,"video-info":video_info,"video-thumbnail":video_thumbnail,
- "csv-profile":csv_profile,"json-format":json_format,"office-text":office_text,"archive-inspect":archive_inspect,"file-hash":file_hash,"text-clean":text_clean,"subtitle-text":subtitle_text,"html-text":html_text,
- "audio-normalize":audio_normalize,"video-audio":video_audio,"video-gif":video_gif,
-
-}
-
-def cmd_fetch(args):
-    secret=os.environ.get("TELEGRAM_WEBHOOK_SECRET")
-    if not secret: raise RuntimeError("Missing TELEGRAM_WEBHOOK_SECRET.")
-    data=api_json(WORKER_URL+"/internal/tools/runner?job_id="+urllib.parse.quote(args.job_id),token=secret)
-    Path(args.output).write_text(json.dumps(data,ensure_ascii=False),encoding="utf-8")
-
-def cmd_download(args):
-    job=load_job(Path(args.job_file))
-    source=download_telegram(job["fileId"],job.get("fileName") or "upload.bin")
-    Path(args.output).write_text(str(source),encoding="utf-8")
-
-def cmd_run(args):
-    job=load_job(Path(args.job_file))
-    source=Path(Path(args.input_path_file).read_text(encoding="utf-8").strip())
-    root=(Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs").resolve()
-    if source.is_symlink():
-        raise RuntimeError("Input file symlinks are not allowed.")
-    resolved=source.resolve(strict=True)
-    if resolved.parent != root or not resolved.is_file():
-        raise RuntimeError("Input file is outside the private runner input directory.")
-    result=TOOLS[job["toolId"]](resolved)
-    Path(args.output).write_text(json.dumps({"summary":str(result.get("summary",""))[:6000],"output_path":result.get("output_path","")},ensure_ascii=False),encoding="utf-8")
-
-def send_document(chat_id,path,caption):
-    token=os.environ["TELEGRAM_BOT_TOKEN"]; boundary="----NolaneToolBoundary-31d9"
-    fields=[]
-    def text_field(name,value):
-        fields.append((f"--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").encode())
-    text_field("chat_id",str(chat_id)); text_field("caption",caption[:850])
-    filename=Path(path).name.replace('"',"_")[:120]
-    head=(f"--{boundary}\r\nContent-Disposition: form-data; name=\"document\"; filename=\"{filename}\"\r\nContent-Type: application/octet-stream\r\n\r\n").encode()
-    body=b"".join(fields)+head+Path(path).read_bytes()+f"\r\n--{boundary}--\r\n".encode()
-    req=urllib.request.Request(f"https://api.telegram.org/bot{token}/sendDocument",data=body,headers={"content-type":f"multipart/form-data; boundary={boundary}"},method="POST")
-    with urllib.request.urlopen(req,timeout=90) as r:
-        result=json.loads(r.read(1_000_000).decode())
-    if not result.get("ok"): raise RuntimeError(result.get("description","Telegram sendDocument failed."))
-
-def callback(job_id,payload):
-    secret=os.environ.get("TELEGRAM_WEBHOOK_SECRET")
-    if not secret: raise RuntimeError("Missing TELEGRAM_WEBHOOK_SECRET.")
-    return api_json(WORKER_URL+"/internal/tools/runner",method="POST",data={"job_id":job_id,**payload},token=secret)
-
-def cmd_complete(args):
-    # Re-fetch authoritative metadata after untrusted file processing has finished.
-    token=os.environ.get("TELEGRAM_WEBHOOK_SECRET")
-    if not token: raise RuntimeError("Missing TELEGRAM_WEBHOOK_SECRET.")
-    job_data=api_json(
-        WORKER_URL+"/internal/tools/runner?job_id="+urllib.parse.quote(args.job_id),
-        token=token,
-    )
-    job=job_data.get("job")
-    if not isinstance(job,dict) or job.get("id")!=args.job_id:
-        raise RuntimeError("Worker returned an invalid or mismatched tool job.")
-    result=json.loads(Path(args.result_file).read_text(encoding="utf-8"))
-    output=result.get("output_path")
-    if output:
-        root=(Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs").resolve()
-        candidate=Path(output)
-        if candidate.is_symlink():
-            raise RuntimeError("Tool output symlinks are not allowed.")
-        p=candidate.resolve(strict=True)
-        if p.parent!=root or not p.is_file() or p.stat().st_size>45*1024*1024:
-            raise RuntimeError("Tool output must be a regular file inside the private runner input directory and stay under 45 MB.")
-        send_document(int(job["chatId"]),p,"Nolane Tools · "+job["toolId"])
-    callback(args.job_id,{"status":"completed","summary":result.get("summary","Đã hoàn thành.")})
-
-def cmd_fail(args):
-    try: callback(args.job_id,{"status":"failed","error":args.message[:1000]})
-    except Exception as exc: print(f"Unable to report failure: {exc}",file=sys.stderr)
-
-
 def text_clean(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace")
     normalized=unicodedata.normalize("NFC",raw).replace("\r\n","\n").replace("\r","\n")
@@ -416,6 +336,87 @@ def video_gif(p):
     vf="fps=10,scale=640:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse"
     cmd("ffmpeg",["-y","-ss",str(start),"-t",str(clip),"-i",str(p),"-vf",vf,"-loop","0",str(out)],900)
     return {"summary":f"Đã tạo GIF xem trước dài {clip:.1f} giây, 10 FPS, rộng tối đa 640 px.","output_path":str(out)}
+
+
+TOOLS={
+ "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
+ "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
+ "audio-transcribe":audio_transcribe,"audio-info":audio_info,"video-info":video_info,"video-thumbnail":video_thumbnail,
+ "csv-profile":csv_profile,"json-format":json_format,"office-text":office_text,"archive-inspect":archive_inspect,"file-hash":file_hash,"text-clean":text_clean,"subtitle-text":subtitle_text,"html-text":html_text,
+ "audio-normalize":audio_normalize,"video-audio":video_audio,"video-gif":video_gif,
+
+}
+
+def cmd_fetch(args):
+    secret=os.environ.get("TELEGRAM_WEBHOOK_SECRET")
+    if not secret: raise RuntimeError("Missing TELEGRAM_WEBHOOK_SECRET.")
+    data=api_json(WORKER_URL+"/internal/tools/runner?job_id="+urllib.parse.quote(args.job_id),token=secret)
+    Path(args.output).write_text(json.dumps(data,ensure_ascii=False),encoding="utf-8")
+
+def cmd_download(args):
+    job=load_job(Path(args.job_file))
+    source=download_telegram(job["fileId"],job.get("fileName") or "upload.bin")
+    Path(args.output).write_text(str(source),encoding="utf-8")
+
+def cmd_run(args):
+    job=load_job(Path(args.job_file))
+    source=Path(Path(args.input_path_file).read_text(encoding="utf-8").strip())
+    root=(Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs").resolve()
+    if source.is_symlink():
+        raise RuntimeError("Input file symlinks are not allowed.")
+    resolved=source.resolve(strict=True)
+    if resolved.parent != root or not resolved.is_file():
+        raise RuntimeError("Input file is outside the private runner input directory.")
+    result=TOOLS[job["toolId"]](resolved)
+    Path(args.output).write_text(json.dumps({"summary":str(result.get("summary",""))[:6000],"output_path":result.get("output_path","")},ensure_ascii=False),encoding="utf-8")
+
+def send_document(chat_id,path,caption):
+    token=os.environ["TELEGRAM_BOT_TOKEN"]; boundary="----NolaneToolBoundary-31d9"
+    fields=[]
+    def text_field(name,value):
+        fields.append((f"--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n").encode())
+    text_field("chat_id",str(chat_id)); text_field("caption",caption[:850])
+    filename=Path(path).name.replace('"',"_")[:120]
+    head=(f"--{boundary}\r\nContent-Disposition: form-data; name=\"document\"; filename=\"{filename}\"\r\nContent-Type: application/octet-stream\r\n\r\n").encode()
+    body=b"".join(fields)+head+Path(path).read_bytes()+f"\r\n--{boundary}--\r\n".encode()
+    req=urllib.request.Request(f"https://api.telegram.org/bot{token}/sendDocument",data=body,headers={"content-type":f"multipart/form-data; boundary={boundary}"},method="POST")
+    with urllib.request.urlopen(req,timeout=90) as r:
+        result=json.loads(r.read(1_000_000).decode())
+    if not result.get("ok"): raise RuntimeError(result.get("description","Telegram sendDocument failed."))
+
+def callback(job_id,payload):
+    secret=os.environ.get("TELEGRAM_WEBHOOK_SECRET")
+    if not secret: raise RuntimeError("Missing TELEGRAM_WEBHOOK_SECRET.")
+    return api_json(WORKER_URL+"/internal/tools/runner",method="POST",data={"job_id":job_id,**payload},token=secret)
+
+def cmd_complete(args):
+    # Re-fetch authoritative metadata after untrusted file processing has finished.
+    token=os.environ.get("TELEGRAM_WEBHOOK_SECRET")
+    if not token: raise RuntimeError("Missing TELEGRAM_WEBHOOK_SECRET.")
+    job_data=api_json(
+        WORKER_URL+"/internal/tools/runner?job_id="+urllib.parse.quote(args.job_id),
+        token=token,
+    )
+    job=job_data.get("job")
+    if not isinstance(job,dict) or job.get("id")!=args.job_id:
+        raise RuntimeError("Worker returned an invalid or mismatched tool job.")
+    result=json.loads(Path(args.result_file).read_text(encoding="utf-8"))
+    output=result.get("output_path")
+    if output:
+        root=(Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs").resolve()
+        candidate=Path(output)
+        if candidate.is_symlink():
+            raise RuntimeError("Tool output symlinks are not allowed.")
+        p=candidate.resolve(strict=True)
+        if p.parent!=root or not p.is_file() or p.stat().st_size>45*1024*1024:
+            raise RuntimeError("Tool output must be a regular file inside the private runner input directory and stay under 45 MB.")
+        send_document(int(job["chatId"]),p,"Nolane Tools · "+job["toolId"])
+    callback(args.job_id,{"status":"completed","summary":result.get("summary","Đã hoàn thành.")})
+
+def cmd_fail(args):
+    try: callback(args.job_id,{"status":"failed","error":args.message[:1000]})
+    except Exception as exc: print(f"Unable to report failure: {exc}",file=sys.stderr)
+
 
 def main():
     parser=argparse.ArgumentParser(); sub=parser.add_subparsers(dest="cmd",required=True)
