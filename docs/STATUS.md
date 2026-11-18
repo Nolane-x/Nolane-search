@@ -275,3 +275,13 @@ The first Tools release is being added in PR #13.
 - A fine-grained `GITHUB_ACTIONS_TOKEN` with repository Actions: Read and write is required before live dispatch works. It is documented in `docs/SECRETS.md`; it must be saved as a GitHub Actions secret, not pasted into chat.
 - OCR installs English and Vietnamese Tesseract data; audio transcription uses CPU Whisper; document extraction includes OCR fallback for scanned PDFs.
 - CI includes registry/dispatch unit tests plus Python syntax checking. Actual hosted-runner execution requires the token to be configured and a real file to be sent from Telegram; that end-to-end run is not claimed until verified.
+
+
+## Nolane Tools expansion · PR #14
+
+The registry expands from 17 to 23 implemented tools.
+
+- Added text cleanup for TXT/Markdown/log files, SRT/VTT subtitle-to-transcript extraction and HTML-to-readable-text extraction.
+- Added audio loudness normalization to podcast-style -16 LUFS, video-to-MP3 audio extraction and a bounded six-second video-to-GIF preview.
+- Added MIME/extension inference and dispatch metadata for the new tools. FFmpeg is installed only for the relevant audio/video jobs.
+- CI now runs Python unit tests against the runner's text, subtitle and HTML transforms plus mocked FFmpeg command construction, in addition to Python compilation and the TypeScript suite.
