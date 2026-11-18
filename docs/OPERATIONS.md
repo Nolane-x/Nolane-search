@@ -146,3 +146,17 @@ Never print secrets in logs. Avoid logging raw user content unless necessary for
 - Removal deletes the corresponding FTS5 row and `indexed_pages` row in a single D1 batch. It also deactivates watches whose normalized URL is among the removed pages, preventing scheduled watch checks from immediately re-indexing those exact URLs.
 - Removing a domain does not delete crawl-job history, Telegram archive snapshots or pages on unrelated domains. A crawl already running may still write pages after a deletion completes; refresh the index after the job finishes and remove again if necessary.
 - This feature reuses existing D1 tables and needs no migration, new secret or additional Cloudflare resource.
+
+
+## Telegram request and provider quota limits
+
+Telegram limits are enforced per Telegram user in fixed one-minute windows using the existing D1 `web_rate_limits` table. Current caps:
+
+- General search commands and free-text search: 20 requests/minute.
+- `/ai`: 8 requests/minute.
+- `/ask`: 4 requests/minute.
+- `/deep`: 2 new queue jobs/minute.
+- `/crawl`: 2 new site-crawl jobs/minute.
+- `/read`: 5 TinyFish page extractions/minute.
+
+The limits apply to interactive-menu actions as well as slash commands because the menu routes through the same command handlers. Browser actions retain their existing, separately named limits. Exceeding a cap is rejected before provider calls or queue creation. Existing scheduled maintenance removes rate-limit rows older than 24 hours; no migration or new secret is required.
