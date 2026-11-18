@@ -264,7 +264,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         unsafe=self.write("formula.csv","name\n=HYPERLINK(\"https://evil.example\")\n")
         safe=runner.csv_clean(unsafe)
         self.assertIn("'=HYPERLINK",Path(safe["output_path"]).read_text(encoding="utf-8"))
-        bad_header=self.write("formula-header.csv","=HYPERLINK,score\\nhttps://evil.example,1\\n")
+        bad_header=self.write("formula-header.csv","=HYPERLINK,score\nhttps://evil.example,1\n")
         safe_header=runner.csv_clean(bad_header)
         self.assertIn("'=HYPERLINK",Path(safe_header["output_path"]).read_text(encoding="utf-8"))
 

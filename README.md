@@ -81,7 +81,7 @@ No license has been selected. Do not assume this repository grants rights to reu
 
 ### AI Agent and file workflows
 
-Telegram `/ai` and the authenticated Web Workspace chat use a bounded function-calling agent for web search, safe public-page reading, Nolane tool discovery, text/data processing and SHA-256 fingerprints. `/ai_file <request>` lets the model select a compatible processor from the full 45-tool catalog, re-validates the selected file type in the Worker, dispatches the job to an isolated GitHub Actions runner, and asks AI to synthesize the actual processor output. See [`docs/NOLANE-TOOLS.md`](docs/NOLANE-TOOLS.md) for limits and safeguards.
+Telegram `/ai` and the authenticated Web Workspace chat use a bounded function-calling agent for web search, safe public-page reading, Nolane tool discovery, text/data processing and SHA-256 fingerprints. `/ai_file <request>` lets the model plan a validated chain of up to four compatible processors from the full 45-tool catalog, re-validates the selected file type in the Worker, dispatches the job to an isolated GitHub Actions runner, and asks AI to synthesize the actual processor output. See [`docs/NOLANE-TOOLS.md`](docs/NOLANE-TOOLS.md) for limits and safeguards.
 
 
 ### AI file orchestration

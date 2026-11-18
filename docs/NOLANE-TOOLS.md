@@ -81,7 +81,7 @@ Web Workspace có tab Tools để xem catalog và sao chép lệnh; thao tác g�
 ### Pipeline orchestration
 - AI File no longer has to select exactly one processor. It can plan an ordered chain of up to 4 processors, such as `video-audio → audio-convert → audio-transcribe`, `pdf-text → text-clean`, or `json-to-csv → csv-clean → csv-to-xlsx`.
 - The Worker validates the first tool against the uploaded MIME type/extension and checks every later edge against an explicit allowlist. The runner independently verifies pipeline length, known IDs, first-step identity and allowed transitions.
-- Only the ordered tool IDs are sent to the GitHub Actions runner; the user prompt and AI rationale remain in Worker/D1. Intermediate outputs stay inside the ephemeral runner input directory. The final artifact alone is delivered to Telegram.
+- The runner receives the ordered tool IDs plus only the job/file metadata needed to fetch and execute the upload; the user prompt and AI rationale remain in Worker/D1. Intermediate outputs stay inside the ephemeral runner input directory. The final artifact alone is delivered to Telegram.
 - Pipelines are limited to 4 unique tools, each intermediate output is capped at 45 MB, and unsupported chains fall back to one deterministic processor rather than executing an arbitrary sequence.
 
 - Telegram: dùng `/ai câu hỏi` để AI tự quyết định có gọi tìm kiếm web, đọc trang công khai, tra danh mục Nolane Tools, xử lý text/CSV/JSON/HTML/phụ đề hoặc tính SHA-256 hay không.
