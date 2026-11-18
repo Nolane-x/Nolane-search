@@ -4,6 +4,7 @@ import {
 } from "./memory";
 import type { MemoryCategory } from "./memory";
 import { compactChatHistory } from "./chat-context";
+import { parseJsonObjectBody } from "./http";
 import { webAppResponse } from "./web-ui";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import type { AiTask } from "./ai-router";
@@ -216,12 +217,7 @@ async function consumeWebRateLimit(env: Env, userId: number, action: string, lim
 }
 
 async function parseJsonBody(request: Request): Promise<Record<string, unknown> | null> {
-  try {
-    const source = await request.text();
-    if (source.length > 30_000) return null;
-    const value = JSON.parse(source) as unknown;
-    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
-  } catch { return null; }
+  return parseJsonObjectBody(request, 30_000);
 }
 
 
