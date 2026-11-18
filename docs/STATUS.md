@@ -6,24 +6,26 @@ Last verified: 2026-11-18. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `460a3b066515d709364f4fdd5223912a749d14e9`
+- Latest production source commit: `ffe1564ebfa1db5a00960c92e88e19dc6a84fb20`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
 - Interactive Telegram workspace and contextual search actions: [PR #5](https://github.com/Nolane-x/Nolane-search/pull/5)
+- Fix Telegram callback delivery and stuck inline-button spinners: [PR #6](https://github.com/Nolane-x/Nolane-search/pull/6)
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `1fe26092-c0c9-4c20-87a8-dbfd7f3e2cbf`
+- Cloudflare Worker version ID: `e182d473-d214-4a0c-82c5-0c8662fb4b87`
 
-The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, and an interactive Telegram dashboard with one-shot search/AI modes and result follow-up actions.
+The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
 ## CI and deployment verification
 
 | Check | Run | Result |
 |---|---:|---|
 | PR CI: typecheck, 58 unit tests, script syntax checks and Worker build | [44245521279](https://github.com/Nolane-x/Nolane-search/actions/runs/44245521279) | PASS |
-| Main CI: typecheck, 60 unit tests, script syntax checks and Worker build | [44251597211](https://github.com/Nolane-x/Nolane-search/actions/runs/44251597211) | PASS |
-| Worker bundle export and production smoke test | [44251597189](https://github.com/Nolane-x/Nolane-search/actions/runs/44251597189) | PASS |
-| Production Worker deployment, runtime secret upload, webhook and command registration | [44251597162](https://github.com/Nolane-x/Nolane-search/actions/runs/44251597162) | PASS |
+| PR #6 CI: typecheck, 61 unit tests, webhook regression check and Worker build | [44255034696](https://github.com/Nolane-x/Nolane-search/actions/runs/44255034696) | PASS |
+| Main CI: typecheck, 61 unit tests, webhook regression check and Worker build | [44255150160](https://github.com/Nolane-x/Nolane-search/actions/runs/44255150160) | PASS |
+| Worker bundle export and production smoke test | [44255150131](https://github.com/Nolane-x/Nolane-search/actions/runs/44255150131) | PASS |
+| Production Worker deployment, runtime secret upload, webhook and command registration | [44255150124](https://github.com/Nolane-x/Nolane-search/actions/runs/44255150124) | PASS |
 
 The deployment log confirms:
 - Worker `nolane-search` was uploaded and deployed.
@@ -31,8 +33,9 @@ The deployment log confirms:
 - Cron `*/30 * * * *` and Queue producer/consumer bindings remained attached.
 - Telegram webhook registration succeeded.
 - Telegram bot command registration succeeded, including `/web`, `/start`, `/menu` and `/cancel`.
-- Worker version `1fe26092-c0c9-4c20-87a8-dbfd7f3e2cbf` was deployed from main commit `460a3b066515d709364f4fdd5223912a749d14e9`.
-- No D1 migration was needed for the Telegram UI release.
+- Worker version `e182d473-d214-4a0c-82c5-0c8662fb4b87` was deployed from main commit `ffe1564ebfa1db5a00960c92e88e19dc6a84fb20`.
+- Telegram webhook update subscriptions were verified by calling `getWebhookInfo`; the returned configuration contains both `message` and `callback_query` for the expected Worker URL.
+- No D1 migration was needed for the Telegram callback fix.
 - Worker version `ccbb1cb9-3d89-4290-a471-92c44a333711` was deployed from main commit `1c17cd1e77a5b83fc57a0ed86e9ace595f58d31e`.
 - No D1 migration was needed; the deployment's migration check correctly skipped the migration apply step.
 
@@ -73,6 +76,15 @@ The web interface includes Web, News, Research, Technology, GitHub, Wikipedia an
 - UI and follow-up callbacks validate the allowlisted user and private chat. Dashboard navigation edits the same message to reduce chat clutter.
 - This release reuses the existing D1 cache; no schema migration or new API secret was introduced.
 - CI verifies formatting, callback construction and Worker build. A real Telegram tap-through still requires the owner's account.
+
+## Telegram callback delivery repair
+
+- Root cause of the stuck inline buttons: the previous webhook registration explicitly allowed only `message` updates. Inline keyboard taps arrive as `callback_query`, which Telegram therefore did not forward to the Worker.
+- `scripts/set-webhook.mjs` now registers both `message` and `callback_query`, then calls Telegram `getWebhookInfo` and fails unless the expected webhook URL and callback subscription are present.
+- The Worker acknowledges an allowlisted callback with `answerCallbackQuery` before D1 deduplication or callback work, so Telegram's loading indicator is not held open by slow storage.
+- Callback handlers no longer issue late/double acknowledgements. If a callback is acknowledged but processing fails, the Worker sends an actionable chat message.
+- Automated regression test verifies acknowledgement occurs before the first D1 operation; a standalone Node check verifies the webhook script subscribes to and verifies callback updates.
+- Production deploy 2026-11-18 verified the configured webhook through Telegram `getWebhookInfo`; a real owner tap-through is still the final UI end-to-end check.
 
 ## Search and retrieval behavior
 
@@ -140,6 +152,8 @@ Create the second secret before the next commit that introduces a new file under
 ## Remaining owner-level end-to-end checks
 
 These need a real interaction from the owner's Telegram account; CI and the public health endpoint cannot complete them:
+1. Send `/start` or `/menu` in the private Telegram chat and tap Web Search, AI Chat, or AI with sources. The button should respond immediately and edit the dashboard prompt; it must no longer show an endless loading spinner.
+
 1. Send `/start` or `/menu` in the private bot chat; try each dashboard mode, send one query, test `/cancel`, and confirm that the next unselected plain-text message falls back to Web Search.
 2. From a search result, use the AI-with-sources and Deep Search buttons; confirm only the matching original query is used and that the job appears in `/jobs`.
 
