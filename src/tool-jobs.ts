@@ -69,8 +69,8 @@ export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "statu
   if (!isToolCompatible(tool, input.mimeType, input.fileName)) {
     throw new Error("Định dạng tệp không phù hợp với công cụ " + tool.name + ".");
   }
-  if (!env.GITHUB_ACTIONS_TOKEN) {
-    throw new Error("Thiếu GitHub Actions token. Hãy thêm GitHub Secret GITHUB_ACTIONS_TOKEN với quyền Actions: write cho repository Nolane-x/Nolane-search.");
+  if (!env.NOLANE_GH_ACTIONS_TOKEN) {
+    throw new Error("Thiếu GitHub Actions token. Hãy thêm GitHub Secret NOLANE_GH_ACTIONS_TOKEN với quyền Actions: write cho repository Nolane-x/Nolane-search.");
   }
   if (typeof input.fileId !== "string" || input.fileId.length < 8 || input.fileId.length > 1024 || /[\u0000-\u001f\u007f]/.test(input.fileId)) {
     throw new Error("Telegram file_id không hợp lệ.");
@@ -85,7 +85,7 @@ export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "statu
       {
         method: "POST",
         headers: {
-          authorization: "Bearer " + env.GITHUB_ACTIONS_TOKEN,
+          authorization: "Bearer " + env.NOLANE_GH_ACTIONS_TOKEN,
           accept: "application/vnd.github+json",
           "content-type": "application/json",
           "x-github-api-version": "2022-11-28",
