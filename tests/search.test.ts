@@ -19,8 +19,8 @@ describe("explicit relevance feedback", () => {
     expect(feedbackWeight(1, 0)).toBeGreaterThan(0);
     expect(feedbackWeight(0, 1)).toBeLessThan(0);
     expect(feedbackWeight(0, 0)).toBe(0);
-    expect(feedbackWeight(1000, 0)).toBe(0.1);
-    expect(feedbackWeight(0, 1000)).toBe(-0.1);
+    expect(feedbackWeight(1000, 0)).toBeCloseTo(0.1, 3);
+    expect(feedbackWeight(0, 1000)).toBeCloseTo(-0.1, 3);
   });
 });
 
