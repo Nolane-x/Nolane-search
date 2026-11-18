@@ -1,0 +1,89 @@
+name: Nolane Tools Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "D1-backed job created by the private Nolane Worker"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nolane-tool-${{ inputs.job_id }}
+  cancel-in-progress: false
+
+jobs:
+  run-tool:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NOLANE_WORKER_URL: https://nolane-search.nolane-file.workers.dev
+      JOB_ID: ${{ inputs.job_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Fetch private job metadata (short-lived Worker secret scope)
+        env:
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+        run: python tools/runner.py fetch "$JOB_ID" "$RUNNER_TEMP/nolane-job.json"
+      - name: Read selected tool
+        id: job
+        shell: bash
+        run: |
+          TOOL_ID="$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['job']['toolId'])" "$RUNNER_TEMP/nolane-job.json")"
+          echo "tool_id=$TOOL_ID" >> "$GITHUB_OUTPUT"
+      - name: Download Telegram input (bot token scoped to download only)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: python tools/runner.py download "$RUNNER_TEMP/nolane-job.json" "$RUNNER_TEMP/nolane-input-path.txt"
+      - name: Install base libraries
+        run: python -m pip install --disable-pip-version-check pillow pymupdf
+      - name: Install Office libraries
+        if: steps.job.outputs.tool_id == 'office-text'
+        run: python -m pip install --disable-pip-version-check python-docx openpyxl python-pptx
+      - name: Install Vietnamese and English OCR engine
+        if: contains(fromJSON('["image-ocr","pdf-text"]'), steps.job.outputs.tool_id)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-vie
+          python -m pip install --disable-pip-version-check pytesseract
+      - name: Install QR decoder
+        if: steps.job.outputs.tool_id == 'qr-read'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libzbar0
+          python -m pip install --disable-pip-version-check pyzbar
+      - name: Install FFmpeg
+        if: contains(fromJSON('["audio-transcribe","audio-info","video-info","video-thumbnail"]'), steps.job.outputs.tool_id)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Cache Whisper model files
+        if: steps.job.outputs.tool_id == 'audio-transcribe'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: nolane-whisper-small-${{ runner.os }}-v1
+      - name: Install Whisper
+        if: steps.job.outputs.tool_id == 'audio-transcribe'
+        run: python -m pip install --disable-pip-version-check faster-whisper
+      - name: Execute tool
+        run: python tools/runner.py run "$RUNNER_TEMP/nolane-job.json" "$RUNNER_TEMP/nolane-input-path.txt" "$RUNNER_TEMP/nolane-result.json"
+      - name: Deliver output and update job (secrets are reintroduced after processing)
+        if: success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+        run: python tools/runner.py complete "$JOB_ID" "$RUNNER_TEMP/nolane-result.json"
+      - name: Report processing failure
+        if: failure()
+        env:
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+        run: python tools/runner.py fail "$JOB_ID" --message "Tool runner failed. Open this GitHub Actions run for the diagnostic details."

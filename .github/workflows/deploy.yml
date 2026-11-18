@@ -115,13 +115,14 @@ jobs:
           OPENROUTER_MODELS: ${{ secrets.OPENROUTER_MODELS }}
           AI_ROUTER_CONFIG: ${{ secrets.AI_ROUTER_CONFIG }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN_SEARCH }}
+          GITHUB_ACTIONS_TOKEN: ${{ secrets.GITHUB_ACTIONS_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
           umask 077
           trap 'rm -f .cloudflare-secrets' EXIT
           : > .cloudflare-secrets
-          for key in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET ALLOWED_TELEGRAM_USER_IDS TAVILY_API_KEY TELEGRAM_ARCHIVE_CHAT_ID EXA_API_KEY BRAVE_SEARCH_API_KEY TINYFISH_API_KEY OPENROUTER_API_KEY OPENROUTER_MODEL OPENROUTER_MODELS AI_ROUTER_CONFIG GITHUB_TOKEN; do
+          for key in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET ALLOWED_TELEGRAM_USER_IDS TAVILY_API_KEY TELEGRAM_ARCHIVE_CHAT_ID EXA_API_KEY BRAVE_SEARCH_API_KEY TINYFISH_API_KEY OPENROUTER_API_KEY OPENROUTER_MODEL OPENROUTER_MODELS AI_ROUTER_CONFIG GITHUB_TOKEN GITHUB_ACTIONS_TOKEN; do
             value="${!key:-}"
             if [[ "$key" == "AI_ROUTER_CONFIG" && -z "$value" ]]; then
               value='{"strategy":"balanced","maxAttempts":12,"providers":[]}'

@@ -49,6 +49,8 @@ export interface Env {
   /** JSON secret containing provider/key/model routes for the AI gateway. */
   AI_ROUTER_CONFIG?: string;
   GITHUB_TOKEN?: string;
+  /** Fine-grained repository token with Actions: write, used to dispatch tool jobs. */
+  GITHUB_ACTIONS_TOKEN?: string;
 }
 
 export interface D1Result<T = Record<string, unknown>> {
@@ -95,11 +97,22 @@ export interface TelegramUser {
   first_name?: string;
 }
 
+export interface TelegramPhotoSize { file_id: string; file_unique_id: string; width: number; height: number; file_size?: number; }
+export interface TelegramDocument { file_id: string; file_unique_id: string; file_name?: string; mime_type?: string; file_size?: number; }
+export interface TelegramMediaFile { file_id: string; file_unique_id: string; file_name?: string; mime_type?: string; file_size?: number; duration?: number; width?: number; height?: number; }
+
 export interface TelegramMessage {
   message_id: number;
   chat: { id: number; type: string };
   from?: TelegramUser;
   text?: string;
+  caption?: string;
+  photo?: TelegramPhotoSize[];
+  document?: TelegramDocument;
+  audio?: TelegramMediaFile;
+  voice?: TelegramMediaFile;
+  video?: TelegramMediaFile;
+  animation?: TelegramMediaFile;
   reply_to_message?: { message_id: number; text?: string };
 }
 

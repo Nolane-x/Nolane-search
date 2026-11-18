@@ -42,6 +42,35 @@ The deploy workflow only uses this secret when changed files under `database/mig
 
 No additional browser secret is required. After `ALLOWED_TELEGRAM_USER_IDS` contains the owner's Telegram numeric ID, open the private bot chat and send `/web`. The bot returns a one-time browser login link that expires after five minutes. Do not share it. Browser sessions last up to seven days and can be revoked with the web UI's Logout action. The portal's search and AI endpoints are authenticated for the single allowlisted owner; it is not a public anonymous search API and has no application-level per-minute request caps.
 
+## Nolane Tools · GitHub Actions runner
+
+Nolane Tools dispatches one GitHub-hosted runner job for each uploaded file. Add one additional GitHub Actions secret:
+
+| Secret | Purpose | Where to obtain |
+|---|---|---|
+| `GITHUB_ACTIONS_TOKEN` | Lets the private Worker dispatch `tool-runner.yml` on this repository | Create a fine-grained Personal Access Token in GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens |
+
+Recommended token settings:
+- Resource owner: your GitHub account.
+- Repository access: **Only select repositories** → `Nolane-x/Nolane-search`.
+- Repository permissions: **Actions → Read and write**. No Contents write, Administration, Secrets, or organization permissions are needed for the dispatch operation.
+- Save the token as repository secret `GITHUB_ACTIONS_TOKEN` under Settings → Secrets and variables → Actions.
+
+The deployment workflow uploads this secret as a hidden Worker secret. It is optional for normal Search deployments, but Tools cannot dispatch jobs until it is configured. Do not paste the token into Telegram or ChatGPT and never put it in the repository.
+
+The runner also uses the existing `TELEGRAM_BOT_TOKEN` to download the user's file with Telegram `getFile` and send result files back, and `TELEGRAM_WEBHOOK_SECRET` to authenticate private job callbacks to the Worker. No additional Telegram token is required.
+
+### File handling and practical limits
+
+- The official Telegram Bot API `getFile` download path supports files up to 20 MB. The bot rejects larger inputs before queueing the job.
+- Output documents are sent back through Telegram `sendDocument`; the runner applies a 45 MB safety cap.
+- Job metadata and status are stored under `tool-job:` keys in the existing D1 `search_cache` for 30 days. The stored result summary is capped at 6,000 characters; the Telegram `file_id` is cleared after a completed or failed state. No migration or R2 bucket is needed.
+- The original file is downloaded only onto the temporary GitHub-hosted runner disk. The workflow does not upload it as an artifact, commit it to Git, or copy it into D1.
+- A runner is ephemeral. A completed run's temporary input and intermediate files are removed when the GitHub-hosted runner is discarded. GitHub Actions logs contain diagnostics, not the OCR/transcription payload.
+- Public repositories can use standard GitHub-hosted runner minutes without charge under GitHub's current policy, but runner concurrency, per-job timeouts, available disk/RAM, Telegram file limits and external model download time still apply. Whisper is CPU-based and may be slower for long recordings.
+
+To use Tools after adding the secret, push/deploy main (or run Deploy Cloudflare Worker) so the new Worker secret is uploaded. Then open the private bot chat and send `/tools`, `/tool image-ocr`, and a photo. A normal photo without a selected tool also defaults to OCR.
+
 ## Optional search and AI providers
 
 | Secret | Feature |

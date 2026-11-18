@@ -153,3 +153,16 @@ Never print secrets in logs. Avoid logging raw user content unless necessary for
 Nolane Search is a private, single-owner service. It does not impose application-level per-minute request caps on Telegram commands or authenticated Web Workspace actions. Provider-side quotas, model access, upstream billing, Cloudflare platform limits and Queue capacity still apply.
 
 Crawling remains bounded per job (up to 20 pages), rejects unsafe/private destinations, stays on the original public origin and respects robots.txt. These are safety and execution bounds for an individual crawl, not per-user request throttles.
+
+
+## Nolane Tools runner
+
+- The private Telegram bot accepts photos, documents, audio, voice messages, videos and animations from the allowlisted owner in the private chat.
+- Photos automatically select Vietnamese/English OCR. Other uploads are mapped by MIME type and file extension. Use `/tool TOOL_ID` to arm an explicit tool for the next file, `/tools` to inspect the catalog, and `/tool_jobs` for recent task status.
+- The Web Workspace Tools hub is a catalog and job-history view. For the first release, upload the actual file through Telegram; the browser page copies the corresponding `/tool` command.
+- The Worker validates the selected registry entry, private-chat ownership, MIME/extension compatibility and the 20 MB Telegram input limit. It writes a D1 job record under `tool-job:` and dispatches only the opaque UUID to GitHub Actions.
+- The runner fetches job metadata from a private Worker endpoint, downloads the Telegram file directly with `getFile`, processes it on an ephemeral Ubuntu GitHub-hosted runner and sends any output document back to the same chat. Inputs are not committed, uploaded as GitHub artifacts or stored in D1.
+- Internal runner callbacks use the existing `TELEGRAM_WEBHOOK_SECRET` as a bearer secret. The workflow concurrency group is keyed by job ID; terminal job states and notification completion are tracked for 30 days in the existing D1 cache. After completion/failure, the Telegram `file_id` is cleared; the record keeps filename/MIME/size, task status and at most 6,000 characters of result summary.
+- The Worker needs the optional GitHub Actions secret `GITHUB_ACTIONS_TOKEN`, a fine-grained PAT scoped only to this repo with repository `Actions: Read and write`. The deploy workflow uploads it as a hidden Worker secret. Without it, Search remains operational but Tools dispatch returns a setup message.
+- No extra D1 migration, Cloudflare R2, KV, object storage or new Queue is needed.
+- The catalog currently includes OCR (Vietnamese/English), image inspection/EXIF cleanup/compression/image-to-PDF/QR decoding, PDF text and scan OCR/PDF info, DOCX/PPTX/XLSX extraction, CSV profiling, JSON validation/formatting, ZIP/TAR inspection without extraction, Whisper audio transcription/audio metadata, video metadata/thumbnail and file hashes.
