@@ -296,6 +296,17 @@ async function cachedSearch(env: Env, query: string, mode: SearchMode): Promise<
     if (!results.length) throw new Error("No web provider returned results. Check provider availability or retry later.");
   }
 
+  // Blend the owner's private FTS5 index into broad public discovery modes.
+  // Dedicated GitHub/Wikipedia and explicit Local lookups remain isolated.
+  if (mode === "web" || mode === "tech" || mode === "research") {
+    try {
+      const personalResults = await localSearch(env, parsedQuery.localQuery || query);
+      if (personalResults.length) results = [...results, ...personalResults];
+    } catch (error) {
+      console.warn("Personal index federation skipped:", error instanceof Error ? error.message : "unknown");
+    }
+  }
+
   const filtered = applySearchFilters(parsedQuery, results);
   const ranked = rankAndDeduplicate(parsedQuery.rankingQuery || query, filtered, mode);
   if (ranked.length) {

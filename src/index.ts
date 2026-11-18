@@ -5,7 +5,6 @@ import {
 import type { MemoryCategory } from "./memory";
 import { compactChatHistory } from "./chat-context";
 import { parseJsonObjectBody } from "./http";
-import { consumeRateLimit } from "./rate-limit";
 import { deleteIndexedContent, listIndexedPages, normalizeIndexDomain, normalizeIndexPageUrl } from "./index-management";
 import { webAppResponse } from "./web-ui";
 import { completeAi, getAiRouterStatus } from "./ai-router";
@@ -274,9 +273,6 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     const modes = new Set<SearchMode>(["web", "tech", "research", "news", "github", "wiki", "local"]);
     if (query.length < 2 || query.length > 500) return jsonResponse({ error: "Từ khóa phải có từ 2 đến 500 ký tự." }, 400);
     if (!modes.has(rawMode as SearchMode)) return jsonResponse({ error: "Danh mục tìm kiếm không hợp lệ." }, 400);
-    if (!(await consumeRateLimit(env.DB, session.userId, "search", 30))) {
-      return jsonResponse({ error: "Bạn đã tìm kiếm quá nhanh. Vui lòng thử lại sau một phút." }, 429);
-    }
     const started = Date.now();
     try {
       const results = await performSearch(env, query, rawMode as SearchMode);
@@ -321,9 +317,6 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     if (!Array.isArray(eventData.urls) || !eventData.urls.includes(urlHash)) {
       return jsonResponse({ error: "URL này không thuộc phiên tìm kiếm đã chọn." }, 400);
     }
-    if (!(await consumeRateLimit(env.DB, session.userId, "feedback", 60))) {
-      return jsonResponse({ error: "Bạn đã đánh giá quá nhanh." }, 429);
-    }
     const voteKey = "search-vote:" + eventId + ":" + urlHash;
     const feedbackKey = "search-feedback:" + eventData.queryHash + ":" + urlHash;
     const [oldVote, aggregate] = await Promise.all([
@@ -365,9 +358,6 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     const maxPages = Number(body?.maxPages ?? 10);
     if (!validated || !Number.isInteger(maxPages) || maxPages < 1 || maxPages > 20) {
       return jsonResponse({ error: "Nhập URL HTTPS public hợp lệ và số trang từ 1 đến 20." }, 400);
-    }
-    if (!(await consumeRateLimit(env.DB, session.userId, "crawl", 2))) {
-      return jsonResponse({ error: "Bạn chỉ có thể khởi chạy tối đa hai lượt crawl mỗi phút." }, 429);
     }
     const job: SiteCrawlJob = {
       kind: "site-crawl", id: crypto.randomUUID(), chatId: session.chatId,
@@ -432,9 +422,6 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
       ? (normalizeIndexPageUrl(pageUrl) ? { kind: "url" as const, value: pageUrl } : null)
       : (normalizeIndexDomain(domainInput) ? { kind: "domain" as const, value: domainInput } : null);
     if (!target) return jsonResponse({ error: "URL hoặc tên miền không hợp lệ. Chỉ chấp nhận địa chỉ HTTPS public." }, 400);
-    if (!(await consumeRateLimit(env.DB, session.userId, "index-delete", 10))) {
-      return jsonResponse({ error: "Bạn đang gỡ nội dung quá nhanh. Hãy thử lại sau một phút." }, 429);
-    }
     try {
       const result = await deleteIndexedContent(env, target);
       return jsonResponse({ ok: true, ...result });
@@ -451,9 +438,6 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     const modes = new Set<SearchMode>(["web", "tech", "research", "news", "github", "wiki", "local"]);
     if (query.length < 2 || query.length > 500 || !modes.has(rawMode as SearchMode)) {
       return jsonResponse({ error: "Câu hỏi hoặc danh mục tìm kiếm không hợp lệ." }, 400);
-    }
-    if (!(await consumeRateLimit(env.DB, session.userId, "ask", 8))) {
-      return jsonResponse({ error: "Bạn đã dùng AI quá nhanh. Vui lòng thử lại sau một phút." }, 429);
     }
     const mode = rawMode as SearchMode;
     const cached = await readAiSynthesisCache(env, mode, query);
@@ -501,9 +485,6 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     const tasks = new Set<AiTask>(["chat", "fast", "reasoning", "coding", "creative", "translation", "research", "summary", "classification"]);
     if (message.length < 1 || message.length > 5000 || !tasks.has(rawTask as AiTask)) {
       return jsonResponse({ error: "Tin nhắn hoặc chế độ chat không hợp lệ." }, 400);
-    }
-    if (!(await consumeRateLimit(env.DB, session.userId, "chat", 12))) {
-      return jsonResponse({ error: "Bạn đã gửi quá nhiều tin nhắn AI. Hãy thử lại sau một phút." }, 429);
     }
     const history = compactChatHistory(body?.history);
     const memoryContext = await safeMemoryContext(env, session.userId, message);
@@ -583,20 +564,6 @@ function isTelegramSearchSession(value: unknown): value is TelegramSearchSession
     session.results.length > 0 && session.results.length <= 20;
 }
 
-async function enforceTelegramRateLimit(
-  env: Env,
-  chatId: number,
-  userId: number,
-  action: string,
-  limit: number,
-  message: string,
-): Promise<boolean> {
-  const allowed = await consumeRateLimit(env.DB, userId, `telegram:${action}`, limit);
-  if (allowed) return true;
-  await reply(env, chatId, message);
-  return false;
-}
-
 async function handleSearch(env: Env, chatId: number, userId: number, query: string, mode: SearchMode): Promise<void> {
   if (!query || query.length < 2) {
     await reply(env, chatId, "Hãy nhập truy vấn cần tìm sau lệnh, ví dụ: <code>/search small language models</code>.");
@@ -606,10 +573,6 @@ async function handleSearch(env: Env, chatId: number, userId: number, query: str
     await reply(env, chatId, "Truy vấn tối đa 500 ký tự.");
     return;
   }
-  if (!(await enforceTelegramRateLimit(
-    env, chatId, userId, "search", 20,
-    "Bạn đã đạt giới hạn tìm kiếm Telegram (20 lượt/phút). Hãy thử lại ở phút tiếp theo.",
-  ))) return;
   try {
     const results = await performSearch(env, query, mode);
     let sessionId: string | null = null;
@@ -794,11 +757,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       await reply(env, chatId, "Cú pháp: <code>/crawl https://example.com [1-20]</code>. Chỉ hỗ trợ website HTTPS public.");
       return;
     }
-    if (!(await enforceTelegramRateLimit(
-      env, chatId, userId, "crawl", 2,
-      "Bạn chỉ có thể khởi chạy tối đa 2 lượt crawl mỗi phút trên Telegram.",
-    ))) return;
-    const job: SiteCrawlJob = {
+      const job: SiteCrawlJob = {
       kind: "site-crawl", id: crypto.randomUUID(), chatId, userId,
       seedUrl: validated.url.toString(), maxPages, createdAt: Date.now(),
     };
@@ -1129,11 +1088,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       await reply(env, chatId, "Lệnh /read cần cấu hình GitHub Secret <code>TINYFISH_API_KEY</code> rồi triển khai lại.");
       return;
     }
-    if (!(await enforceTelegramRateLimit(
-      env, chatId, userId, "read", 5,
-      "Bạn đã đạt giới hạn /read Telegram (5 lượt/phút). Hãy thử lại ở phút tiếp theo.",
-    ))) return;
-    try {
+      try {
       const page = await fetchTinyFishPage(env, validated.url.toString());
       const title = boundedHtml(page.title, 180);
       const url = boundedHtml(validated.url.toString(), 260);
@@ -1204,11 +1159,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       await reply(env, chatId, "Hãy nhập câu hỏi sau lệnh /ai.");
       return;
     }
-    if (!(await enforceTelegramRateLimit(
-      env, chatId, userId, "ai", 8,
-      "Bạn đã đạt giới hạn /ai Telegram (8 lượt/phút). Hãy thử lại ở phút tiếp theo.",
-    ))) return;
-    try {
+      try {
       const memoryContext = await safeMemoryContext(env, userId, prompt);
       const result = await completeAi(env, {
         task,
@@ -1237,11 +1188,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       await reply(env, chatId, "Cú pháp: <code>/ask câu hỏi cần tìm và tổng hợp</code> (tối đa 500 ký tự).");
       return;
     }
-    if (!(await enforceTelegramRateLimit(
-      env, chatId, userId, "ask", 4,
-      "Bạn đã đạt giới hạn /ask Telegram (4 lượt/phút). Hãy thử lại ở phút tiếp theo.",
-    ))) return;
-    const cached = await readAiSynthesisCache(env, "web", args);
+      const cached = await readAiSynthesisCache(env, "web", args);
     if (cached) {
       await reply(env, chatId, formatTelegramAskResult(cached, true));
       return;
@@ -1291,11 +1238,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       await reply(env, chatId, "Cú pháp: <code>/deep câu hỏi cần nghiên cứu</code> (tối đa 400 ký tự).");
       return;
     }
-    if (!(await enforceTelegramRateLimit(
-      env, chatId, userId, "deep", 2,
-      "Bạn đã tạo quá nhiều Deep Search trong phút này (tối đa 2 job/phút). Hãy thử lại ở phút tiếp theo.",
-    ))) return;
-    const job: DeepSearchJob = {
+      const job: DeepSearchJob = {
       id: crypto.randomUUID(), chatId, userId, query: args, createdAt: Date.now(),
     };
     try {
@@ -1745,7 +1688,6 @@ export default {
       await env.DB.prepare("DELETE FROM search_cache WHERE expires_at <= ?").bind(Date.now()).run();
       await env.DB.prepare("DELETE FROM web_login_tickets WHERE expires_at <= ? OR used_at IS NOT NULL").bind(Date.now()).run();
       await env.DB.prepare("DELETE FROM web_sessions WHERE expires_at <= ?").bind(Date.now()).run();
-      await env.DB.prepare("DELETE FROM web_rate_limits WHERE window_start < ?").bind(Date.now() - 24 * 60 * 60 * 1000).run();
       await env.DB.prepare("DELETE FROM telegram_updates WHERE processed_at < datetime('now', '-7 days')").run();
       await env.DB.prepare(
         "DELETE FROM deep_search_jobs WHERE status IN ('completed', 'failed') AND created_at < ?",

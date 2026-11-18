@@ -21,6 +21,70 @@ describe("personal index hybrid retrieval", () => {
     expect(buildLocalFtsQuery('"" -- !!!')).toBe("");
   });
 
+  it("federates private indexed pages into ordinary Web search results", async () => {
+    const sqlCalls: string[] = [];
+    const indexedRows = [{
+      title: "Cloudflare Workers Durable Objects — personal notes",
+      url: "https://my-docs.example/workers/durable-objects",
+      domain: "my-docs.example",
+      snippet: "Personal notes about Durable Objects, storage, alarms and Cloudflare Workers.",
+      bm25_score: -0.12,
+    }];
+    const db = {
+      prepare(sql: string) {
+        sqlCalls.push(sql);
+        return {
+          bind() { return this; },
+          first: async () => null,
+          run: async () => ({ results: [], meta: { changes: 1 } }),
+          all: async () => ({ results: sql.includes("indexed_pages_fts MATCH") ? indexedRows : [] }),
+        };
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.hostname === "en.wikipedia.org") {
+        return new Response(JSON.stringify({ query: { search: [] } }), { status: 200 });
+      }
+      throw new Error("Unexpected provider: " + url.hostname);
+    }));
+
+    const results = await performSearch({
+      DB: db,
+    } as never, "Cloudflare Workers Durable Objects", "web");
+
+    expect(sqlCalls.some(sql => sql.includes("indexed_pages_fts MATCH"))).toBe(true);
+    expect(results.some(item =>
+      item.url === "https://my-docs.example/workers/durable-objects" &&
+      item.provider === "Nolane Index · BM25",
+    )).toBe(true);
+  });
+
+  it("keeps dedicated Wikipedia lookups isolated from the personal index", async () => {
+    const sqlCalls: string[] = [];
+    const db = {
+      prepare(sql: string) {
+        sqlCalls.push(sql);
+        return {
+          bind() { return this; },
+          first: async () => null,
+          run: async () => ({ results: [], meta: { changes: 1 } }),
+          all: async () => ({ results: [] }),
+        };
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.hostname === "en.wikipedia.org") {
+        return new Response(JSON.stringify({ query: { search: [] } }), { status: 200 });
+      }
+      throw new Error("Unexpected provider: " + url.hostname);
+    }));
+
+    await performSearch({ DB: db } as never, "Cloudflare Workers", "wiki");
+    expect(sqlCalls.some(sql => sql.includes("indexed_pages_fts MATCH"))).toBe(false);
+  });
+
   it("uses title-weighted BM25 candidates before the shared relevance reranker", async () => {
     const sqlCalls: Array<{ sql: string; values: unknown[] }> = [];
     const rows = [
