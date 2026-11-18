@@ -1716,7 +1716,14 @@ async function handleToolRunnerApi(request: Request, env: Env): Promise<Response
     if (!job) return jsonResponse({ error: "Tool job not found" }, 404);
     if (job.status === "completed" || job.status === "failed") return jsonResponse({ error: "Tool job is already terminal" }, 409);
     const running = await updateToolJob(env, id, { status: "running" });
-    return running ? jsonResponse({ job: running }) : jsonResponse({ error: "Tool job unavailable" }, 404);
+    if (!running) return jsonResponse({ error: "Tool job unavailable" }, 404);
+    // Keep AI prompts and planner rationale in D1/Worker only; the ephemeral runner
+    // receives only the file/job metadata required to execute the selected processor.
+    const runnerJob = { ...running };
+    delete runnerJob.agentPrompt;
+    delete runnerJob.agentTask;
+    delete runnerJob.agentToolReason;
+    return jsonResponse({ job: runnerJob });
   }
   if (request.method === "POST") {
     const body = await parseJsonBody(request);
