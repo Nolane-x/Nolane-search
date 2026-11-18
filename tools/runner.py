@@ -415,7 +415,7 @@ def pdf_to_images(p):
                 scale=min(1.3,1200/max(page.rect.width,page.rect.height))
                 pix=page.get_pixmap(matrix=fitz.Matrix(scale,scale),alpha=False)
                 image=temp/f"page-{number:03d}.jpg"
-                pix.save(str(image),jpg_quality=82)
+                Image.frombytes("RGB",(pix.width,pix.height),pix.samples).save(image,"JPEG",quality=82,optimize=True)
                 archive.write(image,image.name)
         pages=doc.page_count
     finally:
