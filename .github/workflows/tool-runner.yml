@@ -21,17 +21,19 @@ jobs:
     timeout-minutes: 45
     env:
       NOLANE_WORKER_URL: https://nolane-search.nolane-file.workers.dev
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
       JOB_ID: ${{ inputs.job_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Fetch private job metadata
+      - name: Fetch private job metadata (short-lived Worker secret scope)
+        env:
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
         run: python tools/runner.py fetch "$JOB_ID" "$RUNNER_TEMP/nolane-job.json"
       - name: Read selected tool
         id: job
@@ -39,6 +41,10 @@ jobs:
         run: |
           TOOL_ID="$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['job']['toolId'])" "$RUNNER_TEMP/nolane-job.json")"
           echo "tool_id=$TOOL_ID" >> "$GITHUB_OUTPUT"
+      - name: Download Telegram input (bot token scoped to download only)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: python tools/runner.py download "$RUNNER_TEMP/nolane-job.json" "$RUNNER_TEMP/nolane-input-path.txt"
       - name: Install base libraries
         run: python -m pip install --disable-pip-version-check pillow pymupdf
       - name: Install Office libraries
@@ -69,10 +75,15 @@ jobs:
         if: steps.job.outputs.tool_id == 'audio-transcribe'
         run: python -m pip install --disable-pip-version-check faster-whisper
       - name: Execute tool
-        run: python tools/runner.py run "$RUNNER_TEMP/nolane-job.json" "$RUNNER_TEMP/nolane-result.json"
-      - name: Deliver output and update job
+        run: python tools/runner.py run "$RUNNER_TEMP/nolane-job.json" "$RUNNER_TEMP/nolane-input-path.txt" "$RUNNER_TEMP/nolane-result.json"
+      - name: Deliver output and update job (secrets are reintroduced after processing)
         if: success()
-        run: python tools/runner.py complete "$RUNNER_TEMP/nolane-job.json" "$RUNNER_TEMP/nolane-result.json"
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+        run: python tools/runner.py complete "$JOB_ID" "$RUNNER_TEMP/nolane-result.json"
       - name: Report processing failure
         if: failure()
+        env:
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
         run: python tools/runner.py fail "$JOB_ID" --message "Tool runner failed. Open this GitHub Actions run for the diagnostic details."
