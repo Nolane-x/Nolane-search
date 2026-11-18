@@ -102,7 +102,7 @@ describe("GitHub Actions tool dispatch", () => {
     await expect(createToolJob(env, {
       userId: 42, chatId: 42, toolId: "pdf-text", fileId: "telegram-file-id-123456",
       fileName: "photo.jpg", mimeType: "image/jpeg", fileSize: 100,
-    })).rejects.toThrow("không phù hợp");
+    })).rejects.toThrow("không tương thích");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
