@@ -6,7 +6,7 @@ Last verified: 2026-11-18. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `9c2cbb9004d6301ffabf002df18cede23cfd81d0`
+- Latest production source commit: `07c2ad5ff20fdcda19fbb4b08afef7ef9dedf5ea`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -14,8 +14,9 @@ Last verified: 2026-11-18. This document distinguishes production deployment and
 - Fix Telegram callback delivery and stuck inline-button spinners: [PR #6](https://github.com/Nolane-x/Nolane-search/pull/6)
 - Lightweight Personal Memory, AI efficiency, request-body limits and usage visibility: [PR #7](https://github.com/Nolane-x/Nolane-search/pull/7)
 - Register Personal Memory commands in Telegram's slash-command menu: [PR #8](https://github.com/Nolane-x/Nolane-search/pull/8)
+- Provider response limits, watch redirect isolation and TinyFish URL validation: [PR #9](https://github.com/Nolane-x/Nolane-search/pull/9)
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `6eaac094-1dbe-494d-9393-ef0a66e94ddb`
+- Cloudflare Worker version ID: `a2c2372a-6f95-43f6-9839-9bbf5f7acb0e`
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
@@ -36,6 +37,10 @@ The release adds a private browser search portal, AI Overview, multi-turn chat, 
 | PR #8 main CI: 72 tests and Worker build | [44271236172](https://github.com/Nolane-x/Nolane-search/actions/runs/44271236172) | PASS |
 | PR #8 Worker bundle export and production smoke test | [44271236099](https://github.com/Nolane-x/Nolane-search/actions/runs/44271236099) | PASS |
 | PR #8 production deployment and Telegram command registration | [44271236228](https://github.com/Nolane-x/Nolane-search/actions/runs/44271236228) | PASS |
+| PR #9 CI: typecheck, 78 unit tests, webhook checks and Worker build | [44274411447](https://github.com/Nolane-x/Nolane-search/actions/runs/44274411447) | PASS |
+| PR #9 main CI: 78 unit tests and Worker build | [44274472317](https://github.com/Nolane-x/Nolane-search/actions/runs/44274472317) | PASS |
+| PR #9 Worker bundle export and production smoke test | [44274472497](https://github.com/Nolane-x/Nolane-search/actions/runs/44274472497) | PASS |
+| PR #9 production deployment and Telegram command registration | [44274472339](https://github.com/Nolane-x/Nolane-search/actions/runs/44274472339) | PASS |
 
 The deployment log confirms:
 - Worker `nolane-search` was uploaded and deployed.
@@ -44,7 +49,7 @@ The deployment log confirms:
 - Telegram webhook registration succeeded.
 - Telegram bot command registration succeeded, including `/web`, `/start`, `/menu` and `/cancel`.
 - Worker version `e182d473-d214-4a0c-82c5-0c8662fb4b87` was deployed from main commit `ffe1564ebfa1db5a00960c92e88e19dc6a84fb20` (PR #6 callback repair).
-- Worker version `40974932-b150-4373-995a-ea73facd13ad` deployed PR #7; Worker version `6eaac094-1dbe-494d-9393-ef0a66e94ddb` deployed PR #8 command-menu update.
+- Worker version `40974932-b150-4373-995a-ea73facd13ad` deployed PR #7; Worker version `6eaac094-1dbe-494d-9393-ef0a66e94ddb` deployed PR #8 command-menu update; Worker version `a2c2372a-6f95-43f6-9839-9bbf5f7acb0e` deployed PR #9 upstream/redirect hardening.
 - Telegram webhook update subscriptions were verified by calling `getWebhookInfo`; the returned configuration contains both `message` and `callback_query` for the expected Worker URL.
 - No D1 migration was needed for the Telegram callback fix.
 - Worker version `ccbb1cb9-3d89-4290-a471-92c44a333711` was deployed from main commit `1c17cd1e77a5b83fc57a0ed86e9ace595f58d31e`.
@@ -197,3 +202,19 @@ PR #7 added the bounded Personal Memory and AI efficiency improvements; PR #8 co
 - Deployment log confirms Telegram webhook subscriptions for `message` and `callback_query`, and successful registration of the bot command list.
 
 Automated tests, command registration and live health checks are verified. A real user-level Telegram interaction with `/remember`, `/memories`, `/forget` and a personalized `/ai` prompt remains an owner-side end-to-end check.
+
+
+## Provider and website-fetch hardening — deployed 2026-11-18
+
+PR #9 is merged into `main` and deployed in Worker version `a2c2372a-6f95-43f6-9839-9bbf5f7acb0e`.
+
+- Provider and Telegram Bot API JSON responses are consumed through a streaming reader with a 1 MB decoded-body cap. Declared oversized responses are rejected early; streaming bodies are cancelled once the cap is exceeded. Malformed and empty JSON responses become controlled failures.
+- Website Watch redirects are constrained to the original public HTTPS origin. A monitored URL cannot redirect this Worker to another host. Redirect response bodies are cancelled before following a permitted same-origin redirect.
+- The site crawler retains same-origin redirect enforcement and now cancels redirect bodies before following.
+- TinyFish Fetch results are associated only with safe public URLs that were included in the request. Unsafe or unrelated result URLs are ignored; unsafe final URLs are not used as lookup keys.
+- The `/status` cache count query had a duplicate exclusion removed.
+- PR #9 CI passed type-check, all 78 tests, webhook checks and Worker build. Main CI, Worker export/smoke test and production deployment all passed.
+- The deploy skipped D1 migration because no schema changed. Queue bindings, Cron and Telegram commands/webhook were retained and re-verified.
+- Post-deploy `GET /health` returned `ok: true` and `database: reachable`; the configured provider inventory remains four AI key routes and nine model routes.
+
+The watch redirect change is intentionally stricter: a site that redirects to another hostname will now be reported as a fetch failure. Update its watch target to the canonical destination if cross-host redirects are part of the site's normal behavior.
