@@ -36,7 +36,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Personal memory | /remember, /memories, /forget | Explicit owner-controlled memories shared by Telegram and Web AI chat |
 | Status | /status | Provider configuration and compact index counters |
-| Tool center | /tools, /tool ID, /tool_jobs | 38 file-processing tools executed on ephemeral GitHub Actions runners; photos auto-select OCR |
+| Tool center | /tools, /tool ID, /tool_jobs | 45 file-processing tools executed on ephemeral GitHub Actions runners; photos auto-select OCR |
 
 
 Send a photo to the private Telegram bot to run Vietnamese/English OCR automatically. Use `/tools` to browse the tool catalog, `/tool image-ocr` to select a specific tool before sending a file, and `/tool_jobs` to view recent tasks. The browser workspace also has a Tools hub for browsing/copying tool commands; uploads are sent in Telegram. Files are downloaded directly from Telegram to an ephemeral GitHub Actions runner and are never committed to the repository. Job history retains only a bounded result summary and task metadata; the Telegram file reference is cleared when the job reaches a terminal state.\n\nPlain text messages are interpreted as web search. Use `/web` in the private Telegram conversation to create a one-time, five-minute browser login link. The web portal offers category search, ranked result cards with relevance feedback, AI Overview, a multi-turn chat panel and a Personal Web Index panel for crawling a bounded public site. Browser sessions are stored server-side, use HttpOnly/Secure/SameSite cookies, expire after seven days, and are revocable. Search APIs require an authenticated allowlisted Telegram user; the private service has no application-level per-minute request caps. Use `/ai prompt` for direct AI, `/ai fast prompt` or `/ai reasoning prompt` for task routing, `/ask question` for web-grounded AI synthesis, and `/ai_status` to inspect configured routes. Telegram results show five items per page; inline Previous/Next buttons browse up to 20 ranked candidates. Pagination sessions are private to the requesting user/chat and expire after 15 minutes. `/wiki` is a reference lookup, not a substitute for primary sources or current reporting.
@@ -78,3 +78,7 @@ Cloudflare project configuration uses the Cloudflare CLI cf and cloudflare.confi
 ## License
 
 No license has been selected. Do not assume this repository grants rights to reuse the code until a license is added.
+
+### AI Agent and file workflows
+
+Telegram `/ai` and the authenticated Web Workspace chat use a bounded function-calling agent for web search, safe public-page reading, Nolane tool discovery, text/data processing and SHA-256 fingerprints. `/ai_file <request>` lets the model select a compatible processor from the full 45-tool catalog, re-validates the selected file type in the Worker, dispatches the job to an isolated GitHub Actions runner, and asks AI to synthesize the actual processor output. See [`docs/NOLANE-TOOLS.md`](docs/NOLANE-TOOLS.md) for limits and safeguards.

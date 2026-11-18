@@ -4,11 +4,34 @@ import type { Env } from "./types";
 export type AiTask = "chat" | "fast" | "reasoning" | "coding" | "creative" | "translation" | "research" | "summary" | "classification";
 export type AiProtocol = "openai-compatible" | "anthropic-messages" | "gemini-interactions";
 export type AiStrategy = "balanced" | "priority" | "cheapest";
-export interface AiMessage { role: "system" | "user" | "assistant"; content: string; }
-export interface AiCompletionInput { task: AiTask; messages: AiMessage[]; temperature?: number; maxTokens?: number; }
+export interface AiToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+export interface AiFunctionTool {
+  type: "function";
+  function: { name: string; description: string; parameters: Record<string, unknown>; strict?: boolean };
+}
+export interface AiMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+  tool_calls?: AiToolCall[];
+  tool_call_id?: string;
+  name?: string;
+}
+export interface AiCompletionInput {
+  task: AiTask;
+  messages: AiMessage[];
+  temperature?: number;
+  maxTokens?: number;
+  tools?: AiFunctionTool[];
+  toolChoice?: "auto" | "none" | "required";
+}
 export interface AiCompletionResult {
   text: string; providerId: string; protocol: AiProtocol; model: string; latencyMs: number;
   inputTokens?: number; outputTokens?: number; estimatedCostUsd?: number;
+  toolCalls?: AiToolCall[];
 }
 interface AiModelConfig {
   id: string; tasks: AiTask[] | "all"; priority: number;
@@ -194,7 +217,29 @@ function responseUsage(protocol: AiProtocol, data: Record<string,unknown>): { in
   };
 }
 
-async function invoke(candidate: Candidate, input: AiCompletionInput): Promise<{text:string; inputTokens?:number; outputTokens?:number}> {
+function responseToolCalls(data: Record<string, unknown>): AiToolCall[] {
+  const choices = Array.isArray(data.choices) ? data.choices : [];
+  const first = choices[0] && typeof choices[0] === "object" ? choices[0] as Record<string, unknown> : {};
+  const message = first.message && typeof first.message === "object" ? first.message as Record<string, unknown> : {};
+  const raw = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+  const calls: AiToolCall[] = [];
+  for (const value of raw.slice(0, 8)) {
+    if (!value || typeof value !== "object") continue;
+    const item = value as Record<string, unknown>;
+    const fn = item.function && typeof item.function === "object" ? item.function as Record<string, unknown> : {};
+    const name = typeof fn.name === "string" ? fn.name : "";
+    const args = typeof fn.arguments === "string" ? fn.arguments : "";
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(name) || args.length > 12_000) continue;
+    calls.push({
+      id: typeof item.id === "string" && item.id.length <= 128 ? item.id : "call_" + crypto.randomUUID(),
+      type: "function",
+      function: { name, arguments: args },
+    });
+  }
+  return calls;
+}
+
+async function invoke(candidate: Candidate, input: AiCompletionInput): Promise<{text:string; inputTokens?:number; outputTokens?:number; toolCalls?:AiToolCall[]}> {
   const {provider, model} = candidate;
   const maxTokens = Math.round(numberInRange(input.maxTokens, model.maxOutputTokens || 1800, 1, model.maxOutputTokens || 8192));
   const temperature = numberInRange(input.temperature, 0.2, 0, 2);
@@ -205,7 +250,10 @@ async function invoke(candidate: Candidate, input: AiCompletionInput): Promise<{
   if (provider.protocol === "openai-compatible") {
     url = provider.baseUrl + "/chat/completions";
     headers = { authorization: "Bearer " + provider.apiKey };
-    body = { model: model.id, messages: input.messages, max_tokens: maxTokens, temperature, stream: false };
+    body = {
+      model: model.id, messages: input.messages, max_tokens: maxTokens, temperature, stream: false,
+      ...(input.tools?.length ? { tools: input.tools, tool_choice: input.toolChoice || "auto" } : {}),
+    };
     if (provider.id === "openrouter-legacy") {
       headers["HTTP-Referer"] = "https://github.com/Nolane-x/Nolane-search";
       headers["X-Title"] = "Nolane Search";
@@ -241,9 +289,10 @@ async function invoke(candidate: Candidate, input: AiCompletionInput): Promise<{
   if (!response.ok) throw new Error("HTTP " + response.status);
   const data = await response.json() as Record<string,unknown>;
   const text = responseText(provider.protocol, data);
-  if (!text) throw new Error("empty model response");
+  const toolCalls = provider.protocol === "openai-compatible" ? responseToolCalls(data) : [];
+  if (!text && !toolCalls.length) throw new Error("empty model response");
   const usage = responseUsage(provider.protocol, data);
-  return {text, inputTokens: usage.input, outputTokens: usage.output};
+  return {text, inputTokens: usage.input, outputTokens: usage.output, ...(toolCalls.length ? {toolCalls} : {})};
 }
 
 export function getAiRouterStatus(env: Env): AiRouterStatus {
@@ -259,8 +308,14 @@ export function getAiRouterStatus(env: Env): AiRouterStatus {
 
 export async function completeAi(env: Env, input: AiCompletionInput): Promise<AiCompletionResult> {
   const config = parseConfig(env);
-  const candidates = candidatesFor(config, input.task);
+  const allCandidates = candidatesFor(config, input.task);
+  const candidates = input.tools?.length
+    ? allCandidates.filter(candidate => candidate.provider.protocol === "openai-compatible")
+    : allCandidates;
   if (!candidates.length) {
+    if (input.tools?.length && allCandidates.length) {
+      throw new Error("No OpenAI-compatible AI route is available for native function calling.");
+    }
     if (config.invalidEntries) throw new Error("AI router configuration is invalid or has no usable routes.");
     throw new Error("No AI route is configured for task '" + input.task + "'. Add AI_ROUTER_CONFIG in GitHub Actions Secrets.");
   }
@@ -286,6 +341,7 @@ export async function completeAi(env: Env, input: AiCompletionInput): Promise<Ai
         text: result.text, providerId: candidate.provider.id, protocol: candidate.provider.protocol,
         model: model.id, latencyMs: Date.now()-started, inputTokens: result.inputTokens,
         outputTokens: result.outputTokens, estimatedCostUsd,
+        ...(result.toolCalls?.length ? {toolCalls: result.toolCalls} : {}),
       };
     } catch (error) {
       lastFailure = error instanceof Error ? error.message : "unknown provider error";

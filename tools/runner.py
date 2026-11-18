@@ -17,6 +17,7 @@ RUNNERS = {
     "audio-normalize", "video-audio", "video-gif", "image-resize", "image-webp", "image-palette",
     "pdf-compress", "pdf-to-images", "epub-text", "sqlite-inspect", "yaml-format", "xml-format",
     "code-check", "video-contact-sheet", "video-compress", "audio-subtitles", "archive-safe-extract", "xlsx-profile",
+    "image-png", "csv-clean", "json-to-csv", "csv-to-xlsx", "xlsx-to-csv", "pdf-split", "audio-convert",
 }
 
 def api_json(url: str, method="GET", data=None, token=None):
@@ -739,6 +740,166 @@ def xlsx_profile(p):
         workbook.close()
     return tool_text("\n".join(reports),"Excel workbook profiler")
 
+def _spreadsheet_safe(value):
+    text = "" if value is None else str(value)
+    if text.lstrip().startswith(("=", "+", "-", "@")):
+        return "'" + text
+    return text
+
+def image_png(p):
+    from PIL import Image, ImageOps
+    out=p.with_name(p.stem+"-lossless.png")
+    with Image.open(p) as raw:
+        _guard_image_dimensions(raw)
+        im=ImageOps.exif_transpose(raw)
+        if "A" in im.getbands() or "transparency" in im.info:
+            im=im.convert("RGBA")
+        else:
+            im=im.convert("RGB")
+        im.save(out,"PNG",optimize=True)
+    if out.stat().st_size > 45*1024*1024:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("PNG output exceeds the 45 MB Telegram delivery limit.")
+    return {"summary":f"Đã chuyển sang PNG lossless, giữ transparency khi có thể; {p.stat().st_size:,} → {out.stat().st_size:,} bytes.","output_path":str(out)}
+
+def csv_clean(p):
+    out=p.with_name(p.stem+"-clean.csv")
+    seen=set(); kept=0; removed_blank=0; removed_duplicate=0
+    with p.open("r",encoding="utf-8-sig",newline="") as source:
+        reader=csv.reader(source)
+        headers=next(reader,None)
+        if not headers: raise RuntimeError("CSV không có header.")
+        headers=[unicodedata.normalize("NFC",str(value)).strip() or f"column_{i+1}" for i,value in enumerate(headers[:200])]
+        with out.open("w",encoding="utf-8",newline="") as target:
+            writer=csv.writer(target,lineterminator="\n")
+            writer.writerow(headers)
+            for row in reader:
+                if len(row)>200: raise RuntimeError("CSV vượt quá 200 cột.")
+                values=[unicodedata.normalize("NFC",str(value)).strip() for value in row[:len(headers)]]
+                values += [""] * (len(headers)-len(values))
+                if not any(values): removed_blank+=1; continue
+                key=tuple(values)
+                if key in seen: removed_duplicate+=1; continue
+                seen.add(key)
+                writer.writerow([_spreadsheet_safe(value) for value in values])
+                kept+=1
+                if kept>100000: raise RuntimeError("CSV vượt quá 100.000 dòng dữ liệu.")
+    return {"summary":f"CSV đã làm sạch: giữ {kept:,} dòng; bỏ {removed_blank:,} dòng trống và {removed_duplicate:,} dòng trùng. Spreadsheet formula prefix được escape.","output_path":str(out)}
+
+def json_to_csv(p):
+    value=json.loads(p.read_text(encoding="utf-8-sig"))
+    if isinstance(value,dict) and isinstance(value.get("data"),list):
+        value=value["data"]
+    if not isinstance(value,list) or not value or any(not isinstance(item,dict) for item in value):
+        raise RuntimeError("JSON-to-CSV yêu cầu một mảng không rỗng gồm các object; hoặc object có trường data là mảng object.")
+    if len(value)>100000: raise RuntimeError("JSON array vượt quá 100.000 object.")
+    headers=list(dict.fromkeys(key for item in value for key in item.keys()))[:200]
+    if not headers: raise RuntimeError("Không tìm thấy trường dữ liệu trong JSON.")
+    out=p.with_name(p.stem+"-converted.csv")
+    with out.open("w",encoding="utf-8-sig",newline="") as target:
+        writer=csv.writer(target,lineterminator="\n")
+        writer.writerow(headers)
+        for item in value:
+            row=[]
+            for key in headers:
+                cell=item.get(key)
+                if isinstance(cell,(dict,list)): cell=json.dumps(cell,ensure_ascii=False,separators=(",",":"))
+                row.append(_spreadsheet_safe(cell))
+            writer.writerow(row)
+    return {"summary":f"Đã chuyển {len(value):,} object và {len(headers)} trường JSON sang CSV UTF-8.","output_path":str(out)}
+
+def csv_to_xlsx(p):
+    from openpyxl import Workbook
+    out=p.with_name(p.stem+"-converted.xlsx")
+    wb=Workbook(write_only=True)
+    ws=wb.create_sheet("Data")
+    rows=0
+    with p.open("r",encoding="utf-8-sig",newline="") as source:
+        reader=csv.reader(source)
+        for row in reader:
+            if len(row)>200: raise RuntimeError("CSV vượt quá 200 cột.")
+            ws.append([_spreadsheet_safe(cell) for cell in row])
+            rows+=1
+            if rows>100001: raise RuntimeError("CSV vượt quá 100.000 dòng dữ liệu.")
+    if rows<1: raise RuntimeError("CSV không có dữ liệu.")
+    wb.save(out)
+    if out.stat().st_size>45*1024*1024:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("XLSX output exceeds the 45 MB Telegram delivery limit.")
+    return {"summary":f"Đã chuyển {rows-1:,} dòng CSV thành workbook XLSX (tối đa 200 cột). Ô dữ liệu được ghi an toàn dưới dạng text.","output_path":str(out)}
+
+def xlsx_to_csv(p):
+    from openpyxl import load_workbook
+    root=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"
+    temp=Path(tempfile.mkdtemp(prefix="xlsx-csv-",dir=root))
+    out=p.with_name(p.stem+"-sheets-csv.zip")
+    workbook=load_workbook(p,read_only=True,data_only=True)
+    entries=[]
+    try:
+        if len(workbook.worksheets)>20: raise RuntimeError("Workbook vượt quá 20 sheets.")
+        for index,ws in enumerate(workbook.worksheets,1):
+            target=temp/(f"sheet-{index:02d}.csv")
+            rows=0
+            with target.open("w",encoding="utf-8-sig",newline="") as handle:
+                writer=csv.writer(handle,lineterminator="\n")
+                for values in ws.iter_rows(values_only=True):
+                    if len(values)>200: raise RuntimeError("Sheet vượt quá 200 cột.")
+                    writer.writerow([_spreadsheet_safe(value) for value in values])
+                    rows+=1
+                    if rows>20001: raise RuntimeError("Sheet vượt quá 20.000 dòng.")
+            safe_name=re.sub(r"[^A-Za-z0-9._-]+","_",ws.title).strip("._-")[:50] or f"sheet-{index}"
+            entries.append((target,f"{index:02d}-{safe_name}.csv",rows))
+    finally:
+        workbook.close()
+    with zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=6) as archive:
+        for source,name,_rows in entries: archive.write(source,arcname=name)
+    if out.stat().st_size>45*1024*1024:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("CSV archive exceeds the 45 MB Telegram delivery limit.")
+    return {"summary":f"Đã xuất {len(entries)} sheet thành CSV riêng trong ZIP: "+", ".join(f"{name} ({rows} rows)" for _,name,rows in entries[:10]),"output_path":str(out)}
+
+def pdf_split(p):
+    import fitz
+    source=fitz.open(p)
+    if source.is_encrypted and source.needs_pass:
+        source.close()
+        raise RuntimeError("PDF được mã hóa bằng mật khẩu.")
+    if source.page_count<1 or source.page_count>30:
+        source.close()
+        raise RuntimeError("PDF split hỗ trợ từ 1 đến 30 trang.")
+    root=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"
+    temp=Path(tempfile.mkdtemp(prefix="pdf-split-",dir=root))
+    out=p.with_name(p.stem+"-pages.zip")
+    count=source.page_count
+    try:
+        names=[]
+        for index in range(count):
+            page_doc=fitz.open()
+            page_doc.insert_pdf(source,from_page=index,to_page=index)
+            page_path=temp/f"page-{index+1:03d}.pdf"
+            page_doc.save(page_path,garbage=4,deflate=True)
+            page_doc.close()
+            names.append(page_path)
+    finally:
+        source.close()
+    with zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=6) as archive:
+        for name in names: archive.write(name,arcname=name.name)
+    if out.stat().st_size>45*1024*1024:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("PDF split archive exceeds the 45 MB Telegram delivery limit.")
+    return {"summary":f"Đã tách PDF {count} trang thành {count} tệp PDF một trang và đóng gói ZIP.","output_path":str(out)}
+
+def audio_convert(p):
+    data=ffprobe(p)
+    duration=float(data.get("format",{}).get("duration") or 0)
+    if duration<=0 or duration>600:
+        raise RuntimeError("Audio conversion giới hạn tối đa 10 phút.")
+    out=p.with_name(p.stem+"-speech-16khz-mono.wav")
+    cmd("ffmpeg",["-y","-i",str(p),"-vn","-ac","1","-ar","16000","-c:a","pcm_s16le",str(out)],900)
+    if out.stat().st_size>40*1024*1024:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("WAV output exceeds the 40 MB safety budget.")
+    return {"summary":f"Đã chuyển audio {duration:.1f}s sang WAV PCM 16 kHz mono, phù hợp speech-to-text.","output_path":str(out)}
 
 
 TOOLS={
@@ -752,6 +913,8 @@ TOOLS={
  "yaml-format":yaml_format,"xml-format":xml_format,"code-check":code_check,
  "video-contact-sheet":video_contact_sheet,"video-compress":video_compress,"audio-subtitles":audio_subtitles,
  "archive-safe-extract":archive_safe_extract,"xlsx-profile":xlsx_profile,
+ "image-png":image_png,"csv-clean":csv_clean,"json-to-csv":json_to_csv,"csv-to-xlsx":csv_to_xlsx,
+ "xlsx-to-csv":xlsx_to_csv,"pdf-split":pdf_split,"audio-convert":audio_convert,
 }
 
 def cmd_fetch(args):
@@ -775,7 +938,21 @@ def cmd_run(args):
     if resolved.parent != root or not resolved.is_file():
         raise RuntimeError("Input file is outside the private runner input directory.")
     result=TOOLS[job["toolId"]](resolved)
-    Path(args.output).write_text(json.dumps({"summary":str(result.get("summary",""))[:6000],"output_path":result.get("output_path","")},ensure_ascii=False),encoding="utf-8")
+    summary=str(result.get("summary",""))
+    output=result.get("output_path","")
+    if output:
+        candidate=Path(output)
+        try:
+            root_resolved=root.resolve()
+            if not candidate.is_symlink():
+                resolved_output=candidate.resolve(strict=True)
+                if resolved_output.parent==root_resolved and resolved_output.is_file() and resolved_output.suffix.lower() in {".txt",".md",".csv",".json",".xml",".yaml",".yml",".srt",".vtt",".html"}:
+                    preview=resolved_output.read_text(encoding="utf-8-sig",errors="replace")[:3800].strip()
+                    if preview:
+                        summary += "\n\nNội dung trích xuất (trích đoạn tối đa 3.800 ký tự; tệp đầy đủ được gửi kèm):\n" + preview
+        except (OSError,UnicodeError):
+            pass
+    Path(args.output).write_text(json.dumps({"summary":summary[:6000],"output_path":output},ensure_ascii=False),encoding="utf-8")
 
 def send_document(chat_id,path,caption):
     token=os.environ["TELEGRAM_BOT_TOKEN"]; boundary="----NolaneToolBoundary-31d9"
