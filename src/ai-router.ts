@@ -20,13 +20,44 @@ interface AiProviderConfig {
 }
 interface AiRouterConfig { strategy: AiStrategy; maxAttempts: number; providers: AiProviderConfig[]; invalidEntries: number; }
 export interface AiRouterStatus {
-  configured: boolean; strategy: AiStrategy; providerKeys: number; models: number; invalidEntries: number;
+  configured: boolean; strategy: AiStrategy; maxAttempts: number; providerKeys: number; models: number; invalidEntries: number;
   providers: Array<{ id: string; protocol: AiProtocol; models: Array<{ id: string; tasks: AiTask[] | "all" }> }>;
 }
 
 const VALID_TASKS = new Set<AiTask>(["chat","fast","reasoning","coding","creative","translation","research","summary","classification"]);
 const VALID_PROTOCOLS = new Set<AiProtocol>(["openai-compatible","anthropic-messages","gemini-interactions"]);
 let routeCursor = 0;
+const routeCooldowns = new Map<string, number>();
+
+function routeKey(candidate: Candidate): string {
+  return candidate.provider.id + ":" + candidate.model.id;
+}
+
+function isRouteCoolingDown(candidate: Candidate, now = Date.now()): boolean {
+  const key = routeKey(candidate);
+  const until = routeCooldowns.get(key) || 0;
+  if (until <= now) {
+    routeCooldowns.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function markRouteCoolingDown(candidate: Candidate, error: unknown): void {
+  const message = error instanceof Error ? error.message : "";
+  const status = Number(message.match(/HTTP (\\d{3})/)?.[1] || 0);
+  const duration = status === 429 ? 60_000
+    : status === 401 || status === 403 ? 5 * 60_000
+    : status >= 500 ? 30_000
+    : /timeout|abort/i.test(message) ? 15_000
+    : 10_000;
+  routeCooldowns.set(routeKey(candidate), Date.now() + duration);
+  if (routeCooldowns.size > 256) {
+    const now = Date.now();
+    for (const [key, until] of routeCooldowns) if (until <= now) routeCooldowns.delete(key);
+    while (routeCooldowns.size > 256) routeCooldowns.delete(routeCooldowns.keys().next().value as string);
+  }
+}
 
 function numberInRange(value: unknown, fallback: number, min: number, max: number): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
@@ -57,7 +88,7 @@ function parseModels(value: unknown): AiModelConfig[] {
 
 function parseConfig(env: Env): AiRouterConfig {
   let strategy: AiStrategy = "balanced";
-  let maxAttempts = 12;
+  let maxAttempts = 3;
   const providers: AiProviderConfig[] = [];
   let invalidEntries = 0;
 
@@ -66,7 +97,7 @@ function parseConfig(env: Env): AiRouterConfig {
     else try {
       const parsed = JSON.parse(env.AI_ROUTER_CONFIG) as Record<string, unknown>;
       if (parsed.strategy === "priority" || parsed.strategy === "cheapest" || parsed.strategy === "balanced") strategy = parsed.strategy;
-      maxAttempts = Math.round(numberInRange(parsed.maxAttempts, 12, 1, 24));
+      maxAttempts = Math.round(numberInRange(parsed.maxAttempts, 3, 1, 6));
       const list = Array.isArray(parsed.providers) ? parsed.providers : [];
       for (const raw of list.slice(0, 64)) {
         if (!raw || typeof raw !== "object") { invalidEntries += 1; continue; }
@@ -218,7 +249,7 @@ async function invoke(candidate: Candidate, input: AiCompletionInput): Promise<{
 export function getAiRouterStatus(env: Env): AiRouterStatus {
   const config = parseConfig(env);
   return {
-    configured: config.providers.length > 0, strategy: config.strategy,
+    configured: config.providers.length > 0, strategy: config.strategy, maxAttempts: config.maxAttempts,
     providerKeys: config.providers.length,
     models: config.providers.reduce((n,p) => n + p.models.length, 0),
     invalidEntries: config.invalidEntries,
@@ -233,12 +264,18 @@ export async function completeAi(env: Env, input: AiCompletionInput): Promise<Ai
     if (config.invalidEntries) throw new Error("AI router configuration is invalid or has no usable routes.");
     throw new Error("No AI route is configured for task '" + input.task + "'. Add AI_ROUTER_CONFIG in GitHub Actions Secrets.");
   }
-  const maxAttempts = Math.min(config.maxAttempts, candidates.length);
+  const available = candidates.filter(candidate => !isRouteCoolingDown(candidate));
+  // If every route is cooling down, make a bounded recovery attempt instead
+  // of leaving the assistant unavailable for the entire cooldown window.
+  const selected = (available.length ? available : candidates).slice(0, config.maxAttempts);
+  const maxAttempts = selected.length;
   let lastFailure = "unknown provider error";
-  for (const candidate of candidates.slice(0,maxAttempts)) {
+  for (const candidate of selected) {
     const started = Date.now();
+    const key = routeKey(candidate);
     try {
       const result = await invoke(candidate,input);
+      routeCooldowns.delete(key);
       const model = candidate.model;
       const estimatedCostUsd = result.inputTokens !== undefined && result.outputTokens !== undefined &&
         model.inputCostUsdPerMillion !== undefined && model.outputCostUsdPerMillion !== undefined
@@ -252,6 +289,7 @@ export async function completeAi(env: Env, input: AiCompletionInput): Promise<Ai
       };
     } catch (error) {
       lastFailure = error instanceof Error ? error.message : "unknown provider error";
+      markRouteCoolingDown(candidate, error);
       console.warn("AI route failed; trying the next route:",candidate.provider.id,candidate.model.id,lastFailure);
     }
   }

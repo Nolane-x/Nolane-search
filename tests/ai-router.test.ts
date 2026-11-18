@@ -121,4 +121,36 @@ describe("AI Router protocol adapters and failover", () => {
     ]}),{task:"coding",messages:[{role:"user",content:"Write code"}]});
     expect(result.model).toBe("coding-model");
   });
+
+  it("uses a small default failover budget and caps configured attempts", () => {
+    const defaultStatus = getAiRouterStatus(env({ providers: [
+      route("attempt-primary", "openai-compatible", "https://api.example.ai/v1", "primary-key-123", ["model-a"]),
+    ] }));
+    const cappedStatus = getAiRouterStatus(env({ maxAttempts: 24, providers: [
+      route("attempt-cap", "openai-compatible", "https://api.example.ai/v1", "primary-key-123", ["model-a"]),
+    ] }));
+    expect(defaultStatus.maxAttempts).toBe(3);
+    expect(cappedStatus.maxAttempts).toBe(6);
+  });
+
+  it("temporarily skips a route after an upstream failure on the next request", async () => {
+    const calls: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.includes("primary-cooldown.example.ai")) return new Response("unavailable", { status: 503 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "backup ok" } }] }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const configuration = env({ strategy: "priority", providers: [
+      route("primary-cooldown-test", "openai-compatible", "https://primary-cooldown.example.ai/v1", "primary-secret-123", ["model-a"]),
+      route("backup-cooldown-test", "openai-compatible", "https://backup-cooldown.example.ai/v1", "backup-secret-123", ["model-b"]),
+    ] });
+    const input = { task: "chat" as const, messages: [{ role: "user" as const, content: "hello" }] };
+    expect((await completeAi(configuration, input)).text).toBe("backup ok");
+    const afterFirstRequest = calls.length;
+    expect((await completeAi(configuration, input)).text).toBe("backup ok");
+    expect(calls).toHaveLength(afterFirstRequest + 1);
+    expect(calls.slice(-1)[0]).toContain("backup-cooldown.example.ai");
+  });
 });
