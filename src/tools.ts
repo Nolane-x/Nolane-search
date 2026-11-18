@@ -81,7 +81,7 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (/\.(sqlite|sqlite3|db)$/i.test(name)) return "sqlite-inspect";
   if (/\.xlsx$/i.test(name)) return "xlsx-profile";
   if (/\.(yaml|yml)$/i.test(name) || mime.includes("yaml")) return "yaml-format";
-  if (/\.xml$/i.test(name) || mime.includes("xml")) return "xml-format";
+  if (/\.xml$/i.test(name) || mime === "application/xml" || mime === "text/xml" || mime.endsWith("+xml")) return "xml-format";
   if (mime === "text/html" || /\.html?$/i.test(name)) return "html-text";
   if (/\.(py|pyw|js|mjs|cjs|sh|bash)$/i.test(name)) return "code-check";
   if (/\.(srt|vtt)$/i.test(name) || mime === "text/vtt" || mime === "application/x-subrip") return "subtitle-text";
