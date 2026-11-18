@@ -242,10 +242,17 @@ PR #10 is merged into `main` and deployed in Worker version `74f6a6d4-c91b-4c68-
 An owner-side browser/Telegram interaction is still needed to verify the visible list and destructive controls against the owner's real stored pages. Automated authorization, pagination, validation and deletion-batch behavior are covered by tests.
 
 
-## Telegram provider-quota protection — pending deployment
+## Telegram provider-quota protection — deployed 2026-11-18
 
-- The Worker now reuses its conditional D1 UPSERT limiter for Telegram commands as well as Web Portal endpoints.
-- Per-user one-minute caps are enforced before web search, TinyFish reads, AI completions, Deep Search queue jobs and site-crawl queue jobs.
-- Telegram menu follow-up actions use the same command handlers and therefore inherit the same caps.
-- Unit tests cover D1 window semantics and an integration test verifies that a third `/deep` request is rejected without creating a third job.
-- No D1 migration, extra Cloudflare resource or new secret is required. This section will be changed to deployed status after the main-branch CI and production release are verified.
+PR #11 is merged into `main` at commit `95226937f2fe43a76d6077240f95eb58dec4b096` and deployed in Worker version `62d10606-f902-42f0-98ee-9946732aa172`.
+
+- A shared per-user, per-action, fixed one-minute D1 rate limiter now protects both browser APIs and Telegram commands. The conditional UPSERT keeps the configured cap atomic across concurrent requests.
+- Telegram limits: search 20/minute, `/ai` 8/minute, `/ask` 4/minute, `/deep` 2 jobs/minute, `/crawl` 2 jobs/minute, and `/read` 5 page extractions/minute.
+- The limits are enforced before expensive provider calls or queue creation. Telegram menu follow-up actions pass through the same handlers and inherit the same limits. Existing browser limits remain unchanged.
+- Tests cover per-user/action isolation, minute-window resets and invalid input. A Telegram integration test verifies that a third `/deep` request in one minute is rejected before creating or sending a third job.
+- No D1 migration, extra Cloudflare resource or new secret was required. Deployment confirmed `D1 migration required: false`.
+- PR CI and main CI passed type-check, unit tests, Telegram webhook checks and Worker build. Worker export/smoke test and production deployment also passed.
+- Production `GET /health` returned `ok: true` and `database: reachable`; configured provider inventory remains Tavily, Exa, TinyFish, GitHub and OpenRouter, with four AI key routes and nine model routes. Brave remains unconfigured.
+- Telegram webhook verification confirmed both `message` and `callback_query`; the bot command menu was registered successfully.
+
+Automated tests and production deployment are verified. A live owner-side Telegram interaction is still the final end-to-end check for observing the rejection message in the owner's chat.
