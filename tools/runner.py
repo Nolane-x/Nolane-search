@@ -584,7 +584,7 @@ def video_compress(p):
         raise RuntimeError("Nén video hiện giới hạn 6 phút để bảo đảm thời gian xử lý và dung lượng gửi.")
     out=p.with_name(p.stem+"-compressed.mp4")
     vf="scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"
-    cmd("ffmpeg",["-y","-i",str(p),"-map","0:v:0","-map","0:a?","-vf",vf,"-c:v","libx264","-preset","veryfast","-crf","30","-maxrate","1000k","-bufsize","2000k","-c:a","aac","-b:a","96k","-movflags","+faststart","-sn","-dn","-threads","2",str(out)],900)
+    cmd("ffmpeg",["-y","-i",str(p),"-map","0:v:0","-map","0:a?","-vf",vf,"-c:v","libx264","-preset","veryfast","-crf","30","-maxrate","850k","-bufsize","1700k","-c:a","aac","-b:a","80k","-movflags","+faststart","-sn","-dn","-threads","2",str(out)],900)
     if out.stat().st_size>44*1024*1024:
         out.unlink(missing_ok=True)
         raise RuntimeError("Video sau nén vẫn vượt giới hạn gửi 44 MB; hãy chọn clip ngắn hơn.")
