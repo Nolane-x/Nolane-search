@@ -154,22 +154,57 @@ export function rankAndDeduplicate(query: string, items: SearchResult[], mode: S
   return diversified;
 }
 
+export function buildLocalFtsQuery(query: string): string {
+  const terms = queryTerms(query).slice(0, 16);
+  if (!terms.length) return "";
+  // Every token is quoted independently. Operators are introduced only by us,
+  // never copied from user input, so FTS5 syntax cannot be injected.
+  return terms.map(term => '"' + term.replaceAll('"', '""') + '"').join(" OR ");
+}
+
 async function localSearch(env: Env, query: string): Promise<SearchResult[]> {
-  const safeQuery = query.replace(/[^\p{L}\p{N}\s_-]/gu, " ").trim().split(/\s+/).filter(Boolean).join(" ");
-  if (!safeQuery) return [];
+  const ftsQuery = buildLocalFtsQuery(query);
+  if (!ftsQuery) return [];
   const result = await env.DB.prepare(
-    `SELECT p.title, p.url, p.domain,
-            snippet(indexed_pages_fts, 1, '', '', ' … ', 18) AS snippet
+    \`SELECT p.title, p.url, p.domain,
+            snippet(indexed_pages_fts, 1, '', '', ' … ', 24) AS snippet,
+            bm25(indexed_pages_fts, 8.0, 1.0, 0.0, 0.0) AS bm25_score
        FROM indexed_pages_fts
        JOIN indexed_pages p ON p.id = indexed_pages_fts.rowid
       WHERE indexed_pages_fts MATCH ?
-      ORDER BY bm25(indexed_pages_fts)
-      LIMIT ?`,
-  ).bind(safeQuery, MAX_RESULTS).all<{ title: string; url: string; domain: string; snippet: string }>();
-  return result.results.map((item) => ({
-    title: item.title, url: item.url, domain: item.domain, snippet: item.snippet,
-    provider: "Nolane Index", score: 0.72,
-  }));
+      ORDER BY bm25_score ASC
+      LIMIT ?\`,
+  ).bind(ftsQuery, 60).all<{
+    title: string;
+    url: string;
+    domain: string;
+    snippet: string;
+    bm25_score: number;
+  }>();
+
+  // BM25 is lower-is-better (usually negative). Normalize within this
+  // candidate set so it can act as a weak prior in the shared reranker.
+  const validScores = result.results
+    .map(item => Number(item.bm25_score))
+    .filter(Number.isFinite);
+  const best = validScores.length ? Math.min(...validScores) : 0;
+  const worst = validScores.length ? Math.max(...validScores) : 0;
+  const spread = worst - best;
+
+  return result.results.map(item => {
+    const bm25 = Number(item.bm25_score);
+    const relevance = Number.isFinite(bm25)
+      ? (spread > 0 ? (worst - bm25) / spread : 0.75)
+      : 0.5;
+    return {
+      title: item.title,
+      url: item.url,
+      domain: item.domain,
+      snippet: item.snippet,
+      provider: "Nolane Index · BM25",
+      score: 0.55 + clamp(relevance) * 0.45,
+    };
+  });
 }
 
 function primaryNeedsFallback(query: string, primary: SearchResult[]): boolean {

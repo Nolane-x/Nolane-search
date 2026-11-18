@@ -128,20 +128,41 @@ async function fetchSafe(urlInput: string, etag?: string | null, lastModified?: 
   throw new Error("Too many redirects.");
 }
 
-export async function loadRobotsPolicy(origin: string): Promise<RobotsRule[] | null> {
+interface RobotsDocument {
+  rules: RobotsRule[];
+  sitemaps: string[];
+}
+
+async function loadRobotsDocument(origin: string): Promise<RobotsDocument | null> {
   try {
     const response = await fetchSafe(origin + "/robots.txt");
-    if (response.status === 404 || response.status === 410) return [];
-    // Conservative handling for auth blocks, rate limits, server failures and unreadable policies.
+    if (response.status === 404 || response.status === 410) return { rules: [], sitemaps: [] };
+    // Conservatively defer when policy access is blocked, rate-limited or unavailable.
     if ([401, 403, 429].includes(response.status) || response.status >= 500 || response.status === 304) return null;
-    // Other 4xx responses mean the robots resource is unavailable under RFC 9309.
-    if (response.status >= 400) return [];
+    if (response.status >= 400) return { rules: [], sitemaps: [] };
     if (!response.ok) return null;
-    return parseRobotsRules(await readLimited(response, 64_000));
+
+    const body = await readLimited(response, 64_000);
+    const sitemaps = new Set<string>();
+    for (const rawLine of body.split(/\r?\n/)) {
+      const line = rawLine.replace(/#.*$/, "").trim();
+      const match = line.match(/^sitemap\s*:\s*(\S+)\s*$/i);
+      if (!match?.[1]) continue;
+      try {
+        const sitemap = isSafePublicUrl(new URL(match[1], origin).toString());
+        if (sitemap && sitemap.origin === origin) sitemaps.add(normalizeUrl(sitemap.toString()));
+      } catch { /* Ignore malformed or cross-origin Sitemap declarations. */ }
+    }
+    return { rules: parseRobotsRules(body), sitemaps: [...sitemaps] };
   } catch (error) {
-    console.warn("Robots policy could not be loaded; deferring watch:", error instanceof Error ? error.message : "unknown");
+    console.warn("Robots policy could not be loaded; deferring crawl:", error instanceof Error ? error.message : "unknown");
     return null;
   }
+}
+
+export async function loadRobotsPolicy(origin: string): Promise<RobotsRule[] | null> {
+  const document = await loadRobotsDocument(origin);
+  return document?.rules ?? null;
 }
 
 export async function readLimited(response: Response, maxBytes = 500_000): Promise<string> {
@@ -169,17 +190,43 @@ export async function readLimited(response: Response, maxBytes = 500_000): Promi
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 }
 
+function decodeHtmlText(value: string): string {
+  return value.replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|amp|lt|gt|quot|apos|nbsp);/gi, (entity, token: string) => {
+    const named: Record<string, string> = {
+      amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+    };
+    const key = token.toLowerCase();
+    if (key in named) return named[key]!;
+    const numeric = key.startsWith("#x")
+      ? Number.parseInt(key.slice(2), 16)
+      : Number.parseInt(key.slice(1), 10);
+    if (!Number.isInteger(numeric) || numeric <= 0 || numeric > 0x10ffff) return entity;
+    try { return String.fromCodePoint(numeric); } catch { return entity; }
+  });
+}
+
 export function extractPage(html: string): { title: string; text: string } {
-  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
-    ?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240) || "Untitled page";
-  const text = html
-    .replace(/<(script|style|noscript|svg|iframe)[^>]*>[\s\S]*?<\/\1>/gi, " ")
+  const titleRaw = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1]
+    ?? html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1]
+    ?? "Untitled page";
+  const title = decodeHtmlText(titleRaw.replace(/<[^>]+>/g, " "))
+    .replace(/\s+/g, " ").trim().slice(0, 240) || "Untitled page";
+
+  // Prefer the semantic article/main region when present; otherwise clean the
+  // whole document. Remove high-noise regions before converting markup to text.
+  const article = html.match(/<article\b[^>]*>([\s\S]*?)<\/article\s*>/i)?.[1];
+  const main = html.match(/<main\b[^>]*>([\s\S]*?)<\/main\s*>/i)?.[1];
+  const source = article && article.replace(/<[^>]+>/g, " ").trim().length >= 80
+    ? article
+    : main && main.replace(/<[^>]+>/g, " ").trim().length >= 80
+      ? main
+      : html;
+  const text = decodeHtmlText(source
+    .replace(/<(script|style|noscript|svg|iframe|template|nav|footer|aside|form)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<(br|\/p|\/div|\/li|\/h[1-6])[^>]*>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
-    .replace(/&#39;/gi, "'").replace(/&quot;/gi, '"')
+    .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/section|\/article)[^>]*>/gi, "\n")
+    .replace(/<[^>]+>/g, " "))
+    .replace(/[ \t]+/g, " ")
     .replace(/\s+/g, " ").trim().slice(0, 100_000);
   return { title, text };
 }
@@ -375,26 +422,63 @@ async function fetchCrawlResponse(
   throw new Error("Crawl exceeded the redirect limit.");
 }
 
-async function discoverSitemapUrls(origin: string, rules: RobotsRule[], limit: number): Promise<string[]> {
-  const sitemapUrl = origin + "/sitemap.xml";
-  if (!isAllowedByRobots(sitemapUrl, rules)) return [];
-  try {
-    const { response } = await fetchCrawlResponse(sitemapUrl, origin);
-    if (!response.ok || !/(xml|text\/plain)/i.test(response.headers.get("content-type") || "")) return [];
-    const xml = await readLimited(response, 300_000);
-    const urls = new Set<string>();
-    for (const match of xml.matchAll(/<loc[^>]*>\s*([^<]+?)\s*<\/loc>/gi)) {
-      const candidate = crawlCandidate(decodeHtmlAttribute(match[1] || ""), origin);
-      if (candidate && candidate !== sitemapUrl) {
-        urls.add(candidate);
-        if (urls.size >= limit) break;
+function sitemapLocation(block: string): string | null {
+  const value = block.match(/<loc\b[^>]*>([\s\S]*?)<\/loc\s*>/i)?.[1];
+  return value ? decodeHtmlAttribute(value.trim()) : null;
+}
+
+async function discoverSitemapUrls(
+  origin: string,
+  rules: RobotsRule[],
+  limit: number,
+  declaredSitemaps: string[] = [],
+): Promise<string[]> {
+  const maxPageUrls = Math.max(1, Math.min(100, Math.floor(limit)));
+  const sitemapQueue = [...new Set([...declaredSitemaps, origin + "/sitemap.xml"])];
+  const visitedSitemaps = new Set<string>();
+  const pageUrls = new Set<string>();
+
+  // Bound sitemap recursion separately from the page cap. A sitemap index
+  // can reference hundreds of child files; only a small same-origin subset is read.
+  while (sitemapQueue.length && visitedSitemaps.size < 5 && pageUrls.size < maxPageUrls) {
+    const sitemapInput = sitemapQueue.shift()!;
+    const sitemap = crawlCandidate(sitemapInput, origin);
+    if (!sitemap || visitedSitemaps.has(sitemap) || !isAllowedByRobots(sitemap, rules)) continue;
+    visitedSitemaps.add(sitemap);
+
+    try {
+      const { response } = await fetchCrawlResponse(sitemap, origin);
+      if (!response.ok || !/(xml|text\/plain)/i.test(response.headers.get("content-type") || "")) continue;
+      const xml = await readLimited(response, 300_000);
+      if (/<sitemapindex\b/i.test(xml)) {
+        const blocks = [...xml.matchAll(/<sitemap\b[^>]*>([\s\S]*?)<\/sitemap\s*>/gi)];
+        for (const block of blocks) {
+          const location = sitemapLocation(block[1] || "");
+          if (!location) continue;
+          const nested = crawlCandidate(location, origin);
+          if (nested && !visitedSitemaps.has(nested) && !sitemapQueue.includes(nested) && sitemapQueue.length < 12) {
+            sitemapQueue.push(nested);
+          }
+        }
+        continue;
       }
+
+      const blocks = [...xml.matchAll(/<url\b[^>]*>([\s\S]*?)<\/url\s*>/gi)];
+      const locations = blocks.length
+        ? blocks.map(block => sitemapLocation(block[1] || "")).filter((item): item is string => Boolean(item))
+        : [...xml.matchAll(/<loc\b[^>]*>([\s\S]*?)<\/loc\s*>/gi)]
+          .map(match => decodeHtmlAttribute((match[1] || "").trim()));
+      for (const location of locations) {
+        const candidate = crawlCandidate(location, origin);
+        if (!candidate || candidate === sitemap || pageUrls.has(candidate)) continue;
+        pageUrls.add(candidate);
+        if (pageUrls.size >= maxPageUrls) break;
+      }
+    } catch (error) {
+      console.warn("Sitemap discovery was skipped:", error instanceof Error ? error.message : "unknown");
     }
-    return [...urls];
-  } catch (error) {
-    console.warn("Sitemap discovery was skipped:", error instanceof Error ? error.message : "unknown");
-    return [];
   }
+  return [...pageUrls];
 }
 
 async function storeIndexedPage(
@@ -438,11 +522,12 @@ export async function crawlAndIndexSite(
   if (!seed) throw new Error("Only public HTTPS website URLs are allowed.");
   const origin = seed.url.origin;
   const maxPages = Math.max(1, Math.min(20, Math.floor(requestedMaxPages)));
-  const rules = await loadRobotsPolicy(origin);
-  if (rules === null) throw new Error("The site's robots.txt could not be checked; crawl deferred for safety.");
+  const robots = await loadRobotsDocument(origin);
+  if (robots === null) throw new Error("The site's robots.txt could not be checked; crawl deferred for safety.");
+  const rules = robots.rules;
 
   const queued = new Set<string>([seed.normalized]);
-  for (const sitemapUrl of await discoverSitemapUrls(origin, rules, maxPages * 5)) {
+  for (const sitemapUrl of await discoverSitemapUrls(origin, rules, maxPages * 5, robots.sitemaps)) {
     if (queued.size >= maxPages * 5 + 1) break;
     queued.add(sitemapUrl);
   }

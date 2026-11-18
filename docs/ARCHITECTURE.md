@@ -27,7 +27,7 @@ Direct AI → `/ai` command → task-aware AI Router → rotated/priority provid
 - Duplicate deliveries do not re-run jobs that are already completed or currently claimed.
 - /jobs lists recent work; /retry JOB_ID creates a new job from a failed query.
 
-Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt policy check → bounded HTTP checks → content hash → compact D1 extract/FTS5 → optional Telegram snapshot document and change alert.\n\nOwner-requested site indexing → private browser panel or `/crawl` → D1 cache-backed job record → existing Cloudflare Queue → same-origin public HTTPS fetch → robots.txt check → optional `/sitemap.xml` seed + bounded same-origin links → 1–20 HTML/text pages → D1 upsert + FTS5 → completion report.
+Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt policy check → bounded HTTP checks → content hash → compact D1 extract/FTS5 → optional Telegram snapshot document and change alert.\n\nOwner-requested site indexing → private browser panel or `/crawl` → D1 cache-backed job record → existing Cloudflare Queue → same-origin public HTTPS fetch → robots.txt policy + robots-declared sitemap locations → bounded recursive sitemap-index traversal (at most five sitemap files) + same-origin links → 1–20 HTML/text pages → semantic article/main extraction → D1 upsert + FTS5 → completion report.
 
 ## Private browser portal
 
@@ -57,7 +57,7 @@ Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt polic
 - research: configured Tavily, Exa and TinyFish academic discovery in parallel.
 - news: Tavily, Brave and TinyFish news search in parallel.
 - wiki: direct Wikipedia reference lookup, English by default and Vietnamese when the query contains Vietnamese diacritics.
-- local: FTS5 search over monitored-page extracts.
+- local: hybrid personal-index retrieval over FTS5. A safely quoted OR query improves recall when only some query terms occur on a page; BM25 weights titles more heavily than body text, returns up to 60 candidates, and feeds the shared IDF/phrase/quality reranker. The final response remains capped at 20 results. No embedding model or additional API is required.
 
 The `/search` command accepts Google-style operators: `site:domain`, `filetype:pdf`, `intitle:words`, `inurl:path`, negative terms such as `-deprecated`, `after:YYYY-MM-DD` and `before:YYYY-MM-DD`. The Worker enforces these filters locally even if a provider ignores them. Date filters use strict boundaries and require a parseable `publishedAt` timestamp; results without one are excluded. The `/site` command is a shortcut that prefixes the query with `site:`. The `/read` command uses TinyFish Fetch to extract a single HTTPS page. `/crawl https://example.com [1-20]` queues a bounded same-origin public-site crawl; `/crawls` shows recent crawl jobs. The crawler reads `robots.txt`, can seed from `/sitemap.xml`, follows only same-origin HTTPS links and writes compact text extracts to the FTS5 index. General web search only queries fallback providers when Tavily fails or returns fewer than four results; Wikipedia joins that fallback set and is also available directly through `/wiki`.
 
