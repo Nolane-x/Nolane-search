@@ -158,3 +158,12 @@ Personal Memory is an explicit, owner-controlled feature. It reuses the existing
 The AI Router defaults to three provider/model attempts per completion and clamps configured failover to six. Failed routes receive a short in-isolate cooldown to avoid immediately repeating known 429, authentication, timeout or upstream server failures. This cooldown is best-effort and may reset when a Worker isolate is replaced.
 
 Web AI Overview and Telegram `/ask` share a D1 synthesis cache keyed by normalized query and search mode. Cache life is short (two minutes for news/current queries, five minutes for research, ten minutes for other modes). Recent browser chat history is compacted to at most eight valid turns and an 8,000-character aggregate budget before it is sent to a model. These limits are defensive context budgets, not exact token counts; provider tokenizers differ.
+
+
+## Upstream and website-fetch safety
+
+Provider adapters and Telegram Bot API calls parse JSON through a streaming reader with a 1 MB decoded response limit. A declared oversized Content-Length is rejected before reading; chunked responses are cancelled as soon as the limit is exceeded. This bounds upstream JSON buffering and rejects malformed/empty JSON responses.
+
+Website watches validate the initial URL as public HTTPS and now require every redirect to remain on that same origin. The watch still checks the origin's robots.txt before fetching the target. Redirect response bodies are cancelled before following the next hop. The selected-site crawler also remains same-origin across redirects and cancels redirect bodies.
+
+TinyFish Fetch result URLs are treated as untrusted data. Extracted content is associated only with one of the safe URLs actually sent for fetching; unsafe result/final URLs are not added as lookup keys. This validates metadata returned to the Worker, not the network behavior of the external TinyFish service itself.
