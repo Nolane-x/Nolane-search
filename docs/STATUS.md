@@ -6,7 +6,7 @@ Last verified: 2026-11-18. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `07c2ad5ff20fdcda19fbb4b08afef7ef9dedf5ea`
+- Latest production source commit: `0fe0f59c84129052733ec3c7cbf9e37f283d940e`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -15,8 +15,9 @@ Last verified: 2026-11-18. This document distinguishes production deployment and
 - Lightweight Personal Memory, AI efficiency, request-body limits and usage visibility: [PR #7](https://github.com/Nolane-x/Nolane-search/pull/7)
 - Register Personal Memory commands in Telegram's slash-command menu: [PR #8](https://github.com/Nolane-x/Nolane-search/pull/8)
 - Provider response limits, watch redirect isolation and TinyFish URL validation: [PR #9](https://github.com/Nolane-x/Nolane-search/pull/9)
+- Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `a2c2372a-6f95-43f6-9839-9bbf5f7acb0e`
+- Cloudflare Worker version ID: `74f6a6d4-c91b-4c68-b94d-b65fb152aeea`
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
@@ -41,6 +42,10 @@ The release adds a private browser search portal, AI Overview, multi-turn chat, 
 | PR #9 main CI: 78 unit tests and Worker build | [44274472317](https://github.com/Nolane-x/Nolane-search/actions/runs/44274472317) | PASS |
 | PR #9 Worker bundle export and production smoke test | [44274472497](https://github.com/Nolane-x/Nolane-search/actions/runs/44274472497) | PASS |
 | PR #9 production deployment and Telegram command registration | [44274472339](https://github.com/Nolane-x/Nolane-search/actions/runs/44274472339) | PASS |
+| PR #10 CI: typecheck, 84 unit tests, webhook checks and Worker build | [44283578933](https://github.com/Nolane-x/Nolane-search/actions/runs/44283578933) | PASS |
+| PR #10 main CI: 84 unit tests and Worker build | [44283762795](https://github.com/Nolane-x/Nolane-search/actions/runs/44283762795) | PASS |
+| PR #10 Worker bundle export and production smoke test | [44283762813](https://github.com/Nolane-x/Nolane-search/actions/runs/44283762813) | PASS |
+| PR #10 production deployment and Telegram command registration | [44283763167](https://github.com/Nolane-x/Nolane-search/actions/runs/44283763167) | PASS |
 
 The deployment log confirms:
 - Worker `nolane-search` was uploaded and deployed.
@@ -218,3 +223,20 @@ PR #9 is merged into `main` and deployed in Worker version `a2c2372a-6f95-43f6-9
 - Post-deploy `GET /health` returned `ok: true` and `database: reachable`; the configured provider inventory remains four AI key routes and nine model routes.
 
 The watch redirect change is intentionally stricter: a site that redirects to another hostname will now be reported as a fetch failure. Update its watch target to the canonical destination if cross-host redirects are part of the site's normal behavior.
+
+
+## Personal Web Index management — deployed 2026-11-18
+
+PR #10 is merged into `main` and deployed in Worker version `74f6a6d4-c91b-4c68-b94d-b65fb152aeea`.
+
+- The private Web Workspace Personal Web Index panel lists recently updated pages, supports filtering by title/URL/domain, and paginates through the saved page list.
+- Each page can be removed individually. A domain removal deletes pages for the exact hostname, its `www` alias and subdomains.
+- Browser management endpoints are private behind the existing one-time Telegram login / Web session. Destructive POST requests retain the same-origin guard and have a per-user rate limit.
+- Telegram commands: `/indexed [filter]`, `/unindex https://example.com/page`, and `/unindex_domain example.com`. The commands are included in Telegram's registered slash-command menu and `/help`.
+- A deletion removes the FTS5 row and `indexed_pages` source row in one D1 batch, and deactivates any watch whose normalized URL is among the removed pages. Crawl-job history and Telegram archive snapshots are retained.
+- A crawl job already in flight is not cancelled; it can write a page after a removal completes. Refresh the index and remove again if that happens.
+- No schema migration, new Cloudflare service, paid API or new secret was required. Deployment confirmed `D1 migration required: false`; Queue/Cron bindings were retained, Telegram webhook and command registration succeeded.
+- PR CI and main CI passed type-check, all 84 tests, webhook checks and Worker build. Worker export/smoke and production deployment passed.
+- Post-deploy `GET /health` returned `ok: true` and `database: reachable`; configured AI routes remain four provider-key routes and nine model routes.
+
+An owner-side browser/Telegram interaction is still needed to verify the visible list and destructive controls against the owner's real stored pages. Automated authorization, pagination, validation and deletion-batch behavior are covered by tests.
