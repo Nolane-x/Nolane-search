@@ -78,8 +78,14 @@ Web Workspace có tab Tools để xem catalog và sao chép lệnh; thao tác g�
 
 ## AI Agent
 
+### Pipeline orchestration
+- AI File no longer has to select exactly one processor. It can plan an ordered chain of up to 4 processors, such as `video-audio → audio-convert → audio-transcribe`, `pdf-text → text-clean`, or `json-to-csv → csv-clean → csv-to-xlsx`.
+- The Worker validates the first tool against the uploaded MIME type/extension and checks every later edge against an explicit allowlist. The runner independently verifies pipeline length, known IDs, first-step identity and allowed transitions.
+- The runner receives the ordered tool IDs plus only the job/file metadata needed to fetch and execute the upload; the user prompt and AI rationale remain in Worker/D1. Intermediate outputs stay inside the ephemeral runner input directory. The final artifact alone is delivered to Telegram.
+- Pipelines are limited to 4 unique tools, each intermediate output is capped at 45 MB, and unsupported chains fall back to one deterministic processor rather than executing an arbitrary sequence.
+
 - Telegram: dùng `/ai câu hỏi` để AI tự quyết định có gọi tìm kiếm web, đọc trang công khai, tra danh mục Nolane Tools, xử lý text/CSV/JSON/HTML/phụ đề hoặc tính SHA-256 hay không.
-- Xử lý tệp: dùng `/ai_file yêu cầu`, sau đó gửi một tệp trong vòng 5 phút; hoặc gửi tệp với caption `/ai_file yêu cầu`. AI gọi function chọn đúng một processor trong toàn catalog 45 công cụ, Worker kiểm tra MIME/extension lần nữa rồi dispatch GitHub Actions. Sau khi chạy, file kết quả được gửi về Telegram và AI tổng hợp nội dung text/metadata processor thực sự trích xuất.
+- Xử lý tệp: dùng `/ai_file yêu cầu`, sau đó gửi tối đa 5 tệp trong vòng 5 phút; dùng `/ai_file_done` để đóng đợt sớm. Mỗi tệp nhận một pipeline riêng tối đa 4 processor; Worker kiểm tra MIME/extension và từng cạnh dữ liệu trước khi dispatch GitHub Actions. Tệp cũng có thể gửi trực tiếp kèm caption `/ai_file yêu cầu`. Sau khi chạy, file cuối và bản tổng hợp AI được gửi về Telegram.
 - Web Workspace `/api/chat` dùng cùng agent loop; phản hồi API kèm danh sách `toolsUsed`.
 - Native function calling hiện dùng các route OpenAI-compatible (ví dụ các endpoint Chat Completions có hỗ trợ tools). Khi không có route tương thích hoặc model không trả tool call hợp lệ, agent sẽ fallback về chat thường; AI File dùng nhận diện định dạng xác định thay vì giả vờ đã chạy một tool.
 - Agent giới hạn tối đa 6 lần gọi tool, 4 vòng điều phối, mỗi kết quả tool tối đa 12.000 ký tự. Nội dung tệp/web là dữ liệu không tin cậy; agent không làm theo prompt injection trong tài liệu. Không có shell/command execution tool.

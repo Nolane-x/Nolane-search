@@ -20,6 +20,30 @@ RUNNERS = {
     "image-png", "csv-clean", "json-to-csv", "csv-to-xlsx", "xlsx-to-csv", "pdf-split", "audio-convert",
 }
 
+PIPELINE_TRANSITIONS = {
+    "image-ocr": {"text-clean"}, "qr-read": {"text-clean"}, "pdf-text": {"text-clean"},
+    "office-text": {"text-clean"}, "html-text": {"text-clean"}, "subtitle-text": {"text-clean"},
+    "audio-transcribe": {"text-clean"}, "epub-text": {"text-clean"},
+    "video-audio": {"audio-normalize","audio-transcribe","audio-subtitles","audio-info","audio-convert"},
+    "audio-convert": {"audio-transcribe","audio-subtitles","audio-info"},
+    "audio-normalize": {"audio-transcribe","audio-subtitles","audio-info","audio-convert"},
+    "csv-clean": {"csv-profile","csv-to-xlsx"},
+    "json-to-csv": {"csv-clean","csv-profile","csv-to-xlsx"},
+    "csv-to-xlsx": {"xlsx-profile","xlsx-to-csv","office-text"},
+    "pdf-compress": {"pdf-text","pdf-info","pdf-to-images","pdf-split"},
+    "image-to-pdf": {"pdf-text","pdf-info","pdf-compress","pdf-to-images","pdf-split"},
+    "image-clean-exif": {"image-info","image-compress","image-png","image-webp","image-palette","image-ocr","qr-read","image-to-pdf"},
+    "image-compress": {"image-info","image-png","image-webp","image-palette","image-ocr","qr-read","image-to-pdf"},
+    "image-resize": {"image-info","image-png","image-webp","image-palette","image-ocr","qr-read","image-to-pdf"},
+    "image-png": {"image-info","image-compress","image-webp","image-palette","image-ocr","qr-read","image-to-pdf"},
+    "image-webp": {"image-info","image-compress","image-png","image-palette","image-ocr","qr-read","image-to-pdf"},
+    "video-compress": {"video-info","video-thumbnail","video-audio","video-contact-sheet","video-gif"},
+}
+
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text"}
+MAX_PIPELINE_STEPS = 4
+MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
+
 def api_json(url: str, method="GET", data=None, token=None):
     headers = {"accept":"application/json", "user-agent":"Nolane-Tools-Runner/1.0"}
     body = None
@@ -36,10 +60,32 @@ def api_json(url: str, method="GET", data=None, token=None):
         detail = exc.read(1200).decode("utf-8", "replace")
         raise RuntimeError(f"API HTTP {exc.code}: {detail}") from exc
 
+def validate_pipeline(job):
+    steps = job.get("pipeline")
+    if steps is None:
+        steps = [{"toolId": job.get("toolId")}]
+    if not isinstance(steps, list) or not 1 <= len(steps) <= MAX_PIPELINE_STEPS:
+        raise RuntimeError("Pipeline must contain between 1 and 4 steps.")
+    ids=[]
+    for item in steps:
+        if not isinstance(item,dict):
+            raise RuntimeError("Invalid pipeline step.")
+        tool_id=item.get("toolId")
+        if tool_id not in RUNNERS or tool_id in ids:
+            raise RuntimeError("Unknown or repeated pipeline processor.")
+        ids.append(tool_id)
+    if not ids or ids[0] != job.get("toolId"):
+        raise RuntimeError("The first pipeline step must match the selected tool.")
+    for previous,current in zip(ids,ids[1:]):
+        if current not in PIPELINE_TRANSITIONS.get(previous,set()):
+            raise RuntimeError(f"Unsupported pipeline transition: {previous} -> {current}.")
+    return [{"toolId":tool_id} for tool_id in ids]
+
 def load_job(path):
     job = json.loads(Path(path).read_text(encoding="utf-8")).get("job", {})
     if not re.fullmatch(r"[0-9a-f-]{36}", str(job.get("id","")), re.I) or job.get("toolId") not in RUNNERS:
         raise RuntimeError("Invalid or unsupported tool job.")
+    job["pipeline"] = validate_pipeline(job)
     return job
 
 def download_telegram(file_id, filename):
@@ -921,6 +967,45 @@ TOOLS={
  "xlsx-to-csv":xlsx_to_csv,"pdf-split":pdf_split,"audio-convert":audio_convert,
 }
 
+
+def _runner_output_path(raw_path, root):
+    if not raw_path:
+        return None
+    candidate=Path(raw_path)
+    if candidate.is_symlink():
+        raise RuntimeError("Pipeline output symlinks are not allowed.")
+    resolved=candidate.resolve(strict=True)
+    if resolved.parent != root or not resolved.is_file():
+        raise RuntimeError("Pipeline output must be a regular file inside the private runner input directory.")
+    if resolved.stat().st_size > MAX_PIPELINE_OUTPUT:
+        raise RuntimeError("Pipeline intermediate output exceeds 45 MB.")
+    return resolved
+
+def run_tool_pipeline(job, source, root):
+    steps=validate_pipeline(job)
+    current=source
+    summaries=[]
+    for index,step in enumerate(steps):
+        tool_id=step["toolId"]
+        result=TOOLS[tool_id](current)
+        if not isinstance(result,dict):
+            raise RuntimeError(f"Processor {tool_id} returned an invalid result.")
+        summary=str(result.get("summary","")).strip()
+        output=_runner_output_path(result.get("output_path",""),root)
+        is_last=index==len(steps)-1
+        if output:
+            current=output
+        elif not is_last:
+            next_id=steps[index+1]["toolId"]
+            if next_id != "text-clean" or tool_id not in TEXT_OUTPUT_TOOLS:
+                raise RuntimeError(f"Processor {tool_id} did not produce a file for the next pipeline step.")
+            current=root/f"pipeline-step-{index+1}.txt"
+            current.write_text(summary or "Không phát hiện nội dung.",encoding="utf-8")
+        summaries.append(f"Step {index+1}/{len(steps)} · {tool_id}: {summary or 'completed'}")
+    final_output=str(_runner_output_path(result.get("output_path",""),root) or "")
+    total_summary="\n\n".join(summaries)
+    return {"summary":total_summary[:6000],"output_path":final_output}
+
 def cmd_fetch(args):
     secret=os.environ.get("TELEGRAM_WEBHOOK_SECRET")
     if not secret: raise RuntimeError("Missing TELEGRAM_WEBHOOK_SECRET.")
@@ -941,7 +1026,7 @@ def cmd_run(args):
     resolved=source.resolve(strict=True)
     if resolved.parent != root or not resolved.is_file():
         raise RuntimeError("Input file is outside the private runner input directory.")
-    result=TOOLS[job["toolId"]](resolved)
+    result=run_tool_pipeline(job,resolved,root)
     summary=str(result.get("summary",""))
     output=result.get("output_path","")
     if output:

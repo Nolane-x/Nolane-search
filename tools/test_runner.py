@@ -308,6 +308,62 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertIn("1",args)
         self.assertTrue(result["output_path"].endswith(".wav"))
 
+    def test_pipeline_validation_rejects_unknown_repeated_and_unsupported_edges(self):
+        job={"toolId":"video-audio","pipeline":[
+            {"toolId":"video-audio"},{"toolId":"audio-convert"},{"toolId":"audio-transcribe"}]}
+        self.assertEqual([step["toolId"] for step in runner.validate_pipeline(job)],
+                         ["video-audio","audio-convert","audio-transcribe"])
+        for invalid in (
+            [{"toolId":"video-info"},{"toolId":"audio-transcribe"}],
+            [{"toolId":"video-audio"},{"toolId":"video-audio"}],
+            [{"toolId":"video-audio"},{"toolId":"not-a-tool"}],
+            [{"toolId":"video-audio"}]*5,
+        ):
+            with self.assertRaises(RuntimeError):
+                runner.validate_pipeline({"toolId":invalid[0]["toolId"],"pipeline":invalid})
+
+    def test_runner_executes_pipeline_steps_in_order_and_delivers_only_final_artifact(self):
+        video=self.write("clip.mp4","input")
+        order=[]
+        def extract(path):
+            self.assertEqual(path.suffix,".mp4")
+            out=self.input_dir/"stage-a.mp3"; out.write_bytes(b"mp3")
+            order.append("video-audio")
+            return {"summary":"audio extracted","output_path":str(out)}
+        def convert(path):
+            self.assertEqual(path.suffix,".mp3")
+            out=self.input_dir/"stage-b.wav"; out.write_bytes(b"wav")
+            order.append("audio-convert")
+            return {"summary":"converted to 16 kHz","output_path":str(out)}
+        def transcribe(path):
+            self.assertEqual(path.suffix,".wav")
+            out=self.input_dir/"transcript.txt"; out.write_text("Xin chao Nolane",encoding="utf-8")
+            order.append("audio-transcribe")
+            return {"summary":"transcription ready","output_path":str(out)}
+        job={"toolId":"video-audio","pipeline":[
+            {"toolId":"video-audio"},{"toolId":"audio-convert"},{"toolId":"audio-transcribe"}]}
+        with patch.dict(runner.TOOLS,{"video-audio":extract,"audio-convert":convert,"audio-transcribe":transcribe}):
+            result=runner.run_tool_pipeline(job,video,self.input_dir.resolve())
+        self.assertEqual(order,["video-audio","audio-convert","audio-transcribe"])
+        self.assertEqual(Path(result["output_path"]).name,"transcript.txt")
+        self.assertIn("Step 1/3",result["summary"])
+        self.assertIn("Step 3/3",result["summary"])
+
+    def test_pipeline_materializes_text_result_for_next_text_processor(self):
+        source=self.write("photo.jpg","fake")
+        seen=[]
+        def ocr(path):
+            return {"summary":"OCR result: Café\nLine two","output_path":""}
+        def clean(path):
+            seen.append(path.read_text(encoding="utf-8"))
+            out=self.input_dir/"cleaned.txt"; out.write_text(seen[-1].replace("OCR result: ",""),encoding="utf-8")
+            return {"summary":"text cleaned","output_path":str(out)}
+        job={"toolId":"image-ocr","pipeline":[{"toolId":"image-ocr"},{"toolId":"text-clean"}]}
+        with patch.dict(runner.TOOLS,{"image-ocr":ocr,"text-clean":clean}):
+            result=runner.run_tool_pipeline(job,source,self.input_dir.resolve())
+        self.assertIn("Café",seen[0])
+        self.assertEqual(Path(result["output_path"]).name,"cleaned.txt")
+
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
         self.assertGreaterEqual(len(runner.TOOLS),45)

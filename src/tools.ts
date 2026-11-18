@@ -60,6 +60,82 @@ export const TOOL_CATALOG: ToolDefinition[] = [
 
 ];
 
+
+export interface ToolPipelineStep {
+  toolId: string;
+  reason?: string;
+}
+
+/**
+ * Explicitly supported data-flow edges. A tool can only feed another processor
+ * when the first processor produces a file/content type the next one understands.
+ * Keep this allowlist mirrored by tools/runner.py.
+ */
+export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[]>> = {
+  "image-ocr": ["text-clean"],
+  "qr-read": ["text-clean"],
+  "pdf-text": ["text-clean"],
+  "office-text": ["text-clean"],
+  "html-text": ["text-clean"],
+  "subtitle-text": ["text-clean"],
+  "audio-transcribe": ["text-clean"],
+  "epub-text": ["text-clean"],
+  "video-audio": ["audio-normalize", "audio-transcribe", "audio-subtitles", "audio-info", "audio-convert"],
+  "audio-convert": ["audio-transcribe", "audio-subtitles", "audio-info"],
+  "audio-normalize": ["audio-transcribe", "audio-subtitles", "audio-info", "audio-convert"],
+  "csv-clean": ["csv-profile", "csv-to-xlsx"],
+  "json-to-csv": ["csv-clean", "csv-profile", "csv-to-xlsx"],
+  "csv-to-xlsx": ["xlsx-profile", "xlsx-to-csv", "office-text"],
+  "pdf-compress": ["pdf-text", "pdf-info", "pdf-to-images", "pdf-split"],
+  "image-to-pdf": ["pdf-text", "pdf-info", "pdf-compress", "pdf-to-images", "pdf-split"],
+  "image-clean-exif": ["image-info", "image-compress", "image-png", "image-webp", "image-palette", "image-ocr", "qr-read", "image-to-pdf"],
+  "image-compress": ["image-info", "image-png", "image-webp", "image-palette", "image-ocr", "qr-read", "image-to-pdf"],
+  "image-resize": ["image-info", "image-png", "image-webp", "image-palette", "image-ocr", "qr-read", "image-to-pdf"],
+  "image-png": ["image-info", "image-compress", "image-webp", "image-palette", "image-ocr", "qr-read", "image-to-pdf"],
+  "image-webp": ["image-info", "image-compress", "image-png", "image-palette", "image-ocr", "qr-read", "image-to-pdf"],
+  "video-compress": ["video-info", "video-thumbnail", "video-audio", "video-contact-sheet", "video-gif"],
+};
+
+export type ToolPipelineValidation =
+  | { ok: true; steps: ToolPipelineStep[] }
+  | { ok: false; error: string };
+
+export function validateToolPipeline(
+  file: { mimeType: string; fileName: string },
+  rawSteps: unknown,
+): ToolPipelineValidation {
+  if (!Array.isArray(rawSteps) || rawSteps.length < 1 || rawSteps.length > 4) {
+    return { ok: false, error: "Pipeline phải có từ 1 đến 4 bước." };
+  }
+  const steps: ToolPipelineStep[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < rawSteps.length; index++) {
+    const raw = rawSteps[index];
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      return { ok: false, error: "Bước " + (index + 1) + " không hợp lệ." };
+    }
+    const item = raw as Record<string, unknown>;
+    const toolId = typeof item.toolId === "string" ? item.toolId : "";
+    const tool = getTool(toolId);
+    if (!tool?.ready) return { ok: false, error: "Tool không tồn tại hoặc chưa sẵn sàng: " + (toolId || "unknown") };
+    if (seen.has(toolId)) return { ok: false, error: "Không cho phép lặp lại cùng một tool trong pipeline." };
+    seen.add(toolId);
+    if (index === 0 && !isToolCompatible(tool, file.mimeType, file.fileName)) {
+      return { ok: false, error: "Bước đầu tiên không tương thích với tệp đầu vào: " + toolId };
+    }
+    if (index > 0) {
+      const previous = steps[index - 1]!.toolId;
+      const allowed = TOOL_PIPELINE_TRANSITIONS[previous] || [];
+      if (!allowed.includes(toolId)) {
+        return { ok: false, error: "Không có luồng dữ liệu được hỗ trợ từ " + previous + " sang " + toolId + "." };
+      }
+    }
+    const reason = typeof item.reason === "string" ? item.reason.trim().slice(0, 240) : "";
+    steps.push({ toolId, ...(reason ? { reason } : {}) });
+  }
+  return { ok: true, steps };
+}
+
 const BY_ID = new Map(TOOL_CATALOG.map(tool => [tool.id, tool]));
 
 export function getTool(id: string): ToolDefinition | null {

@@ -60,6 +60,39 @@ describe("GitHub Actions tool dispatch", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("persists a validated multi-step pipeline while still dispatching only the opaque job ID", async () => {
+    const { db, rows } = fakeDb();
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || "{}")) as { inputs?: { job_id?: string } };
+      expect(body.inputs?.job_id).toBeTruthy();
+      expect(JSON.stringify(body)).not.toContain("telegram-file-id-123456");
+      return new Response(null, { status: 204 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = { DB: db, NOLANE_GH_ACTIONS_TOKEN: "test-actions-token" } as unknown as Env;
+    const job = await createToolJob(env, {
+      userId:42,chatId:42,toolId:"video-audio",fileId:"telegram-file-id-123456",
+      fileName:"clip.mp4",mimeType:"video/mp4",fileSize:1234,
+      pipeline:[{toolId:"video-audio"},{toolId:"audio-convert"},{toolId:"audio-transcribe"}],
+      agentPrompt:"Transcribe the clip",
+    });
+    expect(job.pipeline?.map(step=>step.toolId)).toEqual(["video-audio","audio-convert","audio-transcribe"]);
+    const stored=JSON.parse(rows.get("tool-job:"+job.id)||"{}");
+    expect(stored.pipeline).toHaveLength(3);
+  });
+
+  it("rejects an unsupported pipeline before any D1 write or dispatch", async () => {
+    const DB = { prepare: () => { throw new Error("D1 should not be used"); } } as unknown as D1Database;
+    const fetchMock=vi.fn();
+    vi.stubGlobal("fetch",fetchMock);
+    await expect(createToolJob({DB,NOLANE_GH_ACTIONS_TOKEN:"test-actions-token"} as unknown as Env,{
+      userId:42,chatId:42,toolId:"video-info",fileId:"telegram-file-id-123456",
+      fileName:"clip.mp4",mimeType:"video/mp4",fileSize:1234,
+      pipeline:[{toolId:"video-info"},{toolId:"audio-transcribe"}],
+    })).rejects.toThrow("pipeline");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("rejects unsupported formats before dispatch", async () => {
     const { db } = fakeDb();
     const fetchMock = vi.fn();
@@ -69,7 +102,7 @@ describe("GitHub Actions tool dispatch", () => {
     await expect(createToolJob(env, {
       userId: 42, chatId: 42, toolId: "pdf-text", fileId: "telegram-file-id-123456",
       fileName: "photo.jpg", mimeType: "image/jpeg", fileSize: 100,
-    })).rejects.toThrow("không phù hợp");
+    })).rejects.toThrow("không tương thích");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

@@ -40,7 +40,9 @@ jobs:
         shell: bash
         run: |
           TOOL_ID="$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['job']['toolId'])" "$RUNNER_TEMP/nolane-job.json")"
+          TOOL_IDS="$(python -c "import json,sys; j=json.load(open(sys.argv[1]))['job']; print(' '.join(s['toolId'] for s in j.get('pipeline',[{'toolId':j['toolId']}])))" "$RUNNER_TEMP/nolane-job.json")"
           echo "tool_id=$TOOL_ID" >> "$GITHUB_OUTPUT"
+          echo "tool_ids=$TOOL_IDS" >> "$GITHUB_OUTPUT"
       - name: Download Telegram input (bot token scoped to download only)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -48,37 +50,37 @@ jobs:
       - name: Install base libraries
         run: python -m pip install --disable-pip-version-check pillow pymupdf
       - name: Install Office libraries
-        if: contains(fromJSON('["office-text","xlsx-profile","csv-to-xlsx","xlsx-to-csv"]'), steps.job.outputs.tool_id)
+        if: contains(steps.job.outputs.tool_ids, 'office-text') || contains(steps.job.outputs.tool_ids, 'xlsx-profile') || contains(steps.job.outputs.tool_ids, 'csv-to-xlsx') || contains(steps.job.outputs.tool_ids, 'xlsx-to-csv')
         run: python -m pip install --disable-pip-version-check python-docx openpyxl python-pptx
       - name: Install Vietnamese and English OCR engine
-        if: contains(fromJSON('["image-ocr","pdf-text"]'), steps.job.outputs.tool_id)
+        if: contains(steps.job.outputs.tool_ids, 'image-ocr') || contains(steps.job.outputs.tool_ids, 'pdf-text')
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-vie
           python -m pip install --disable-pip-version-check pytesseract
       - name: Install QR decoder
-        if: steps.job.outputs.tool_id == 'qr-read'
+        if: contains(steps.job.outputs.tool_ids, 'qr-read')
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libzbar0
           python -m pip install --disable-pip-version-check pyzbar
       - name: Install FFmpeg
-        if: contains(fromJSON('["audio-transcribe","audio-subtitles","audio-info","video-info","video-thumbnail","audio-normalize","video-audio","video-gif","video-contact-sheet","video-compress","audio-convert"]'), steps.job.outputs.tool_id)
+        if: contains(steps.job.outputs.tool_ids, 'audio-transcribe') || contains(steps.job.outputs.tool_ids, 'audio-subtitles') || contains(steps.job.outputs.tool_ids, 'audio-info') || contains(steps.job.outputs.tool_ids, 'video-info') || contains(steps.job.outputs.tool_ids, 'video-thumbnail') || contains(steps.job.outputs.tool_ids, 'audio-normalize') || contains(steps.job.outputs.tool_ids, 'video-audio') || contains(steps.job.outputs.tool_ids, 'video-gif') || contains(steps.job.outputs.tool_ids, 'video-contact-sheet') || contains(steps.job.outputs.tool_ids, 'video-compress') || contains(steps.job.outputs.tool_ids, 'audio-convert')
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Cache Whisper model files
-        if: contains(fromJSON('["audio-transcribe","audio-subtitles"]'), steps.job.outputs.tool_id)
+        if: contains(steps.job.outputs.tool_ids, 'audio-transcribe') || contains(steps.job.outputs.tool_ids, 'audio-subtitles')
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface/hub
           key: nolane-whisper-small-${{ runner.os }}-v1
       - name: Install Whisper
-        if: contains(fromJSON('["audio-transcribe","audio-subtitles"]'), steps.job.outputs.tool_id)
+        if: contains(steps.job.outputs.tool_ids, 'audio-transcribe') || contains(steps.job.outputs.tool_ids, 'audio-subtitles')
         run: python -m pip install --disable-pip-version-check faster-whisper
       - name: Install YAML parser
-        if: contains(fromJSON('["yaml-format","code-check"]'), steps.job.outputs.tool_id)
+        if: contains(steps.job.outputs.tool_ids, 'yaml-format') || contains(steps.job.outputs.tool_ids, 'code-check')
         run: python -m pip install --disable-pip-version-check pyyaml
       - name: Setup Node for JavaScript syntax checks
-        if: steps.job.outputs.tool_id == 'code-check'
+        if: contains(steps.job.outputs.tool_ids, 'code-check')
         uses: actions/setup-node@v6
         with:
           node-version: "22"
