@@ -6,30 +6,33 @@ Last verified: 2026-11-18. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `1c17cd1e77a5b83fc57a0ed86e9ace595f58d31e`
+- Latest production source commit: `460a3b066515d709364f4fdd5223912a749d14e9`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
+- Interactive Telegram workspace and contextual search actions: [PR #5](https://github.com/Nolane-x/Nolane-search/pull/5)
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `ccbb1cb9-3d89-4290-a471-92c44a333711`
+- Cloudflare Worker version ID: `1fe26092-c0c9-4c20-87a8-dbfd7f3e2cbf`
 
-The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction and per-result helpful/not-helpful feedback.
+The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, and an interactive Telegram dashboard with one-shot search/AI modes and result follow-up actions.
 
 ## CI and deployment verification
 
 | Check | Run | Result |
 |---|---:|---|
 | PR CI: typecheck, 58 unit tests, script syntax checks and Worker build | [44245521279](https://github.com/Nolane-x/Nolane-search/actions/runs/44245521279) | PASS |
-| Main CI: typecheck, 58 unit tests, script syntax checks and Worker build | [44245682121](https://github.com/Nolane-x/Nolane-search/actions/runs/44245682121) | PASS |
-| Worker bundle export and production smoke test | [44245681931](https://github.com/Nolane-x/Nolane-search/actions/runs/44245681931) | PASS |
-| Production Worker deployment, runtime secret upload, webhook and command registration | [44245681953](https://github.com/Nolane-x/Nolane-search/actions/runs/44245681953) | PASS |
+| Main CI: typecheck, 60 unit tests, script syntax checks and Worker build | [44251597211](https://github.com/Nolane-x/Nolane-search/actions/runs/44251597211) | PASS |
+| Worker bundle export and production smoke test | [44251597189](https://github.com/Nolane-x/Nolane-search/actions/runs/44251597189) | PASS |
+| Production Worker deployment, runtime secret upload, webhook and command registration | [44251597162](https://github.com/Nolane-x/Nolane-search/actions/runs/44251597162) | PASS |
 
 The deployment log confirms:
 - Worker `nolane-search` was uploaded and deployed.
 - Runtime `AI_ROUTER_CONFIG` was uploaded as a hidden secret.
 - Cron `*/30 * * * *` and Queue producer/consumer bindings remained attached.
 - Telegram webhook registration succeeded.
-- Telegram bot command registration succeeded, including `/web`.
+- Telegram bot command registration succeeded, including `/web`, `/start`, `/menu` and `/cancel`.
+- Worker version `1fe26092-c0c9-4c20-87a8-dbfd7f3e2cbf` was deployed from main commit `460a3b066515d709364f4fdd5223912a749d14e9`.
+- No D1 migration was needed for the Telegram UI release.
 - Worker version `ccbb1cb9-3d89-4290-a471-92c44a333711` was deployed from main commit `1c17cd1e77a5b83fc57a0ed86e9ace595f58d31e`.
 - No D1 migration was needed; the deployment's migration check correctly skipped the migration apply step.
 
@@ -59,6 +62,17 @@ The browser root returns the new Nolane Search HTML page, identifies itself as `
 - Chat history and recent searches are bounded in browser local storage; conversation transcripts are not persisted as server-side chat records.
 
 The web interface includes Web, News, Research, Technology, GitHub, Wikipedia and private-site search categories, result cards with helpful/not-helpful controls, AI Overview with linked sources, multi-turn Nolane Chat, Personal Web Index, responsive layout, recent searches and a light/dark theme.
+
+## Telegram interactive workspace
+
+- `/start`, `/menu` and `/home` send the inline dashboard for the allowlisted owner in the private chat.
+- The dashboard provides one-tap Web, AI Chat, AI with sources, Deep Research, Technology, News, GitHub, Wikipedia and personal-site modes, plus status/help and a link to the existing browser workspace.
+- Selecting a mode edits the dashboard message to show an input prompt and stores a per-user/per-chat pending mode in D1 `search_cache` for 10 minutes.
+- The next plain-text message atomically consumes that pending mode once. Without a pending mode, plain text retains the old default Web Search behavior. Slash commands cancel pending mode; `/cancel` clears it and returns to the dashboard.
+- Search results keep existing five-item pagination and now include inline follow-ups for source-grounded AI (`/ask`) and Deep Search (`/deep`) using the original query from the owner's 15-minute search session.
+- UI and follow-up callbacks validate the allowlisted user and private chat. Dashboard navigation edits the same message to reduce chat clutter.
+- This release reuses the existing D1 cache; no schema migration or new API secret was introduced.
+- CI verifies formatting, callback construction and Worker build. A real Telegram tap-through still requires the owner's account.
 
 ## Search and retrieval behavior
 
@@ -126,6 +140,9 @@ Create the second secret before the next commit that introduces a new file under
 ## Remaining owner-level end-to-end checks
 
 These need a real interaction from the owner's Telegram account; CI and the public health endpoint cannot complete them:
+1. Send `/start` or `/menu` in the private bot chat; try each dashboard mode, send one query, test `/cancel`, and confirm that the next unselected plain-text message falls back to Web Search.
+2. From a search result, use the AI-with-sources and Deep Search buttons; confirm only the matching original query is used and that the job appears in `/jobs`.
+
 1. Open the private Telegram chat and send `/web`. Open the returned one-time link and confirm browser login works, then test logout and a fresh login link.
 2. Try `/crawl https://your-own-public-site.example 10` on a website you control, then use `/crawls` and search its contents with `/local` or Website của tôi. Confirm only permitted pages are indexed.
 3. Use Personal Web Index in the browser to enqueue a small crawl and refresh its status.
