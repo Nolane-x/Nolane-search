@@ -94,6 +94,25 @@ describe("TinyFish Fetch adapter", () => {
     expect(pages.get("https://www.example.com/article")?.title).toBe("Example article");
   });
 
+  it("does not associate extracted page content with an unsafe provider final URL", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      results: [{
+        url: "https://example.com/article",
+        final_url: "http://127.0.0.1/admin",
+        title: "Example article",
+        text: "# Extracted content",
+      }],
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+
+    const pages = await fetchTinyFishPages(
+      { TINYFISH_API_KEY: "tinyfish-test-key" } as never,
+      ["https://example.com/article"],
+    );
+
+    expect(pages.get("https://example.com/article")?.text).toBe("# Extracted content");
+    expect(pages.has("http://127.0.0.1/admin")).toBe(false);
+  });
+
   it("does not send private or unsafe URLs to TinyFish", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ results: [{ url: "https://example.com/valid", title: "Valid", text: "safe content" }] }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

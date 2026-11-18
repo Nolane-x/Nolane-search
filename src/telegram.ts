@@ -1,4 +1,5 @@
 import { htmlEscape } from "./security";
+import { readJsonResponse } from "./http";
 import type { Env, SearchMode, SearchResult } from "./types";
 
 const MAX_FORMATTED_LENGTH = 3600;
@@ -9,7 +10,7 @@ export async function telegramApi<T = Record<string, unknown>>(env: Env, method:
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     signal: AbortSignal.timeout(15_000),
   });
-  const data = await response.json() as { ok?: boolean; description?: string; result?: T };
+  const data = await readJsonResponse<{ ok?: boolean; description?: string; result?: T }>(response, 1_000_000);
   if (!response.ok || !data.ok) throw new Error(data.description || `Telegram API error (${response.status})`);
   return data.result as T;
 }
@@ -62,7 +63,7 @@ export async function sendArchiveDocument(env: Env, filename: string, content: s
   const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, {
     method: "POST", body: form, signal: AbortSignal.timeout(20_000),
   });
-  const data = await response.json() as { ok?: boolean; description?: string };
+  const data = await readJsonResponse<{ ok?: boolean; description?: string }>(response, 1_000_000);
   if (!response.ok || !data.ok) throw new Error(data.description || `Telegram sendDocument failed (${response.status})`);
 }
 

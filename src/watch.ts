@@ -104,7 +104,10 @@ async function fetchSafe(urlInput: string, etag?: string | null, lastModified?: 
   let current = urlInput;
   for (let redirects = 0; redirects <= 3; redirects += 1) {
     const safe = isSafePublicUrl(current);
-    if (!safe) throw new Error("URL or redirect is not an allowed public HTTPS address.");
+    const originalOrigin = new URL(urlInput).origin;
+    if (!safe || safe.origin !== originalOrigin) {
+      throw new Error("Watch URL or redirect must remain on the original public HTTPS origin.");
+    }
     const headers = new Headers({
       "user-agent": "NolaneSearchBot/0.1 (+https://github.com/Nolane-x/Nolane-search)",
       "accept": "text/html,application/xhtml+xml,text/plain,application/xml;q=0.9,*/*;q=0.2",
@@ -120,7 +123,17 @@ async function fetchSafe(urlInput: string, etag?: string | null, lastModified?: 
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get("location");
       if (!location) return response;
-      current = new URL(location, safe).toString();
+      let next: URL;
+      try { next = new URL(location, safe); }
+      catch {
+        await response.body?.cancel().catch(() => undefined);
+        throw new Error("Watch returned an invalid redirect location.");
+      }
+      await response.body?.cancel().catch(() => undefined);
+      if (next.origin !== originalOrigin) {
+        throw new Error("Watch redirect left the original origin.");
+      }
+      current = next.toString();
       continue;
     }
     return response;
@@ -412,7 +425,13 @@ async function fetchCrawlResponse(
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get("location");
       if (!location) return { response, finalUrl: safe };
-      const next = new URL(location, safe);
+      let next: URL;
+      try { next = new URL(location, safe); }
+      catch {
+        await response.body?.cancel().catch(() => undefined);
+        throw new Error("Crawl returned an invalid redirect location.");
+      }
+      await response.body?.cancel().catch(() => undefined);
       if (next.origin !== origin) throw new Error("Crawl redirect left the allowed HTTPS origin.");
       current = next.toString();
       continue;

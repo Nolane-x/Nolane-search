@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { crawlAndIndexSite, extractPage } from "../src/watch";
+import { checkWatchTargets, crawlAndIndexSite, extractPage } from "../src/watch";
 import type { Env } from "../src/types";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -108,4 +108,53 @@ describe("bounded same-origin site crawler", () => {
     expect(page.text).not.toContain("Privacy Terms Cookies");
   });
 
+});
+
+describe("website watch redirect scope", () => {
+  it("does not follow a watch redirect to another origin", async () => {
+    const requested: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      requested.push(url.toString());
+      if (url.pathname === "/robots.txt") {
+        return new Response("User-agent: *\\nAllow: /", { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      if (url.pathname === "/watch-me") {
+        return new Response(null, { status: 302, headers: { location: "https://other.example/redirect-target" } });
+      }
+      throw new Error("Cross-origin redirect destination must never be requested.");
+    }));
+
+    const watch = {
+      id: 7,
+      chat_id: "123",
+      user_id: "123",
+      url: "https://example.com/watch-me",
+      normalized_url: "https://example.com/watch-me",
+      interval_minutes: 30,
+      etag: null,
+      last_modified: null,
+      content_hash: null,
+    };
+    const statement = {
+      bind() { return this; },
+      first: async () => null,
+      all: async () => ({ results: [watch] }),
+      run: async () => ({ meta: { changes: 1 } }),
+    };
+    const env = {
+      DB: { prepare: (sql: string) => ({
+        ...statement,
+        all: async () => sql.includes("FROM watches") ? ({ results: [watch] }) : ({ results: [] }),
+      }), batch: async () => [] },
+    } as unknown as Env;
+
+    const result = await checkWatchTargets(env);
+    expect(result).toEqual({ checked: 1, changed: 0 });
+    expect(requested).toEqual([
+      "https://example.com/robots.txt",
+      "https://example.com/watch-me",
+    ]);
+    expect(requested.some(value => value.includes("other.example"))).toBe(false);
+  });
 });
