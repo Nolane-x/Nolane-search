@@ -1495,43 +1495,52 @@ async function handleToolUpload(env: Env, message: NonNullable<TelegramUpdate["m
 async function setToolJobResult(
   env: Env,
   jobId: string,
-  status: "completed" | "failed",
+  requestedStatus: "completed" | "failed",
   summary: string,
   errorMessage: string,
 ): Promise<boolean> {
   const previous = await getToolJob(env, jobId);
   if (!previous) return false;
-  if (previous.status === "completed" || previous.status === "failed") return true;
-  const tool = getTool(previous.toolId);
-  const now = Date.now();
-  const job = await updateToolJob(env, jobId, {
-    status,
-    finishedAt: now,
-    resultSummary: status === "completed" ? summary.slice(0, 6000) : undefined,
-    error: status === "failed" ? errorMessage.slice(0, 1000) : undefined,
-  });
-  if (!job) return false;
-  const heading = status === "completed"
-    ? "✅ <b>" + htmlEscape(tool?.name || job.toolId) + " · Hoàn thành</b>"
-    : "❌ <b>" + htmlEscape(tool?.name || job.toolId) + " · Thất bại</b>";
-  const content = status === "completed" ? summary : errorMessage;
+  if (previous.notifiedAt) return true;
+
+  let job = previous;
+  if (previous.status !== "completed" && previous.status !== "failed") {
+    const now = Date.now();
+    const updated = await updateToolJob(env, jobId, {
+      status: requestedStatus,
+      finishedAt: now,
+      fileId: "",
+      resultSummary: requestedStatus === "completed" ? summary.slice(0, 6000) : undefined,
+      error: requestedStatus === "failed" ? errorMessage.slice(0, 1000) : undefined,
+    });
+    if (!updated) return false;
+    job = updated;
+  }
+
+  // A terminal job can be retried by the runner's failure callback if Telegram
+  // notification delivery failed on the first callback. Never replace its result.
+  const status = job.status === "failed" ? "failed" : "completed";
+  const tool = getTool(job.toolId);
+  const title = (status === "completed" ? "✅ " : "❌ ") + (tool?.name || job.toolId) +
+    (status === "completed" ? " · Hoàn thành" : " · Thất bại");
+  const content = status === "completed" ? (job.resultSummary || summary) : (job.error || errorMessage);
   const chunks: string[] = [];
   let remaining = content || (status === "completed" ? "Đã hoàn thành." : "Tool runner failed.");
-  while (remaining.length > 2400) {
-    let splitAt = remaining.lastIndexOf("\n", 2400);
-    if (splitAt < 1200) splitAt = 2400;
+  while (remaining.length > 2800) {
+    let splitAt = remaining.lastIndexOf("\n", 2800);
+    if (splitAt < 1400) splitAt = 2800;
     chunks.push(remaining.slice(0, splitAt));
     remaining = remaining.slice(splitAt).trimStart();
   }
   if (remaining) chunks.push(remaining);
   for (let i = 0; i < chunks.length; i++) {
     await telegramApi(env, "sendMessage", {
-      chat_id: previous.chatId,
-      text: heading + (chunks.length > 1 ? " · " + (i + 1) + "/" + chunks.length : "") + "\n<pre>" + htmlEscape(chunks[i]!) + "</pre>",
-      parse_mode: "HTML",
+      chat_id: job.chatId,
+      text: title + (chunks.length > 1 ? " · " + (i + 1) + "/" + chunks.length : "") + "\n" + chunks[i]!,
       disable_web_page_preview: true,
     });
   }
+  await updateToolJob(env, jobId, { notifiedAt: Date.now() });
   return true;
 }
 

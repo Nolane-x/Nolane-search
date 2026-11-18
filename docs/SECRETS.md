@@ -64,7 +64,7 @@ The runner also uses the existing `TELEGRAM_BOT_TOKEN` to download the user's fi
 
 - The official Telegram Bot API `getFile` download path supports files up to 20 MB. The bot rejects larger inputs before queueing the job.
 - Output documents are sent back through Telegram `sendDocument`; the runner applies a 45 MB safety cap.
-- Job metadata and status are stored under `tool-job:` keys in the existing D1 `search_cache` for 30 days. No migration or R2 bucket is needed.
+- Job metadata and status are stored under `tool-job:` keys in the existing D1 `search_cache` for 30 days. The stored result summary is capped at 6,000 characters; the Telegram `file_id` is cleared after a completed or failed state. No migration or R2 bucket is needed.
 - The original file is downloaded only onto the temporary GitHub-hosted runner disk. The workflow does not upload it as an artifact, commit it to Git, or copy it into D1.
 - A runner is ephemeral. A completed run's temporary input and intermediate files are removed when the GitHub-hosted runner is discarded. GitHub Actions logs contain diagnostics, not the OCR/transcription payload.
 - Public repositories can use standard GitHub-hosted runner minutes without charge under GitHub's current policy, but runner concurrency, per-job timeouts, available disk/RAM, Telegram file limits and external model download time still apply. Whisper is CPU-based and may be slower for long recordings.

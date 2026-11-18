@@ -14,6 +14,7 @@ export interface ToolJob {
   createdAt: number;
   updatedAt: number;
   finishedAt?: number;
+  notifiedAt?: number;
   resultSummary?: string;
   error?: string;
 }
@@ -39,7 +40,7 @@ async function saveToolJob(env: Env, job: ToolJob): Promise<void> {
 export async function updateToolJob(
   env: Env,
   id: string,
-  patch: Partial<Pick<ToolJob, "status" | "updatedAt" | "finishedAt" | "resultSummary" | "error">>,
+  patch: Partial<Pick<ToolJob, "status" | "updatedAt" | "finishedAt" | "resultSummary" | "error" | "fileId" | "notifiedAt">>,
 ): Promise<ToolJob | null> {
   const previous = await getToolJob(env, id);
   if (!previous) return null;
@@ -101,6 +102,7 @@ export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "statu
     await updateToolJob(env, job.id, {
       status: "failed",
       finishedAt: Date.now(),
+      fileId: "",
       error: error instanceof Error ? error.message.slice(0, 500) : "Không thể kích hoạt GitHub Actions.",
     });
     throw error;
