@@ -23,12 +23,12 @@ describe("Telegram command rate limits", () => {
               const [userId, action, windowStart, limit] = values as [string, string, number, number];
               const key = [userId, action, windowStart].join(":");
               const current = counts.get(key) || 0;
-              if (current >= limit) return { meta: { changes: 0 } };
+              if (current >= limit) return { results: [], meta: { changes: 0 } };
               counts.set(key, current + 1);
-              return { meta: { changes: 1 } };
+              return { results: [], meta: { changes: 1 } };
             }
             if (sql.includes("INSERT INTO deep_search_jobs")) insertedJobs.push(String(values[0]));
-            return { meta: { changes: 1 } };
+            return { results: [], meta: { changes: 1 } };
           },
           async first<T>(): Promise<T | null> { return null; },
           async all<T>(): Promise<D1Result<T>> { return { results: [] }; },
