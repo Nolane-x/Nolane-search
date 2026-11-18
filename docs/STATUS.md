@@ -6,7 +6,7 @@ Last verified: 2026-11-18. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit before PR #12: `95226937f2fe43a76d6077240f95eb58dec4b096`
+- Latest production source commit: `b12aa461af2bb8f366671edc07821ef5549ccf90`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -16,9 +16,9 @@ Last verified: 2026-11-18. This document distinguishes production deployment and
 - Register Personal Memory commands in Telegram's slash-command menu: [PR #8](https://github.com/Nolane-x/Nolane-search/pull/8)
 - Provider response limits, watch redirect isolation and TinyFish URL validation: [PR #9](https://github.com/Nolane-x/Nolane-search/pull/9)
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
-- Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) are removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12).
+- Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID before PR #12: `62d10606-f902-42f0-98ee-9946732aa172`
+- Cloudflare Worker version ID: `26f16ed2-8133-457b-a77c-59c93b269a47`
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
@@ -47,6 +47,10 @@ The release adds a private browser search portal, AI Overview, multi-turn chat, 
 | PR #10 main CI: 84 unit tests and Worker build | [44283762795](https://github.com/Nolane-x/Nolane-search/actions/runs/44283762795) | PASS |
 | PR #10 Worker bundle export and production smoke test | [44283762813](https://github.com/Nolane-x/Nolane-search/actions/runs/44283762813) | PASS |
 | PR #10 production deployment and Telegram command registration | [44283763167](https://github.com/Nolane-x/Nolane-search/actions/runs/44283763167) | PASS |
+| PR #12 CI: type-check, 87 unit tests, webhook checks and Worker build | [44295647765](https://github.com/Nolane-x/Nolane-search/actions/runs/44295647765) | PASS |
+| PR #12 main CI: 87 unit tests and Worker build | [44296385809](https://github.com/Nolane-x/Nolane-search/actions/runs/44296385809) | PASS |
+| PR #12 Worker bundle export and smoke test | [44296385774](https://github.com/Nolane-x/Nolane-search/actions/runs/44296385774) | PASS |
+| PR #12 production deployment and Telegram webhook/command registration | [44296385765](https://github.com/Nolane-x/Nolane-search/actions/runs/44296385765) | PASS |
 
 The deployment log confirms:
 - Worker `nolane-search` was uploaded and deployed.
@@ -81,6 +85,7 @@ The browser root returns the new Nolane Search HTML page, identifies itself as `
 - Login ticket: 256-bit random token, SHA-256 hash stored in D1, five-minute expiry and one-time atomic consumption.
 - Browser session: random token whose SHA-256 hash is stored in D1; seven-day expiry; Secure, HttpOnly and SameSite=Strict cookie.
 - `/api/search`, `/api/ask`, `/api/chat`, `/api/crawl`, `/api/crawls` and `/api/feedback` require an active session whose Telegram user remains on the allowlist.
+- The private single-owner service has no application-level per-minute request caps. Provider billing/quotas and Cloudflare platform capacity remain external constraints.
 - POST requests are same-origin checked; JSON bodies are capped at 30 KB.
 - Logout revokes the server-side session. Scheduled cleanup removes expired tickets and sessions.
 - Chat history and recent searches are bounded in browser local storage; conversation transcripts are not persisted as server-side chat records.
@@ -126,6 +131,7 @@ The web interface includes Web, News, Research, Technology, GitHub, Wikipedia an
 - Crawl jobs use the existing Queue and D1 search_cache `site-crawl:` prefix; there is no new D1 schema or additional API secret.
 - The crawler is same-origin only, validates redirects, checks robots.txt, follows same-origin sitemap locations declared by robots.txt (including bounded nested sitemap indexes) plus `/sitemap.xml`, follows bounded same-origin HTML links, extracts article/main text where available and stores compact title/text in existing D1 indexed_pages and FTS5.
 - Local retrieval combines FTS5 OR-term recall with title-weighted BM25 and the shared heuristic reranker; it does not require a vector database or embedding API.
+- Personal Web Index results are also federated into ordinary Web, Technology and Research search (and therefore into AI Overview and Telegram `/ask` evidence). Dedicated GitHub and Wikipedia modes remain isolated from private-index content.
 - Hard limits: 20 pages per job, 350 KB maximum response read per page and 10-second page fetch timeout. It skips binary assets and URL paths with query strings.
 - It does not render JavaScript-heavy websites, bypass login, defeat anti-bot controls or crawl external domains. Use it only for sites whose robots policy permits it.
 
@@ -155,10 +161,11 @@ The live D1 `schema_migrations` table contains:
 - `0001_core.sql`
 - `0002_deep_search_jobs.sql`
 - `0003_web_portal.sql`
+- `0004_remove_request_rate_limits.sql`
 
 PR #3 and PR #4 did not introduce new D1 migrations; both reuse the existing indexed_pages/FTS5 schema, search_cache and Queue.
 
-The new migration creates `web_login_tickets`, `web_sessions` and `web_rate_limits`, plus supporting indexes. All three tables and the migration record were queried after applying the migration.
+`0003_web_portal.sql` originally created `web_login_tickets`, `web_sessions` and `web_rate_limits`. PR #12 applied `0004_remove_request_rate_limits.sql`, removed `idx_web_rate_limits_expiry` and `web_rate_limits`, and recorded the migration. A live `sqlite_master` query returned no remaining objects with either obsolete name.
 
 ### D1 permission handling
 
@@ -231,7 +238,7 @@ PR #10 is merged into `main` and deployed in Worker version `74f6a6d4-c91b-4c68-
 
 - The private Web Workspace Personal Web Index panel lists recently updated pages, supports filtering by title/URL/domain, and paginates through the saved page list.
 - Each page can be removed individually. A domain removal deletes pages for the exact hostname, its `www` alias and subdomains.
-- Browser management endpoints are private behind the existing one-time Telegram login / Web session. Destructive POST requests retain the same-origin guard and have a per-user rate limit.
+- Browser management endpoints are private behind the existing one-time Telegram login / Web session. Destructive POST requests retain the same-origin guard.
 - Telegram commands: `/indexed [filter]`, `/unindex https://example.com/page`, and `/unindex_domain example.com`. The commands are included in Telegram's registered slash-command menu and `/help`.
 - A deletion removes the FTS5 row and `indexed_pages` source row in one D1 batch, and deactivates any watch whose normalized URL is among the removed pages. Crawl-job history and Telegram archive snapshots are retained.
 - A crawl job already in flight is not cancelled; it can write a page after a removal completes. Refresh the index and remove again if that happens.
@@ -242,13 +249,16 @@ PR #10 is merged into `main` and deployed in Worker version `74f6a6d4-c91b-4c68-
 An owner-side browser/Telegram interaction is still needed to verify the visible list and destructive controls against the owner's real stored pages. Automated authorization, pagination, validation and deletion-batch behavior are covered by tests.
 
 
-## Request-cap removal and Personal Web Index federation — PR #12
+## Request-cap removal and Personal Web Index federation — deployed 2026-11-18
 
-The owner confirmed this is a private, single-owner service and requested no application-level per-minute usage limits. PR #11's Telegram limits and the existing Web Workspace limits are removed together.
+PR #12 was merged at `fe988bdbeb4c5c7095c06b03c9f2b08485582d39`. The final Worker deployment was built from main commit `b12aa461af2bb8f366671edc07821ef5549ccf90` and is running Worker version `26f16ed2-8133-457b-a77c-59c93b269a47`.
 
-- Telegram commands and authenticated Web Workspace actions no longer have per-minute request throttles.
-- Migration `0004_remove_request_rate_limits.sql` drops the obsolete D1 `web_rate_limits` table. No application-level throttle state remains.
-- Provider-side quotas, billing, Cloudflare platform limits and Queue capacity still apply. A single site crawl remains bounded to 20 pages and retains public-HTTPS, same-origin and robots.txt protections.
-- Personal Web Index FTS5/BM25 results now join ordinary Web, Technology and Research retrieval. Dedicated GitHub/Wikipedia modes remain isolated; Local mode remains a direct personal-index lookup.
-- AI Overview and Telegram `/ask` inherit indexed personal pages as additional evidence through the shared `performSearch` path.
-- CI, migration and production deployment evidence will be appended after PR #12 passes and ships.
+- Per-minute application-level usage caps have been removed from Telegram commands and authenticated Web Workspace endpoints. The private single-owner bot and browser portal no longer reject `/ai`, `/ask`, `/deep`, `/crawl`, search, or feedback actions due to an app-level request counter.
+- D1 migration `0004_remove_request_rate_limits.sql` was applied directly through the connected Cloudflare D1 session after the GitHub D1 migration token was found to be absent. The `web_rate_limits` table and `idx_web_rate_limits_expiry` index were dropped, and migration `0004` was inserted into `schema_migrations`; follow-up `sqlite_master` verification returned no obsolete objects.
+- The subsequent GitHub deployment correctly detected `D1 migration required: false`, deployed the Worker, verified Telegram webhook subscriptions for `message` and `callback_query`, and registered the current bot command list.
+- Provider-owned quotas/billing, Cloudflare platform limits and Queue capacity still apply. A single website crawl remains bounded to 20 pages per job and keeps the HTTPS/public-host, same-origin and robots.txt safety checks; those are execution/security bounds, not request throttles.
+- Personal Web Index FTS5/BM25 results are federated into Web, Technology and Research search. Dedicated GitHub/Wikipedia modes remain isolated; Local remains a direct personal-index lookup. Shared search means AI Overview and Telegram `/ask` can now use indexed personal pages as evidence.
+- PR CI and main CI passed type-check, all 87 tests across 14 files, webhook checks and Worker build. Worker export/smoke test and production deployment passed.
+- Production `GET /health` returned `ok: true` and `database: reachable`; provider inventory remains Tavily, Exa, TinyFish, GitHub and OpenRouter, with four AI key routes and nine model routes.
+
+The automated behaviors and production release are verified. Real Telegram interaction and browser login still require an owner-side end-to-end check.
