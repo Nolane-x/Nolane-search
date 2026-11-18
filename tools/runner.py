@@ -400,6 +400,7 @@ def pdf_compress(p):
 
 def pdf_to_images(p):
     import fitz
+    from PIL import Image
     import tempfile
     doc=fitz.open(p)
     if doc.is_encrypted and doc.needs_pass:

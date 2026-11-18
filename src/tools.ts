@@ -78,10 +78,10 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (mime.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(name)) return "image-ocr";
   if (mime === "application/pdf" || name.endsWith(".pdf")) return "pdf-text";
   if (name.endsWith(".epub") || mime === "application/epub+zip") return "epub-text";
-  if (/\\.(sqlite|sqlite3|db)$/i.test(name)) return "sqlite-inspect";
-  if (/\\.xlsx$/i.test(name)) return "xlsx-profile";
-  if (/\\.(yaml|yml)$/i.test(name) || mime.includes("yaml")) return "yaml-format";
-  if (/\\.xml$/i.test(name) || mime.includes("xml")) return "xml-format";
+  if (/\.(sqlite|sqlite3|db)$/i.test(name)) return "sqlite-inspect";
+  if (/\.xlsx$/i.test(name)) return "xlsx-profile";
+  if (/\.(yaml|yml)$/i.test(name) || mime.includes("yaml")) return "yaml-format";
+  if (/\.xml$/i.test(name) || mime.includes("xml")) return "xml-format";
   if (mime === "text/html" || /\.html?$/i.test(name)) return "html-text";
   if (/\.(srt|vtt)$/i.test(name) || mime === "text/vtt" || mime === "application/x-subrip") return "subtitle-text";
   if (/\.(txt|md|log)$/i.test(name) || mime === "text/plain") return "text-clean";
