@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { normalizeUrl } from "../src/security";
-import { performSearch, rankAndDeduplicate } from "../src/search";
+import { feedbackWeight, performSearch, rankAndDeduplicate } from "../src/search";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -11,6 +11,16 @@ describe("search URL normalization", () => {
   });
   it("preserves meaningful query parameters", () => {
     expect(normalizeUrl("https://example.com/search?q=workers")).toContain("q=workers");
+  });
+});
+
+describe("explicit relevance feedback", () => {
+  it("uses a small smoothed boost for positive feedback and penalty for negative feedback", () => {
+    expect(feedbackWeight(1, 0)).toBeGreaterThan(0);
+    expect(feedbackWeight(0, 1)).toBeLessThan(0);
+    expect(feedbackWeight(0, 0)).toBe(0);
+    expect(feedbackWeight(1000, 0)).toBeCloseTo(0.1, 3);
+    expect(feedbackWeight(0, 1000)).toBeCloseTo(-0.1, 3);
   });
 });
 

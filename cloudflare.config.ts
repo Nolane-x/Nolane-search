@@ -1,6 +1,6 @@
 import { bindings, defineConfig, triggers } from "cf/config";
 import * as entrypoint from "./src/index.ts" with { type: "cf-worker" };
-import type { DeepSearchJob } from "./src/types";
+import type { SearchQueueJob } from "./src/types";
 
 export default defineConfig({
   accountId: "1172c01120a2470aa12f81e5b4778556",
@@ -16,7 +16,7 @@ export default defineConfig({
     },
     env: {
       DB: bindings.d1({ name: "nolane-search-db", id: "4f6a8cbd-cc8c-42b9-be6a-ed45c709d3db" }),
-      SEARCH_JOBS: bindings.queue<DeepSearchJob>({ name: "nolane-search-jobs" }),
+      SEARCH_JOBS: bindings.queue<SearchQueueJob>({ name: "nolane-search-jobs" }),
       TELEGRAM_BOT_TOKEN: bindings.secret(),
       TELEGRAM_WEBHOOK_SECRET: bindings.secret(),
       ALLOWED_TELEGRAM_USER_IDS: bindings.secret(),

@@ -20,7 +20,7 @@
 | /deep question | Queue multi-query research |
 | /site example.com query | Provider site-restricted query |
 | /local query | Search indexed page extracts |
-| /watch https://example.com | Monitor public HTTPS page |
+| /watch https://example.com | Monitor public HTTPS page |\n| /crawl https://example.com [1-20] | Crawl a bounded public website into the private FTS5 index |\n| /crawls | List recent site indexing jobs |
 | /watches | List active watches |
 | /unwatch 12 | Disable watch ID 12 |
 | /jobs | List the latest eight Deep Search jobs |
@@ -81,7 +81,7 @@ External search APIs have their own quotas and possible paid overages. Wikipedia
 - `balanced` rotates the starting candidate per Worker isolate; `priority` tries higher configured priority first; `cheapest` uses supplied per-model token prices. Each candidate is attempted at most once, up to `maxAttempts` (maximum 24).
 - 429/5xx/auth/model errors, timeout or empty response moves to the next candidate. Failover does not guarantee that the rejected request is unbilled; check each provider's billing and quota.
 - `/ai prompt` routes a direct prompt; task prefixes include `fast`, `reasoning`, `coding`, `creative`, `translation`, `research`, `summary` and `classification`.
-- `/ask question` retrieves web evidence, asks the AI Router for an evidence-grounded synthesis and lists source links.
+- `/ask question` retrieves web evidence, asks the AI Router for an evidence-grounded synthesis and lists source links.\n- Browser search results include optional helpful/not-helpful votes. Votes are stored against a hashed exact query/mode and normalized URL; prior votes nudge that exact query's ranking slightly, with a hard cap of ±0.10. Search feedback events expire after 30 minutes and aggregate feedback entries after 180 days.
 - `/ai_status` and `/models` show configured route labels, protocols and model IDs without exposing keys. Configuration status does not prove API-key validity; a real `/ai` request is required to test upstream access.
 - Existing `OPENROUTER_API_KEY` and model variables remain a fallback route. Current production health reports one legacy OpenRouter key route and six model candidates until the owner adds their own `AI_ROUTER_CONFIG`.
 - Cost fields produce estimates only; a durable cross-provider billing ledger is not implemented. Balanced rotation is not globally synchronized across Worker isolates.
@@ -95,7 +95,7 @@ External search APIs have their own quotas and possible paid overages. Wikipedia
 - Dead-letter Queue: nolane-search-dlq
 - Cron: every 30 minutes
 
-D1 stores small operational records and a compact index. Search cache expires after two minutes and is pruned by scheduled maintenance. Telegram update IDs are pruned after seven days. Completed/failed Deep Search job records are pruned after 30 days; queued/running jobs are retained.
+D1 stores small operational records and a compact index. General search cache expires after two minutes (news is shorter and research longer) and is pruned by scheduled maintenance. Internal `search-event:`, `search-feedback:`, `search-vote:` and `site-crawl:` cache entries have dedicated retention windows and are excluded from the displayed cache count. Telegram update IDs are pruned after seven days. Completed/failed Deep Search job records are pruned after 30 days; queued/running jobs are retained.
 
 ## Debugging checklist
 

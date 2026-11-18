@@ -22,6 +22,17 @@ button,input,textarea{font:inherit}button{cursor:pointer}a{color:inherit}.shell{
 :root[data-theme="dark"] .chat-form textarea{background:#101927;color:#e8edf7;border-color:#344158}
 :root[data-theme="dark"] .quiet{color:#a0adc1}
 :root[data-theme="dark"] .result-meta .tag{background:#273348}
+
+.result-actions{display:flex;align-items:center;gap:8px;margin-top:11px;flex-wrap:wrap}
+.feedback-btn{border:1px solid var(--line);background:transparent;color:var(--muted);padding:5px 9px;border-radius:8px;font-size:11px}
+.feedback-btn:hover{background:var(--soft);color:var(--accent);border-color:#cdd9ff}
+.feedback-btn:disabled{opacity:.65;cursor:default}
+.crawl-form{display:grid;gap:8px}
+.crawl-form input,.crawl-form select{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:var(--panel);color:var(--ink);outline:0;font-size:13px}
+.crawl-form input:focus,.crawl-form select:focus{border-color:#9aafff;box-shadow:0 0 0 3px #315efb12}
+.crawl-job{padding:9px 10px;border:1px solid var(--line);border-radius:10px;margin-top:8px;font-size:12px;overflow-wrap:anywhere}
+.crawl-job strong{display:block;margin-bottom:3px}
+.crawl-job .mini{display:block}
 </style>
 </head>
 <body>
@@ -42,6 +53,11 @@ button,input,textarea{font:inherit}button{cursor:pointer}a{color:inherit}.shell{
 <div id="resultLayout" class="layout">
 <div class="maincol"><div class="summarybar"><span id="resultSummary">Sẵn sàng tìm kiếm</span><div class="search-mode"><button id="answerBtn" class="quiet hidden">✧ Tổng hợp bằng AI</button></div></div><div id="results"><div class="empty"><strong>Chào mừng đến Nolane Search</strong>Nhập một câu hỏi hoặc từ khóa để bắt đầu khám phá.</div></div></div>
 <aside class="side">
+<section class="panel"><div class="panel-head"><strong>⌁ Personal Web Index</strong><button id="refreshCrawls" class="quiet" style="font-size:11px">Làm mới</button></div><div class="panel-body">
+<p class="muted" style="font-size:12px;margin:0 0 12px">Thu thập một website công khai để tạo chỉ mục riêng. Chỉ crawl cùng tên miền và tuân thủ robots.txt.</p>
+<form id="crawlForm" class="crawl-form"><input id="crawlUrl" type="url" placeholder="https://example.com" required><select id="crawlPages"><option value="5">5 trang</option><option value="10" selected>10 trang</option><option value="20">20 trang</option></select><button id="crawlSubmit" class="btn" type="submit">Lập chỉ mục website</button></form>
+<div id="crawlStatus" class="mini" style="margin-top:9px">Chưa có tác vụ crawl.</div><div id="crawlJobs"></div>
+</div></section>
 <section class="panel"><div class="panel-head"><strong>✧ AI Overview</strong><span class="mini">Có nguồn tham khảo</span></div><div id="answerPanel" class="panel-body"><div class="ai-card"><h3>Hỏi AI dựa trên kết quả web</h3><p>Tìm một chủ đề, sau đó yêu cầu Nolane tổng hợp các nguồn thành câu trả lời có dẫn chứng.</p></div><button id="answerSideBtn" class="btn" style="width:100%">Tổng hợp câu trả lời</button><div id="answerOutput" class="hidden" style="margin-top:14px"></div></div></section>
 <section class="panel"><div class="panel-head"><strong>✦ Nolane Chat</strong><button id="clearChat" class="quiet" style="font-size:11px">Cuộc trò chuyện mới</button></div><div class="chat"><div id="chatLog" class="chat-log"><div class="bubble assistant">Xin chào! Tôi có thể giúp bạn phân tích, giải thích hoặc tiếp tục một câu hỏi. Dùng Tìm kiếm để lấy thông tin web mới nhất, hoặc hỏi trực tiếp tại đây.</div></div><form id="chatForm" class="chat-form"><textarea id="chatInput" placeholder="Nhắn tin với Nolane..." rows="1" aria-label="Tin nhắn"></textarea><button class="send" title="Gửi">➤</button></form></div></section>
 </aside></div>
@@ -51,7 +67,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}a{color:inherit}.shell{
 <script>
 (function(){
 'use strict';
-var state={mode:'web',query:'',results:[],history:[],busy:false};
+var state={mode:'web',query:'',results:[],history:[],busy:false,eventId:null};
 var $=function(id){return document.getElementById(id)};
 var auth=$('auth'),workspace=$('workspace'),query=$('query'),results=$('results'),summary=$('resultSummary');
 function text(el,value){el.textContent=value==null?'':String(value)}
@@ -62,15 +78,68 @@ function showAuth(message){workspace.classList.add('hidden');auth.classList.remo
 function showWorkspace(){auth.classList.add('hidden');workspace.classList.remove('hidden');$('logoutBtn').classList.remove('hidden')}
 function saveRecent(q){try{var arr=JSON.parse(localStorage.getItem('nolane.recent')||'[]');arr=[q].concat(arr.filter(function(x){return x!==q})).slice(0,6);localStorage.setItem('nolane.recent',JSON.stringify(arr));renderRecent()}catch(e){}}
 function renderRecent(){var box=$('recent');box.replaceChildren();var arr=[];try{arr=JSON.parse(localStorage.getItem('nolane.recent')||'[]')}catch(e){}arr.forEach(function(item){var b=document.createElement('button');text(b,item);b.addEventListener('click',function(){query.value=item;runSearch()});box.appendChild(b)})}
-function addResult(item,index){var card=document.createElement('article');card.className='result';var meta=document.createElement('div');meta.className='result-url';var favicon=document.createElement('span');favicon.className='favicon';text(favicon,(item.domain||'N').slice(0,1).toUpperCase());meta.appendChild(favicon);var domain=document.createElement('span');text(domain,item.domain||'');meta.appendChild(domain);card.appendChild(meta);var h=document.createElement('h3');var a=document.createElement('a');var url=safeUrl(item.url);a.href=url||'#';a.target='_blank';a.rel='noopener noreferrer';text(a,(index+1)+'. '+(item.title||item.url));h.appendChild(a);card.appendChild(h);var p=document.createElement('p');text(p,item.snippet||'Không có mô tả từ nguồn.');card.appendChild(p);var foot=document.createElement('div');foot.className='result-meta';var provider=document.createElement('span');provider.className='tag';text(provider,item.provider||'Web');foot.appendChild(provider);if(item.publishedAt){var date=document.createElement('span');text(date,new Date(item.publishedAt).toLocaleDateString('vi-VN'));if(!Number.isNaN(new Date(item.publishedAt).getTime()))foot.appendChild(date)}card.appendChild(foot);return card}
-function renderResults(data){results.replaceChildren();if(!data.length){var empty=document.createElement('div');empty.className='empty';var strong=document.createElement('strong');text(strong,'Không tìm thấy kết quả');empty.appendChild(strong);empty.appendChild(document.createTextNode('Thử cụm từ khác, đổi danh mục hoặc bỏ bớt bộ lọc.'));results.appendChild(empty);return}data.forEach(function(item,i){results.appendChild(addResult(item,i))})}
+function addResult(item,index,eventId){
+ var card=document.createElement('article');card.className='result';
+ var meta=document.createElement('div');meta.className='result-url';
+ var favicon=document.createElement('span');favicon.className='favicon';text(favicon,(item.domain||'N').slice(0,1).toUpperCase());meta.appendChild(favicon);
+ var domain=document.createElement('span');text(domain,item.domain||'');meta.appendChild(domain);card.appendChild(meta);
+ var h=document.createElement('h3');var a=document.createElement('a');var url=safeUrl(item.url);a.href=url||'#';a.target='_blank';a.rel='noopener noreferrer';text(a,(index+1)+'. '+(item.title||item.url));h.appendChild(a);card.appendChild(h);
+ var p=document.createElement('p');text(p,item.snippet||'Không có mô tả từ nguồn.');card.appendChild(p);
+ var foot=document.createElement('div');foot.className='result-meta';var provider=document.createElement('span');provider.className='tag';text(provider,item.provider||'Web');foot.appendChild(provider);
+ if(item.publishedAt){var date=document.createElement('span');if(!Number.isNaN(new Date(item.publishedAt).getTime())){text(date,new Date(item.publishedAt).toLocaleDateString('vi-VN'));foot.appendChild(date)}}
+ card.appendChild(foot);
+ if(eventId&&url&&url.indexOf('https:')===0){
+  var actions=document.createElement('div');actions.className='result-actions';
+  [[1,'👍 Hữu ích'],[-1,'👎 Không phù hợp']].forEach(function(entry){
+   var button=document.createElement('button');button.type='button';button.className='feedback-btn';text(button,entry[1]);
+   button.addEventListener('click',async function(){
+    button.disabled=true;
+    try{await api('/api/feedback',{method:'POST',headers:authHeaders(),body:JSON.stringify({eventId:eventId,url:url,rating:entry[0]})});text(button,entry[0]===1?'✓ Đã ghi nhận':'✓ Đã ghi nhận')}
+    catch(error){text(button,'Thử lại');button.disabled=false}
+   });
+   actions.appendChild(button);
+  });
+  card.appendChild(actions);
+ }
+ return card;
+}
+function renderResults(data,eventId){results.replaceChildren();if(!data.length){var empty=document.createElement('div');empty.className='empty';var strong=document.createElement('strong');text(strong,'Không tìm thấy kết quả');empty.appendChild(strong);empty.appendChild(document.createTextNode('Thử cụm từ khác, đổi danh mục hoặc bỏ bớt bộ lọc.'));results.appendChild(empty);return}data.forEach(function(item,i){results.appendChild(addResult(item,i,eventId))})}
 async function api(path,options){var response=await fetch(path,Object.assign({credentials:'same-origin',cache:'no-store'},options||{}));var data=await response.json().catch(function(){return {error:'Phản hồi máy chủ không hợp lệ'}});if(response.status===401){showAuth('Phiên đăng nhập đã hết hạn. Hãy gửi /web cho bot để tạo liên kết mới.');throw new Error(data.error||'Unauthorized')}if(!response.ok)throw new Error(data.error||('Lỗi HTTP '+response.status));return data}
-async function runSearch(){var q=query.value.trim();if(q.length<2){query.focus();return}state.query=q;saveRecent(q);setBusy(true);summary.textContent='Đang tìm kiếm';try{var params=new URLSearchParams({q:q,mode:state.mode});var data=await api('/api/search?'+params.toString());state.results=data.results||[];renderResults(state.results);text(summary,(data.results||[]).length+' kết quả · '+(data.meta&&data.meta.elapsedMs||0)+' ms');$('answerBtn').classList.remove('hidden');$('answerSideBtn').disabled=false;document.querySelector('.content').scrollIntoView({behavior:'smooth',block:'start'})}catch(e){results.innerHTML='<div class="notice"></div>';text(results.firstChild,e.message);text(summary,'Không thể hoàn tất tìm kiếm')}finally{state.busy=false;$('searchBtn').disabled=false;$('searchBtn').textContent='Tìm kiếm'}}
+async function runSearch(){var q=query.value.trim();if(q.length<2){query.focus();return}state.query=q;saveRecent(q);setBusy(true);summary.textContent='Đang tìm kiếm';try{var params=new URLSearchParams({q:q,mode:state.mode});var data=await api('/api/search?'+params.toString());state.results=data.results||[];state.eventId=data.eventId||null;renderResults(state.results,state.eventId);text(summary,(data.results||[]).length+' kết quả · '+(data.meta&&data.meta.elapsedMs||0)+' ms');$('answerBtn').classList.remove('hidden');$('answerSideBtn').disabled=false;document.querySelector('.content').scrollIntoView({behavior:'smooth',block:'start'})}catch(e){results.innerHTML='<div class="notice"></div>';text(results.firstChild,e.message);text(summary,'Không thể hoàn tất tìm kiếm')}finally{state.busy=false;$('searchBtn').disabled=false;$('searchBtn').textContent='Tìm kiếm'}}
 function renderSources(list){var box=document.createElement('div');box.className='sources';(list||[]).forEach(function(item,i){var u=safeUrl(item.url);if(!u)return;var a=document.createElement('a');a.className='source';a.href=u;a.target='_blank';a.rel='noopener noreferrer';text(a,'['+(i+1)+'] '+(item.title||item.domain));box.appendChild(a)});return box}
 async function answer(){if(!state.query){query.focus();return}var output=$('answerOutput');output.classList.remove('hidden');output.replaceChildren();var loading=document.createElement('div');loading.className='loading';loading.innerHTML='<span class="spinner"></span><span>Đang tổng hợp và đối chiếu các nguồn…</span>';output.appendChild(loading);$('answerBtn').disabled=true;$('answerSideBtn').disabled=true;try{var data=await api('/api/ask',{method:'POST',headers:authHeaders(),body:JSON.stringify({q:state.query,mode:state.mode})});output.replaceChildren();var p=document.createElement('div');p.className='answer';text(p,data.answer);output.appendChild(p);output.appendChild(renderSources(data.sources||[]));var note=document.createElement('div');note.className='mini';text(note,'AI: '+(data.provider||'AI Router')+' · '+(data.model||''));output.appendChild(note)}catch(e){output.replaceChildren();var n=document.createElement('div');n.className='notice';text(n,e.message);output.appendChild(n)}finally{$('answerBtn').disabled=false;$('answerSideBtn').disabled=false}}
 function addBubble(role,message){var b=document.createElement('div');b.className='bubble '+role;text(b,message);$('chatLog').appendChild(b);$('chatLog').scrollTop=$('chatLog').scrollHeight}
 function loadChat(){try{state.history=JSON.parse(localStorage.getItem('nolane.chat')||'[]').slice(-12);state.history.forEach(function(m){addBubble(m.role==='user'?'user':'assistant',m.content)})}catch(e){state.history=[]}}
 async function sendChat(){var input=$('chatInput');var message=input.value.trim();if(!message)return;input.value='';state.history.push({role:'user',content:message});state.history=state.history.slice(-12);addBubble('user',message);var pending=document.createElement('div');pending.className='bubble assistant';pending.textContent='Đang suy nghĩ…';$('chatLog').appendChild(pending);var btn=$('chatForm').querySelector('button');btn.disabled=true;try{var data=await api('/api/chat',{method:'POST',headers:authHeaders(),body:JSON.stringify({message:message,history:state.history.slice(0,-1),task:'chat'})});pending.remove();state.history.push({role:'assistant',content:data.answer});state.history=state.history.slice(-12);addBubble('assistant',data.answer);localStorage.setItem('nolane.chat',JSON.stringify(state.history));}catch(e){pending.remove();addBubble('assistant','Không thể trả lời lúc này: '+e.message)}finally{btn.disabled=false;input.focus()}}
+
+async function refreshCrawls(){
+ try{
+  var data=await api('/api/crawls');var box=$('crawlJobs');box.replaceChildren();
+  var jobs=data.jobs||[];
+  if(!jobs.length){text($('crawlStatus'),'Chưa có tác vụ crawl.');return}
+  text($('crawlStatus'),jobs.length+' tác vụ gần đây');
+  jobs.forEach(function(job){
+   var card=document.createElement('div');card.className='crawl-job';
+   var title=document.createElement('strong');text(title,(job.status||'unknown').toString().toUpperCase()+' · '+(job.indexed||0)+'/'+(job.maxPages||0)+' trang');card.appendChild(title);
+   var url=document.createElement('span');url.className='mini';text(url,job.seedUrl||'');card.appendChild(url);
+   if(job.lastError){var error=document.createElement('span');error.className='mini';text(error,job.lastError);card.appendChild(error)}
+   box.appendChild(card);
+  });
+ }catch(error){text($('crawlStatus'),error.message)}
+}
+$('crawlForm').addEventListener('submit',async function(e){
+ e.preventDefault();var button=$('crawlSubmit');var url=$('crawlUrl').value.trim();var maxPages=Number($('crawlPages').value);
+ if(!safeUrl(url)){text($('crawlStatus'),'Chỉ hỗ trợ URL HTTPS public hợp lệ.');return}
+ button.disabled=true;button.textContent='Đang xếp hàng…';
+ try{
+  var data=await api('/api/crawl',{method:'POST',headers:authHeaders(),body:JSON.stringify({url:url,maxPages:maxPages})});
+  text($('crawlStatus'),'Đã tạo job '+data.job.id+'. Đang chờ Worker xử lý.');
+  await refreshCrawls();
+ }catch(error){text($('crawlStatus'),error.message)}
+ finally{button.disabled=false;button.textContent='Lập chỉ mục website'}
+});
+$('refreshCrawls').addEventListener('click',refreshCrawls);
+
 $('searchForm').addEventListener('submit',function(e){e.preventDefault();runSearch()});
 $('modeChips').addEventListener('click',function(e){var b=e.target.closest('[data-mode]');if(!b)return;state.mode=b.dataset.mode;document.querySelectorAll('.chip').forEach(function(x){x.classList.toggle('active',x===b)});if(query.value.trim())runSearch()});
 $('answerBtn').addEventListener('click',answer);$('answerSideBtn').addEventListener('click',answer);
@@ -80,7 +149,7 @@ $('logoutBtn').addEventListener('click',async function(){try{await api('/api/aut
 $('themeBtn').addEventListener('click',function(){var dark=document.documentElement.dataset.theme!=='dark';document.documentElement.dataset.theme=dark?'dark':'light';try{localStorage.setItem('nolane.theme',dark?'dark':'light')}catch(e){}});try{document.documentElement.dataset.theme=localStorage.getItem('nolane.theme')||'light'}catch(e){}
 document.addEventListener('keydown',function(e){if(e.key==='/'&&document.activeElement!==query&&document.activeElement!==$('chatInput')){e.preventDefault();query.focus()}});
 renderRecent();loadChat();
-(async function boot(){var params=new URLSearchParams(location.search);var ticket=params.get('ticket');if(ticket){try{await api('/api/auth/exchange',{method:'POST',headers:authHeaders(),body:JSON.stringify({ticket:ticket})});history.replaceState({},'',location.pathname);showWorkspace()}catch(e){showAuth(e.message);return}}else{try{await api('/api/auth/me');showWorkspace()}catch(e){showAuth()}}})();
+(async function boot(){var params=new URLSearchParams(location.search);var ticket=params.get('ticket');if(ticket){try{await api('/api/auth/exchange',{method:'POST',headers:authHeaders(),body:JSON.stringify({ticket:ticket})});history.replaceState({},'',location.pathname);showWorkspace();refreshCrawls()}catch(e){showAuth(e.message);return}}else{try{await api('/api/auth/me');showWorkspace();refreshCrawls()}catch(e){showAuth()}}})();
 })();
 </script></body></html>`;
 export function webAppResponse(): Response {

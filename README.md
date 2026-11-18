@@ -30,13 +30,13 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | AI configuration | /ai_status, /models | Inspect configured providers, key-route count, models and task tags without exposing keys |
 | Search within a site | /site example.com words | Provider site restriction |
 | Read a page | /read https://example.com | TinyFish Fetch extracts clean page text |
-| Personal index | /local words | D1 FTS5 over monitored-page extracts |
+| Personal index | /crawl https://example.com [1-20], /crawls, /local words | Queue-based same-origin site crawl, sitemap seed, robots.txt checks and D1 FTS5 index |
 | Website monitoring | /watch https://example.com | Scheduled HTTP checks and change alerts |
 | Watch management | /watches, /unwatch ID | List and disable watches |
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Status | /status | Provider configuration and compact index counters |
 
-Plain text messages are interpreted as web search. Use `/web` in the private Telegram conversation to create a one-time, five-minute browser login link. The web portal offers category search, ranked result cards, AI Overview and a multi-turn chat panel. Browser sessions are stored server-side, use HttpOnly/Secure/SameSite cookies, expire after seven days, and are revocable. Search APIs require an authenticated allowlisted Telegram user and have per-user rate limits. Use `/ai prompt` for direct AI, `/ai fast prompt` or `/ai reasoning prompt` for task routing, `/ask question` for web-grounded AI synthesis, and `/ai_status` to inspect configured routes. Telegram results show five items per page; inline Previous/Next buttons browse up to 20 ranked candidates. Pagination sessions are private to the requesting user/chat and expire after 15 minutes. `/wiki` is a reference lookup, not a substitute for primary sources or current reporting.
+Plain text messages are interpreted as web search. Use `/web` in the private Telegram conversation to create a one-time, five-minute browser login link. The web portal offers category search, ranked result cards with relevance feedback, AI Overview, a multi-turn chat panel and a Personal Web Index panel for crawling a bounded public site. Browser sessions are stored server-side, use HttpOnly/Secure/SameSite cookies, expire after seven days, and are revocable. Search APIs require an authenticated allowlisted Telegram user and have per-user rate limits. Use `/ai prompt` for direct AI, `/ai fast prompt` or `/ai reasoning prompt` for task routing, `/ask question` for web-grounded AI synthesis, and `/ai_status` to inspect configured routes. Telegram results show five items per page; inline Previous/Next buttons browse up to 20 ranked candidates. Pagination sessions are private to the requesting user/chat and expire after 15 minutes. `/wiki` is a reference lookup, not a substitute for primary sources or current reporting.
 
 ### Search operators
 
@@ -48,8 +48,8 @@ Use /help in the bot for the current command list.
 
 - Telegram Bot API: user interface, result delivery and optional archive channel.
 - Cloudflare Worker: webhook, authorization, provider routing and response formatting.
-- Cloudflare D1: compact operational metadata, short cache, watch state and small FTS5 index.
-- Cloudflare Queues: asynchronous Deep Search jobs, retries with backoff and dead-letter handling. D1 tracks job state so users can inspect or retry failed work.
+- Cloudflare D1: compact operational metadata, search/feedback cache, crawl-job state, watch state and small FTS5 index.
+- Cloudflare Queues: asynchronous Deep Search and bounded site-crawl jobs, retries with backoff and dead-letter handling. D1 tracks job state so users can inspect or retry failed work.
 - Cloudflare Cron: periodic website checks and housekeeping.
 - Tavily / Exa / Brave / TinyFish / GitHub: external discovery providers, enabled only when their keys exist. The public MediaWiki API adds a free bilingual encyclopedia reference source without another API secret.
 - AI Router: configured through encrypted GitHub Actions secret `AI_ROUTER_CONFIG`; supports multiple keys per provider and OpenAI-compatible, Anthropic Messages and Gemini Interactions APIs. It routes by task and falls back between configured key/model routes. Legacy OpenRouter secrets remain supported.
@@ -59,10 +59,10 @@ See docs/ARCHITECTURE.md, docs/SETUP.md, docs/SECRETS.md and docs/OPERATIONS.md.
 
 ## Important limitations
 
-1. Search coverage and freshness depend on external providers and their quotas.
+1. Search coverage and freshness depend on external providers and their quotas. Explicit feedback from the owner nudges ranking only for the exact same query/mode and is capped at a small score adjustment.
 2. Ranking is currently a transparent heuristic, not a trained relevance model. Search retains up to 12 candidates, displays five per page and caps the first-pass contribution at two results per domain.
 3. Deep Search is bounded multi-query retrieval, not exhaustive research or a guarantee of factual correctness.
-4. The browser portal is a private search UI, not a public anonymous search API. The initial crawler checks only URLs explicitly added by the owner. It does not crawl the whole web, render JavaScript-heavy sites, bypass login or defeat anti-bot controls.
+4. The browser portal is a private search UI, not a public anonymous search API. The crawler indexes only pages explicitly requested by the owner, up to 20 pages per job, and does not crawl the whole web or render JavaScript-heavy sites. It does not crawl the whole web, render JavaScript-heavy sites, bypass login or defeat anti-bot controls.
 5. Website monitoring reads and applies the origin's robots.txt policy before fetching a watched page. D1 keeps only a short extract per monitored page. If a Telegram archive channel is configured, the full extracted text snapshot is sent there on first capture and detected changes. Telegram is an archive, not a queryable database or an unlimited-storage guarantee.
 6. The Worker, health endpoint, Telegram webhook and command menu are deployed. A successful configuration/health check does not guarantee that every provider key or user-level command works; test the bot in Telegram before relying on search or archive delivery.
 
