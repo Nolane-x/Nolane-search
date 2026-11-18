@@ -83,6 +83,7 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (/\.(yaml|yml)$/i.test(name) || mime.includes("yaml")) return "yaml-format";
   if (/\.xml$/i.test(name) || mime.includes("xml")) return "xml-format";
   if (mime === "text/html" || /\.html?$/i.test(name)) return "html-text";
+  if (/\.(py|pyw|js|mjs|cjs|sh|bash)$/i.test(name)) return "code-check";
   if (/\.(srt|vtt)$/i.test(name) || mime === "text/vtt" || mime === "application/x-subrip") return "subtitle-text";
   if (/\.(txt|md|log)$/i.test(name) || mime === "text/plain") return "text-clean";
   if (mime.startsWith("audio/") || /\.(mp3|wav|m4a|ogg|flac|aac)$/i.test(name)) return "audio-transcribe";
