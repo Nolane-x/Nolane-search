@@ -100,6 +100,7 @@ export interface TelegramMessage {
   chat: { id: number; type: string };
   from?: TelegramUser;
   text?: string;
+  reply_to_message?: { message_id: number; text?: string };
 }
 
 export interface TelegramCallbackQuery {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSearchKeyboard, formatDeepReport, formatSearchResults, SEARCH_PAGE_SIZE } from "../src/telegram";
+import { buildBackHomeKeyboard, buildHomeKeyboard, buildModePromptKeyboard, buildSearchKeyboard, formatDeepReport, formatHomeMenu, formatModePrompt, formatSearchResults, SEARCH_PAGE_SIZE } from "../src/telegram";
 import type { SearchResult } from "../src/types";
 
 const result: SearchResult = {
@@ -17,6 +17,26 @@ function countTag(text: string, tag: string, closing = false): number {
     : new RegExp("<" + tag + "(?:\\s[^>]*)?>", "g");
   return [...text.matchAll(pattern)].length;
 }
+
+describe("Telegram interactive workspace UI", () => {
+  it("builds a menu with all search/AI modes and a web workspace URL", () => {
+    const menu = buildHomeKeyboard();
+    const buttons = menu.inline_keyboard.flat();
+    expect(buttons.some(button => button.callback_data === "ui:mode:web")).toBe(true);
+    expect(buttons.some(button => button.callback_data === "ui:mode:ask")).toBe(true);
+    expect(buttons.some(button => button.callback_data === "ui:mode:deep")).toBe(true);
+    expect(buttons.some(button => button.callback_data === "ui:mode:local")).toBe(true);
+    expect(buttons.some(button => button.url?.startsWith("https://"))).toBe(true);
+    expect(buttons.every(button => new TextEncoder().encode(button.callback_data || "").length <= 64)).toBe(true);
+  });
+
+  it("shows an explicit next-message prompt and cancel/home navigation", () => {
+    expect(formatHomeMenu("<admin>")).toContain("&lt;admin&gt;");
+    expect(formatModePrompt("ask")).toContain("AI trả lời có nguồn");
+    expect(buildModePromptKeyboard().inline_keyboard[0]?.map(button => button.callback_data)).toEqual(["ui:cancel", "ui:home"]);
+    expect(buildBackHomeKeyboard().inline_keyboard[0]?.[0]?.callback_data).toBe("ui:home");
+  });
+});
 
 describe("Telegram HTML formatting", () => {
   it("escapes untrusted search result text and URLs", () => {
@@ -58,11 +78,14 @@ describe("Telegram HTML formatting", () => {
     expect(fourth).toContain("20. <a");
   });
 
-  it("creates owner-session pagination callbacks and omits keyboard for one page", () => {
+  it("creates owner-session pagination and contextual follow-up actions", () => {
     const keyboard = buildSearchKeyboard("12345678-1234-1234-1234-123456789abc", 1, 12);
     expect(keyboard?.inline_keyboard[0]?.map(button => button.text)).toEqual(["⬅️ Trước", "2/3", "Tiếp ➡️"]);
     expect(keyboard?.inline_keyboard[0]?.[0]?.callback_data).toBe("ns:12345678-1234-1234-1234-123456789abc:0");
-    expect(buildSearchKeyboard("12345678-1234-1234-1234-123456789abc", 0, 5)).toBeUndefined();
+    const singlePage = buildSearchKeyboard("12345678-1234-1234-1234-123456789abc", 0, 5);
+    expect(singlePage.inline_keyboard[0]?.map(button => button.text)).toEqual(["🤖 Hỏi AI có nguồn", "📚 Deep Search"]);
+    expect(singlePage.inline_keyboard[1]?.[0]?.callback_data).toBe("ui:home");
+    expect(singlePage.inline_keyboard[0]?.[0]?.callback_data).toBe("na:ask:12345678-1234-1234-1234-123456789abc");
   });
 
   it("bounds long Deep Search summaries without breaking markup", () => {

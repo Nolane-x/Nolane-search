@@ -14,11 +14,14 @@ export async function telegramApi<T = Record<string, unknown>>(env: Env, method:
   return data.result as T;
 }
 
+export interface TelegramInlineButton { text: string; callback_data?: string; url?: string; }
+export interface TelegramInlineKeyboardMarkup { inline_keyboard: Array<Array<TelegramInlineButton>>; }
+
 export async function sendSearchPage(
   env: Env,
   chatId: number | string,
   text: string,
-  replyMarkup?: { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> },
+  replyMarkup?: TelegramInlineKeyboardMarkup,
 ): Promise<void> {
   await telegramApi(env, "sendMessage", {
     chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
@@ -63,6 +66,61 @@ export async function sendArchiveDocument(env: Env, filename: string, content: s
   if (!response.ok || !data.ok) throw new Error(data.description || `Telegram sendDocument failed (${response.status})`);
 }
 
+export type TelegramInputMode = SearchMode | "ai" | "ask" | "deep";
+
+const INPUT_MODE_LABELS: Record<TelegramInputMode, string> = {
+  web: "Web Search", tech: "Technology Search", research: "Research",
+  news: "News", github: "GitHub", wiki: "Wikipedia", local: "Website riêng",
+  ai: "AI Chat", ask: "AI trả lời có nguồn", deep: "Deep Research",
+};
+
+export function formatHomeMenu(firstName = ""): string {
+  const greeting = firstName.trim() ? "Chào " + safeHtmlText(firstName.trim(), 70) + "!" : "Xin chào!";
+  return [
+    "<b>◈ NOLANE SEARCH</b>",
+    "<i>Personal Search & AI Workspace</i>",
+    "",
+    "<b>" + greeting + "</b>",
+    "Tìm kiếm web, nghiên cứu nhiều nguồn, hỏi AI và tra cứu website riêng ngay trong cuộc trò chuyện này.",
+    "",
+    "<b>Chọn một công cụ bên dưới</b>",
+    "<i>Chạm vào chế độ → gửi câu hỏi. Không cần nhớ cú pháp lệnh.</i>",
+  ].join("\n");
+}
+
+export function buildHomeKeyboard(webAppUrl = "https://nolane-search.nolane-file.workers.dev/"): TelegramInlineKeyboardMarkup {
+  return { inline_keyboard: [
+    [{ text: "🔎 Web Search", callback_data: "ui:mode:web" }, { text: "🧠 AI có nguồn", callback_data: "ui:mode:ask" }],
+    [{ text: "⚡ AI Chat", callback_data: "ui:mode:ai" }, { text: "📚 Deep Research", callback_data: "ui:mode:deep" }],
+    [{ text: "💻 Công nghệ", callback_data: "ui:mode:tech" }, { text: "📰 Tin tức", callback_data: "ui:mode:news" }],
+    [{ text: "🐙 GitHub", callback_data: "ui:mode:github" }, { text: "📖 Wikipedia", callback_data: "ui:mode:wiki" }],
+    [{ text: "🔬 Nghiên cứu", callback_data: "ui:mode:research" }, { text: "🗂 Website riêng", callback_data: "ui:mode:local" }],
+    [{ text: "🌐 Mở Web Workspace", url: webAppUrl }],
+    [{ text: "📊 Trạng thái", callback_data: "ui:status" }, { text: "❔ Hướng dẫn", callback_data: "ui:help" }],
+  ] };
+}
+
+export function formatModePrompt(mode: TelegramInputMode): string {
+  return [
+    "<b>◈ NOLANE SEARCH · " + INPUT_MODE_LABELS[mode] + "</b>",
+    "",
+    "Gửi câu hỏi hoặc từ khóa của bạn trong tin nhắn tiếp theo.",
+    "Mình sẽ xử lý bằng chế độ <b>" + INPUT_MODE_LABELS[mode] + "</b>.",
+    "",
+    "<i>Lựa chọn này tự hết hạn sau 10 phút. Bạn có thể đổi chế độ bất cứ lúc nào.</i>",
+  ].join("\n");
+}
+
+export function buildModePromptKeyboard(): TelegramInlineKeyboardMarkup {
+  return { inline_keyboard: [[
+    { text: "✕ Huỷ lựa chọn", callback_data: "ui:cancel" },
+    { text: "⌂ Menu chính", callback_data: "ui:home" },
+  ]] };
+}
+
+export function buildBackHomeKeyboard(): TelegramInlineKeyboardMarkup {
+  return { inline_keyboard: [[{ text: "⌂ Menu chính", callback_data: "ui:home" }]] };
+}
 const MODE_LABELS: Record<SearchMode, string> = {
   web: "Web Search", tech: "Technology Search", research: "Research Search",
   news: "News Search", github: "GitHub Search", wiki: "Wikipedia Reference", local: "My Sites Index",
@@ -91,15 +149,23 @@ export function buildSearchKeyboard(
   sessionId: string,
   page: number,
   totalResults: number,
-): { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> } | undefined {
-  const totalPages = Math.ceil(totalResults / SEARCH_PAGE_SIZE);
-  if (totalPages <= 1) return undefined;
+): TelegramInlineKeyboardMarkup {
+  const totalPages = Math.max(1, Math.ceil(totalResults / SEARCH_PAGE_SIZE));
   const currentPage = Math.max(0, Math.min(totalPages - 1, page));
-  const row: Array<{ text: string; callback_data: string }> = [];
-  if (currentPage > 0) row.push({ text: "⬅️ Trước", callback_data: `ns:${sessionId}:${currentPage - 1}` });
-  row.push({ text: `${currentPage + 1}/${totalPages}`, callback_data: `ns:${sessionId}:${currentPage}` });
-  if (currentPage < totalPages - 1) row.push({ text: "Tiếp ➡️", callback_data: `ns:${sessionId}:${currentPage + 1}` });
-  return { inline_keyboard: [row] };
+  const rows: TelegramInlineButton[][] = [];
+  if (totalPages > 1) {
+    const row: TelegramInlineButton[] = [];
+    if (currentPage > 0) row.push({ text: "⬅️ Trước", callback_data: "ns:" + sessionId + ":" + (currentPage - 1) });
+    row.push({ text: (currentPage + 1) + "/" + totalPages, callback_data: "ns:" + sessionId + ":" + currentPage });
+    if (currentPage < totalPages - 1) row.push({ text: "Tiếp ➡️", callback_data: "ns:" + sessionId + ":" + (currentPage + 1) });
+    rows.push(row);
+  }
+  rows.push([
+    { text: "🤖 Hỏi AI có nguồn", callback_data: "na:ask:" + sessionId },
+    { text: "📚 Deep Search", callback_data: "na:deep:" + sessionId },
+  ]);
+  rows.push([{ text: "⌂ Menu chính", callback_data: "ui:home" }]);
+  return { inline_keyboard: rows };
 }
 
 export function formatSearchResults(
