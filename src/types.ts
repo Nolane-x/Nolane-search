@@ -50,7 +50,7 @@ export interface Env {
   AI_ROUTER_CONFIG?: string;
   GITHUB_TOKEN?: string;
   /** Fine-grained repository token with Actions: write, used to dispatch tool jobs. */
-  GITHUB_ACTIONS_TOKEN?: string;
+  NOLANE_GH_ACTIONS_TOKEN?: string;
 }
 
 export interface D1Result<T = Record<string, unknown>> {
