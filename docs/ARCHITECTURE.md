@@ -13,6 +13,8 @@
 
 Telegram user → Telegram webhook → Cloudflare Worker
 - Validate Telegram secret header.
+- Telegram webhook explicitly subscribes to both `message` and `callback_query`; the deploy script verifies the active configuration with `getWebhookInfo`.
+- Acknowledge allowlisted callback taps with `answerCallbackQuery` before D1 deduplication or any callback work, so slow storage cannot leave the Telegram client spinner running.
 - Deduplicate update_id in D1.
 - Enforce owner allowlist.
 - Parse command and select search mode.

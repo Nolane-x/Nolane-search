@@ -27,7 +27,7 @@
 | /jobs | List the latest eight Deep Search jobs |
 | /retry JOB_ID | Re-enqueue a failed Deep Search query as a new job |
 
-`/start` and `/menu` open the interactive Telegram dashboard. Tap a mode, then send the question as the next plain-text message; the selected mode is consumed once and expires after 10 minutes. `/cancel` returns to the dashboard. Plain text without a selected mode still defaults to `/search`. Search results show five items per page and up to 20 candidates; result messages include inline actions for source-grounded AI and Deep Search. Search sessions are user/chat-bound and expire after 15 minutes. Pagination and menu navigation edit existing messages where possible.
+`/start` and `/menu` open the interactive Telegram dashboard. Tap a mode, then send the question as the next plain-text message; the selected mode is consumed once and expires after 10 minutes. `/cancel` returns to the dashboard. Plain text without a selected mode still defaults to `/search`. The Telegram webhook must subscribe to both `message` and `callback_query`; `scripts/set-webhook.mjs` verifies this after `setWebhook` using `getWebhookInfo`. Callback taps are acknowledged before D1 operations. Search results show five items per page and up to 20 candidates; result messages include inline actions for source-grounded AI and Deep Search. Search sessions are user/chat-bound and expire after 15 minutes. Pagination and menu navigation edit existing messages where possible.
 
 ## Search operators
 
