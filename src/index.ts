@@ -213,6 +213,10 @@ async function parseJsonBody(request: Request): Promise<Record<string, unknown> 
 
 
 
+/**
+ * This is a private single-owner workspace: no application-level per-minute request
+ * caps are enforced. Provider billing, platform capacity and per-job safety checks remain.
+ */
 async function handleWebApi(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (request.method === "POST" && !sameOriginRequest(request)) {
