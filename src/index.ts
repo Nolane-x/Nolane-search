@@ -1074,7 +1074,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       env.DB.prepare("SELECT COUNT(*) AS count FROM watches WHERE active = 1").first<{ count: number }>(),
       env.DB.prepare("SELECT COUNT(*) AS count FROM indexed_pages").first<{ count: number }>(),
       env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE cache_key LIKE 'personal-memory:%' AND expires_at > ?").bind(Date.now()).first<{ count: number }>(),
-      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ? AND cache_key NOT LIKE 'telegram-search:%' AND cache_key NOT LIKE 'search-feedback:%' AND cache_key NOT LIKE 'search-vote:%' AND cache_key NOT LIKE 'search-event:%' AND cache_key NOT LIKE 'site-crawl:%' AND cache_key NOT LIKE 'telegram-ui:%' AND cache_key NOT LIKE 'personal-memory:%' AND cache_key NOT LIKE 'ai-synthesis:%'").bind(Date.now()).first<{ count: number }>(),
+      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ? AND cache_key NOT LIKE 'telegram-search:%' AND cache_key NOT LIKE 'search-feedback:%' AND cache_key NOT LIKE 'search-vote:%' AND cache_key NOT LIKE 'search-event:%' AND cache_key NOT LIKE 'site-crawl:%' AND cache_key NOT LIKE 'telegram-ui:%' AND cache_key NOT LIKE 'personal-memory:%' AND cache_key NOT LIKE 'ai-synthesis:%' AND cache_key NOT LIKE 'tool-job:%' AND cache_key NOT LIKE 'tool-pending:%'").bind(Date.now()).first<{ count: number }>(),
       env.DB.prepare("SELECT status, COUNT(*) AS count FROM deep_search_jobs WHERE created_at >= ? GROUP BY status")
         .bind(Date.now() - 7 * 24 * 60 * 60 * 1000).all<{ status: string; count: number }>(),
     ]);

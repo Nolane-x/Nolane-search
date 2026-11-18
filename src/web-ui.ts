@@ -42,14 +42,14 @@ button,input,textarea{font:inherit}button{cursor:pointer}a{color:inherit}.shell{
 .index-entry .mini{display:block;margin-top:3px}
 .index-entry-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
 .index-entry-actions button{font-size:10px;padding:4px 7px}
-#indexPages{max-height:390px;overflow:auto}
+#indexPages{max-height:390px;overflow:auto}.tools-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:16px}.tool-card{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--panel);min-width:0}.tool-card h3{font-size:14px;margin:0 0 6px}.tool-card p{font-size:12px;color:var(--muted);margin:0 0 11px}.tool-card .mini{display:block;margin:3px 0}.tool-card button{width:100%;margin-top:8px}.tool-jobs{display:grid;gap:8px}.tool-job{border:1px solid var(--line);border-radius:10px;padding:10px;font-size:12px;overflow-wrap:anywhere}.tool-job strong{display:block}.tool-badge{display:inline-block;border-radius:999px;padding:3px 8px;background:var(--soft);color:var(--accent);font-size:10px;font-weight:700}
 
 </style>
 </head>
 <body>
 <header class="topbar"><div class="shell" style="width:100%;display:flex;align-items:center;justify-content:space-between">
 <a class="brand" href="/"><span class="mark">N</span><span>Nolane<span style="color:#315efb"> Search</span></span></a>
-<div class="top-actions"><span class="pill">Private search workspace</span><button id="themeBtn" class="quiet" title="Đổi giao diện">◐</button><button id="logoutBtn" class="quiet hidden">Đăng xuất</button></div>
+<div class="top-actions"><span class="pill">Private search workspace</span><button id="toolsBtn" class="quiet hidden" type="button">🧰 Tools</button><button id="themeBtn" class="quiet" title="Đổi giao diện">◐</button><button id="logoutBtn" class="quiet hidden">Đăng xuất</button></div>
 </div></header>
 <main class="shell">
 <section id="auth" class="auth hidden"><div class="mark" style="margin:auto;width:46px;height:46px;font-size:20px">N</div><h2>Không gian tìm kiếm riêng tư</h2><p id="authText">Để đăng nhập, hãy mở bot Nolane Search trên Telegram, gửi lệnh <b>/web</b>, sau đó mở đường dẫn bot gửi cho bạn.</p><div id="authError" class="notice hidden"></div></section>
@@ -60,6 +60,14 @@ button,input,textarea{font:inherit}button{cursor:pointer}a{color:inherit}.shell{
 <button class="chip active" data-mode="web">Tất cả</button><button class="chip" data-mode="news">Tin tức</button><button class="chip" data-mode="research">Nghiên cứu</button><button class="chip" data-mode="tech">Công nghệ</button><button class="chip" data-mode="github">GitHub</button><button class="chip" data-mode="wiki">Wikipedia</button><button class="chip" data-mode="local">Website của tôi</button>
 </div><div id="recent" class="recent"></div>
 </div>
+<section id="toolsHub" class="content hidden">
+  <div class="panel" style="padding:20px">
+    <div class="summarybar"><div><span class="eyebrow">GitHub Actions · Hosted runner</span><h2 style="margin:10px 0 4px">Nolane Tools</h2><p class="muted" style="margin:0">Bộ công cụ xử lý tệp chạy trên GitHub Actions. Tệp được tải trực tiếp từ Telegram, không commit vào repository.</p></div><button id="refreshToolJobs" class="quiet" type="button">Làm mới job</button></div>
+    <div class="notice">Cách dùng: mở chat riêng với bot, gửi <b>/tools</b>, chọn <b>/tool image-ocr</b> rồi gửi ảnh. Gửi ảnh bình thường cũng tự chạy OCR. PDF, audio, video, CSV, JSON và Office sẽ tự nhận diện công cụ phù hợp.</div>
+    <div id="toolCatalog" class="tools-grid"><div class="loading"><span class="spinner"></span><span>Đang tải danh mục công cụ…</span></div></div>
+    <h3 style="margin:26px 0 8px">Lịch sử tác vụ</h3><div id="toolJobs" class="tool-jobs"><span class="mini">Chưa tải lịch sử.</span></div>
+  </div>
+</section>
 <section id="searchContent" class="content">
 <div id="resultLayout" class="layout">
 <div class="maincol"><div class="summarybar"><span id="resultSummary">Sẵn sàng tìm kiếm</span><div class="search-mode"><button id="answerBtn" class="quiet hidden">✧ Tổng hợp bằng AI</button></div></div><div id="results"><div class="empty"><strong>Chào mừng đến Nolane Search</strong>Nhập một câu hỏi hoặc từ khóa để bắt đầu khám phá.</div></div></div>
@@ -88,7 +96,7 @@ function text(el,value){el.textContent=value==null?'':String(value)}
 function safeUrl(raw){try{var u=new URL(raw);return (u.protocol==='https:'||u.protocol==='http:')?u.href:null}catch(e){return null}}
 function authHeaders(){return {'content-type':'application/json','x-nolane-request':'1'}}
 function setBusy(on,label){state.busy=on;$('searchBtn').disabled=on;$('searchBtn').textContent=on?'Đang tìm…':'Tìm kiếm';if(on){results.innerHTML='<div class="loading"><span class="spinner"></span><span></span></div>';results.querySelector('.loading span:last-child').textContent=label||'Đang tìm kiếm qua nhiều nguồn…'}}
-function showAuth(message){workspace.classList.add('hidden');auth.classList.remove('hidden');if(message){$('authError').classList.remove('hidden');text($('authError'),message)}}
+function showAuth(message){workspace.classList.add('hidden');auth.classList.remove('hidden');$('toolsBtn').classList.add('hidden');if(message){$('authError').classList.remove('hidden');text($('authError'),message)}}
 function showWorkspace(){auth.classList.add('hidden');workspace.classList.remove('hidden');$('logoutBtn').classList.remove('hidden');$('toolsBtn').classList.remove('hidden')}
 function saveRecent(q){try{var arr=JSON.parse(localStorage.getItem('nolane.recent')||'[]');arr=[q].concat(arr.filter(function(x){return x!==q})).slice(0,6);localStorage.setItem('nolane.recent',JSON.stringify(arr));renderRecent()}catch(e){}}
 function renderRecent(){var box=$('recent');box.replaceChildren();var arr=[];try{arr=JSON.parse(localStorage.getItem('nolane.recent')||'[]')}catch(e){}arr.forEach(function(item){var b=document.createElement('button');text(b,item);b.addEventListener('click',function(){query.value=item;runSearch()});box.appendChild(b)})}
@@ -191,6 +199,51 @@ async function refreshIndex(reset){
  }catch(error){text($('indexSummary'),error.message)}
  finally{state.indexLoading=false;$('indexMore').disabled=false}
 }
+async function loadTools(){
+ try{
+  var data=await api('/api/tools/catalog');var box=$('toolCatalog');box.replaceChildren();
+  (data.tools||[]).forEach(function(tool){
+   var card=document.createElement('article');card.className='tool-card';
+   var title=document.createElement('h3');text(title,tool.name);card.appendChild(title);
+   var badge=document.createElement('span');badge.className='tool-badge';text(badge,tool.ready?'READY':'SETUP NEEDED');card.appendChild(badge);
+   var desc=document.createElement('p');desc.textContent=tool.description;card.appendChild(desc);
+   var input=document.createElement('span');input.className='mini';text(input,'Nhận: '+(tool.accepts||[]).join(', '));card.appendChild(input);
+   var output=document.createElement('span');output.className='mini';text(output,'Trả về: '+(tool.output||'Kết quả'));card.appendChild(output);
+   var button=document.createElement('button');button.type='button';button.className='feedback-btn';button.disabled=!tool.ready;
+   text(button,tool.ready?'Sao chép /tool '+tool.id:'Cần GITHUB_ACTIONS_TOKEN');
+   button.addEventListener('click',async function(){
+    try{await navigator.clipboard.writeText('/tool '+tool.id);text(button,'Đã sao chép')}
+    catch(e){window.prompt('Sao chép lệnh này vào Telegram','/tool '+tool.id)}
+   });
+   card.appendChild(button);box.appendChild(card);
+  });
+ }catch(error){var box=$('toolCatalog');box.replaceChildren();var notice=document.createElement('div');notice.className='notice';text(notice,error.message);box.appendChild(notice)}
+}
+async function refreshToolJobs(){
+ try{
+  var data=await api('/api/tools/jobs');var box=$('toolJobs');box.replaceChildren();var jobs=data.jobs||[];
+  if(!jobs.length){text(box,'Chưa có tác vụ công cụ nào.');return}
+  jobs.forEach(function(job){
+   var card=document.createElement('div');card.className='tool-job';
+   var title=document.createElement('strong');text(title,(job.toolId||'tool')+' · '+(job.status||'unknown').toUpperCase());card.appendChild(title);
+   var file=document.createElement('span');file.className='mini';text(file,job.fileName||'');card.appendChild(file);
+   var id=document.createElement('span');id.className='mini';text(id,job.id||'');card.appendChild(id);
+   if(job.resultSummary){var summary=document.createElement('p');summary.textContent=job.resultSummary;card.appendChild(summary)}
+   if(job.error){var error=document.createElement('p');error.className='mini';error.textContent=job.error;card.appendChild(error)}
+   box.appendChild(card);
+  });
+ }catch(error){text($('toolJobs'),error.message)}
+}
+function showTools(show){
+ $('toolsHub').classList.toggle('hidden',!show);
+ document.querySelector('.hero').classList.toggle('hidden',show);
+ $('searchContent').classList.toggle('hidden',show);
+ text($('toolsBtn'),show?'← Tìm kiếm':'🧰 Tools');
+ if(show){loadTools();refreshToolJobs();$('toolsHub').scrollIntoView({behavior:'smooth',block:'start'})}
+}
+$('toolsBtn').addEventListener('click',function(){showTools($('toolsHub').classList.contains('hidden'))});
+$('refreshToolJobs').addEventListener('click',refreshToolJobs);
+
 $('crawlForm').addEventListener('submit',async function(e){
  e.preventDefault();var button=$('crawlSubmit');var url=$('crawlUrl').value.trim();var maxPages=Number($('crawlPages').value);
  if(!safeUrl(url)){text($('crawlStatus'),'Chỉ hỗ trợ URL HTTPS public hợp lệ.');return}

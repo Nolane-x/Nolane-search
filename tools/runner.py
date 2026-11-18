@@ -47,7 +47,9 @@ def download_telegram(file_id, filename):
     if not rel or rel.startswith("/") or ".." in Path(rel).parts or "\\" in rel: raise RuntimeError("Unsafe Telegram file path.")
     url = f"https://api.telegram.org/file/bot{token}/{urllib.parse.quote(rel, safe='/')}"
     safe = re.sub(r"[^A-Za-z0-9._-]+","_",Path(filename or Path(rel).name or "upload.bin").name)[:100] or "upload.bin"
-    dest = Path(os.environ.get("RUNNER_TEMP","/tmp")) / ("nolane-" + safe)
+    input_root = Path(os.environ.get("RUNNER_TEMP","/tmp")) / "nolane-inputs"
+    input_root.mkdir(parents=True, exist_ok=True)
+    dest = input_root / safe
     size=0
     with urllib.request.urlopen(urllib.request.Request(url,headers={"user-agent":"Nolane-Tools-Runner/1.0"}),timeout=60) as response, dest.open("wb") as out:
         while True:
@@ -62,7 +64,9 @@ def download_telegram(file_id, filename):
 def tool_text(text, title):
     text = text.strip() or "Không phát hiện nội dung."
     if len(text) > 2800:
-        out=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-result.txt"
+        out_root=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"
+        out_root.mkdir(parents=True,exist_ok=True)
+        out=out_root/"nolane-result.txt"
         out.write_text(text,encoding="utf-8")
         return {"summary":f"{title}: hoàn tất, {len(text):,} ký tự. Toàn bộ kết quả được gửi kèm dưới dạng TXT.","output_path":str(out)}
     return {"summary":f"{title}\n\n{text}","output_path":""}
@@ -261,11 +265,21 @@ def cmd_fetch(args):
     data=api_json(WORKER_URL+"/internal/tools/runner?job_id="+urllib.parse.quote(args.job_id),token=secret)
     Path(args.output).write_text(json.dumps(data,ensure_ascii=False),encoding="utf-8")
 
-def cmd_run(args):
-    job=json.loads(Path(args.job_file).read_text(encoding="utf-8")).get("job",{})
-    if not re.fullmatch(r"[0-9a-f-]{36}",str(job.get("id","")),re.I) or job.get("toolId") not in TOOLS: raise RuntimeError("Invalid tool job.")
+def cmd_download(args):
+    job=load_job(Path(args.job_file))
     source=download_telegram(job["fileId"],job.get("fileName") or "upload.bin")
-    result=TOOLS[job["toolId"]](source)
+    Path(args.output).write_text(str(source),encoding="utf-8")
+
+def cmd_run(args):
+    job=load_job(Path(args.job_file))
+    source=Path(Path(args.input_path_file).read_text(encoding="utf-8").strip())
+    root=(Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs").resolve()
+    if source.is_symlink():
+        raise RuntimeError("Input file symlinks are not allowed.")
+    resolved=source.resolve(strict=True)
+    if resolved.parent != root or not resolved.is_file():
+        raise RuntimeError("Input file is outside the private runner input directory.")
+    result=TOOLS[job["toolId"]](resolved)
     Path(args.output).write_text(json.dumps({"summary":str(result.get("summary",""))[:6000],"output_path":result.get("output_path","")},ensure_ascii=False),encoding="utf-8")
 
 def send_document(chat_id,path,caption):
@@ -288,14 +302,28 @@ def callback(job_id,payload):
     return api_json(WORKER_URL+"/internal/tools/runner",method="POST",data={"job_id":job_id,**payload},token=secret)
 
 def cmd_complete(args):
-    job=json.loads(Path(args.job_file).read_text(encoding="utf-8"))["job"]
+    # Re-fetch authoritative metadata after untrusted file processing has finished.
+    token=os.environ.get("TELEGRAM_WEBHOOK_SECRET")
+    if not token: raise RuntimeError("Missing TELEGRAM_WEBHOOK_SECRET.")
+    job_data=api_json(
+        WORKER_URL+"/internal/tools/runner?job_id="+urllib.parse.quote(args.job_id),
+        token=token,
+    )
+    job=job_data.get("job")
+    if not isinstance(job,dict) or job.get("id")!=args.job_id:
+        raise RuntimeError("Worker returned an invalid or mismatched tool job.")
     result=json.loads(Path(args.result_file).read_text(encoding="utf-8"))
     output=result.get("output_path")
     if output:
-        p=Path(output)
-        if not p.is_file() or p.stat().st_size>45*1024*1024: raise RuntimeError("Output file is missing or exceeds the 45 MB Telegram delivery cap.")
+        root=(Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs").resolve()
+        candidate=Path(output)
+        if candidate.is_symlink():
+            raise RuntimeError("Tool output symlinks are not allowed.")
+        p=candidate.resolve(strict=True)
+        if p.parent!=root or not p.is_file() or p.stat().st_size>45*1024*1024:
+            raise RuntimeError("Tool output must be a regular file inside the private runner input directory and stay under 45 MB.")
         send_document(int(job["chatId"]),p,"Nolane Tools · "+job["toolId"])
-    callback(job["id"],{"status":"completed","summary":result.get("summary","Đã hoàn thành.")})
+    callback(args.job_id,{"status":"completed","summary":result.get("summary","Đã hoàn thành.")})
 
 def cmd_fail(args):
     try: callback(args.job_id,{"status":"failed","error":args.message[:1000]})
@@ -304,8 +332,9 @@ def cmd_fail(args):
 def main():
     parser=argparse.ArgumentParser(); sub=parser.add_subparsers(dest="cmd",required=True)
     p=sub.add_parser("fetch"); p.add_argument("job_id"); p.add_argument("output"); p.set_defaults(func=cmd_fetch)
-    p=sub.add_parser("run"); p.add_argument("job_file"); p.add_argument("output"); p.set_defaults(func=cmd_run)
-    p=sub.add_parser("complete"); p.add_argument("job_file"); p.add_argument("result_file"); p.set_defaults(func=cmd_complete)
+    p=sub.add_parser("download"); p.add_argument("job_file"); p.add_argument("output"); p.set_defaults(func=cmd_download)
+    p=sub.add_parser("run"); p.add_argument("job_file"); p.add_argument("input_path_file"); p.add_argument("output"); p.set_defaults(func=cmd_run)
+    p=sub.add_parser("complete"); p.add_argument("job_id"); p.add_argument("result_file"); p.set_defaults(func=cmd_complete)
     p=sub.add_parser("fail"); p.add_argument("job_id"); p.add_argument("--message",default="Tool runner failed; see Actions logs."); p.set_defaults(func=cmd_fail)
     args=parser.parse_args()
     try: args.func(args)
