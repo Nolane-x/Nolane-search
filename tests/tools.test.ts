@@ -5,7 +5,7 @@ describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
     const ids = TOOL_CATALOG.map(tool => tool.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(23);
+    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(37);
     expect(TOOL_CATALOG.every(tool => tool.ready && tool.description.length > 12 && tool.accepts.length > 0)).toBe(true);
   });
 
@@ -15,6 +15,12 @@ describe("Nolane Tools registry", () => {
     expect(inferToolForUpload({ mimeType: "application/octet-stream", fileName: "photo.png" })).toBe("image-ocr");
     expect(isToolCompatible(getTool("pdf-text")!, "application/octet-stream", "scan.pdf")).toBe(true);
     expect(inferToolForUpload({ mimeType: "application/pdf", fileName: "scan.pdf" })).toBe("pdf-text");
+    expect(inferToolForUpload({ mimeType: "application/epub+zip", fileName: "book.epub" })).toBe("epub-text");
+    expect(inferToolForUpload({ mimeType: "application/octet-stream", fileName: "archive.sqlite" })).toBe("sqlite-inspect");
+    expect(inferToolForUpload({ mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName: "sales.xlsx" })).toBe("xlsx-profile");
+    expect(inferToolForUpload({ mimeType: "text/yaml", fileName: "config.yml" })).toBe("yaml-format");
+    expect(inferToolForUpload({ mimeType: "application/xml", fileName: "feed.xml" })).toBe("xml-format");
+    expect(inferToolForUpload({ mimeType: "text/x-python", fileName: "script.py" })).toBe("code-check");
     expect(inferToolForUpload({ mimeType: "text/html", fileName: "page.html" })).toBe("html-text");
     expect(inferToolForUpload({ mimeType: "text/plain", fileName: "notes.txt" })).toBe("text-clean");
     expect(inferToolForUpload({ mimeType: "text/vtt", fileName: "captions.vtt" })).toBe("subtitle-text");
@@ -36,6 +42,10 @@ describe("Nolane Tools registry", () => {
     expect(isToolCompatible(getTool("audio-normalize")!, "audio/mpeg", "podcast.mp3")).toBe(true);
     expect(isToolCompatible(getTool("video-audio")!, "video/mp4", "clip.mp4")).toBe(true);
     expect(isToolCompatible(getTool("video-gif")!, "video/webm", "clip.webm")).toBe(true);
+    expect(isToolCompatible(getTool("image-webp")!, "image/png", "transparent.png")).toBe(true);
+    expect(isToolCompatible(getTool("pdf-to-images")!, "application/pdf", "book.pdf")).toBe(true);
+    expect(isToolCompatible(getTool("sqlite-inspect")!, "application/octet-stream", "data.sqlite3")).toBe(true);
+    expect(isToolCompatible(getTool("archive-safe-extract")!, "application/zip", "bundle.zip")).toBe(true);
     expect(isToolCompatible(getTool("pdf-text")!, "image/jpeg", "photo.jpg")).toBe(false);
     expect(isToolCompatible(getTool("office-text")!, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "notes.docx")).toBe(true);
     expect(getTool("not-a-tool")).toBeNull();
