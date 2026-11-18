@@ -240,3 +240,12 @@ PR #10 is merged into `main` and deployed in Worker version `74f6a6d4-c91b-4c68-
 - Post-deploy `GET /health` returned `ok: true` and `database: reachable`; configured AI routes remain four provider-key routes and nine model routes.
 
 An owner-side browser/Telegram interaction is still needed to verify the visible list and destructive controls against the owner's real stored pages. Automated authorization, pagination, validation and deletion-batch behavior are covered by tests.
+
+
+## Telegram provider-quota protection — pending deployment
+
+- The Worker now reuses its conditional D1 UPSERT limiter for Telegram commands as well as Web Portal endpoints.
+- Per-user one-minute caps are enforced before web search, TinyFish reads, AI completions, Deep Search queue jobs and site-crawl queue jobs.
+- Telegram menu follow-up actions use the same command handlers and therefore inherit the same caps.
+- Unit tests cover D1 window semantics and an integration test verifies that a third `/deep` request is rejected without creating a third job.
+- No D1 migration, extra Cloudflare resource or new secret is required. This section will be changed to deployed status after the main-branch CI and production release are verified.
