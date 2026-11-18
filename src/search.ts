@@ -166,14 +166,14 @@ async function localSearch(env: Env, query: string): Promise<SearchResult[]> {
   const ftsQuery = buildLocalFtsQuery(query);
   if (!ftsQuery) return [];
   const result = await env.DB.prepare(
-    \`SELECT p.title, p.url, p.domain,
+    `SELECT p.title, p.url, p.domain,
             snippet(indexed_pages_fts, 1, '', '', ' … ', 24) AS snippet,
             bm25(indexed_pages_fts, 8.0, 1.0, 0.0, 0.0) AS bm25_score
        FROM indexed_pages_fts
        JOIN indexed_pages p ON p.id = indexed_pages_fts.rowid
       WHERE indexed_pages_fts MATCH ?
       ORDER BY bm25_score ASC
-      LIMIT ?\`,
+      LIMIT ?`,
   ).bind(ftsQuery, 60).all<{
     title: string;
     url: string;
