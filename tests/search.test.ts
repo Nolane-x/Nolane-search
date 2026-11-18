@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { normalizeUrl } from "../src/security";
-import { feedbackWeight, performSearch, rankAndDeduplicate } from "../src/search";
+import { buildLocalFtsQuery, feedbackWeight, performSearch, rankAndDeduplicate } from "../src/search";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -11,6 +11,60 @@ describe("search URL normalization", () => {
   });
   it("preserves meaningful query parameters", () => {
     expect(normalizeUrl("https://example.com/search?q=workers")).toContain("q=workers");
+  });
+});
+
+describe("personal index hybrid retrieval", () => {
+  it("builds a parameter-safe broad FTS5 query from meaningful terms", () => {
+    expect(buildLocalFtsQuery("the Cloudflare Workers durable objects"))
+      .toBe('"cloudflare" OR "workers" OR "durable" OR "objects"');
+    expect(buildLocalFtsQuery('"" -- !!!')).toBe("");
+  });
+
+  it("uses title-weighted BM25 candidates before the shared relevance reranker", async () => {
+    const sqlCalls: Array<{ sql: string; values: unknown[] }> = [];
+    const rows = [
+      {
+        title: "Cloudflare Workers Durable Objects",
+        url: "https://docs.example/workers/durable-objects",
+        domain: "docs.example",
+        snippet: "A guide to Durable Objects on Cloudflare Workers.",
+        bm25_score: -0.08,
+      },
+      {
+        title: "Workers overview",
+        url: "https://other.example/workers",
+        domain: "other.example",
+        snippet: "An overview that only briefly mentions Workers.",
+        bm25_score: -0.01,
+      },
+    ];
+    const db = {
+      prepare(sql: string) {
+        let values: unknown[] = [];
+        const call = {
+          bind(...input: unknown[]) { values = input; return this; },
+          first: async () => null,
+          all: async () => {
+            sqlCalls.push({ sql, values });
+            return { results: sql.includes("indexed_pages_fts MATCH") ? rows : [] };
+          },
+          run: async () => ({ meta: { changes: 1 } }),
+        };
+        return call;
+      },
+    };
+    const results = await performSearch({
+      DB: db,
+    } as never, "Cloudflare Workers Durable Objects", "local");
+
+    const retrieval = sqlCalls.find(call => call.sql.includes("indexed_pages_fts MATCH"));
+    expect(retrieval).toBeDefined();
+    expect(retrieval?.sql).toContain("bm25(indexed_pages_fts, 8.0, 1.0, 0.0, 0.0)");
+    expect(retrieval?.values[0]).toBe('"cloudflare" OR "workers" OR "durable" OR "objects"');
+    expect(retrieval?.values[1]).toBe(60);
+    expect(results[0]?.title).toBe("Cloudflare Workers Durable Objects");
+    expect(results[0]?.provider).toBe("Nolane Index · BM25");
   });
 });
 
