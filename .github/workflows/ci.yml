@@ -48,7 +48,9 @@ jobs:
           node --check scripts/check-telegram-webhook.mjs
           node scripts/check-telegram-webhook.mjs
           node --check scripts/set-commands.mjs
-      - name: Check GitHub Actions tool runner syntax
-        run: python -m py_compile tools/runner.py
+      - name: Test GitHub Actions tool runner
+        run: |
+          python -m py_compile tools/runner.py
+          python -m unittest discover -s tools -p 'test_*.py'
       - name: Build Worker
         run: npx cf build

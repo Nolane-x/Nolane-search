@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Private GitHub-hosted execution engine for Nolane Tools."""
 from __future__ import annotations
-import argparse, csv, hashlib, json, mimetypes, os, re, shutil, subprocess, sys, tarfile, urllib.error, urllib.parse, urllib.request, zipfile
+import argparse, csv, hashlib, json, mimetypes, os, re, shutil, subprocess, sys, tarfile, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
 from pathlib import Path
+from html import unescape
+from html.parser import HTMLParser
 from typing import Any
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
@@ -11,7 +13,8 @@ RUNNERS = {
     "image-ocr", "image-info", "image-clean-exif", "image-compress", "image-to-pdf",
     "qr-read", "pdf-text", "pdf-info", "audio-transcribe", "audio-info",
     "video-info", "video-thumbnail", "csv-profile", "json-format",
-    "office-text", "archive-inspect", "file-hash",
+    "office-text", "archive-inspect", "file-hash", "text-clean", "subtitle-text", "html-text",
+    "audio-normalize", "video-audio", "video-gif",
 }
 
 def api_json(url: str, method="GET", data=None, token=None):
@@ -256,7 +259,9 @@ TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
  "audio-transcribe":audio_transcribe,"audio-info":audio_info,"video-info":video_info,"video-thumbnail":video_thumbnail,
- "csv-profile":csv_profile,"json-format":json_format,"office-text":office_text,"archive-inspect":archive_inspect,"file-hash":file_hash,
+ "csv-profile":csv_profile,"json-format":json_format,"office-text":office_text,"archive-inspect":archive_inspect,"file-hash":file_hash,"text-clean":text_clean,"subtitle-text":subtitle_text,"html-text":html_text,
+ "audio-normalize":audio_normalize,"video-audio":video_audio,"video-gif":video_gif,
+
 }
 
 def cmd_fetch(args):
@@ -328,6 +333,89 @@ def cmd_complete(args):
 def cmd_fail(args):
     try: callback(args.job_id,{"status":"failed","error":args.message[:1000]})
     except Exception as exc: print(f"Unable to report failure: {exc}",file=sys.stderr)
+
+
+def text_clean(p):
+    raw=p.read_text(encoding="utf-8-sig",errors="replace")
+    normalized=unicodedata.normalize("NFC",raw).replace("\r\n","\n").replace("\r","\n")
+    normalized=re.sub("[\u200b\u200c\u200d\ufeff]","",normalized)
+    lines=[line.rstrip(" \t") for line in normalized.split("\n")]
+    cleaned=re.sub(r"\n{3,}","\n\n","\n".join(lines)).strip()+"\n"
+    out=p.with_name(p.stem+"-cleaned"+(p.suffix.lower() or ".txt"))
+    out.write_text(cleaned,encoding="utf-8")
+    return {"summary":f"Đã làm sạch văn bản: {len(raw):,} → {len(cleaned):,} ký tự; chuẩn hóa Unicode NFC, newline, khoảng trắng và ký tự zero-width.","output_path":str(out)}
+
+def subtitle_text(p):
+    raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
+    lines=[]
+    for line in raw.splitlines():
+        value=line.strip()
+        if not value or value.upper()=="WEBVTT" or value.startswith("NOTE "):
+            continue
+        if re.fullmatch(r"\d+",value):
+            continue
+        if "-->" in value and re.search(r"\d{2}:\d{2}",value):
+            continue
+        value=re.sub(r"<[^>]*>","",value)
+        value=unescape(value).strip()
+        if value and (not lines or lines[-1]!=value):
+            lines.append(value)
+    return tool_text("\n".join(lines),"Subtitle transcript")
+
+class VisibleHtmlText(HTMLParser):
+    BLOCK_TAGS={"address","article","aside","blockquote","br","dd","div","dl","dt","fieldset","figcaption","figure","footer","form","h1","h2","h3","h4","h5","h6","header","hr","li","main","nav","ol","p","pre","section","table","td","th","tr","ul"}
+    SKIP_TAGS={"head","script","style","noscript","svg","canvas","iframe","template"}
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.skip_depth=0
+        self.parts=[]
+    def handle_starttag(self,tag,attrs):
+        if tag in self.SKIP_TAGS:
+            self.skip_depth+=1
+        elif not self.skip_depth and tag in self.BLOCK_TAGS:
+            self.parts.append("\n")
+    def handle_endtag(self,tag):
+        if tag in self.SKIP_TAGS and self.skip_depth:
+            self.skip_depth-=1
+        elif not self.skip_depth and tag in self.BLOCK_TAGS:
+            self.parts.append("\n")
+    def handle_data(self,data):
+        if not self.skip_depth:
+            value=data.strip()
+            if value:
+                self.parts.append(value)
+
+def html_text(p):
+    parser=VisibleHtmlText()
+    parser.feed(p.read_text(encoding="utf-8-sig",errors="replace"))
+    parser.close()
+    text=" ".join(parser.parts)
+    text=re.sub(r"[ \t]+"," ",text)
+    text=re.sub(r" *\n *","\n",text)
+    text=re.sub(r"\n{3,}","\n\n",text).strip()
+    return tool_text(text,"HTML text extraction")
+
+def audio_normalize(p):
+    out=p.with_name(p.stem+"-normalized.mp3")
+    cmd("ffmpeg",["-y","-i",str(p),"-vn","-af","loudnorm=I=-16:TP=-1.5:LRA=11","-c:a","libmp3lame","-q:a","2",str(out)],600)
+    return {"summary":"Đã chuẩn hóa loudness về mục tiêu -16 LUFS, true peak -1.5 dBTP và xuất MP3.","output_path":str(out)}
+
+def video_audio(p):
+    out=p.with_name(p.stem+"-audio.mp3")
+    cmd("ffmpeg",["-y","-i",str(p),"-map","0:a:0","-vn","-c:a","libmp3lame","-q:a","2",str(out)],600)
+    return {"summary":"Đã tách track âm thanh đầu tiên khỏi video và xuất MP3.","output_path":str(out)}
+
+def video_gif(p):
+    data=ffprobe(p)
+    duration=float(data.get("format",{}).get("duration") or 0)
+    if duration<=0:
+        raise RuntimeError("Không đọc được thời lượng video.")
+    clip=min(6.0,duration)
+    start=max(0.0,(duration-clip)/2)
+    out=p.with_name(p.stem+"-preview.gif")
+    vf="fps=10,scale=640:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse"
+    cmd("ffmpeg",["-y","-ss",str(start),"-t",str(clip),"-i",str(p),"-vf",vf,"-loop","0",str(out)],900)
+    return {"summary":f"Đã tạo GIF xem trước dài {clip:.1f} giây, 10 FPS, rộng tối đa 640 px.","output_path":str(out)}
 
 def main():
     parser=argparse.ArgumentParser(); sub=parser.add_subparsers(dest="cmd",required=True)
