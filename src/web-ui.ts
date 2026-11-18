@@ -33,6 +33,17 @@ button,input,textarea{font:inherit}button{cursor:pointer}a{color:inherit}.shell{
 .crawl-job{padding:9px 10px;border:1px solid var(--line);border-radius:10px;margin-top:8px;font-size:12px;overflow-wrap:anywhere}
 .crawl-job strong{display:block;margin-bottom:3px}
 .crawl-job .mini{display:block}
+.index-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;margin-top:16px}
+.index-tools input{min-width:0;width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 9px;background:var(--panel);color:var(--ink);font-size:12px;outline:0}
+.index-tools input:focus{border-color:#9aafff}
+.index-entry{padding:10px;border:1px solid var(--line);border-radius:11px;margin-top:8px;overflow-wrap:anywhere}
+.index-entry a{display:block;color:var(--accent);font-size:12px;font-weight:650;text-decoration:none;line-height:1.45}
+.index-entry a:hover{text-decoration:underline}
+.index-entry .mini{display:block;margin-top:3px}
+.index-entry-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.index-entry-actions button{font-size:10px;padding:4px 7px}
+#indexPages{max-height:390px;overflow:auto}
+
 </style>
 </head>
 <body>
@@ -57,6 +68,9 @@ button,input,textarea{font:inherit}button{cursor:pointer}a{color:inherit}.shell{
 <p class="muted" style="font-size:12px;margin:0 0 12px">Thu thập một website công khai để tạo chỉ mục riêng. Chỉ crawl cùng tên miền và tuân thủ robots.txt.</p>
 <form id="crawlForm" class="crawl-form"><input id="crawlUrl" type="url" placeholder="https://example.com" required><select id="crawlPages"><option value="5">5 trang</option><option value="10" selected>10 trang</option><option value="20">20 trang</option></select><button id="crawlSubmit" class="btn" type="submit">Lập chỉ mục website</button></form>
 <div id="crawlStatus" class="mini" style="margin-top:9px">Chưa có tác vụ crawl.</div><div id="crawlJobs"></div>
+<div class="index-tools"><input id="indexFilter" type="search" placeholder="Lọc theo tiêu đề hoặc domain"><button id="indexFilterBtn" class="quiet" type="button">Lọc</button></div>
+<div id="indexSummary" class="mini" style="margin-top:7px">Chưa tải chỉ mục.</div><div id="indexPages"></div>
+<button id="indexMore" class="quiet hidden" type="button" style="width:100%;margin-top:8px">Tải thêm trang</button>
 </div></section>
 <section class="panel"><div class="panel-head"><strong>✧ AI Overview</strong><span class="mini">Có nguồn tham khảo</span></div><div id="answerPanel" class="panel-body"><div class="ai-card"><h3>Hỏi AI dựa trên kết quả web</h3><p>Tìm một chủ đề, sau đó yêu cầu Nolane tổng hợp các nguồn thành câu trả lời có dẫn chứng.</p></div><button id="answerSideBtn" class="btn" style="width:100%">Tổng hợp câu trả lời</button><div id="answerOutput" class="hidden" style="margin-top:14px"></div></div></section>
 <section class="panel"><div class="panel-head"><strong>✦ Nolane Chat</strong><button id="clearChat" class="quiet" style="font-size:11px">Cuộc trò chuyện mới</button></div><div class="chat"><div id="chatLog" class="chat-log"><div class="bubble assistant">Xin chào! Tôi có thể giúp bạn phân tích, giải thích hoặc tiếp tục một câu hỏi. Dùng Tìm kiếm để lấy thông tin web mới nhất, hoặc hỏi trực tiếp tại đây.</div></div><form id="chatForm" class="chat-form"><textarea id="chatInput" placeholder="Nhắn tin với Nolane..." rows="1" aria-label="Tin nhắn"></textarea><button class="send" title="Gửi">➤</button></form></div></section>
@@ -67,7 +81,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}a{color:inherit}.shell{
 <script>
 (function(){
 'use strict';
-var state={mode:'web',query:'',results:[],history:[],busy:false,eventId:null};
+var state={mode:'web',query:'',results:[],history:[],busy:false,eventId:null,indexOffset:0,indexTotal:0,indexLoading:false,indexQuery:''};
 var $=function(id){return document.getElementById(id)};
 var auth=$('auth'),workspace=$('workspace'),query=$('query'),results=$('results'),summary=$('resultSummary');
 function text(el,value){el.textContent=value==null?'':String(value)}
@@ -127,6 +141,56 @@ async function refreshCrawls(){
   });
  }catch(error){text($('crawlStatus'),error.message)}
 }
+
+async function removeIndexed(target){
+ var isDomain=!!target.domain;
+ var label=isDomain?target.domain:target.url;
+ var warning=isDomain
+  ?'Gỡ toàn bộ trang đã lưu của '+label+'? Các watch khớp URL đã lưu cũng sẽ bị tắt.'
+  :'Gỡ trang này khỏi chỉ mục? Watch khớp URL này cũng sẽ bị tắt.';
+ if(!window.confirm(warning))return;
+ try{
+  var payload=isDomain?{domain:target.domain}:{url:target.url};
+  var data=await api('/api/index/delete',{method:'POST',headers:authHeaders(),body:JSON.stringify(payload)});
+  text($('indexSummary'),'Đã gỡ '+data.pagesDeleted+' trang · Đã tắt '+data.watchesDisabled+' watch.');
+  state.indexOffset=0;
+  await refreshIndex(true);
+  await refreshCrawls();
+ }catch(error){text($('indexSummary'),error.message)}
+}
+
+async function refreshIndex(reset){
+ if(state.indexLoading)return;
+ if(reset){state.indexOffset=0;state.indexQuery=$('indexFilter').value.trim();$('indexPages').replaceChildren()}
+ state.indexLoading=true;
+ $('indexMore').disabled=true;
+ try{
+  var params=new URLSearchParams({limit:'20',offset:String(state.indexOffset)});
+  if(state.indexQuery)params.set('q',state.indexQuery);
+  var data=await api('/api/index?'+params.toString());
+  var pages=data.pages||[];
+  state.indexTotal=Number(data.total)||0;
+  pages.forEach(function(page){
+   var card=document.createElement('div');card.className='index-entry';
+   var link=document.createElement('a');var href=safeUrl(page.url);
+   if(href){link.href=href;link.target='_blank';link.rel='noopener noreferrer'}
+   text(link,page.title||page.url);card.appendChild(link);
+   var meta=document.createElement('span');meta.className='mini';
+   text(meta,(page.domain||'')+' · '+(page.contentChars||0).toLocaleString()+' ký tự');card.appendChild(meta);
+   var actions=document.createElement('div');actions.className='index-entry-actions';
+   var removePage=document.createElement('button');removePage.className='feedback-btn';removePage.type='button';text(removePage,'Gỡ trang');
+   removePage.addEventListener('click',function(){removeIndexed({url:page.url})});actions.appendChild(removePage);
+   var removeSite=document.createElement('button');removeSite.className='feedback-btn';removeSite.type='button';text(removeSite,'Gỡ domain');
+   removeSite.addEventListener('click',function(){removeIndexed({domain:page.domain})});actions.appendChild(removeSite);
+   card.appendChild(actions);$('indexPages').appendChild(card);
+  });
+  if(!state.indexTotal)text($('indexSummary'),state.indexQuery?'Không có trang phù hợp với bộ lọc.':'Chưa có nội dung trong chỉ mục.');
+  else text($('indexSummary'),state.indexQuery?state.indexTotal+' trang phù hợp':'Đang lưu '+state.indexTotal+' trang');
+  state.indexOffset+=pages.length;
+  $('indexMore').classList.toggle('hidden',state.indexOffset>=state.indexTotal||pages.length===0);
+ }catch(error){text($('indexSummary'),error.message)}
+ finally{state.indexLoading=false;$('indexMore').disabled=false}
+}
 $('crawlForm').addEventListener('submit',async function(e){
  e.preventDefault();var button=$('crawlSubmit');var url=$('crawlUrl').value.trim();var maxPages=Number($('crawlPages').value);
  if(!safeUrl(url)){text($('crawlStatus'),'Chỉ hỗ trợ URL HTTPS public hợp lệ.');return}
@@ -138,7 +202,10 @@ $('crawlForm').addEventListener('submit',async function(e){
  }catch(error){text($('crawlStatus'),error.message)}
  finally{button.disabled=false;button.textContent='Lập chỉ mục website'}
 });
-$('refreshCrawls').addEventListener('click',refreshCrawls);
+$('refreshCrawls').addEventListener('click',function(){refreshCrawls();refreshIndex(true)});
+$('indexFilterBtn').addEventListener('click',function(){refreshIndex(true)});
+$('indexFilter').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();refreshIndex(true)}});
+$('indexMore').addEventListener('click',function(){refreshIndex(false)});
 
 $('searchForm').addEventListener('submit',function(e){e.preventDefault();runSearch()});
 $('modeChips').addEventListener('click',function(e){var b=e.target.closest('[data-mode]');if(!b)return;state.mode=b.dataset.mode;document.querySelectorAll('.chip').forEach(function(x){x.classList.toggle('active',x===b)});if(query.value.trim())runSearch()});
@@ -149,7 +216,7 @@ $('logoutBtn').addEventListener('click',async function(){try{await api('/api/aut
 $('themeBtn').addEventListener('click',function(){var dark=document.documentElement.dataset.theme!=='dark';document.documentElement.dataset.theme=dark?'dark':'light';try{localStorage.setItem('nolane.theme',dark?'dark':'light')}catch(e){}});try{document.documentElement.dataset.theme=localStorage.getItem('nolane.theme')||'light'}catch(e){}
 document.addEventListener('keydown',function(e){if(e.key==='/'&&document.activeElement!==query&&document.activeElement!==$('chatInput')){e.preventDefault();query.focus()}});
 renderRecent();loadChat();
-(async function boot(){var params=new URLSearchParams(location.search);var ticket=params.get('ticket');if(ticket){try{await api('/api/auth/exchange',{method:'POST',headers:authHeaders(),body:JSON.stringify({ticket:ticket})});history.replaceState({},'',location.pathname);showWorkspace();refreshCrawls()}catch(e){showAuth(e.message);return}}else{try{await api('/api/auth/me');showWorkspace();refreshCrawls()}catch(e){showAuth()}}})();
+(async function boot(){var params=new URLSearchParams(location.search);var ticket=params.get('ticket');if(ticket){try{await api('/api/auth/exchange',{method:'POST',headers:authHeaders(),body:JSON.stringify({ticket:ticket})});history.replaceState({},'',location.pathname);showWorkspace();refreshCrawls();refreshIndex(true)}catch(e){showAuth(e.message);return}}else{try{await api('/api/auth/me');showWorkspace();refreshCrawls();refreshIndex(true)}catch(e){showAuth()}}})();
 })();
 </script></body></html>`;
 export function webAppResponse(): Response {
