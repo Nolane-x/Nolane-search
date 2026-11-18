@@ -44,7 +44,11 @@ describe("personal index hybrid retrieval", () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
       if (url.hostname === "en.wikipedia.org") {
-        return new Response(JSON.stringify({ query: { search: [] } }), { status: 200 });
+        return new Response(JSON.stringify({ query: { search: [{
+          title: "Cloudflare Workers reference",
+          snippet: "Background reference information about Cloudflare Workers.",
+          timestamp: "2026-10-01T00:00:00Z",
+        }] } }), { status: 200 });
       }
       throw new Error("Unexpected provider: " + url.hostname);
     }));
