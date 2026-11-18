@@ -275,8 +275,8 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
 
   if (url.pathname === "/api/tools/catalog" && request.method === "GET") {
     return jsonResponse({
-      configured: Boolean(env.GITHUB_ACTIONS_TOKEN),
-      tools: TOOL_CATALOG.map(tool => ({ ...tool, ready: Boolean(tool.ready && env.GITHUB_ACTIONS_TOKEN) })),
+      configured: Boolean(env.NOLANE_GH_ACTIONS_TOKEN),
+      tools: TOOL_CATALOG.map(tool => ({ ...tool, ready: Boolean(tool.ready && env.NOLANE_GH_ACTIONS_TOKEN) })),
     });
   }
 
@@ -990,7 +990,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     const lines = [...groups.entries()].map(([label, rows]) => "<b>" + htmlEscape(label) + "</b>\n" + rows.join("\n"));
     await reply(env, chatId,
       "<b>Nolane Tools · " + TOOL_CATALOG.length + " công cụ</b>\n" +
-      (env.GITHUB_ACTIONS_TOKEN ? "" : "⚠️ Chưa cấu hình GitHub Actions token. Hãy thêm secret GITHUB_ACTIONS_TOKEN vào repository trước khi chạy công cụ.\n\n") +
+      (env.NOLANE_GH_ACTIONS_TOKEN ? "" : "⚠️ Chưa cấu hình GitHub Actions token. Hãy thêm secret NOLANE_GH_ACTIONS_TOKEN vào repository trước khi chạy công cụ.\n\n") +
       "Gửi /tool ID để chọn công cụ, rồi gửi tệp. Ảnh sẽ tự chạy OCR nếu không chọn trước.\n\n" +
       lines.join("\n\n") + "\n\nDùng /tool_jobs để xem lịch sử xử lý.");
     return;
