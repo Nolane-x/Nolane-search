@@ -9,6 +9,10 @@ export interface IndexDeleteResult { pagesDeleted: number; watchesDisabled: numb
 export function normalizeIndexDomain(input: string): string | null {
   const raw = input.trim().toLowerCase().replace(/^www\./, "").replace(/\.$/, "");
   if (!raw || raw.length > 253 || /[\s/:?#@]/.test(raw)) return null;
+  const labels = raw.split(".");
+  if (labels.length < 2 || labels.some((label, index) =>
+    !label || label.length > 63 || !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label) ||
+    (index === labels.length - 1 && label.length < 2))) return null;
   const safe = isSafePublicUrl("https://" + raw + "/");
   if (!safe || safe.hostname !== raw) return null;
   return safe.hostname;
@@ -49,8 +53,8 @@ export async function deleteIndexedContent(env: Env, target: IndexDeleteTarget):
   } else {
     const domain = normalizeIndexDomain(target.value);
     if (!domain) throw new Error("Enter a valid public domain such as example.com.");
-    predicate = "lower(domain) IN (?, ?)";
-    values = [domain, "www." + domain];
+    predicate = "(lower(domain) = ? OR lower(domain) = ? OR lower(domain) LIKE ?)";
+    values = [domain, "www." + domain, "%." + domain];
     target = { kind: "domain", value: domain };
   }
   const result = await env.DB.batch([

@@ -17,6 +17,9 @@ describe("private browser search portal", () => {
     expect(html).toContain("AI Overview");
     expect(html).toContain("Nolane Chat");
     expect(html).toContain("Personal Web Index");
+    expect(html).toContain("indexFilter");
+    expect(html).toContain("indexMore");
+    expect(html).toContain("Gỡ domain");
     expect(html).toContain("feedback-btn");
     expect(html).toContain("data-mode=\"research\"");
   });
@@ -37,6 +40,16 @@ describe("private browser search portal", () => {
 
     const crawls = await worker.fetch(new Request("https://nolane-search.example/api/crawls"), env, context);
     expect(crawls.status).toBe(401);
+
+    const index = await worker.fetch(new Request("https://nolane-search.example/api/index"), env, context);
+    expect(index.status).toBe(401);
+
+    const deleteIndex = await worker.fetch(new Request("https://nolane-search.example/api/index/delete", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://nolane-search.example" },
+      body: JSON.stringify({ domain: "example.com" }),
+    }), env, context);
+    expect(deleteIndex.status).toBe(401);
 
     const feedback = await worker.fetch(new Request("https://nolane-search.example/api/feedback", {
       method: "POST",

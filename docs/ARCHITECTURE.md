@@ -167,3 +167,8 @@ Provider adapters and Telegram Bot API calls parse JSON through a streaming read
 Website watches validate the initial URL as public HTTPS and now require every redirect to remain on that same origin. The watch still checks the origin's robots.txt before fetching the target. Redirect response bodies are cancelled before following the next hop. The selected-site crawler also remains same-origin across redirects and cancels redirect bodies.
 
 TinyFish Fetch result URLs are treated as untrusted data. Extracted content is associated only with one of the safe URLs actually sent for fetching; unsafe result/final URLs are not added as lookup keys. This validates metadata returned to the Worker, not the network behavior of the external TinyFish service itself.
+
+
+## Personal index lifecycle
+
+The owner can inspect indexed page metadata through a private API and remove either one normalized public HTTPS page or a domain scope. Removal deletes both the FTS5 row and source row and deactivates matching watch definitions in one D1 batch. Domain removal covers the exact hostname, its `www` alias and subdomains. Job history and Telegram archive snapshots are retained; a crawl already in flight is not cancelled and can reinsert a page after removal.
