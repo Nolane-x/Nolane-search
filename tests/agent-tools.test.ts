@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { executeAgentTool, AGENT_TOOL_DEFINITIONS } from "../src/agent-tools";
+import { executeAgentTool, AGENT_TOOL_DEFINITIONS, runAgentLoop } from "../src/agent-tools";
 import type { Env } from "../src/types";
 
 afterEach(() => vi.unstubAllGlobals());

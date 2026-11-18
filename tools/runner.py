@@ -742,6 +742,9 @@ def xlsx_profile(p):
 
 def _spreadsheet_safe(value):
     text = "" if value is None else str(value)
+    # Preserve ordinary negative numeric values while neutralizing spreadsheet formulas.
+    if re.fullmatch(r"-\d+(?:\.\d+)?", text.strip()):
+        return text
     if text.lstrip().startswith(("=", "+", "-", "@")):
         return "'" + text
     return text
@@ -769,7 +772,8 @@ def csv_clean(p):
         reader=csv.reader(source)
         headers=next(reader,None)
         if not headers: raise RuntimeError("CSV không có header.")
-        headers=[unicodedata.normalize("NFC",str(value)).strip() or f"column_{i+1}" for i,value in enumerate(headers[:200])]
+        if len(headers)>200: raise RuntimeError("CSV vượt quá 200 cột.")
+        headers=[_spreadsheet_safe(unicodedata.normalize("NFC",str(value)).strip() or f"column_{i+1}") for i,value in enumerate(headers)]
         with out.open("w",encoding="utf-8",newline="") as target:
             writer=csv.writer(target,lineterminator="\n")
             writer.writerow(headers)
@@ -798,7 +802,7 @@ def json_to_csv(p):
     out=p.with_name(p.stem+"-converted.csv")
     with out.open("w",encoding="utf-8-sig",newline="") as target:
         writer=csv.writer(target,lineterminator="\n")
-        writer.writerow(headers)
+        writer.writerow([_spreadsheet_safe(header) for header in headers])
         for item in value:
             row=[]
             for key in headers:
