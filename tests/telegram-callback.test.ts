@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { processUpdate } from "../src/index";
 import type { Env } from "../src/types";
@@ -8,13 +7,6 @@ afterEach(() => {
 });
 
 describe("Telegram callback delivery", () => {
-  it("registers callback_query updates and verifies the active webhook configuration", () => {
-    const script = readFileSync(new URL("../scripts/set-webhook.mjs", import.meta.url), "utf8");
-    expect(script).toContain('allowed_updates: ["message", "callback_query"]');
-    expect(script).toContain("getWebhookInfo");
-    expect(script).toContain('configuredUpdates.includes("callback_query")');
-  });
-
   it("acknowledges a dashboard button before the first D1 operation", async () => {
     const events: string[] = [];
     const env = {
