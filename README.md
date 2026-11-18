@@ -34,6 +34,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Website monitoring | /watch https://example.com | Scheduled HTTP checks and change alerts |
 | Watch management | /watches, /unwatch ID | List and disable watches |
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
+| Personal memory | /remember, /memories, /forget | Explicit owner-controlled memories shared by Telegram and Web AI chat |
 | Status | /status | Provider configuration and compact index counters |
 
 Plain text messages are interpreted as web search. Use `/web` in the private Telegram conversation to create a one-time, five-minute browser login link. The web portal offers category search, ranked result cards with relevance feedback, AI Overview, a multi-turn chat panel and a Personal Web Index panel for crawling a bounded public site. Browser sessions are stored server-side, use HttpOnly/Secure/SameSite cookies, expire after seven days, and are revocable. Search APIs require an authenticated allowlisted Telegram user and have per-user rate limits. Use `/ai prompt` for direct AI, `/ai fast prompt` or `/ai reasoning prompt` for task routing, `/ask question` for web-grounded AI synthesis, and `/ai_status` to inspect configured routes. Telegram results show five items per page; inline Previous/Next buttons browse up to 20 ranked candidates. Pagination sessions are private to the requesting user/chat and expire after 15 minutes. `/wiki` is a reference lookup, not a substitute for primary sources or current reporting.
@@ -42,7 +43,7 @@ Plain text messages are interpreted as web search. Use `/web` in the private Tel
 
 `/search cloudflare site:developers.cloudflare.com` restricts results to a domain and its subdomains. `filetype:pdf` filters by URL extension; `intitle:workers` requires those title tokens. `after:2026-01-10 before:2026-02-01` restricts results to publication timestamps strictly after 10 January and strictly before 1 February. Date filters exclude results without a parseable publication timestamp. Use ISO dates (`YYYY-MM-DD`).
 
-Use /help in the bot for the current command list.
+Use /help in the bot for the current command list. Personal Memory is opt-in: save only details you explicitly want Nolane to retain with `/remember [profile|preference|project|note] text`, review them with `/memories`, and remove them with `/forget ID`. The assistant retrieves at most three relevant saved memories; it does not automatically extract or store private conversation content. AI Overview responses are cached briefly to avoid repeating synthesis calls, and provider routes that fail are temporarily cooled down.
 
 ## Architecture
 
@@ -52,7 +53,7 @@ Use /help in the bot for the current command list.
 - Cloudflare Queues: asynchronous Deep Search and bounded site-crawl jobs, retries with backoff and dead-letter handling. D1 tracks job state so users can inspect or retry failed work.
 - Cloudflare Cron: periodic website checks and housekeeping.
 - Tavily / Exa / Brave / TinyFish / GitHub: external discovery providers, enabled only when their keys exist. The public MediaWiki API adds a free bilingual encyclopedia reference source without another API secret.
-- AI Router: configured through encrypted GitHub Actions secret `AI_ROUTER_CONFIG`; supports multiple keys per provider and OpenAI-compatible, Anthropic Messages and Gemini Interactions APIs. It routes by task and falls back between configured key/model routes. Legacy OpenRouter secrets remain supported.
+- AI Router: configured through encrypted GitHub Actions secret `AI_ROUTER_CONFIG`; supports multiple keys per provider and OpenAI-compatible, Anthropic Messages and Gemini Interactions APIs. It routes by task, limits each request to at most six failover routes (three by default), and temporarily skips recently failing routes. Legacy OpenRouter secrets remain supported. Recent chat history is bounded before prompting, and repeated evidence-based answers use a short D1 cache.
 - GitHub Actions: tests, build validation, migrations and deployment. It is not a permanent bot server.
 
 See docs/ARCHITECTURE.md, docs/SETUP.md, docs/SECRETS.md and docs/OPERATIONS.md. Add AI provider credentials only through GitHub Actions Secrets; never commit or paste keys into chat.
