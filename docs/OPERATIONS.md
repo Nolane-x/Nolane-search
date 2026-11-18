@@ -117,3 +117,14 @@ Never print secrets in logs. Avoid logging raw user content unless necessary for
 - D1 rows are not deleted by code deployment.
 - Telegram archive is a human-readable secondary archive, not an automatic full restore mechanism for watch metadata.
 - If D1 operational data is lost, re-create watch definitions manually; archive snapshots survive only when archive was configured and delivery succeeded.
+
+
+## Personal memory and AI cost controls
+
+- Save only details you explicitly want the assistant to retain: `/remember [profile|preference|project|note] text`.
+- Review the saved list with `/memories`; delete an entry with `/forget ID`.
+- The store is capped at 50 entries per Telegram user, uses the existing D1 cache table and expires entries after five years. Memory is not automatically extracted from chat.
+- Repeated AI Overview/`/ask` queries can reuse a short-lived answer cache. News/current queries expire after two minutes, research after five minutes and other modes after ten minutes.
+- AI Router defaults to three failover routes per completion and clamps configured `maxAttempts` to six. Recently failing routes are temporarily skipped per Worker isolate.
+- Browser chat passes at most eight valid recent turns / 8,000 aggregate characters to the model. Character limits are an approximation for context control, not an exact token count.
+- These controls do not change provider prices or guarantee lower bills; inspect response usage fields when the selected provider reports token usage.

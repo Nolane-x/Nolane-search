@@ -149,3 +149,12 @@ R2 is not enabled in the linked account and neither R2 nor KV is required for th
 5. Consider Vectorize/external embeddings only after FTS quality has been measured.
 6. Add R2 only if snapshot volume exceeds practical Telegram archive workflows.
 7. Consider paid plans or dedicated crawler infrastructure only when real quota metrics justify it.
+
+
+## Lightweight personal memory and AI efficiency
+
+Personal Memory is an explicit, owner-controlled feature. It reuses the existing D1 `search_cache` table with a per-user `personal-memory:{userId}:` key prefix, a maximum of 50 entries per user, five-year expiry, and four categories: profile, preference, project and note. The assistant does not automatically extract or save conversation content. Telegram commands `/remember`, `/memories` and `/forget` let the owner save, review and delete entries. Chat and direct Telegram AI retrieve no more than three short relevant entries; memory is optional context, never an instruction source.
+
+The AI Router defaults to three provider/model attempts per completion and clamps configured failover to six. Failed routes receive a short in-isolate cooldown to avoid immediately repeating known 429, authentication, timeout or upstream server failures. This cooldown is best-effort and may reset when a Worker isolate is replaced.
+
+Web AI Overview and Telegram `/ask` share a D1 synthesis cache keyed by normalized query and search mode. Cache life is short (two minutes for news/current queries, five minutes for research, ten minutes for other modes). Recent browser chat history is compacted to at most eight valid turns and an 8,000-character aggregate budget before it is sent to a model. These limits are defensive context budgets, not exact token counts; provider tokenizers differ.

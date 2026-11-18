@@ -167,3 +167,16 @@ These need a real interaction from the owner's Telegram account; CI and the publ
 8. Run `/ai_status`, then one low-cost `/ai fast ...` request to verify live API-key acceptance. Test failover only if needed; it can spend provider quota.
 9. Try a 20-result Telegram search pagination case, `/deep`, `/read`, `/watch` and archive delivery.
 No API key, bot token, webhook secret or session token should be pasted into chat, committed to the repository, or included in screenshots/logs.
+
+
+## Lightweight personal memory and efficiency controls (branch validation pending)
+
+The current upgrade branch `upgrade/personal-memory-efficiency-v1` contains a small opt-in Personal Memory implementation and bounded AI-cost controls. It has not yet been merged or deployed:
+
+- D1 `search_cache` reuse, no new table or migration; maximum 50 owner memories, five-year TTL; `/remember`, `/memories`, `/forget`.
+- At most three relevant memories injected as optional context into Telegram `/ai` and browser `/api/chat`; chat history budget of 8,000 characters and eight turns.
+- AI Overview / Telegram `/ask` short-lived synthesis cache.
+- AI Router defaults to three failover attempts and clamps configuration at six, with temporary per-isolate route cooldowns.
+- New unit tests cover memory ownership/retrieval/deletion, bounded chat history and route failover behavior.
+
+Do not treat these changes as production features until branch CI, merge, deployment and the live health endpoint have been verified.
