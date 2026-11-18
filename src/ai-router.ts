@@ -45,7 +45,7 @@ function isRouteCoolingDown(candidate: Candidate, now = Date.now()): boolean {
 
 function markRouteCoolingDown(candidate: Candidate, error: unknown): void {
   const message = error instanceof Error ? error.message : "";
-  const status = Number(message.match(/HTTP (\\d{3})/)?.[1] || 0);
+  const status = Number(message.match(/HTTP (\d{3})/)?.[1] || 0);
   const duration = status === 429 ? 60_000
     : status === 401 || status === 403 ? 5 * 60_000
     : status >= 500 ? 30_000
