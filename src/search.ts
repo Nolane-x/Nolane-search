@@ -275,8 +275,52 @@ async function cachedSearch(env: Env, query: string, mode: SearchMode): Promise<
   return ranked;
 }
 
+export function feedbackWeight(positive: number, negative: number): number {
+  const up = Math.max(0, Math.min(10_000, Math.floor(positive)));
+  const down = Math.max(0, Math.min(10_000, Math.floor(negative)));
+  return Math.max(-0.10, Math.min(0.10, 0.10 * (up - down) / (up + down + 3)));
+}
+
+async function applySearchFeedback(
+  env: Env,
+  query: string,
+  mode: SearchMode,
+  results: SearchResult[],
+): Promise<SearchResult[]> {
+  if (!results.length) return results;
+  try {
+    const queryHash = await sha256Hex(`${mode}\n${query.trim().toLowerCase()}`);
+    const rows = await env.DB.prepare(
+      "SELECT cache_key, payload FROM search_cache WHERE cache_key LIKE ? AND expires_at > ?",
+    ).bind(`search-feedback:${queryHash}:%`, Date.now())
+      .all<{ cache_key: string; payload: string }>();
+    if (!rows.results.length) return results;
+    const counts = new Map<string, { positive: number; negative: number }>();
+    for (const row of rows.results) {
+      const urlHash = row.cache_key.slice(`search-feedback:${queryHash}:`.length);
+      try {
+        const value = JSON.parse(row.payload) as { positive?: number; negative?: number };
+        counts.set(urlHash, {
+          positive: Number.isFinite(value.positive) ? Number(value.positive) : 0,
+          negative: Number.isFinite(value.negative) ? Number(value.negative) : 0,
+        });
+      } catch { /* Ignore malformed feedback cache entries. */ }
+    }
+    const adjusted = await Promise.all(results.map(async item => {
+      const urlHash = await sha256Hex(normalizeUrl(item.url));
+      const signal = counts.get(urlHash);
+      return signal ? { ...item, score: clamp(item.score + feedbackWeight(signal.positive, signal.negative), 0, 1.5) } : item;
+    }));
+    return adjusted.sort((a, b) => b.score - a.score);
+  } catch (error) {
+    console.warn("Search feedback could not be applied:", error instanceof Error ? error.message : "unknown");
+    return results;
+  }
+}
+
 export async function performSearch(env: Env, query: string, mode: SearchMode = "web"): Promise<SearchResult[]> {
-  return cachedSearch(env, query, mode);
+  const results = await cachedSearch(env, query, mode);
+  return applySearchFeedback(env, query, mode, results);
 }
 
 function staticDeepQueries(query: string): string[] {

@@ -27,15 +27,15 @@ Direct AI → `/ai` command → task-aware AI Router → rotated/priority provid
 - Duplicate deliveries do not re-run jobs that are already completed or currently claimed.
 - /jobs lists recent work; /retry JOB_ID creates a new job from a failed query.
 
-Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt policy check → bounded HTTP checks → content hash → compact D1 extract/FTS5 → optional Telegram snapshot document and change alert.
+Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt policy check → bounded HTTP checks → content hash → compact D1 extract/FTS5 → optional Telegram snapshot document and change alert.\n\nOwner-requested site indexing → private browser panel or `/crawl` → D1 cache-backed job record → existing Cloudflare Queue → same-origin public HTTPS fetch → robots.txt check → optional `/sitemap.xml` seed + bounded same-origin links → 1–20 HTML/text pages → D1 upsert + FTS5 → completion report.
 
 ## Private browser portal
 
 - `/web` can be used only by an allowlisted owner in a private Telegram chat. It creates a cryptographically random, one-time ticket, stores only the SHA-256 hash in D1, expires it after five minutes, and sends the owner a private link.
 - `POST /api/auth/exchange` consumes the ticket with a conditional D1 update and creates a seven-day server-side session. The browser receives only a Secure, HttpOnly, SameSite=Strict cookie; only its hash is stored in D1.
 - `GET /api/auth/me` checks session state. `POST /api/auth/logout` revokes the current session. Expired tickets/sessions and stale rate-limit rows are removed by the scheduled maintenance task.
-- `GET /api/search`, `POST /api/ask` and `POST /api/chat` require an authenticated session whose Telegram user remains on the allowlist. Search, AI Overview and chat have separate per-user D1-backed per-minute limits. Unsafe or oversized inputs are rejected.
-- The UI is served inline from the Worker at `/` and uses no external script/font dependencies. Chat history is bounded in browser local storage and sent as context only when the user sends a message; it is not stored as a server transcript.
+- `GET /api/search`, `POST /api/ask`, `POST /api/chat`, `POST /api/crawl`, `GET /api/crawls` and `POST /api/feedback` require an authenticated session whose Telegram user remains on the allowlist. Search, AI Overview and chat have separate per-user D1-backed per-minute limits. Unsafe or oversized inputs are rejected.
+- Search events store only a hash of the query/mode and hashes of returned URLs. Per-result votes are stored in the existing D1 `search_cache` under internal prefixes; raw search text is not written to the feedback records. Relevance feedback is scoped to the exact query/mode and capped at ±0.10 score.\n- The UI is served inline from the Worker at `/` and uses no external script/font dependencies. Chat history is bounded in browser local storage and sent as context only when the user sends a message; it is not stored as a server transcript.
 - This is a private browser search interface backed by external retrieval providers. It is not an independent full-Web crawl/index and should not be described as Google-equivalent coverage.
 
 ## Provider adapters
@@ -59,7 +59,7 @@ Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt polic
 - wiki: direct Wikipedia reference lookup, English by default and Vietnamese when the query contains Vietnamese diacritics.
 - local: FTS5 search over monitored-page extracts.
 
-The `/search` command accepts Google-style operators: `site:domain`, `filetype:pdf`, `intitle:words`, `inurl:path`, negative terms such as `-deprecated`, `after:YYYY-MM-DD` and `before:YYYY-MM-DD`. The Worker enforces these filters locally even if a provider ignores them. Date filters use strict boundaries and require a parseable `publishedAt` timestamp; results without one are excluded. The `/site` command is a shortcut that prefixes the query with `site:`. The `/read` command uses TinyFish Fetch to extract a single HTTPS page. General web search only queries fallback providers when Tavily fails or returns fewer than four results; Wikipedia joins that fallback set and is also available directly through `/wiki`.
+The `/search` command accepts Google-style operators: `site:domain`, `filetype:pdf`, `intitle:words`, `inurl:path`, negative terms such as `-deprecated`, `after:YYYY-MM-DD` and `before:YYYY-MM-DD`. The Worker enforces these filters locally even if a provider ignores them. Date filters use strict boundaries and require a parseable `publishedAt` timestamp; results without one are excluded. The `/site` command is a shortcut that prefixes the query with `site:`. The `/read` command uses TinyFish Fetch to extract a single HTTPS page. `/crawl https://example.com [1-20]` queues a bounded same-origin public-site crawl; `/crawls` shows recent crawl jobs. The crawler reads `robots.txt`, can seed from `/sitemap.xml`, follows only same-origin HTTPS links and writes compact text extracts to the FTS5 index. General web search only queries fallback providers when Tavily fails or returns fewer than four results; Wikipedia joins that fallback set and is also available directly through `/wiki`.
 
 ## AI routing and credential handling
 
@@ -94,7 +94,7 @@ D1 stores compact operational information:
 - Telegram update IDs for webhook deduplication, pruned after seven days.
 - Search cache with two-minute TTL, pruned during scheduled maintenance.
 - Owner-bound Telegram pagination sessions with a 15-minute TTL in the same table; session entries use a dedicated `telegram-search:` key prefix and are excluded from the cached-query status count.
-- URL/title/domain and a maximum 5 KB text extract per monitored page.
+- URL/title/domain and a maximum 5 KB text extract per monitored or crawled page.\n- Search event, site-crawl job and aggregate relevance-feedback metadata stored with dedicated key prefixes in `search_cache`; event URLs and query strings are hashed in the feedback records.
 - FTS5 index over title and short text extract.
 
 Full extracted text (up to 100 KB after parsing, with a 500 KB response-read cap) is sent to Telegram archive if configured. D1 does not keep the full page body.

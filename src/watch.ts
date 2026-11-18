@@ -128,7 +128,7 @@ async function fetchSafe(urlInput: string, etag?: string | null, lastModified?: 
   throw new Error("Too many redirects.");
 }
 
-async function loadRobotsPolicy(origin: string): Promise<RobotsRule[] | null> {
+export async function loadRobotsPolicy(origin: string): Promise<RobotsRule[] | null> {
   try {
     const response = await fetchSafe(origin + "/robots.txt");
     if (response.status === 404 || response.status === 410) return [];
@@ -144,7 +144,7 @@ async function loadRobotsPolicy(origin: string): Promise<RobotsRule[] | null> {
   }
 }
 
-async function readLimited(response: Response, maxBytes = 500_000): Promise<string> {
+export async function readLimited(response: Response, maxBytes = 500_000): Promise<string> {
   if (!response.body) return "";
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -169,7 +169,7 @@ async function readLimited(response: Response, maxBytes = 500_000): Promise<stri
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 }
 
-function extractPage(html: string): { title: string; text: string } {
+export function extractPage(html: string): { title: string; text: string } {
   const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
     ?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240) || "Untitled page";
   const text = html
@@ -299,6 +299,202 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
     }
   }
   return { checked, changed };
+}
+
+
+export interface SiteCrawlSummary {
+  seedUrl: string;
+  origin: string;
+  discovered: number;
+  indexed: number;
+  skipped: number;
+  pages: Array<{ url: string; title: string }>;
+}
+
+function decodeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+}
+
+function crawlCandidate(input: string, origin: string): string | null {
+  try {
+    const url = new URL(input, origin);
+    if (url.origin !== origin || url.protocol !== "https:" || url.username || url.password) return null;
+    if (/\.(?:7z|avi|css|csv|docx?|eot|gif|gz|ico|jpe?g|js|json|m4v|mov|mp[34]|pdf|png|pptx?|rar|rss|svg|tar|tif|ttf|webm|webp|woff2?|xlsx?|xml\.gz|zip)$/i.test(url.pathname)) return null;
+    url.hash = "";
+    if (url.search) return null;
+    return normalizeUrl(url.toString());
+  } catch { return null; }
+}
+
+function extractCrawlLinks(html: string, currentUrl: string, origin: string, limit: number): string[] {
+  const found = new Set<string>();
+  const pattern = /<a\b[^>]*\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+  for (const match of html.matchAll(pattern)) {
+    const raw = decodeHtmlAttribute((match[1] ?? match[2] ?? match[3] ?? "").trim());
+    if (!raw || /^(?:#|mailto:|tel:|javascript:|data:)/i.test(raw)) continue;
+    const candidate = crawlCandidate(raw, origin);
+    if (!candidate || candidate === currentUrl) continue;
+    found.add(candidate);
+    if (found.size >= limit) break;
+  }
+  return [...found];
+}
+
+async function fetchCrawlResponse(
+  input: string,
+  origin: string,
+): Promise<{ response: Response; finalUrl: URL }> {
+  let current = input;
+  for (let redirects = 0; redirects <= 3; redirects += 1) {
+    const safe = isSafePublicUrl(current);
+    if (!safe || safe.origin !== origin) throw new Error("Crawl redirect left the allowed HTTPS origin.");
+    const response = await fetch(safe, {
+      method: "GET",
+      headers: {
+        "user-agent": "NolaneSearchBot/0.2 (+https://github.com/Nolane-x/Nolane-search)",
+        "accept": "text/html,application/xhtml+xml,text/plain,application/xml;q=0.9,*/*;q=0.2",
+      },
+      redirect: "manual",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get("location");
+      if (!location) return { response, finalUrl: safe };
+      const next = new URL(location, safe);
+      if (next.origin !== origin) throw new Error("Crawl redirect left the allowed HTTPS origin.");
+      current = next.toString();
+      continue;
+    }
+    return { response, finalUrl: safe };
+  }
+  throw new Error("Crawl exceeded the redirect limit.");
+}
+
+async function discoverSitemapUrls(origin: string, rules: RobotsRule[], limit: number): Promise<string[]> {
+  const sitemapUrl = origin + "/sitemap.xml";
+  if (!isAllowedByRobots(sitemapUrl, rules)) return [];
+  try {
+    const { response } = await fetchCrawlResponse(sitemapUrl, origin);
+    if (!response.ok || !/(xml|text\/plain)/i.test(response.headers.get("content-type") || "")) return [];
+    const xml = await readLimited(response, 300_000);
+    const urls = new Set<string>();
+    for (const match of xml.matchAll(/<loc[^>]*>\s*([^<]+?)\s*<\/loc>/gi)) {
+      const candidate = crawlCandidate(decodeHtmlAttribute(match[1] || ""), origin);
+      if (candidate && candidate !== sitemapUrl) {
+        urls.add(candidate);
+        if (urls.size >= limit) break;
+      }
+    }
+    return [...urls];
+  } catch (error) {
+    console.warn("Sitemap discovery was skipped:", error instanceof Error ? error.message : "unknown");
+    return [];
+  }
+}
+
+async function storeIndexedPage(
+  env: Env,
+  url: string,
+  title: string,
+  content: string,
+  contentHash: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const domain = new URL(url).hostname;
+  await env.DB.batch([
+    env.DB.prepare(
+      "DELETE FROM indexed_pages_fts WHERE rowid = (SELECT id FROM indexed_pages WHERE normalized_url = ?)",
+    ).bind(url),
+    env.DB.prepare(
+      `INSERT INTO indexed_pages (url, normalized_url, domain, title, content, content_hash, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(normalized_url) DO UPDATE SET
+         url = excluded.url, domain = excluded.domain, title = excluded.title,
+         content = excluded.content, content_hash = excluded.content_hash, updated_at = excluded.updated_at`,
+    ).bind(url, url, domain, title.slice(0, 240), content.slice(0, 5000), contentHash, now),
+    env.DB.prepare(
+      `INSERT INTO indexed_pages_fts (rowid, title, content, url, domain)
+       SELECT id, title, content, url, domain FROM indexed_pages WHERE normalized_url = ?`,
+    ).bind(url),
+  ]);
+}
+
+/**
+ * Bounded, same-origin public-site crawl for the owner's private FTS index.
+ * It follows robots.txt, optionally seeds from sitemap.xml and indexes a capped
+ * number of HTML/text pages. It is deliberately not a general Internet crawler.
+ */
+export async function crawlAndIndexSite(
+  env: Env,
+  seedInput: string,
+  requestedMaxPages = 10,
+): Promise<SiteCrawlSummary> {
+  const seed = validateWatchUrl(seedInput);
+  if (!seed) throw new Error("Only public HTTPS website URLs are allowed.");
+  const origin = seed.url.origin;
+  const maxPages = Math.max(1, Math.min(20, Math.floor(requestedMaxPages)));
+  const rules = await loadRobotsPolicy(origin);
+  if (rules === null) throw new Error("The site's robots.txt could not be checked; crawl deferred for safety.");
+
+  const queued = new Set<string>([seed.normalized]);
+  for (const sitemapUrl of await discoverSitemapUrls(origin, rules, maxPages * 5)) {
+    if (queued.size >= maxPages * 5 + 1) break;
+    queued.add(sitemapUrl);
+  }
+  const pending = [...queued];
+  const visited = new Set<string>();
+  const pages: Array<{ url: string; title: string }> = [];
+  let indexed = 0;
+  let skipped = 0;
+
+  while (pending.length && indexed < maxPages) {
+    const current = pending.shift()!;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    if (!isAllowedByRobots(current, rules)) { skipped += 1; continue; }
+
+    try {
+      const { response, finalUrl } = await fetchCrawlResponse(current, origin);
+      if (!response.ok) { skipped += 1; continue; }
+      const contentType = response.headers.get("content-type") || "";
+      if (!/(text\/html|text\/plain|application\/xhtml\+xml)/i.test(contentType)) {
+        skipped += 1;
+        continue;
+      }
+      const body = await readLimited(response, 350_000);
+      const page = extractPage(body);
+      if (page.text.length < 40) { skipped += 1; continue; }
+      const finalNormalized = normalizeUrl(finalUrl.toString());
+      const hash = await sha256Hex(page.text);
+      await storeIndexedPage(env, finalNormalized, page.title, page.text, hash);
+      indexed += 1;
+      pages.push({ url: finalNormalized, title: page.title });
+
+      for (const link of extractCrawlLinks(body, finalNormalized, origin, maxPages * 6)) {
+        if (!visited.has(link) && !queued.has(link) && pending.length < maxPages * 6) {
+          queued.add(link);
+          pending.push(link);
+        }
+      }
+    } catch (error) {
+      skipped += 1;
+      console.warn("Site crawl page skipped:", current, error instanceof Error ? error.message : "unknown");
+    }
+  }
+
+  return {
+    seedUrl: seed.normalized,
+    origin,
+    discovered: queued.size,
+    indexed,
+    skipped,
+    pages,
+  };
 }
 
 export function validateWatchUrl(input: string): { url: URL; normalized: string } | null {

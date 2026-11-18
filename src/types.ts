@@ -18,9 +18,21 @@ export interface DeepSearchJob {
   createdAt: number;
 }
 
+export interface SiteCrawlJob {
+  kind: "site-crawl";
+  id: string;
+  chatId: number;
+  userId: number;
+  seedUrl: string;
+  maxPages: number;
+  createdAt: number;
+}
+
+export type SearchQueueJob = DeepSearchJob | SiteCrawlJob;
+
 export interface Env {
   DB: D1Database;
-  SEARCH_JOBS: Queue<DeepSearchJob>;
+  SEARCH_JOBS: Queue<SearchQueueJob>;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   ALLOWED_TELEGRAM_USER_IDS?: string;

@@ -16,6 +16,8 @@ const commands = [
   { command: "deep", description: "Tìm kiếm chuyên sâu nhiều nguồn" },
   { command: "site", description: "Tìm trong một website" },
   { command: "read", description: "Đọc nội dung một trang web" },
+  { command: "crawl", description: "Lập chỉ mục website công khai" },
+  { command: "crawls", description: "Xem trạng thái crawl/index jobs" },
   { command: "local", description: "Tìm trong chỉ mục riêng" },
   { command: "watch", description: "Theo dõi thay đổi website" },
   { command: "watches", description: "Danh sách website theo dõi" },

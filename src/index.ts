@@ -1,4 +1,4 @@
-import { constantTimeEqual, htmlEscape } from "./security";
+import { constantTimeEqual, htmlEscape, normalizeUrl } from "./security";
 import { webAppResponse } from "./web-ui";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import type { AiTask } from "./ai-router";
@@ -8,9 +8,9 @@ import {
   buildSearchKeyboard, formatDeepReport, formatSearchResults, SEARCH_PAGE_SIZE,
   sendSearchPage, sendTelegram, sendToArchive, telegramApi,
 } from "./telegram";
-import { validateWatchUrl, checkWatchTargets } from "./watch";
+import { crawlAndIndexSite, validateWatchUrl, checkWatchTargets } from "./watch";
 import type {
-  DeepSearchJob, Env, ExecutionContext, MessageBatch, SearchMode, SearchResult,
+  DeepSearchJob, Env, ExecutionContext, MessageBatch, SearchMode, SearchResult, SearchQueueJob, SiteCrawlJob,
   TelegramCallbackQuery, TelegramUpdate,
 } from "./types";
 
@@ -173,11 +173,129 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     const started = Date.now();
     try {
       const results = await performSearch(env, query, rawMode as SearchMode);
-      return jsonResponse({ query, mode: rawMode, results, meta: { count: results.length, elapsedMs: Date.now() - started } });
+      const eventId = crypto.randomUUID();
+      const queryHash = await sha256Hex(rawMode + "\n" + query.trim().toLowerCase());
+      const resultHashes = await Promise.all(results.map(item => sha256Hex(normalizeUrl(item.url))));
+      const eventPayload = { userId: session.userId, queryHash, mode: rawMode, urls: resultHashes };
+      await env.DB.prepare(
+        "INSERT INTO search_cache (cache_key, payload, expires_at, created_at) VALUES (?, ?, ?, ?)",
+      ).bind("search-event:" + eventId, JSON.stringify(eventPayload), Date.now() + 30 * 60 * 1000, Date.now()).run();
+      return jsonResponse({
+        query, mode: rawMode, eventId, results,
+        meta: { count: results.length, elapsedMs: Date.now() - started },
+      });
     } catch (error) {
       console.error("Web search API failed:", error instanceof Error ? error.message : "unknown");
       return jsonResponse({ error: "Không thể tìm kiếm lúc này. Hãy thử lại hoặc đổi danh mục." }, 502);
     }
+  }
+
+  if (url.pathname === "/api/feedback" && request.method === "POST") {
+    const body = await parseJsonBody(request);
+    const eventId = typeof body?.eventId === "string" ? body.eventId : "";
+    const inputUrl = typeof body?.url === "string" ? body.url : "";
+    const rating = body?.rating;
+    if (!/^[a-f0-9-]{36}$/i.test(eventId) || (rating !== 1 && rating !== -1)) {
+      return jsonResponse({ error: "Đánh giá kết quả không hợp lệ." }, 400);
+    }
+    const validated = validateWatchUrl(inputUrl);
+    if (!validated) return jsonResponse({ error: "URL kết quả không hợp lệ." }, 400);
+    const event = await env.DB.prepare(
+      "SELECT payload FROM search_cache WHERE cache_key = ? AND expires_at > ?",
+    ).bind("search-event:" + eventId, Date.now()).first<{ payload: string }>();
+    if (!event?.payload) return jsonResponse({ error: "Phiên kết quả đã hết hạn. Hãy tìm kiếm lại." }, 410);
+    let eventData: { userId?: number; queryHash?: string; urls?: string[] };
+    try { eventData = JSON.parse(event.payload) as typeof eventData; }
+    catch { return jsonResponse({ error: "Dữ liệu phiên kết quả không hợp lệ." }, 400); }
+    if (eventData.userId !== session.userId || typeof eventData.queryHash !== "string") {
+      return jsonResponse({ error: "Bạn không có quyền đánh giá phiên kết quả này." }, 403);
+    }
+    const urlHash = await sha256Hex(validated.normalized);
+    if (!Array.isArray(eventData.urls) || !eventData.urls.includes(urlHash)) {
+      return jsonResponse({ error: "URL này không thuộc phiên tìm kiếm đã chọn." }, 400);
+    }
+    if (!(await consumeWebRateLimit(env, session.userId, "feedback", 60))) {
+      return jsonResponse({ error: "Bạn đã đánh giá quá nhanh." }, 429);
+    }
+    const voteKey = "search-vote:" + eventId + ":" + urlHash;
+    const feedbackKey = "search-feedback:" + eventData.queryHash + ":" + urlHash;
+    const [oldVote, aggregate] = await Promise.all([
+      env.DB.prepare("SELECT payload FROM search_cache WHERE cache_key = ? AND expires_at > ?")
+        .bind(voteKey, Date.now()).first<{ payload: string }>(),
+      env.DB.prepare("SELECT payload FROM search_cache WHERE cache_key = ? AND expires_at > ?")
+        .bind(feedbackKey, Date.now()).first<{ payload: string }>(),
+    ]);
+    let previousRating = 0;
+    let counts = { positive: 0, negative: 0 };
+    try { previousRating = Number((JSON.parse(oldVote?.payload || "{}") as { rating?: number }).rating) || 0; } catch { /* No prior vote. */ }
+    try {
+      const parsed = JSON.parse(aggregate?.payload || "{}") as { positive?: number; negative?: number };
+      counts = { positive: Math.max(0, Number(parsed.positive) || 0), negative: Math.max(0, Number(parsed.negative) || 0) };
+    } catch { /* Start a clean aggregate. */ }
+    if (previousRating === rating) return jsonResponse({ ok: true, changed: false, rating });
+    if (previousRating === 1) counts.positive = Math.max(0, counts.positive - 1);
+    if (previousRating === -1) counts.negative = Math.max(0, counts.negative - 1);
+    if (rating === 1) counts.positive += 1;
+    else counts.negative += 1;
+    const now = Date.now();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO search_cache (cache_key, payload, expires_at, created_at) VALUES (?, ?, ?, ?) " +
+        "ON CONFLICT(cache_key) DO UPDATE SET payload = excluded.payload, expires_at = excluded.expires_at, created_at = excluded.created_at",
+      ).bind(feedbackKey, JSON.stringify(counts), now + 180 * 24 * 60 * 60 * 1000, now),
+      env.DB.prepare(
+        "INSERT INTO search_cache (cache_key, payload, expires_at, created_at) VALUES (?, ?, ?, ?) " +
+        "ON CONFLICT(cache_key) DO UPDATE SET payload = excluded.payload, expires_at = excluded.expires_at, created_at = excluded.created_at",
+      ).bind(voteKey, JSON.stringify({ rating }), now + 30 * 24 * 60 * 60 * 1000, now),
+    ]);
+    return jsonResponse({ ok: true, changed: true, rating });
+  }
+
+  if (url.pathname === "/api/crawl" && request.method === "POST") {
+    const body = await parseJsonBody(request);
+    const inputUrl = typeof body?.url === "string" ? body.url.trim() : "";
+    const validated = validateWatchUrl(inputUrl);
+    const maxPages = Number(body?.maxPages ?? 10);
+    if (!validated || !Number.isInteger(maxPages) || maxPages < 1 || maxPages > 20) {
+      return jsonResponse({ error: "Nhập URL HTTPS public hợp lệ và số trang từ 1 đến 20." }, 400);
+    }
+    if (!(await consumeWebRateLimit(env, session.userId, "crawl", 2))) {
+      return jsonResponse({ error: "Bạn chỉ có thể khởi chạy tối đa hai lượt crawl mỗi phút." }, 429);
+    }
+    const job: SiteCrawlJob = {
+      kind: "site-crawl", id: crypto.randomUUID(), chatId: session.chatId,
+      userId: session.userId, seedUrl: validated.url.toString(), maxPages, createdAt: Date.now(),
+    };
+    const record = {
+      id: job.id, userId: session.userId, chatId: session.chatId, seedUrl: job.seedUrl,
+      maxPages, status: "queued", discovered: 0, indexed: 0, skipped: 0,
+      createdAt: job.createdAt, updatedAt: job.createdAt,
+    };
+    try {
+      await env.DB.prepare(
+        "INSERT INTO search_cache (cache_key, payload, expires_at, created_at) VALUES (?, ?, ?, ?)",
+      ).bind("site-crawl:" + job.id, JSON.stringify(record), Date.now() + 30 * 24 * 60 * 60 * 1000, Date.now()).run();
+      await env.SEARCH_JOBS.send(job);
+      return jsonResponse({ ok: true, job: record });
+    } catch (error) {
+      await env.DB.prepare("UPDATE search_cache SET payload = ?, created_at = ? WHERE cache_key = ?")
+        .bind(JSON.stringify({ ...record, status: "failed", lastError: "Queue unavailable" }), Date.now(), "site-crawl:" + job.id).run().catch(() => undefined);
+      console.error("Browser site crawl enqueue failed:", error instanceof Error ? error.message : "unknown");
+      return jsonResponse({ error: "Không thể đưa tác vụ crawl vào hàng đợi. Kiểm tra Cloudflare Queue." }, 502);
+    }
+  }
+
+  if (url.pathname === "/api/crawls" && request.method === "GET") {
+    const rows = await env.DB.prepare(
+      "SELECT payload FROM search_cache WHERE cache_key LIKE 'site-crawl:%' AND expires_at > ? ORDER BY created_at DESC LIMIT 12",
+    ).bind(Date.now()).all<{ payload: string }>();
+    const jobs = rows.results.flatMap(row => {
+      try {
+        const item = JSON.parse(row.payload) as Record<string, unknown>;
+        return Number(item.userId) === session.userId ? [item] : [];
+      } catch { return []; }
+    });
+    return jsonResponse({ jobs });
   }
 
   if (url.pathname === "/api/ask" && request.method === "POST") {
@@ -427,6 +545,63 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   }
 
 
+  if (command === "crawl") {
+    const parts = args.split(/\s+/).filter(Boolean);
+    const validated = parts[0] ? validateWatchUrl(parts[0]) : null;
+    const maxPages = parts[1] === undefined ? 10 : Number(parts[1]);
+    if (!validated || !Number.isInteger(maxPages) || maxPages < 1 || maxPages > 20) {
+      await reply(env, chatId, "Cú pháp: <code>/crawl https://example.com [1-20]</code>. Chỉ hỗ trợ website HTTPS public.");
+      return;
+    }
+    const job: SiteCrawlJob = {
+      kind: "site-crawl", id: crypto.randomUUID(), chatId, userId,
+      seedUrl: validated.url.toString(), maxPages, createdAt: Date.now(),
+    };
+    const record = {
+      id: job.id, userId, chatId, seedUrl: job.seedUrl, maxPages, status: "queued",
+      discovered: 0, indexed: 0, skipped: 0, createdAt: job.createdAt, updatedAt: job.createdAt,
+    };
+    try {
+      await env.DB.prepare(
+        "INSERT INTO search_cache (cache_key, payload, expires_at, created_at) VALUES (?, ?, ?, ?)",
+      ).bind("site-crawl:" + job.id, JSON.stringify(record), Date.now() + 30 * 24 * 60 * 60 * 1000, Date.now()).run();
+      await env.SEARCH_JOBS.send(job);
+      await reply(env, chatId,
+        "<b>Đã xếp hàng lập chỉ mục website.</b>\nJob: <code>" + job.id + "</code>\nGiới hạn: " + maxPages +
+        " trang · Cùng origin · Tôn trọng robots.txt. Dùng /crawls để xem trạng thái.");
+    } catch (error) {
+      await env.DB.prepare("UPDATE search_cache SET payload = ? WHERE cache_key = ?")
+        .bind(JSON.stringify({ ...record, status: "failed", lastError: "Queue unavailable" }), "site-crawl:" + job.id).run().catch(() => undefined);
+      console.error("Site crawl enqueue failed:", error instanceof Error ? error.message : "unknown");
+      await reply(env, chatId, "Không thể tạo crawl job. Kiểm tra Cloudflare Queue.");
+    }
+    return;
+  }
+
+  if (command === "crawls") {
+    const rows = await env.DB.prepare(
+      "SELECT payload FROM search_cache WHERE cache_key LIKE 'site-crawl:%' AND expires_at > ? ORDER BY created_at DESC LIMIT 12",
+    ).bind(Date.now()).all<{ payload: string }>();
+    const own = rows.results.flatMap(row => {
+      try {
+        const job = JSON.parse(row.payload) as Record<string, unknown>;
+        return Number(job.userId) === userId ? [job] : [];
+      } catch { return []; }
+    });
+    if (!own.length) {
+      await reply(env, chatId, "Chưa có site crawl job. Dùng <code>/crawl https://example.com 10</code>.");
+      return;
+    }
+    const lines = ["<b>Website indexing jobs</b>"];
+    for (const job of own) {
+      lines.push("<code>" + htmlEscape(String(job.id || "")) + "</code> · <b>" + htmlEscape(String(job.status || "unknown")) + "</b>");
+      lines.push(htmlEscape(String(job.seedUrl || "")) + " · " + Number(job.indexed || 0) + "/" + Number(job.maxPages || 0) + " trang");
+      if (job.lastError) lines.push("<i>" + htmlEscape(String(job.lastError).slice(0, 150)) + "</i>");
+    }
+    await reply(env, chatId, lines.join("\n"));
+    return;
+  }
+
   if (command === "web") {
     if (chatId !== userId) {
       await reply(env, chatId, "Hãy mở cuộc trò chuyện riêng với bot rồi gửi /web để nhận liên kết đăng nhập.");
@@ -477,7 +652,9 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/retry ID</code> — chạy lại job thất bại\n" +
       "<code>/id</code> — Telegram ID\n\n" +
       "Gửi văn bản không kèm lệnh cũng được hiểu là tìm web.\n" +
-      "<code>/web</code> — mở giao diện tìm kiếm và chat trên trình duyệt.");
+      "<code>/web</code> — mở giao diện tìm kiếm và chat trên trình duyệt.\n" +
+      "<code>/crawl https://example.com [1-20]</code> — lập chỉ mục website công khai.\n" +
+      "<code>/crawls</code> — xem trạng thái các lượt lập chỉ mục.");
     return;
   }
 
@@ -485,7 +662,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     const [watchCount, pageCount, cacheCount, deepJobRows] = await Promise.all([
       env.DB.prepare("SELECT COUNT(*) AS count FROM watches WHERE active = 1").first<{ count: number }>(),
       env.DB.prepare("SELECT COUNT(*) AS count FROM indexed_pages").first<{ count: number }>(),
-      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ? AND cache_key NOT LIKE 'telegram-search:%'").bind(Date.now()).first<{ count: number }>(),
+      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ? AND cache_key NOT LIKE 'telegram-search:%' AND cache_key NOT LIKE 'search-feedback:%' AND cache_key NOT LIKE 'search-vote:%' AND cache_key NOT LIKE 'search-event:%' AND cache_key NOT LIKE 'site-crawl:%'").bind(Date.now()).first<{ count: number }>(),
       env.DB.prepare("SELECT status, COUNT(*) AS count FROM deep_search_jobs WHERE created_at >= ? GROUP BY status")
         .bind(Date.now() - 7 * 24 * 60 * 60 * 1000).all<{ status: string; count: number }>(),
     ]);
@@ -815,6 +992,129 @@ async function processUpdate(env: Env, update: TelegramUpdate): Promise<void> {
   await handleCommand(env, message.chat.id, message.from.id, message.text);
 }
 
+function isSiteCrawlJob(value: unknown): value is SiteCrawlJob {
+  if (!value || typeof value !== "object") return false;
+  const job = value as Partial<SiteCrawlJob>;
+  return job.kind === "site-crawl" && typeof job.id === "string" &&
+    /^[a-f0-9-]{36}$/i.test(job.id) && typeof job.seedUrl === "string" &&
+    job.seedUrl.length <= 2048 && Number.isSafeInteger(job.chatId) &&
+    Number.isSafeInteger(job.userId) && Number.isInteger(job.maxPages) &&
+    Number(job.maxPages) >= 1 && Number(job.maxPages) <= 20 && Number.isFinite(job.createdAt);
+}
+
+function isSearchQueueJob(value: unknown): value is SearchQueueJob {
+  return isDeepSearchJob(value) || isSiteCrawlJob(value);
+}
+
+async function updateSiteCrawlRecord(
+  env: Env,
+  id: string,
+  update: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const key = "site-crawl:" + id;
+  const row = await env.DB.prepare("SELECT payload FROM search_cache WHERE cache_key = ?")
+    .bind(key).first<{ payload: string }>();
+  if (!row?.payload) return null;
+  let previous: Record<string, unknown>;
+  try { previous = JSON.parse(row.payload) as Record<string, unknown>; }
+  catch { return null; }
+  const next = { ...previous, ...update, updatedAt: Date.now() };
+  await env.DB.prepare("UPDATE search_cache SET payload = ?, expires_at = ?, created_at = ? WHERE cache_key = ?")
+    .bind(JSON.stringify(next), Date.now() + 30 * 24 * 60 * 60 * 1000, Date.now(), key).run();
+  return next;
+}
+
+async function processSiteCrawlJob(env: Env, job: SiteCrawlJob): Promise<void> {
+  const row = await env.DB.prepare("SELECT payload FROM search_cache WHERE cache_key = ?")
+    .bind("site-crawl:" + job.id).first<{ payload: string }>();
+  if (!row?.payload) return;
+  let existing: Record<string, unknown>;
+  try { existing = JSON.parse(row.payload) as Record<string, unknown>; }
+  catch { throw new Error("Site crawl job record is invalid."); }
+  if (existing.status === "completed" || existing.status === "failed") return;
+  if (existing.status === "running" && Date.now() - Number(existing.updatedAt || 0) < 10 * 60 * 1000) return;
+  await updateSiteCrawlRecord(env, job.id, { status: "running", lastError: null });
+  try {
+    const result = await crawlAndIndexSite(env, job.seedUrl, job.maxPages);
+    await updateSiteCrawlRecord(env, job.id, {
+      status: "completed",
+      discovered: result.discovered,
+      indexed: result.indexed,
+      skipped: result.skipped,
+      pages: result.pages,
+      completedAt: Date.now(),
+      lastError: null,
+    });
+    const message =
+      "<b>Site indexing hoàn tất</b>\n" +
+      "Job: <code>" + htmlEscape(job.id) + "</code>\n" +
+      "Website: <a href=\"" + htmlEscape(result.origin) + "\">" + htmlEscape(result.origin) + "</a>\n" +
+      "Đã lập chỉ mục: <b>" + result.indexed + "</b> trang · Phát hiện: " + result.discovered +
+      " · Bỏ qua: " + result.skipped + "\n\nDùng <code>/local từ khóa</code> hoặc danh mục Website của tôi để tìm trong nội dung này.";
+    await sendTelegram(env, job.chatId, message);
+    await sendToArchive(env, "<b>Site crawl archive</b>\n" + message);
+  } catch (error) {
+    await updateSiteCrawlRecord(env, job.id, {
+      status: "queued",
+      lastError: error instanceof Error ? error.message.slice(0, 240) : "Unknown site crawl error",
+    });
+    throw error;
+  }
+}
+
+async function notifySiteCrawlDeadLetter(env: Env, job: SiteCrawlJob): Promise<void> {
+  const row = await env.DB.prepare("SELECT payload FROM search_cache WHERE cache_key = ?")
+    .bind("site-crawl:" + job.id).first<{ payload: string }>();
+  if (!row?.payload) return;
+  let previous: Record<string, unknown>;
+  try { previous = JSON.parse(row.payload) as Record<string, unknown>; } catch { return; }
+  if (previous.status === "completed" || previous.status === "failed") return;
+  await updateSiteCrawlRecord(env, job.id, {
+    status: "failed",
+    lastError: "Delivery retries exhausted",
+    completedAt: Date.now(),
+  });
+  const notice = "Site crawl job <code>" + htmlEscape(job.id) + "</code> đã thất bại sau nhiều lần thử. Kiểm tra robots.txt, URL và thử lại bằng /crawl.";
+  try { await sendTelegram(env, job.chatId, notice); }
+  catch (error) { console.error("Site crawl DLQ notification failed:", error instanceof Error ? error.message : "unknown"); }
+  await sendToArchive(env, "<b>Site crawl dead-letter</b>\n" + notice);
+}
+
+async function recoverStaleSiteCrawlJobs(env: Env): Promise<number> {
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  const rows = await env.DB.prepare(
+    "SELECT cache_key, payload FROM search_cache WHERE cache_key LIKE 'site-crawl:%' AND expires_at > ? ORDER BY created_at ASC LIMIT 10",
+  ).bind(cutoff).all<{ cache_key: string; payload: string }>();
+  let recovered = 0;
+  for (const row of rows.results) {
+    let record: Record<string, unknown>;
+    try { record = JSON.parse(row.payload) as Record<string, unknown>; } catch { continue; }
+    if (record.status !== "queued" && record.status !== "running") continue;
+    if (Date.now() - Number(record.updatedAt || record.createdAt || 0) < 10 * 60 * 1000) continue;
+    const job: SiteCrawlJob = {
+      kind: "site-crawl",
+      id: String(record.id),
+      chatId: Number(record.chatId),
+      userId: Number(record.userId),
+      seedUrl: String(record.seedUrl),
+      maxPages: Number(record.maxPages),
+      createdAt: Number(record.createdAt),
+    };
+    if (!isSiteCrawlJob(job)) continue;
+    await updateSiteCrawlRecord(env, job.id, { status: "queued", lastError: "Recovered stale site crawl job." });
+    try {
+      await env.SEARCH_JOBS.send(job);
+      recovered += 1;
+    } catch (error) {
+      await updateSiteCrawlRecord(env, job.id, {
+        status: "failed",
+        lastError: error instanceof Error ? error.message.slice(0, 200) : "Queue recovery failed",
+      });
+    }
+  }
+  return recovered;
+}
+
 async function processDeepJob(env: Env, job: DeepSearchJob): Promise<void> {
   const now = Date.now();
   await env.DB.prepare(
@@ -964,25 +1264,31 @@ export default {
     return new Response("Not found", { status: 404 });
   },
 
-  async queue(batch: MessageBatch<DeepSearchJob>, env: Env): Promise<void> {
+  async queue(batch: MessageBatch<SearchQueueJob>, env: Env): Promise<void> {
     for (const message of batch.messages) {
       const job = message.body;
-      if (!isDeepSearchJob(job)) {
-        console.error("Discarding malformed Deep Search queue message.");
+      if (!isSearchQueueJob(job)) {
+        console.error("Discarding malformed search queue message.");
         message.ack();
         continue;
       }
       if (batch.queue === "nolane-search-dlq") {
-        try { await notifyDeadLetter(env, job); message.ack(); }
-        catch (error) {
+        try {
+          if (isSiteCrawlJob(job)) await notifySiteCrawlDeadLetter(env, job);
+          else await notifyDeadLetter(env, job);
+          message.ack();
+        } catch (error) {
           console.error("Dead-letter handling failed:", error instanceof Error ? error.message : "unknown");
           message.retry({ delaySeconds: 60 });
         }
         continue;
       }
-      try { await processDeepJob(env, job); message.ack(); }
-      catch (error) {
-        console.error("Deep Search queue attempt failed:", error instanceof Error ? error.message : "unknown");
+      try {
+        if (isSiteCrawlJob(job)) await processSiteCrawlJob(env, job);
+        else await processDeepJob(env, job);
+        message.ack();
+      } catch (error) {
+        console.error("Search queue attempt failed:", error instanceof Error ? error.message : "unknown");
         message.retry({ delaySeconds: Math.min(300, 15 * (2 ** Math.max(0, message.attempts - 1))) });
       }
     }
@@ -991,6 +1297,7 @@ export default {
   async scheduled(_controller: { cron: string; scheduledTime: number }, env: Env): Promise<void> {
     try {
       const recovered = await recoverStaleDeepJobs(env);
+      const recoveredCrawls = await recoverStaleSiteCrawlJobs(env);
       const stats = await checkWatchTargets(env);
       await env.DB.prepare("DELETE FROM search_cache WHERE expires_at <= ?").bind(Date.now()).run();
       await env.DB.prepare("DELETE FROM web_login_tickets WHERE expires_at <= ? OR used_at IS NOT NULL").bind(Date.now()).run();
@@ -1001,6 +1308,7 @@ export default {
         "DELETE FROM deep_search_jobs WHERE status IN ('completed', 'failed') AND created_at < ?",
       ).bind(Date.now() - 30 * 24 * 60 * 60 * 1000).run();
       if (recovered) console.log("Recovered stale Deep Search jobs", recovered);
+      if (recoveredCrawls) console.log("Recovered stale site crawl jobs", recoveredCrawls);
       if (stats.checked) console.log("Watch run complete", stats);
     } catch (error) {
       console.error("Scheduled maintenance failed:", error instanceof Error ? error.message : "unknown");

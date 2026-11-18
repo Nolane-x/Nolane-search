@@ -16,6 +16,8 @@ describe("private browser search portal", () => {
     expect(html).toContain("Nolane Search");
     expect(html).toContain("AI Overview");
     expect(html).toContain("Nolane Chat");
+    expect(html).toContain("Personal Web Index");
+    expect(html).toContain("feedback-btn");
     expect(html).toContain("data-mode=\"research\"");
   });
 
@@ -23,6 +25,25 @@ describe("private browser search portal", () => {
     const response = await worker.fetch(new Request("https://nolane-search.example/api/search?q=hello"), env, context);
     expect(response.status).toBe(401);
     expect(await response.json()).toMatchObject({ error: expect.stringContaining("Phiên đăng nhập") });
+  });
+
+  it("keeps site crawl and feedback APIs private", async () => {
+    const crawl = await worker.fetch(new Request("https://nolane-search.example/api/crawl", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://nolane-search.example" },
+      body: JSON.stringify({ url: "https://example.com", maxPages: 5 }),
+    }), env, context);
+    expect(crawl.status).toBe(401);
+
+    const crawls = await worker.fetch(new Request("https://nolane-search.example/api/crawls"), env, context);
+    expect(crawls.status).toBe(401);
+
+    const feedback = await worker.fetch(new Request("https://nolane-search.example/api/feedback", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://nolane-search.example" },
+      body: JSON.stringify({ eventId: "12345678-1234-1234-1234-123456789abc", url: "https://example.com", rating: 1 }),
+    }), env, context);
+    expect(feedback.status).toBe(401);
   });
 
   it("rejects cross-origin ticket exchanges before accessing D1", async () => {
