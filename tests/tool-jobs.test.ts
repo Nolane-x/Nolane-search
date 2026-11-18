@@ -49,7 +49,7 @@ describe("GitHub Actions tool dispatch", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const env = { DB: db, GITHUB_ACTIONS_TOKEN: "test-actions-token" } as unknown as Env;
+    const env = { DB: db, NOLANE_GH_ACTIONS_TOKEN: "test-actions-token" } as unknown as Env;
     const job = await createToolJob(env, {
       userId: 42, chatId: 42, toolId: "image-ocr", fileId: "telegram-file-id-123456",
       fileName: "homework.jpg", mimeType: "image/jpeg", fileSize: 1234,
@@ -64,7 +64,7 @@ describe("GitHub Actions tool dispatch", () => {
     const { db } = fakeDb();
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const env = { DB: db, GITHUB_ACTIONS_TOKEN: "test-actions-token" } as unknown as Env;
+    const env = { DB: db, NOLANE_GH_ACTIONS_TOKEN: "test-actions-token" } as unknown as Env;
 
     await expect(createToolJob(env, {
       userId: 42, chatId: 42, toolId: "pdf-text", fileId: "telegram-file-id-123456",
@@ -78,6 +78,6 @@ describe("GitHub Actions tool dispatch", () => {
     await expect(createToolJob({ DB } as unknown as Env, {
       userId: 42, chatId: 42, toolId: "image-ocr", fileId: "telegram-file-id-123456",
       fileName: "photo.png", mimeType: "image/png", fileSize: 100,
-    })).rejects.toThrow("GITHUB_ACTIONS_TOKEN");
+    })).rejects.toThrow("NOLANE_GH_ACTIONS_TOKEN");
   });
 });
