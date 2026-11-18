@@ -262,3 +262,16 @@ PR #12 was merged at `fe988bdbeb4c5c7095c06b03c9f2b08485582d39`. The final Worke
 - Production `GET /health` returned `ok: true` and `database: reachable`; provider inventory remains Tavily, Exa, TinyFish, GitHub and OpenRouter, with four AI key routes and nine model routes.
 
 The automated behaviors and production release are verified. Real Telegram interaction and browser login still require an owner-side end-to-end check.
+
+
+## Nolane Tools · implementation under PR #13
+
+The first Tools release is being added in PR #13.
+
+- A registry of 17 implemented tools spans image/OCR, PDF/Office, audio/video, data and utility categories.
+- Telegram file uploads automatically select a compatible tool (photos default to Vietnamese/English OCR); `/tool TOOL_ID` can override the next upload.
+- The private Web Workspace includes a Tools catalog and personal job history. File uploads are initially handled from the Telegram chat.
+- GitHub Actions runs the actual Python processing on ephemeral hosted Ubuntu runners. Worker D1 stores metadata/status in the existing `search_cache`; the runner downloads inputs directly from Telegram and sends output files back, without committing files or using R2.
+- A fine-grained `GITHUB_ACTIONS_TOKEN` with repository Actions: Read and write is required before live dispatch works. It is documented in `docs/SECRETS.md`; it must be saved as a GitHub Actions secret, not pasted into chat.
+- OCR installs English and Vietnamese Tesseract data; audio transcription uses CPU Whisper; document extraction includes OCR fallback for scanned PDFs.
+- CI includes registry/dispatch unit tests plus Python syntax checking. Actual hosted-runner execution requires the token to be configured and a real file to be sent from Telegram; that end-to-end run is not claimed until verified.

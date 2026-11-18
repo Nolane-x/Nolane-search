@@ -172,3 +172,16 @@ TinyFish Fetch result URLs are treated as untrusted data. Extracted content is a
 ## Personal index lifecycle
 
 The owner can inspect indexed page metadata through a private API and remove either one normalized public HTTPS page or a domain scope. Removal deletes both the FTS5 row and source row and deactivates matching watch definitions in one D1 batch. Domain removal covers the exact hostname, its `www` alias and subdomains. Job history and Telegram archive snapshots are retained; a crawl already in flight is not cancelled and can reinsert a page after removal.
+
+
+## GitHub Actions tool execution
+
+The Tools subsystem uses the existing Worker and D1 rather than introducing a permanent runner or new object-storage service.
+
+1. Telegram sends an update containing a `file_id`; the Worker checks that the sender is the allowlisted owner in a private chat.
+2. The tool registry infers a compatible tool or uses the user's explicit `/tool ID` selection. The Worker stores only metadata and the Telegram `file_id` in the existing D1 `search_cache` under `tool-job:<uuid>`.
+3. The Worker dispatches `.github/workflows/tool-runner.yml` using a fine-grained `GITHUB_ACTIONS_TOKEN`; the GitHub workflow input is only the opaque job UUID, never the Telegram file ID or file bytes.
+4. The ephemeral runner fetches job metadata from `/internal/tools/runner` using `TELEGRAM_WEBHOOK_SECRET`, downloads the file directly from Telegram, executes the selected Python tool and sends resulting text/files back to the originating Telegram chat.
+5. The runner calls the private Worker callback to mark the D1 job completed or failed. The Web Tools hub and `/tool_jobs` read this history.
+
+The file is held in the runner's temporary filesystem for the lifetime of that job. It is not written to the Git tree, a repository artifact or D1. The runner currently accepts Telegram `getFile` downloads up to 20 MB and caps result-document delivery at 45 MB. Job records expire after 30 days. The GitHub Actions PAT must be scoped to this repository with Actions write permission; Worker deployment and normal Search calls do not need the PAT for any other operation.

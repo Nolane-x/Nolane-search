@@ -8,3 +8,7 @@ dist/
 coverage/
 *.log
 .DS_Store
+
+# Python runner cache
+__pycache__/
+*.py[cod]

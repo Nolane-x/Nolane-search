@@ -31,6 +31,10 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "22"
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Type-check
@@ -44,5 +48,7 @@ jobs:
           node --check scripts/check-telegram-webhook.mjs
           node scripts/check-telegram-webhook.mjs
           node --check scripts/set-commands.mjs
+      - name: Check GitHub Actions tool runner syntax
+        run: python -m py_compile tools/runner.py
       - name: Build Worker
         run: npx cf build
