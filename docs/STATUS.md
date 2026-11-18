@@ -6,14 +6,16 @@ Last verified: 2026-11-18. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `ffe1564ebfa1db5a00960c92e88e19dc6a84fb20`
+- Latest production source commit: `9c2cbb9004d6301ffabf002df18cede23cfd81d0`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
 - Interactive Telegram workspace and contextual search actions: [PR #5](https://github.com/Nolane-x/Nolane-search/pull/5)
 - Fix Telegram callback delivery and stuck inline-button spinners: [PR #6](https://github.com/Nolane-x/Nolane-search/pull/6)
+- Lightweight Personal Memory, AI efficiency, request-body limits and usage visibility: [PR #7](https://github.com/Nolane-x/Nolane-search/pull/7)
+- Register Personal Memory commands in Telegram's slash-command menu: [PR #8](https://github.com/Nolane-x/Nolane-search/pull/8)
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `e182d473-d214-4a0c-82c5-0c8662fb4b87`
+- Cloudflare Worker version ID: `6eaac094-1dbe-494d-9393-ef0a66e94ddb`
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
@@ -26,6 +28,14 @@ The release adds a private browser search portal, AI Overview, multi-turn chat, 
 | Main CI: typecheck, 61 unit tests, webhook regression check and Worker build | [44255150160](https://github.com/Nolane-x/Nolane-search/actions/runs/44255150160) | PASS |
 | Worker bundle export and production smoke test | [44255150131](https://github.com/Nolane-x/Nolane-search/actions/runs/44255150131) | PASS |
 | Production Worker deployment, runtime secret upload, webhook and command registration | [44255150124](https://github.com/Nolane-x/Nolane-search/actions/runs/44255150124) | PASS |
+| PR #7 CI: typecheck, 72 unit tests, webhook checks and Worker build | [44270510551](https://github.com/Nolane-x/Nolane-search/actions/runs/44270510551) | PASS |
+| PR #7 main CI | [44270643224](https://github.com/Nolane-x/Nolane-search/actions/runs/44270643224) | PASS |
+| PR #7 Worker bundle export and production smoke test | [44270643846](https://github.com/Nolane-x/Nolane-search/actions/runs/44270643846) | PASS |
+| PR #7 production deployment | [44270643085](https://github.com/Nolane-x/Nolane-search/actions/runs/44270643085) | PASS |
+| PR #8 CI: Telegram slash-command registration | [44271133530](https://github.com/Nolane-x/Nolane-search/actions/runs/44271133530) | PASS |
+| PR #8 main CI: 72 tests and Worker build | [44271236172](https://github.com/Nolane-x/Nolane-search/actions/runs/44271236172) | PASS |
+| PR #8 Worker bundle export and production smoke test | [44271236099](https://github.com/Nolane-x/Nolane-search/actions/runs/44271236099) | PASS |
+| PR #8 production deployment and Telegram command registration | [44271236228](https://github.com/Nolane-x/Nolane-search/actions/runs/44271236228) | PASS |
 
 The deployment log confirms:
 - Worker `nolane-search` was uploaded and deployed.
@@ -33,7 +43,8 @@ The deployment log confirms:
 - Cron `*/30 * * * *` and Queue producer/consumer bindings remained attached.
 - Telegram webhook registration succeeded.
 - Telegram bot command registration succeeded, including `/web`, `/start`, `/menu` and `/cancel`.
-- Worker version `e182d473-d214-4a0c-82c5-0c8662fb4b87` was deployed from main commit `ffe1564ebfa1db5a00960c92e88e19dc6a84fb20`.
+- Worker version `e182d473-d214-4a0c-82c5-0c8662fb4b87` was deployed from main commit `ffe1564ebfa1db5a00960c92e88e19dc6a84fb20` (PR #6 callback repair).
+- Worker version `40974932-b150-4373-995a-ea73facd13ad` deployed PR #7; Worker version `6eaac094-1dbe-494d-9393-ef0a66e94ddb` deployed PR #8 command-menu update.
 - Telegram webhook update subscriptions were verified by calling `getWebhookInfo`; the returned configuration contains both `message` and `callback_query` for the expected Worker URL.
 - No D1 migration was needed for the Telegram callback fix.
 - Worker version `ccbb1cb9-3d89-4290-a471-92c44a333711` was deployed from main commit `1c17cd1e77a5b83fc57a0ed86e9ace595f58d31e`.
@@ -169,14 +180,20 @@ These need a real interaction from the owner's Telegram account; CI and the publ
 No API key, bot token, webhook secret or session token should be pasted into chat, committed to the repository, or included in screenshots/logs.
 
 
-## Lightweight personal memory and efficiency controls (branch validation pending)
+## Personal Memory and efficiency controls — deployed 2026-11-18
 
-The current upgrade branch `upgrade/personal-memory-efficiency-v1` contains a small opt-in Personal Memory implementation and bounded AI-cost controls. It has not yet been merged or deployed:
+PR #7 added the bounded Personal Memory and AI efficiency improvements; PR #8 completed Telegram slash-command registration. Both are merged into `main` and deployed in Worker version `6eaac094-1dbe-494d-9393-ef0a66e94ddb`.
 
-- D1 `search_cache` reuse, no new table or migration; maximum 50 owner memories, five-year TTL; `/remember`, `/memories`, `/forget`.
-- At most three relevant memories injected as optional context into Telegram `/ai` and browser `/api/chat`; chat history budget of 8,000 characters and eight turns.
-- AI Overview / Telegram `/ask` short-lived synthesis cache.
-- AI Router defaults to three failover attempts and clamps configuration at six, with temporary per-isolate route cooldowns.
-- New unit tests cover memory ownership/retrieval/deletion, bounded chat history and route failover behavior.
+- Personal Memory reuses D1 `search_cache`; no new table, migration, Cloudflare service or secret is required. Each Telegram user can store at most 50 explicitly saved entries, with a five-year expiry. Categories are profile, preference, project and note.
+- Telegram commands `/remember`, `/memories` and `/forget` are registered in the bot command menu. Memory is opt-in: the assistant does not automatically extract private conversation content.
+- Telegram `/ai` and browser `/api/chat` retrieve at most three relevant saved memories as optional context.
+- Browser chat history is bounded to at most eight valid turns and 8,000 aggregate characters before model submission. This is a character-based context budget, not an exact tokenizer count.
+- AI Overview and Telegram `/ask` share a short D1 synthesis cache: two minutes for news/current queries, five minutes for research and ten minutes for other modes.
+- AI Router defaults to three provider/model attempts per completion and clamps configured attempts to six. Recently failing routes receive a short per-isolate cooldown; it is best-effort and resets when an isolate is replaced.
+- Web POST JSON request bodies are read as a stream and capped at 30 KB; oversized bodies are cancelled and rejected.
+- Browser AI Overview and chat surface cache, latency, input/output token and estimated-cost metadata when the provider returns those usage fields.
+- Final main CI passed type-check, all 72 unit tests, webhook checks and Worker build. The export smoke test and production deployment succeeded.
+- Post-deploy `GET /health` returned `ok: true`, `database: reachable`, four AI provider-key routes and nine model routes. Brave is optional and is not configured.
+- Deployment log confirms Telegram webhook subscriptions for `message` and `callback_query`, and successful registration of the bot command list.
 
-Do not treat these changes as production features until branch CI, merge, deployment and the live health endpoint have been verified.
+Automated tests, command registration and live health checks are verified. A real user-level Telegram interaction with `/remember`, `/memories`, `/forget` and a personalized `/ai` prompt remains an owner-side end-to-end check.
