@@ -480,7 +480,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
       const completion = await completeAi(env, {
         task: rawTask as AiTask,
         temperature: rawTask === "reasoning" || rawTask === "coding" ? 0.15 : 0.3,
-        maxTokens: rawTask === "fast" || rawTask === "classification" ? 800 : 1400,
+        maxTokens: rawTask === "fast" || rawTask === "classification" ? 800 : rawTask === "reasoning" || rawTask === "coding" ? 2200 : 1400,
         messages: [
           {
             role: "system",
