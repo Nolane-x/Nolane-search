@@ -14,16 +14,13 @@ describe("Nolane AI callable tools", () => {
 
   it("returns all registered file processors from the catalog tool", async () => {
     const result = JSON.parse(await executeAgentTool(env, "list_nolane_tools", {})) as Array<{id:string}>;
-    expect(result.length).toBeGreaterThanOrEqual(38);
+    expect(result.length).toBeGreaterThanOrEqual(45);
     expect(result.some(tool => tool.id === "video-compress")).toBe(true);
   });
 
   it("formats JSON and cleans text through bounded processor calls", async () => {
     const formatted = await executeAgentTool(env, "process_text_content", {tool_id:"json-format",content:'{"b":2,"a":1}'});
-    expect(formatted).toBe('{
-  "b": 2,
-  "a": 1
-}');
+    expect(formatted).toBe("{\n  \"b\": 2,\n  \"a\": 1\n}");
     const cleaned = await executeAgentTool(env, "process_text_content", {tool_id:"text-clean",content:"Cafe\u0301  \u200b\r\n\n\nline"});
     expect(cleaned).toBe("Café\n\nline");
   });
