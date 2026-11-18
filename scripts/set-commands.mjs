@@ -2,6 +2,9 @@ const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) throw new Error("Missing TELEGRAM_BOT_TOKEN.");
 
 const commands = [
+  { command: "start", description: "Mở bảng điều khiển Nolane Search" },
+  { command: "menu", description: "Mở menu công cụ tương tác" },
+  { command: "cancel", description: "Huỷ chế độ đang chọn" },
   { command: "search", description: "Tìm kiếm web nhanh" },
   { command: "tech", description: "Tìm kiếm công nghệ và GitHub" },
   { command: "github", description: "Tìm repositories" },

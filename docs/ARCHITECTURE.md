@@ -16,6 +16,9 @@ Telegram user → Telegram webhook → Cloudflare Worker
 - Deduplicate update_id in D1.
 - Enforce owner allowlist.
 - Parse command and select search mode.
+- `/start` and `/menu` open an inline dashboard; callbacks edit the same menu message instead of sending a new menu for every navigation step.
+- Mode buttons save a one-shot per-user/per-chat input mode in the existing D1 `search_cache` with a 10-minute TTL. The next plain-text message consumes that state and routes to Web, Tech, News, Research, GitHub, Wiki, Local, AI, Ask or Deep Search. Slash commands clear the pending mode.
+- Search-result action buttons can launch `/ask` or `/deep` from the stored owner/chat-bound 15-minute search session; the callback is validated against the original user and chat.
 
 Quick Search → Tavily primary → (when unavailable or fewer than six results) parallel Exa/TinyFish/Brave/Wikipedia fallback → merge → local operator enforcement → normalized URL deduplication → IDF-weighted title/snippet/URL coverage + provider prior + snippet quality + query-aware freshness + exact-phrase/source-type priors → domain-diversity ranking → up to 20 candidates. The ranking remains a transparent heuristic, not a learned relevance model.
 

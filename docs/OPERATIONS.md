@@ -4,8 +4,9 @@
 
 | Command | Description |
 |---|---|
-| /start | Start bot |
+| /start, /menu | Open the interactive inline dashboard |
 | /id | Show numeric Telegram user ID |
+| /cancel | Cancel the selected one-shot input mode and return to the dashboard |
 | /help | Show commands |
 | /status | Provider configuration and index counters |
 | /search query | General web search |
@@ -26,7 +27,7 @@
 | /jobs | List the latest eight Deep Search jobs |
 | /retry JOB_ID | Re-enqueue a failed Deep Search query as a new job |
 
-Plain text messages are treated as /search. Search results show five items per page and up to 12 candidates; pagination sessions are user/chat-bound and expire after 15 minutes.
+`/start` and `/menu` open the interactive Telegram dashboard. Tap a mode, then send the question as the next plain-text message; the selected mode is consumed once and expires after 10 minutes. `/cancel` returns to the dashboard. Plain text without a selected mode still defaults to `/search`. Search results show five items per page and up to 20 candidates; result messages include inline actions for source-grounded AI and Deep Search. Search sessions are user/chat-bound and expire after 15 minutes. Pagination and menu navigation edit existing messages where possible.
 
 ## Search operators
 

@@ -5,7 +5,8 @@ import type { AiTask } from "./ai-router";
 import { performDeepSearch, performSearch } from "./search";
 import { fetchOpenRouterSummary, fetchTinyFishPage, parseOpenRouterModels } from "./providers";
 import {
-  buildSearchKeyboard, formatDeepReport, formatSearchResults, SEARCH_PAGE_SIZE,
+  buildBackHomeKeyboard, buildHomeKeyboard, buildModePromptKeyboard, buildSearchKeyboard,
+  formatDeepReport, formatHomeMenu, formatModePrompt, formatSearchResults, SEARCH_PAGE_SIZE,
   sendSearchPage, sendTelegram, sendToArchive, telegramApi,
 } from "./telegram";
 import { crawlAndIndexSite, validateWatchUrl, checkWatchTargets } from "./watch";
@@ -13,6 +14,7 @@ import type {
   DeepSearchJob, Env, ExecutionContext, MessageBatch, SearchMode, SearchResult, SearchQueueJob, SiteCrawlJob,
   TelegramCallbackQuery, TelegramUpdate,
 } from "./types";
+import type { TelegramInputMode, TelegramInlineKeyboardMarkup } from "./telegram";
 
 function allowedUser(env: Env, userId: number): boolean {
   const allowed = (env.ALLOWED_TELEGRAM_USER_IDS || "")
@@ -26,6 +28,48 @@ function parseCommand(text: string): { command: string; args: string } {
   const [raw, ...rest] = trimmed.split(/\s+/);
   const command = (raw || "").split("@")[0].slice(1).toLowerCase();
   return { command, args: rest.join(" ").trim() };
+}
+
+const TELEGRAM_UI_TTL_MS = 10 * 60 * 1000;
+const TELEGRAM_INPUT_MODES = new Set<TelegramInputMode>(["web", "tech", "research", "news", "github", "wiki", "local", "ai", "ask", "deep"]);
+
+function telegramUiKey(userId: number, chatId: number): string {
+  return "telegram-ui:" + userId + ":" + chatId;
+}
+
+async function setPendingTelegramMode(env: Env, userId: number, chatId: number, mode: TelegramInputMode): Promise<void> {
+  const now = Date.now();
+  await env.DB.prepare("INSERT INTO search_cache (cache_key, payload, expires_at, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(cache_key) DO UPDATE SET payload = excluded.payload, expires_at = excluded.expires_at, created_at = excluded.created_at")
+    .bind(telegramUiKey(userId, chatId), JSON.stringify({ userId, chatId, mode }), now + TELEGRAM_UI_TTL_MS, now).run();
+}
+
+async function clearPendingTelegramMode(env: Env, userId: number, chatId: number): Promise<void> {
+  await env.DB.prepare("DELETE FROM search_cache WHERE cache_key = ?").bind(telegramUiKey(userId, chatId)).run();
+}
+
+async function consumePendingTelegramMode(env: Env, userId: number, chatId: number): Promise<TelegramInputMode | null> {
+  const row = await env.DB.prepare("DELETE FROM search_cache WHERE cache_key = ? AND expires_at > ? RETURNING payload").bind(telegramUiKey(userId, chatId), Date.now()).first<{ payload: string }>();
+  if (!row?.payload) return null;
+  try {
+    const state = JSON.parse(row.payload) as { userId?: number; chatId?: number; mode?: string };
+    if (state.userId !== userId || state.chatId !== chatId || !TELEGRAM_INPUT_MODES.has(state.mode as TelegramInputMode)) return null;
+    return state.mode as TelegramInputMode;
+  } catch { return null; }
+}
+
+async function sendHomeDashboard(env: Env, chatId: number): Promise<void> {
+  await telegramApi(env, "sendMessage", { chat_id: chatId, text: formatHomeMenu(), parse_mode: "HTML", disable_web_page_preview: true, reply_markup: buildHomeKeyboard() });
+}
+
+async function editTelegramDashboard(env: Env, chatId: number, messageId: number, text: string, replyMarkup: TelegramInlineKeyboardMarkup): Promise<void> {
+  await telegramApi(env, "editMessageText", { chat_id: chatId, message_id: messageId, text, parse_mode: "HTML", disable_web_page_preview: true, reply_markup: replyMarkup });
+}
+
+async function runPendingTelegramMode(env: Env, chatId: number, userId: number, mode: TelegramInputMode, query: string): Promise<void> {
+  if (mode === "ai") return handleCommand(env, chatId, userId, "/ai " + query);
+  if (mode === "ask") return handleCommand(env, chatId, userId, "/ask " + query);
+  if (mode === "deep") return handleCommand(env, chatId, userId, "/deep " + query);
+  return handleSearch(env, chatId, userId, query, mode);
 }
 
 async function reply(env: Env, chatId: number, message: string): Promise<void> {
@@ -446,7 +490,7 @@ async function handleSearch(env: Env, chatId: number, userId: number, query: str
   try {
     const results = await performSearch(env, query, mode);
     let sessionId: string | null = null;
-    if (results.length > SEARCH_PAGE_SIZE) {
+    if (results.length) {
       const candidateId = crypto.randomUUID();
       const now = Date.now();
       const payload: TelegramSearchSession = { ownerUserId: userId, chatId, query, mode, results };
@@ -525,17 +569,115 @@ async function handleSearchCallback(env: Env, callback: TelegramCallbackQuery): 
     reply_markup: buildSearchKeyboard(sessionId, page, session.results.length),
   });
 }
+async function handleSearchActionCallback(env: Env, callback: TelegramCallbackQuery, action: "ask" | "deep", sessionId: string): Promise<void> {
+  const message = callback.message;
+  if (!allowedUser(env, callback.from.id) || !message || message.chat.id !== callback.from.id) {
+    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Hành động này chỉ khả dụng trong chat riêng được cấp quyền.", show_alert: true });
+    return;
+  }
+  const row = await env.DB.prepare("SELECT payload FROM search_cache WHERE cache_key = ? AND expires_at > ?").bind("telegram-search:" + sessionId, Date.now()).first<{ payload: string }>();
+  if (!row?.payload) {
+    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Phiên tìm kiếm đã hết hạn. Hãy tìm lại từ khóa.", show_alert: true });
+    return;
+  }
+  let session: unknown;
+  try { session = JSON.parse(row.payload); } catch { session = null; }
+  if (!isTelegramSearchSession(session) || session.ownerUserId !== callback.from.id || session.chatId !== message.chat.id) {
+    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Phiên tìm kiếm này không thuộc cuộc trò chuyện của bạn.", show_alert: true });
+    return;
+  }
+  await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: action === "ask" ? "Đang tổng hợp câu trả lời có nguồn…" : "Đang xếp hàng Deep Search…" });
+  await handleCommand(env, message.chat.id, callback.from.id, "/" + action + " " + session.query);
+}
+
+async function handleUiCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
+  const message = callback.message;
+  if (!allowedUser(env, callback.from.id) || !message || message.chat.id !== callback.from.id) {
+    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Menu chỉ khả dụng trong chat riêng được cấp quyền.", show_alert: true });
+    return;
+  }
+  const data = callback.data || "";
+  if (data === "ui:home" || data === "ui:cancel") {
+    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: data === "ui:cancel" ? "Đã huỷ lựa chọn." : "" });
+    await clearPendingTelegramMode(env, callback.from.id, message.chat.id);
+    await editTelegramDashboard(env, message.chat.id, message.message_id, formatHomeMenu(), buildHomeKeyboard());
+    return;
+  }
+  if (data.startsWith("ui:mode:")) {
+    const mode = data.slice("ui:mode:".length) as TelegramInputMode;
+    if (!TELEGRAM_INPUT_MODES.has(mode)) {
+      await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Chế độ không hợp lệ.", show_alert: true });
+      return;
+    }
+    await setPendingTelegramMode(env, callback.from.id, message.chat.id, mode);
+    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Đã chọn chế độ. Gửi câu hỏi tiếp theo." });
+    await editTelegramDashboard(env, message.chat.id, message.message_id, formatModePrompt(mode), buildModePromptKeyboard());
+    return;
+  }
+  if (data === "ui:status") {
+    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Đang tải trạng thái…" });
+    await handleCommand(env, message.chat.id, callback.from.id, "/status");
+    return;
+  }
+  if (data === "ui:help") {
+    await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id });
+    const help = [
+      "<b>◈ Nolane Search · Hướng dẫn nhanh</b>",
+      "", "<b>Lệnh nhanh</b>",
+      "1. Chọn chế độ trên menu.",
+      "2. Gửi câu hỏi hoặc từ khóa ở tin nhắn tiếp theo.",
+      "3. Dùng nút dưới kết quả để hỏi AI có nguồn hoặc chuyển sang Deep Search.",
+      "<code>/read URL</code> · Đọc trang web",
+      "<code>/crawl URL 10</code> · Lập chỉ mục website",
+      "<code>/jobs</code> · Tác vụ nghiên cứu",
+      "<code>/watches</code> · Website đang theo dõi",
+      "<code>/web</code> · Mở giao diện Web",
+      "<code>/help</code> · Danh sách đầy đủ lệnh",
+    ].join("\n");
+    await editTelegramDashboard(env, message.chat.id, message.message_id, help, buildBackHomeKeyboard());
+    return;
+  }
+  await telegramApi(env, "answerCallbackQuery", { callback_query_id: callback.id, text: "Thao tác không được hỗ trợ." });
+}
+
+async function handleTelegramCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
+  const data = callback.data || "";
+  if (data.startsWith("ui:")) return handleUiCallback(env, callback);
+  const action = data.match(/^na:(ask|deep):([0-9a-f-]{36})$/i);
+  if (action) return handleSearchActionCallback(env, callback, action[1] as "ask" | "deep", action[2]!);
+  return handleSearchCallback(env, callback);
+}
+
 async function handleCommand(env: Env, chatId: number, userId: number, text: string): Promise<void> {
   const { command, args } = parseCommand(text);
 
-  if (command === "id" || command === "start") {
+  if (command === "id") {
+    await reply(env, chatId, "Telegram ID: <code>" + userId + "</code>");
+    return;
+  }
+
+  if (command === "start" || command === "menu" || command === "home") {
+    if (chatId !== userId) {
+      await reply(env, chatId, "Hãy mở cuộc trò chuyện riêng với bot rồi gửi /start để sử dụng menu tương tác.");
+      return;
+    }
     if (!allowedUser(env, userId)) {
       await reply(env, chatId,
         `Telegram ID của bạn: <code>${userId}</code>\n\nBot đang ở chế độ private. Chủ bot cần thêm ID này vào GitHub Actions Secret <code>ALLOWED_TELEGRAM_USER_IDS</code> rồi triển khai lại. Không gửi bot token cho bất kỳ ai.`);
       return;
     }
-    await reply(env, chatId,
-      "<b>Chào mừng đến Nolane Search.</b>\n\nTìm kiếm web, GitHub, tin tức, nghiên cứu và các website bạn theo dõi. Gõ /help để xem lệnh.");
+    await clearPendingTelegramMode(env, userId, chatId);
+    await sendHomeDashboard(env, chatId);
+    return;
+  }
+
+  if (command === "cancel") {
+    if (!allowedUser(env, userId) || chatId !== userId) {
+      await reply(env, chatId, "Lệnh này chỉ khả dụng trong chat riêng được cấp quyền.");
+      return;
+    }
+    await clearPendingTelegramMode(env, userId, chatId);
+    await sendHomeDashboard(env, chatId);
     return;
   }
 
@@ -650,7 +792,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/status</code> — trạng thái cấu hình bot\n" +
       "<code>/jobs</code> — lịch sử Deep Search gần đây\n" +
       "<code>/retry ID</code> — chạy lại job thất bại\n" +
-      "<code>/id</code> — Telegram ID\n\n" +
+      "<code>/id</code> — Telegram ID\n" +
+      "<code>/menu</code> — mở bảng điều khiển bằng nút bấm\n\n" +
       "Gửi văn bản không kèm lệnh cũng được hiểu là tìm web.\n" +
       "<code>/web</code> — mở giao diện tìm kiếm và chat trên trình duyệt.\n" +
       "<code>/crawl https://example.com [1-20]</code> — lập chỉ mục website công khai.\n" +
@@ -662,7 +805,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     const [watchCount, pageCount, cacheCount, deepJobRows] = await Promise.all([
       env.DB.prepare("SELECT COUNT(*) AS count FROM watches WHERE active = 1").first<{ count: number }>(),
       env.DB.prepare("SELECT COUNT(*) AS count FROM indexed_pages").first<{ count: number }>(),
-      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ? AND cache_key NOT LIKE 'telegram-search:%' AND cache_key NOT LIKE 'search-feedback:%' AND cache_key NOT LIKE 'search-vote:%' AND cache_key NOT LIKE 'search-event:%' AND cache_key NOT LIKE 'site-crawl:%'").bind(Date.now()).first<{ count: number }>(),
+      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ? AND cache_key NOT LIKE 'telegram-search:%' AND cache_key NOT LIKE 'search-feedback:%' AND cache_key NOT LIKE 'search-vote:%' AND cache_key NOT LIKE 'search-event:%' AND cache_key NOT LIKE 'site-crawl:%' AND cache_key NOT LIKE 'telegram-ui:%'").bind(Date.now()).first<{ count: number }>(),
       env.DB.prepare("SELECT status, COUNT(*) AS count FROM deep_search_jobs WHERE created_at >= ? GROUP BY status")
         .bind(Date.now() - 7 * 24 * 60 * 60 * 1000).all<{ status: string; count: number }>(),
     ]);
@@ -984,12 +1127,29 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
 async function processUpdate(env: Env, update: TelegramUpdate): Promise<void> {
   if (!(await recordUpdate(env, update.update_id))) return;
   if (update.callback_query) {
-    await handleSearchCallback(env, update.callback_query);
+    await handleTelegramCallback(env, update.callback_query);
     return;
   }
   const message = update.message;
   if (!message?.text || !message.from) return;
-  await handleCommand(env, message.chat.id, message.from.id, message.text);
+  const chatId = message.chat.id;
+  const userId = message.from.id;
+  const text = message.text.trim();
+  if (text.startsWith("/")) {
+    await clearPendingTelegramMode(env, userId, chatId);
+    await handleCommand(env, chatId, userId, text);
+    return;
+  }
+  if (!allowedUser(env, userId)) {
+    await handleCommand(env, chatId, userId, text);
+    return;
+  }
+  const mode = await consumePendingTelegramMode(env, userId, chatId);
+  if (mode) {
+    await runPendingTelegramMode(env, chatId, userId, mode, text);
+    return;
+  }
+  await handleCommand(env, chatId, userId, text);
 }
 
 function isSiteCrawlJob(value: unknown): value is SiteCrawlJob {
