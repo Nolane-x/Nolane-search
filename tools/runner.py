@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Private GitHub-hosted execution engine for Nolane Tools."""
 from __future__ import annotations
-import argparse, csv, hashlib, json, mimetypes, os, re, shutil, subprocess, sys, tarfile, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
+import argparse, csv, hashlib, json, mimetypes, os, posixpath, re, shutil, stat, subprocess, sys, tarfile, tempfile, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
 from pathlib import Path
 from html import unescape
 from html.parser import HTMLParser
@@ -14,7 +14,9 @@ RUNNERS = {
     "qr-read", "pdf-text", "pdf-info", "audio-transcribe", "audio-info",
     "video-info", "video-thumbnail", "csv-profile", "json-format",
     "office-text", "archive-inspect", "file-hash", "text-clean", "subtitle-text", "html-text",
-    "audio-normalize", "video-audio", "video-gif",
+    "audio-normalize", "video-audio", "video-gif", "image-resize", "image-webp", "image-palette",
+    "pdf-compress", "pdf-to-images", "epub-text", "sqlite-inspect", "yaml-format", "xml-format",
+    "code-check", "video-contact-sheet", "video-compress", "audio-subtitles", "archive-safe-extract", "xlsx-profile",
 }
 
 def api_json(url: str, method="GET", data=None, token=None):
@@ -338,13 +340,393 @@ def video_gif(p):
     return {"summary":f"Đã tạo GIF xem trước dài {clip:.1f} giây, 10 FPS, rộng tối đa 640 px.","output_path":str(out)}
 
 
+def image_resize(p):
+    from PIL import Image, ImageOps
+    out=p.with_name(p.stem+"-resized.jpg")
+    with Image.open(p) as raw:
+        im=ImageOps.exif_transpose(raw)
+        im.thumbnail((1920,1920),Image.Resampling.LANCZOS)
+        if "A" in im.getbands():
+            rgba=im.convert("RGBA")
+            background=Image.new("RGB",rgba.size,"white")
+            background.paste(rgba,mask=rgba.getchannel("A"))
+            im=background
+        else:
+            im=im.convert("RGB")
+        im.save(out,"JPEG",quality=86,optimize=True,progressive=True)
+    return {"summary":f"Đã resize ảnh về tối đa 1920 px, giữ tỷ lệ; {p.stat().st_size:,} → {out.stat().st_size:,} bytes.","output_path":str(out)}
+
+def image_webp(p):
+    from PIL import Image, ImageOps
+    out=p.with_name(p.stem+"-converted.webp")
+    with Image.open(p) as raw:
+        im=ImageOps.exif_transpose(raw)
+        if im.mode not in ("RGB","RGBA"):
+            im=im.convert("RGBA" if "A" in im.getbands() else "RGB")
+        im.save(out,"WEBP",quality=84,method=6)
+    return {"summary":f"Đã chuyển ảnh sang WebP; {p.stat().st_size:,} → {out.stat().st_size:,} bytes.","output_path":str(out)}
+
+def image_palette(p):
+    from PIL import Image, ImageOps
+    with Image.open(p) as raw:
+        im=ImageOps.exif_transpose(raw).convert("RGB")
+        im.thumbnail((512,512),Image.Resampling.LANCZOS)
+        quantized=im.quantize(colors=8)
+        counts=sorted(quantized.getcolors(512*512) or [],reverse=True)
+        palette=quantized.getpalette() or []
+    total=max(1,sum(count for count,_ in counts))
+    rows=[]
+    for count,index in counts[:8]:
+        base=index*3
+        if base+2>=len(palette): continue
+        color="#"+"".join(f"{v:02X}" for v in palette[base:base+3])
+        rows.append(f"{color} · {count/total*100:.1f}%")
+    return tool_text("Bảng màu chủ đạo (tối đa 8 màu):\n"+"\n".join(rows),"Image color palette")
+
+def pdf_compress(p):
+    import fitz
+    doc=fitz.open(p)
+    if doc.is_encrypted and doc.needs_pass:
+        raise RuntimeError("PDF được mã hóa bằng mật khẩu; không thể nén khi chưa mở khóa.")
+    if doc.page_count>200:
+        raise RuntimeError("PDF quá 200 trang. Hãy chia nhỏ tài liệu trước khi nén.")
+    out=p.with_name(p.stem+"-compressed.pdf")
+    doc.save(str(out),garbage=4,deflate=True,clean=True,deflate_images=True,deflate_fonts=True)
+    doc.close()
+    before=p.stat().st_size
+    after=out.stat().st_size
+    change=(1-after/max(1,before))*100
+    return {"summary":f"Đã tối ưu PDF không thay đổi nội dung trang: {before:,} → {after:,} bytes ({change:.1f}% thay đổi).","output_path":str(out)}
+
+def pdf_to_images(p):
+    import fitz
+    import tempfile
+    doc=fitz.open(p)
+    if doc.is_encrypted and doc.needs_pass:
+        raise RuntimeError("PDF được mã hóa bằng mật khẩu.")
+    if doc.page_count>20:
+        raise RuntimeError("Chuyển PDF sang ảnh hiện giới hạn 20 trang để giữ tệp đầu ra an toàn.")
+    out=p.with_name(p.stem+"-pages.zip")
+    root=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"
+    temp=Path(tempfile.mkdtemp(prefix="pdf-pages-",dir=root))
+    try:
+        with zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=6) as archive:
+            for number,page in enumerate(doc,1):
+                scale=min(1.3,1200/max(page.rect.width,page.rect.height))
+                pix=page.get_pixmap(matrix=fitz.Matrix(scale,scale),alpha=False)
+                image=temp/f"page-{number:03d}.jpg"
+                pix.save(str(image),jpg_quality=82)
+                archive.write(image,image.name)
+        pages=doc.page_count
+    finally:
+        doc.close()
+        shutil.rmtree(temp,ignore_errors=True)
+    return {"summary":f"Đã render {pages} trang PDF thành ảnh JPEG và đóng gói ZIP.","output_path":str(out)}
+
+def epub_text(p):
+    import xml.etree.ElementTree as ET
+    from urllib.parse import unquote
+    if not zipfile.is_zipfile(p):
+        raise RuntimeError("Tệp EPUB không phải ZIP hợp lệ.")
+    with zipfile.ZipFile(p) as archive:
+        infos=archive.infolist()
+        if len(infos)>2000 or sum(x.file_size for x in infos)>100*1024*1024:
+            raise RuntimeError("EPUB vượt giới hạn 2.000 mục hoặc 100 MB giải nén.")
+        names={x.filename for x in infos}
+        if "META-INF/container.xml" not in names:
+            raise RuntimeError("EPUB thiếu META-INF/container.xml.")
+        container=ET.fromstring(archive.read("META-INF/container.xml"))
+        rootfiles=container.findall(".//{*}rootfile")
+        if not rootfiles:
+            raise RuntimeError("Không tìm thấy package OPF trong EPUB.")
+        opf_path=unquote(rootfiles[0].attrib.get("full-path",""))
+        if not opf_path or opf_path.startswith("/") or ".." in Path(opf_path).parts or opf_path not in names:
+            raise RuntimeError("Đường dẫn OPF trong EPUB không an toàn hoặc không tồn tại.")
+        package=ET.fromstring(archive.read(opf_path))
+        ns={"opf":"http://www.idpf.org/2007/opf","dc":"http://purl.org/dc/elements/1.1/"}
+        title=package.findtext(".//dc:title",default=p.stem,namespaces=ns)
+        author=package.findtext(".//dc:creator",default="",namespaces=ns)
+        manifest={}
+        base=Path(opf_path).parent
+        for item in package.findall(".//opf:manifest/opf:item",ns):
+            href=unquote(item.attrib.get("href","")).split("#",1)[0].split("?",1)[0]
+            candidate=posixpath.normpath(posixpath.join(base.as_posix(),href))
+            if candidate.startswith("../") or candidate.startswith("/") or candidate not in names:
+                continue
+            manifest[item.attrib.get("id","")]=candidate
+        spine=package.findall(".//opf:spine/opf:itemref",ns)
+        chapters=[]
+        for ref in spine[:60]:
+            name=manifest.get(ref.attrib.get("idref",""))
+            if not name or not name.lower().endswith((".xhtml",".html",".htm")):
+                continue
+            data=archive.read(name)
+            parser=VisibleHtmlText()
+            parser.feed(data.decode("utf-8-sig","replace"))
+            parser.close()
+            text_value=re.sub(r"\s+"," "," ".join(parser.parts)).strip()
+            if text_value:
+                chapters.append(f"--- {Path(name).name} ---\n{text_value}")
+    output=f"Title: {title}\nAuthor: {author or 'Unknown'}\nChapters: {len(chapters)}\n\n"+"\n\n".join(chapters)
+    return tool_text(output,"EPUB reader · spine order")
+
+def sqlite_inspect(p):
+    import sqlite3
+    from urllib.parse import quote
+    uri="file:"+quote(str(p.resolve()),safe="/:")+"?mode=ro&immutable=1"
+    connection=sqlite3.connect(uri,uri=True,timeout=5)
+    try:
+        connection.execute("PRAGMA query_only=ON")
+        connection.set_progress_handler(lambda: 1,2_000_000)
+        tables=connection.execute(
+            "SELECT name,sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name LIMIT 30"
+        ).fetchall()
+        lines=[f"Database: {p.name}",f"Tables inspected: {len(tables)} (max 30)","Mode: read-only; no SQL from the uploaded file is executed."]
+        for name,create_sql in tables:
+            if create_sql and "CREATE VIRTUAL TABLE" in create_sql.upper():
+                lines.append(f"\n[{name}] Virtual table skipped for safety.")
+                continue
+            quoted='"'+name.replace('"','""')+'"'
+            try:
+                count=connection.execute("SELECT COUNT(*) FROM "+quoted).fetchone()[0]
+                columns=connection.execute("PRAGMA table_info("+quoted+")").fetchall()
+                rows=connection.execute("SELECT * FROM "+quoted+" LIMIT 5").fetchall()
+            except sqlite3.Error as exc:
+                lines.append(f"\n[{name}] Inspection skipped: {str(exc)[:160]}")
+                continue
+            lines.append(f"\n[{name}] rows={count:,}")
+            lines.append("Columns: "+", ".join(f"{c[1]} ({c[2] or 'unknown'})" for c in columns[:40]))
+            lines.append("Sample: "+json.dumps(rows,ensure_ascii=False,default=str)[:1000])
+        return tool_text("\n".join(lines),"SQLite database inspector")
+    finally:
+        connection.close()
+
+def yaml_format(p):
+    import yaml
+    raw=p.read_text(encoding="utf-8-sig")
+    documents=list(yaml.safe_load_all(raw))
+    formatted=yaml.safe_dump_all(documents,allow_unicode=True,sort_keys=False,indent=2)
+    out=p.with_name(p.stem+"-formatted.yaml")
+    out.write_text(formatted,encoding="utf-8")
+    return {"summary":f"YAML hợp lệ: {len(documents)} document(s), đã parse bằng SafeLoader và định dạng lại bằng SafeDumper.","output_path":str(out)}
+
+def xml_format(p):
+    import xml.etree.ElementTree as ET
+    raw=p.read_text(encoding="utf-8-sig")
+    if re.search(r"<!\s*(DOCTYPE|ENTITY)\b",raw,re.I):
+        raise RuntimeError("XML có DTD/ENTITY bị chặn để tránh external entity và entity expansion.")
+    root=ET.fromstring(raw)
+    ET.indent(root,space="  ")
+    out=p.with_name(p.stem+"-formatted.xml")
+    ET.ElementTree(root).write(out,encoding="utf-8",xml_declaration=True)
+    return {"summary":f"XML hợp lệ; root element: {root.tag}. Đã định dạng lại.","output_path":str(out)}
+
+def code_check(p):
+    ext=p.suffix.lower()
+    report=[f"File: {p.name}","Uploaded code is parsed/checked only; it is never executed."]
+    if ext in (".py",".pyw"):
+        import ast
+        ast.parse(p.read_text(encoding="utf-8-sig"),filename=p.name)
+        report.append("Python: syntax OK (AST parse)")
+    elif ext in (".js",".mjs",".cjs"):
+        result=subprocess.run([shutil.which("node") or "node","--check",str(p)],capture_output=True,text=True,timeout=30)
+        if result.returncode:
+            raise RuntimeError((result.stderr or result.stdout or "JavaScript syntax error.")[-1200:])
+        report.append("JavaScript: syntax OK (Node --check)")
+    elif ext in (".sh",".bash"):
+        result=subprocess.run([shutil.which("bash") or "bash","-n",str(p)],capture_output=True,text=True,timeout=30)
+        if result.returncode:
+            raise RuntimeError((result.stderr or result.stdout or "Shell syntax error.")[-1200:])
+        report.append("Shell: syntax OK (bash -n)")
+    elif ext in (".json",):
+        value=json.loads(p.read_text(encoding="utf-8-sig"))
+        report.append(f"JSON: syntax OK; root type={type(value).__name__}")
+    elif ext in (".yaml",".yml"):
+        import yaml
+        count=sum(1 for _ in yaml.safe_load_all(p.read_text(encoding="utf-8-sig")))
+        report.append(f"YAML: syntax OK; {count} document(s), SafeLoader")
+    elif ext==".xml":
+        import xml.etree.ElementTree as ET
+        raw=p.read_text(encoding="utf-8-sig")
+        if re.search(r"<!\s*(DOCTYPE|ENTITY)\b",raw,re.I):
+            raise RuntimeError("XML DTD/ENTITY is disabled.")
+        root=ET.fromstring(raw)
+        report.append(f"XML: syntax OK; root={root.tag}")
+    else:
+        raise RuntimeError("code-check hỗ trợ .py, .js, .mjs, .cjs, .sh, .bash, .json, .yaml, .yml và .xml.")
+    return tool_text("\n".join(report),"Code validation")
+
+def video_contact_sheet(p):
+    data=ffprobe(p)
+    duration=float(data.get("format",{}).get("duration") or 0)
+    if duration<=0 or duration>1800:
+        raise RuntimeError("Video phải có thời lượng từ 0 đến 30 phút để tạo contact sheet.")
+    out=p.with_name(p.stem+"-contact-sheet.jpg")
+    rate=12/max(duration,1)
+    vf=f"fps={rate:.8f},scale=320:-2,tile=4x3:padding=12:margin=8"
+    cmd("ffmpeg",["-y","-i",str(p),"-vf",vf,"-frames:v","1","-q:v","3",str(out)],300)
+    return {"summary":f"Đã tạo contact sheet tối đa 12 khung hình đại diện cho video dài {duration:.1f} giây.","output_path":str(out)}
+
+def video_compress(p):
+    data=ffprobe(p)
+    duration=float(data.get("format",{}).get("duration") or 0)
+    if duration<=0 or duration>360:
+        raise RuntimeError("Nén video hiện giới hạn 6 phút để bảo đảm thời gian xử lý và dung lượng gửi.")
+    out=p.with_name(p.stem+"-compressed.mp4")
+    vf="scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"
+    cmd("ffmpeg",["-y","-i",str(p),"-map","0:v:0","-map","0:a?","-vf",vf,"-c:v","libx264","-preset","veryfast","-crf","30","-maxrate","1000k","-bufsize","2000k","-c:a","aac","-b:a","96k","-movflags","+faststart","-sn","-dn","-threads","2",str(out)],900)
+    if out.stat().st_size>44*1024*1024:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("Video sau nén vẫn vượt giới hạn gửi 44 MB; hãy chọn clip ngắn hơn.")
+    change=(1-out.stat().st_size/max(1,p.stat().st_size))*100
+    return {"summary":f"Đã nén H.264/AAC ở tối đa 720p/1280 px, CRF 30: {p.stat().st_size:,} → {out.stat().st_size:,} bytes ({change:.1f}% thay đổi).","output_path":str(out)}
+
+def _subtitle_timestamp(seconds,separator):
+    millis=max(0,round(float(seconds)*1000))
+    hours,remain=divmod(millis,3_600_000)
+    minutes,remain=divmod(remain,60_000)
+    secs,millis=divmod(remain,1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}{separator}{millis:03d}"
+
+def audio_subtitles(p):
+    from faster_whisper import WhisperModel
+    model=WhisperModel("small",device="cpu",compute_type="int8",cpu_threads=4)
+    segments,info=model.transcribe(str(p),beam_size=5,vad_filter=True)
+    srt=[]; vtt=["WEBVTT",""]
+    count=0
+    for segment in segments:
+        text_value=segment.text.strip()
+        if not text_value: continue
+        count+=1
+        start=_subtitle_timestamp(segment.start,",")
+        end=_subtitle_timestamp(segment.end,",")
+        srt.extend([str(count),f"{start} --> {end}",text_value,""])
+        vtt.extend([f"{_subtitle_timestamp(segment.start,'.')} --> {_subtitle_timestamp(segment.end,'.')}",text_value,""])
+        if count>=5000: break
+    if not count:
+        raise RuntimeError("Whisper không nhận diện được lời thoại để tạo phụ đề.")
+    root=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"
+    out=p.with_name(p.stem+"-subtitles.zip")
+    srt_path=root/(p.stem+"-transcript.srt")
+    vtt_path=root/(p.stem+"-transcript.vtt")
+    srt_path.write_text("\n".join(srt),encoding="utf-8")
+    vtt_path.write_text("\n".join(vtt),encoding="utf-8")
+    with zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.write(srt_path,srt_path.name)
+        archive.write(vtt_path,vtt_path.name)
+    srt_path.unlink(missing_ok=True); vtt_path.unlink(missing_ok=True)
+    return {"summary":f"Đã tạo phụ đề SRT và VTT bằng Whisper small · ngôn ngữ: {info.language} · {count} cue(s).","output_path":str(out)}
+
+def _safe_archive_parts(name):
+    normalized=name.replace("\\","/")
+    if "\x00" in normalized or normalized.startswith("/") or re.match(r"^[A-Za-z]:",normalized):
+        raise RuntimeError("Archive chứa đường dẫn tuyệt đối hoặc ký tự không an toàn.")
+    parts=[part for part in normalized.split("/") if part not in ("",".")]
+    if not parts or any(part==".." for part in parts):
+        raise RuntimeError("Archive chứa đường dẫn traversal (..).")
+    return parts
+
+def archive_safe_extract(p):
+    root=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"
+    temp=Path(tempfile.mkdtemp(prefix="archive-safe-",dir=root))
+    out=p.with_name(p.stem+"-safe-extracted.zip")
+    total=0; count=0
+    max_files=200; max_bytes=150*1024*1024
+    try:
+        if zipfile.is_zipfile(p):
+            with zipfile.ZipFile(p) as archive:
+                for item in archive.infolist():
+                    if item.is_dir(): continue
+                    count+=1; total+=item.file_size
+                    if count>max_files or total>max_bytes:
+                        raise RuntimeError("Archive vượt giới hạn 200 tệp hoặc 150 MB sau giải nén.")
+                    if item.flag_bits & 0x1:
+                        raise RuntimeError("Archive có tệp mã hóa; không thể giải nén an toàn.")
+                    mode=(item.external_attr>>16)&0xFFFF
+                    if stat.S_ISLNK(mode):
+                        raise RuntimeError("Archive chứa symbolic link; đã từ chối giải nén.")
+                    if item.file_size>2*1024*1024 and item.compress_size and item.file_size/max(1,item.compress_size)>250:
+                        raise RuntimeError("Archive có tỷ lệ nén bất thường (zip bomb protection).")
+                    parts=_safe_archive_parts(item.filename)
+                    target=temp.joinpath(*parts)
+                    target.parent.mkdir(parents=True,exist_ok=True)
+                    with archive.open(item) as source,target.open("wb") as destination:
+                        shutil.copyfileobj(source,destination,1024*1024)
+        else:
+            with tarfile.open(p,"r:*") as archive:
+                for item in archive.getmembers():
+                    if item.isdir(): continue
+                    if not item.isfile():
+                        raise RuntimeError("Archive TAR chứa link hoặc special file; đã từ chối giải nén.")
+                    count+=1; total+=item.size
+                    if count>max_files or total>max_bytes:
+                        raise RuntimeError("Archive vượt giới hạn 200 tệp hoặc 150 MB sau giải nén.")
+                    parts=_safe_archive_parts(item.name)
+                    source=archive.extractfile(item)
+                    if source is None: continue
+                    target=temp.joinpath(*parts)
+                    target.parent.mkdir(parents=True,exist_ok=True)
+                    with source,target.open("wb") as destination:
+                        shutil.copyfileobj(source,destination,1024*1024)
+        with zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=6) as packaged:
+            for item in sorted(temp.rglob("*")):
+                if item.is_file():
+                    packaged.write(item,item.relative_to(temp).as_posix())
+    except (zipfile.BadZipFile,tarfile.TarError) as exc:
+        raise RuntimeError("Archive không hợp lệ hoặc không được hỗ trợ.") from exc
+    finally:
+        shutil.rmtree(temp,ignore_errors=True)
+    return {"summary":f"Đã giải nén an toàn {count} tệp ({total:,} bytes), loại bỏ metadata/link nguy hiểm và đóng gói ZIP sạch.","output_path":str(out)}
+
+def xlsx_profile(p):
+    from openpyxl import load_workbook
+    workbook=load_workbook(p,read_only=True,data_only=True)
+    reports=[]
+    try:
+        for sheet in workbook.worksheets[:20]:
+            iterator=sheet.iter_rows(values_only=True)
+            header=next(iterator,None)
+            if header is None:
+                reports.append(f"\n[{sheet.title}] Empty sheet")
+                continue
+            names=[str(value).strip() if value is not None else f"Column {i+1}" for i,value in enumerate(header[:60])]
+            missing=[0]*len(names); numeric=[[] for _ in names]; samples=[]; duplicates=set(); duplicate_count=0; rows=0
+            for row in iterator:
+                rows+=1
+                values=list(row[:len(names)])
+                if len(samples)<5: samples.append(values)
+                key=hashlib.sha256(json.dumps(values,ensure_ascii=False,default=str).encode()).hexdigest()
+                if key in duplicates: duplicate_count+=1
+                else: duplicates.add(key)
+                for i in range(len(names)):
+                    value=values[i] if i<len(values) else None
+                    if value is None or str(value).strip()=="": missing[i]+=1
+                    elif isinstance(value,(int,float)) and not isinstance(value,bool): numeric[i].append(float(value))
+                if rows>=10000: break
+            lines=[f"\n[{sheet.title}] data rows={rows:,} · duplicate rows={duplicate_count:,}"+(" · scan capped at 10,000" if rows>=10000 else "")]
+            for i,name in enumerate(names):
+                line=f"- {name}: missing {missing[i]}/{rows}"
+                if numeric[i]: line+=f" · numeric min={min(numeric[i]):g}, max={max(numeric[i]):g}, avg={sum(numeric[i])/len(numeric[i]):g}"
+                lines.append(line)
+            lines.append("Sample: "+json.dumps(samples,ensure_ascii=False,default=str)[:1200])
+            reports.extend(lines)
+    finally:
+        workbook.close()
+    return tool_text("\n".join(reports),"Excel workbook profiler")
+
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
  "audio-transcribe":audio_transcribe,"audio-info":audio_info,"video-info":video_info,"video-thumbnail":video_thumbnail,
  "csv-profile":csv_profile,"json-format":json_format,"office-text":office_text,"archive-inspect":archive_inspect,"file-hash":file_hash,"text-clean":text_clean,"subtitle-text":subtitle_text,"html-text":html_text,
  "audio-normalize":audio_normalize,"video-audio":video_audio,"video-gif":video_gif,
-
+ "image-resize":image_resize,"image-webp":image_webp,"image-palette":image_palette,
+ "pdf-compress":pdf_compress,"pdf-to-images":pdf_to_images,"epub-text":epub_text,"sqlite-inspect":sqlite_inspect,
+ "yaml-format":yaml_format,"xml-format":xml_format,"code-check":code_check,
+ "video-contact-sheet":video_contact_sheet,"video-compress":video_compress,"audio-subtitles":audio_subtitles,
+ "archive-safe-extract":archive_safe_extract,"xlsx-profile":xlsx_profile,
 }
 
 def cmd_fetch(args):
