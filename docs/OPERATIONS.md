@@ -128,3 +128,12 @@ Never print secrets in logs. Avoid logging raw user content unless necessary for
 - AI Router defaults to three failover routes per completion and clamps configured `maxAttempts` to six. Recently failing routes are temporarily skipped per Worker isolate.
 - Browser chat passes at most eight valid recent turns / 8,000 aggregate characters to the model. Character limits are an approximation for context control, not an exact token count.
 - These controls do not change provider prices or guarantee lower bills; inspect response usage fields when the selected provider reports token usage.
+
+
+## Upstream response and redirect limits
+
+- JSON responses from search providers and the Telegram Bot API are read with a streaming 1 MB decoded-byte cap. A too-large Content-Length is rejected early; chunked bodies are cancelled when the cap is crossed.
+- Invalid or empty upstream JSON is treated as a provider/API failure and follows the existing fallback/error handling.
+- Website Watch checks the configured site's robots.txt and refuses redirects to another origin. If a site redirects to a different hostname, the check is marked as a fetch failure; update the watch target to the canonical URL if appropriate.
+- The selected-site crawler continues to allow only same-origin redirects, and redirect bodies are cancelled before the next request.
+- TinyFish page extraction is matched back to the safe public URL actually requested. Its returned final URL is only used when it is itself a safe public HTTPS URL.

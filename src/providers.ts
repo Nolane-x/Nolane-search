@@ -1,4 +1,5 @@
 import { isSafePublicUrl, normalizeUrl } from "./security";
+import { readJsonResponse } from "./http";
 import { completeAi } from "./ai-router";
 import type { Env, SearchResult } from "./types";
 
@@ -50,7 +51,7 @@ async function postJson<T>(url: string, body: unknown, headers: Record<string, s
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) throw new Error(`Provider request failed (${response.status})`);
-  return await response.json() as T;
+  return await readJsonResponse<T>(response, 1_000_000);
 }
 
 export function parseOpenRouterModels(env: Pick<Env, "OPENROUTER_MODEL" | "OPENROUTER_MODELS">): string[] {
@@ -83,10 +84,10 @@ export async function searchBrave(env: Env, query: string, news = false): Promis
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`Brave Search failed (${response.status})`);
-  const data = await response.json() as {
+  const data = await readJsonResponse<{
     web?: { results?: Array<{ title?: string; url?: string; description?: string; age?: string }> };
     results?: Array<{ title?: string; url?: string; description?: string; age?: string }>;
-  };
+  }>(response, 1_000_000);
   return (data.web?.results ?? data.results ?? []).map((item) => normalizeResult({
     title: item.title, url: item.url, snippet: item.description, publishedAt: item.age,
   }, "Brave")).filter((item): item is SearchResult => item !== null);
@@ -131,11 +132,11 @@ export async function searchWikipedia(query: string, language: "en" | "vi" = wik
     signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) throw new Error(`Wikipedia Search failed (${response.status})`);
-  const data = await response.json() as {
+  const data = await readJsonResponse<{
     query?: {
       search?: Array<{ title?: string; snippet?: string; timestamp?: string }>;
     };
-  };
+  }>(response, 1_000_000);
   return (data.query?.search ?? []).map(item => {
     const title = String(item.title || "Untitled");
     const snippet = String(item.snippet || "")
@@ -183,9 +184,9 @@ export async function searchTinyFish(
     signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) throw new Error(`TinyFish Search failed (${response.status})`);
-  const data = await response.json() as {
+  const data = await readJsonResponse<{
     results?: Array<{ title?: string; url?: string; snippet?: string; site_name?: string; position?: number; published_date?: string; date?: string }>;
-  };
+  }>(response, 1_000_000);
   return (data.results ?? []).map((item) => normalizeResult({
     title: item.title || item.site_name,
     url: item.url,
@@ -200,19 +201,22 @@ export async function fetchTinyFishPages(env: Env, urls: string[]): Promise<Map<
   if (!env.TINYFISH_API_KEY || urls.length === 0) return output;
   const unique = [...new Set(urls.map((url) => isSafePublicUrl(url)?.toString()).filter((url): url is string => Boolean(url)))].slice(0, 10);
   if (!unique.length) return output;
+  const requested = new Set(unique.map(url => normalizeUrl(url)));
   const data = await postJson<{
     results?: Array<{ url?: string; final_url?: string; title?: string; text?: string }>;
     errors?: Array<{ url?: string; error?: string }>;
   }>("https://api.fetch.tinyfish.ai/", { urls: unique, format: "markdown" }, { "X-API-Key": env.TINYFISH_API_KEY }, 45_000);
-  for (const [index, item] of (data.results ?? []).entries()) {
-    const original = item.url || unique[index];
-    const candidates = [original, item.final_url].filter((value): value is string => Boolean(value));
-    if (!item.text) continue;
+  for (const item of data.results ?? []) {
+    if (!item.url || !item.text) continue;
+    const original = isSafePublicUrl(item.url);
+    if (!original) continue;
+    const originalKey = normalizeUrl(original.toString());
+    // Only associate extracted text with a URL that was actually requested.
+    if (!requested.has(originalKey)) continue;
     const page = { title: item.title, text: item.text.slice(0, 6000) };
-    for (const candidate of candidates) {
-      output.set(candidate, page);
-      try { output.set(normalizeUrl(candidate), page); } catch { /* ignore malformed provider URL */ }
-    }
+    output.set(originalKey, page);
+    const finalUrl = item.final_url ? isSafePublicUrl(item.final_url) : null;
+    if (finalUrl) output.set(normalizeUrl(finalUrl.toString()), page);
   }
   return output;
 }
@@ -227,7 +231,12 @@ export async function fetchTinyFishPage(env: Env, url: string): Promise<{ title:
   }>("https://api.fetch.tinyfish.ai/", { urls: [safeUrl.toString()], format: "markdown" }, { "X-API-Key": env.TINYFISH_API_KEY }, 45_000);
   const page = data.results?.[0];
   if (!page?.text) throw new Error(data.errors?.[0]?.error || "TinyFish could not extract this page.");
-  return { title: page.title || new URL(page.final_url || url).hostname, text: page.text.slice(0, 12_000), finalUrl: page.final_url || url };
+  const finalUrl = page.final_url ? isSafePublicUrl(page.final_url) : null;
+  return {
+    title: page.title || (finalUrl || safeUrl).hostname,
+    text: page.text.slice(0, 12_000),
+    finalUrl: (finalUrl || safeUrl).toString(),
+  };
 }
 
 export async function searchGitHub(env: Env, query: string): Promise<SearchResult[]> {
@@ -242,9 +251,9 @@ export async function searchGitHub(env: Env, query: string): Promise<SearchResul
     },
   );
   if (!response.ok) throw new Error(`GitHub Search failed (${response.status})`);
-  const data = await response.json() as {
+  const data = await readJsonResponse<{
     items?: Array<{ full_name?: string; html_url?: string; description?: string; stargazers_count?: number; updated_at?: string; language?: string }>;
-  };
+  }>(response, 1_000_000);
   return (data.items ?? []).map((item) => normalizeResult({
     title: item.full_name, url: item.html_url,
     snippet: [item.description, item.language, typeof item.stargazers_count === "number" ? `★ ${item.stargazers_count}` : ""].filter(Boolean).join(" · "),
