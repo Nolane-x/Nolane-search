@@ -340,10 +340,16 @@ def video_gif(p):
     return {"summary":f"Đã tạo GIF xem trước dài {clip:.1f} giây, 10 FPS, rộng tối đa 640 px.","output_path":str(out)}
 
 
+def _guard_image_dimensions(image):
+    if image.width * image.height > 80_000_000:
+        raise RuntimeError("Ảnh vượt giới hạn 80 megapixel để tránh dùng quá nhiều bộ nhớ.")
+
+
 def image_resize(p):
     from PIL import Image, ImageOps
     out=p.with_name(p.stem+"-resized.jpg")
     with Image.open(p) as raw:
+        _guard_image_dimensions(raw)
         im=ImageOps.exif_transpose(raw)
         im.thumbnail((1920,1920),Image.Resampling.LANCZOS)
         if "A" in im.getbands():
@@ -360,15 +366,18 @@ def image_webp(p):
     from PIL import Image, ImageOps
     out=p.with_name(p.stem+"-converted.webp")
     with Image.open(p) as raw:
+        _guard_image_dimensions(raw)
         im=ImageOps.exif_transpose(raw)
+        has_alpha=("A" in im.getbands()) or ("transparency" in im.info)
         if im.mode not in ("RGB","RGBA"):
-            im=im.convert("RGBA" if "A" in im.getbands() else "RGB")
+            im=im.convert("RGBA" if has_alpha else "RGB")
         im.save(out,"WEBP",quality=84,method=6)
     return {"summary":f"Đã chuyển ảnh sang WebP; {p.stat().st_size:,} → {out.stat().st_size:,} bytes.","output_path":str(out)}
 
 def image_palette(p):
     from PIL import Image, ImageOps
     with Image.open(p) as raw:
+        _guard_image_dimensions(raw)
         im=ImageOps.exif_transpose(raw).convert("RGB")
         im.thumbnail((512,512),Image.Resampling.LANCZOS)
         quantized=im.quantize(colors=8)
@@ -580,7 +589,7 @@ def video_compress(p):
         out.unlink(missing_ok=True)
         raise RuntimeError("Video sau nén vẫn vượt giới hạn gửi 44 MB; hãy chọn clip ngắn hơn.")
     change=(1-out.stat().st_size/max(1,p.stat().st_size))*100
-    return {"summary":f"Đã nén H.264/AAC ở tối đa 720p/1280 px, CRF 30: {p.stat().st_size:,} → {out.stat().st_size:,} bytes ({change:.1f}% thay đổi).","output_path":str(out)}
+    return {"summary":f"Đã nén H.264/AAC ở tối đa 1280 px, CRF 30: {p.stat().st_size:,} → {out.stat().st_size:,} bytes ({change:.1f}% thay đổi).","output_path":str(out)}
 
 def _subtitle_timestamp(seconds,separator):
     millis=max(0,round(float(seconds)*1000))
@@ -627,6 +636,21 @@ def _safe_archive_parts(name):
         raise RuntimeError("Archive chứa đường dẫn traversal (..).")
     return parts
 
+
+def _copy_archive_stream(source,destination,current_total,max_bytes,expected_size=None):
+    written=0
+    with destination.open("wb") as output:
+        while True:
+            chunk=source.read(1024*1024)
+            if not chunk: break
+            written+=len(chunk)
+            if current_total+written>max_bytes:
+                raise RuntimeError("Archive vượt giới hạn 150 MB dữ liệu giải nén thực tế.")
+            output.write(chunk)
+    if expected_size is not None and written!=expected_size:
+        raise RuntimeError("Kích thước giải nén không khớp metadata của archive.")
+    return written
+
 def archive_safe_extract(p):
     root=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"
     temp=Path(tempfile.mkdtemp(prefix="archive-safe-",dir=root))
@@ -638,8 +662,8 @@ def archive_safe_extract(p):
             with zipfile.ZipFile(p) as archive:
                 for item in archive.infolist():
                     if item.is_dir(): continue
-                    count+=1; total+=item.file_size
-                    if count>max_files or total>max_bytes:
+                    count+=1
+                    if count>max_files or total+item.file_size>max_bytes:
                         raise RuntimeError("Archive vượt giới hạn 200 tệp hoặc 150 MB sau giải nén.")
                     if item.flag_bits & 0x1:
                         raise RuntimeError("Archive có tệp mã hóa; không thể giải nén an toàn.")
@@ -651,24 +675,24 @@ def archive_safe_extract(p):
                     parts=_safe_archive_parts(item.filename)
                     target=temp.joinpath(*parts)
                     target.parent.mkdir(parents=True,exist_ok=True)
-                    with archive.open(item) as source,target.open("wb") as destination:
-                        shutil.copyfileobj(source,destination,1024*1024)
+                    with archive.open(item) as source:
+                        total+=_copy_archive_stream(source,target,total,max_bytes,item.file_size)
         else:
             with tarfile.open(p,"r:*") as archive:
                 for item in archive.getmembers():
                     if item.isdir(): continue
                     if not item.isfile():
                         raise RuntimeError("Archive TAR chứa link hoặc special file; đã từ chối giải nén.")
-                    count+=1; total+=item.size
-                    if count>max_files or total>max_bytes:
+                    count+=1
+                    if count>max_files or total+item.size>max_bytes:
                         raise RuntimeError("Archive vượt giới hạn 200 tệp hoặc 150 MB sau giải nén.")
                     parts=_safe_archive_parts(item.name)
                     source=archive.extractfile(item)
                     if source is None: continue
                     target=temp.joinpath(*parts)
                     target.parent.mkdir(parents=True,exist_ok=True)
-                    with source,target.open("wb") as destination:
-                        shutil.copyfileobj(source,destination,1024*1024)
+                    with source:
+                        total+=_copy_archive_stream(source,target,total,max_bytes,item.size)
         with zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=6) as packaged:
             for item in sorted(temp.rglob("*")):
                 if item.is_file():

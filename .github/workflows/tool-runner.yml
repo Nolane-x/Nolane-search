@@ -63,7 +63,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends libzbar0
           python -m pip install --disable-pip-version-check pyzbar
       - name: Install FFmpeg
-        if: contains(fromJSON('["audio-transcribe","audio-info","video-info","video-thumbnail","audio-normalize","video-audio","video-gif","video-contact-sheet","video-compress"]'), steps.job.outputs.tool_id)
+        if: contains(fromJSON('["audio-transcribe","audio-subtitles","audio-info","video-info","video-thumbnail","audio-normalize","video-audio","video-gif","video-contact-sheet","video-compress"]'), steps.job.outputs.tool_id)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Cache Whisper model files
         if: contains(fromJSON('["audio-transcribe","audio-subtitles"]'), steps.job.outputs.tool_id)
