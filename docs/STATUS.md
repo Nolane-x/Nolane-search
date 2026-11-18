@@ -6,22 +6,23 @@ Last verified: 2026-11-18. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `ea01f12c15520092bae1a0b439f93dff0c6eea6b`
+- Latest production source commit: `1c17cd1e77a5b83fc57a0ed86e9ace595f58d31e`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
+- Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `3f012fc3-68d1-44fc-8d57-44fa214ea1b9`
+- Cloudflare Worker version ID: `ccbb1cb9-3d89-4290-a471-92c44a333711`
 
-The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, an owner-controlled bounded site crawler, a Personal Web Index panel, and per-result helpful/not-helpful feedback.
+The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction and per-result helpful/not-helpful feedback.
 
 ## CI and deployment verification
 
 | Check | Run | Result |
 |---|---:|---|
-| PR CI: typecheck, 55 unit tests, script syntax checks and Worker build | [44242461140](https://github.com/Nolane-x/Nolane-search/actions/runs/44118842734) | PASS |
-| Main CI: typecheck, 51 unit tests, script syntax checks and Worker build | [44242568805](https://github.com/Nolane-x/Nolane-search/actions/runs/44119582728) | PASS |
-| Worker bundle export and production smoke test | [44242568822](https://github.com/Nolane-x/Nolane-search/actions/runs/44119582985) | PASS |
-| Production Worker deployment, runtime secret upload, webhook and command registration | [44242568919](https://github.com/Nolane-x/Nolane-search/actions/runs/44119582847) | PASS |
+| PR CI: typecheck, 58 unit tests, script syntax checks and Worker build | [44245521279](https://github.com/Nolane-x/Nolane-search/actions/runs/44245521279) | PASS |
+| Main CI: typecheck, 58 unit tests, script syntax checks and Worker build | [44245682121](https://github.com/Nolane-x/Nolane-search/actions/runs/44245682121) | PASS |
+| Worker bundle export and production smoke test | [44245681931](https://github.com/Nolane-x/Nolane-search/actions/runs/44245681931) | PASS |
+| Production Worker deployment, runtime secret upload, webhook and command registration | [44245681953](https://github.com/Nolane-x/Nolane-search/actions/runs/44245681953) | PASS |
 
 The deployment log confirms:
 - Worker `nolane-search` was uploaded and deployed.
@@ -29,6 +30,8 @@ The deployment log confirms:
 - Cron `*/30 * * * *` and Queue producer/consumer bindings remained attached.
 - Telegram webhook registration succeeded.
 - Telegram bot command registration succeeded, including `/web`.
+- Worker version `ccbb1cb9-3d89-4290-a471-92c44a333711` was deployed from main commit `1c17cd1e77a5b83fc57a0ed86e9ace595f58d31e`.
+- No D1 migration was needed; the deployment's migration check correctly skipped the migration apply step.
 
 ## Live health verification
 
@@ -106,7 +109,7 @@ The live D1 `schema_migrations` table contains:
 - `0002_deep_search_jobs.sql`
 - `0003_web_portal.sql`
 
-PR #3 did not introduce a new D1 migration; it reuses the existing indexed_pages/FTS5 schema, search_cache and Queue.
+PR #3 and PR #4 did not introduce new D1 migrations; both reuse the existing indexed_pages/FTS5 schema, search_cache and Queue.
 
 The new migration creates `web_login_tickets`, `web_sessions` and `web_rate_limits`, plus supporting indexes. All three tables and the migration record were queried after applying the migration.
 
@@ -127,10 +130,9 @@ These need a real interaction from the owner's Telegram account; CI and the publ
 2. Try `/crawl https://your-own-public-site.example 10` on a website you control, then use `/crawls` and search its contents with `/local` or Website của tôi. Confirm only permitted pages are indexed.
 3. Use Personal Web Index in the browser to enqueue a small crawl and refresh its status.
 4. Vote helpful/not-helpful on a few search results, then repeat the exact same query to observe the small ranking nudge.
-2. Run a browser search in Web, News, Research and GitHub categories. Confirm results open and the result count / timing are sensible.
-3. Use AI Overview on a current topic and check that inline source numbers correspond to the linked sources.
-4. Send a few chat messages to verify conversation continuity and verify that chat does not claim it performed live web search.
-5. Run `/ai_status`, then one low-cost `/ai fast ...` request to verify live API-key acceptance. Test failover only if needed; it can spend provider quota.
-6. Try a 20-result Telegram search pagination case, `/deep`, `/read`, `/watch` and archive delivery.
-
+5. Run a browser search in Web, News, Research and GitHub categories. Confirm results open and the result count / timing are sensible.
+6. Use AI Overview on a current topic and check that inline source numbers correspond to the linked sources.
+7. Send a few chat messages to verify conversation continuity and verify that chat does not claim it performed live web search.
+8. Run `/ai_status`, then one low-cost `/ai fast ...` request to verify live API-key acceptance. Test failover only if needed; it can spend provider quota.
+9. Try a 20-result Telegram search pagination case, `/deep`, `/read`, `/watch` and archive delivery.
 No API key, bot token, webhook secret or session token should be pasted into chat, committed to the repository, or included in screenshots/logs.
