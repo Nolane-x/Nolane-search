@@ -188,6 +188,22 @@ describe("GitHub Actions tool dispatch", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+
+  it("retains the source reference when Actions dispatch itself fails", async () => {
+    const {db,rows}=fakeDb();
+    vi.stubGlobal("fetch",vi.fn(async()=>new Response("dispatch unavailable",{status:503})));
+    const env={DB:db,NOLANE_GH_ACTIONS_TOKEN:"test-actions-token"} as unknown as Env;
+    await expect(createToolJob(env,{
+      userId:42,chatId:42,toolId:"image-ocr",fileId:"telegram-file-id-123456",
+      fileName:"photo.png",mimeType:"image/png",fileSize:100,
+    })).rejects.toThrow("dispatch thất bại");
+    const saved=[...rows.entries()].find(([key])=>key.startsWith("tool-job:"));
+    expect(saved).toBeTruthy();
+    const job=JSON.parse(saved![1]);
+    expect(job.status).toBe("failed");
+    expect(job.fileId).toBe("telegram-file-id-123456");
+  });
+
   it("explains a missing Actions write token before persisting work", async () => {
     const DB = { prepare: () => { throw new Error("D1 should not be used"); } } as unknown as D1Database;
     await expect(createToolJob({ DB } as unknown as Env, {
