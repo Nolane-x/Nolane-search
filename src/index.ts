@@ -1032,7 +1032,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     if (separator < 0) {
       await reply(env, chatId,
         "Cú pháp: <code>/workflow_save Tên quy trình | tool-1 -> tool-2</code>\n" +
-        "Ví dụ: <code>/workflow_save Video transcript | video-audio -> audio-convert -> audio-transcribe</code>");
+        "Ví dụ tuyến tính: <code>/workflow_save Video transcript | video-audio -> audio-transcribe</code>\\n" +\n        "Ví dụ DAG: <code>/workflow_save Video branches | source=video-audio@input; transcript=audio-transcribe@source; converted=audio-convert@source</code>");
       return;
     }
     const name = args.slice(0, separator).trim();
@@ -1211,7 +1211,9 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "ID: <code>" + htmlEscape(job.id) + "</code>",
       "Trạng thái: " + state + " · lần chạy " + (job.attempt || 1),
       "Tệp: " + htmlEscape(job.fileName),
-      "Pipeline: " + htmlEscape(steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ")),
+      (job.workflowDag
+        ? "DAG:\\n" + htmlEscape(job.workflowDag.map(node => node.id + " = " + (getTool(node.toolId)?.name || node.toolId) + " ← " + (node.dependsOn[0] || "input")).join("\\n"))
+        : "Pipeline: " + htmlEscape(steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → "))),
     ];
     if (job.retryOf) lines.push("Retry từ: <code>" + htmlEscape(job.retryOf) + "</code>");
     if (job.workflowName) lines.push("Workflow: " + htmlEscape(job.workflowName));
@@ -2021,7 +2023,7 @@ async function setToolJobResult(
     (job.workflowName ? " · Workflow: " + job.workflowName : "") +
     (status === "completed" ? " · Hoàn thành" : " · Thất bại");
   const traceText = (job.trace || []).map(step =>
-    (step.status === "completed" ? "✅ " : "❌ ") + "Step " + step.step + "/" + step.total +
+    (step.status === "completed" ? "✅ " : "❌ ") + (step.nodeId ? "Node " + step.nodeId : "Step " + step.step) + "/" + step.total +
     " · " + step.toolId + " · " + step.durationMs + " ms · " +
     step.inputBytes + " → " + (step.outputBytes === null ? "text" : step.outputBytes + " bytes") +
     "\n" + (step.error || step.summary).slice(0, 300)
