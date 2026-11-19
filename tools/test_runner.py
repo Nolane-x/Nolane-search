@@ -722,7 +722,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual(row["profile.age"],"17")
         self.assertEqual(row["profile.city"],"Hai Phong")
         self.assertEqual(row["tags"],'["ai","python"]')
-        csv_source=self.write("people.csv","name,age\\nAn,17\\nBinh,18\\n")
+        csv_source=self.write("people.csv","name,age\nAn,17\nBinh,18\n")
         database=runner.csv_to_sqlite(csv_source)
         connection=sqlite3.connect(database["output_path"])
         try:
@@ -742,10 +742,10 @@ class ToolRunnerUnitTests(unittest.TestCase):
 
     def test_log_insights_groups_levels_and_repeated_errors(self):
         path=self.write("service.log",
-            "2026-11-19T10:00:00Z ERROR database timeout request 12\\n"
-            "2026-11-19T10:01:00Z ERROR database timeout request 99\\n"
-            "2026-11-19T10:02:00Z WARNING slow query\\n"
-            "2026-11-19T10:03:00Z INFO ready\\n")
+            "2026-11-19T10:00:00Z ERROR database timeout request 12\n"
+            "2026-11-19T10:01:00Z ERROR database timeout request 99\n"
+            "2026-11-19T10:02:00Z WARNING slow query\n"
+            "2026-11-19T10:03:00Z INFO ready\n")
         result=runner.log_insights(path)
         self.assertIn("ERROR: 2",result["summary"])
         self.assertIn("WARN: 1",result["summary"])
