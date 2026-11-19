@@ -144,17 +144,17 @@ describe("Saved Nolane Tool Workflows", () => {
     const workflow=await saveDagToolWorkflow(env,42,42,"Failure branch",{nodes:[
       {id:"extract",toolId:"video-audio",dependsOn:[]},
       {id:"transcribe",toolId:"audio-transcribe",dependsOn:["extract"],input:"parent"},
-      {id:"fallback",toolId:"text-stats",dependsOn:["transcribe"],input:"source",when:"any-failure"},
+      {id:"fallback",toolId:"video-info",dependsOn:["transcribe"],input:"source",when:"any-failure"},
     ]});
     expect(workflow.graph?.nodes[2]).toMatchObject({id:"fallback",when:"any-failure",input:"source"});
     await expect(saveDagToolWorkflow(env,42,42,"Bad branch",{nodes:[
       {id:"extract",toolId:"video-audio",dependsOn:[]},
-      {id:"fallback",toolId:"text-stats",dependsOn:["extract"],input:"source",when:"all-success"},
+      {id:"fallback",toolId:"video-info",dependsOn:["extract"],input:"source",when:"all-success"},
     ]})).rejects.toThrow("input=source");
     const barrier=await saveDagToolWorkflow(env,42,42,"Barrier",{nodes:[
       {id:"left",toolId:"video-audio",dependsOn:[]},
       {id:"right",toolId:"video-info",dependsOn:[]},
-      {id:"after-both",toolId:"text-stats",dependsOn:["left","right"],input:"source",when:"all-success"},
+      {id:"after-both",toolId:"video-thumbnail",dependsOn:["left","right"],input:"source",when:"all-success"},
     ]});
     expect(barrier.graph?.nodes.at(-1)?.dependsOn).toEqual(["left","right"]);
   });
