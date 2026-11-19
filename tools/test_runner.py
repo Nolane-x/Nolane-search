@@ -741,6 +741,27 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual(statuses,{"primary":"failed","normal":"skipped","fallback":"completed"})
 
 
+
+    def test_dag_scheduler_skips_success_condition_and_runs_always_barrier(self):
+        source=self.write("always.txt","original")
+        calls=[]
+        def success(path):
+            calls.append(path.read_text(encoding="utf-8"))
+            output=path.with_name("handled.txt")
+            output.write_text("handled",encoding="utf-8")
+            return {"summary":"handled","output_path":str(output)}
+        job={"toolId":"file-hash","workflowGraph":{"nodes":[
+            {"id":"left","toolId":"file-hash","dependsOn":[],"input":"source","when":"all-success"},
+            {"id":"right","toolId":"text-clean","dependsOn":["left"],"input":"source","when":"always"},
+            {"id":"skipped","toolId":"text-stats","dependsOn":["left"],"input":"parent","when":"all-success"},
+        ]}}
+        with patch.dict(runner.TOOLS,{"file-hash":success,"text-clean":success}):
+            result=runner.run_tool_workflow_dag(job,source,self.input_dir.resolve())
+        statuses={entry["nodeId"]:entry["status"] for entry in result["trace"]}
+        self.assertEqual(statuses,{"left":"completed","right":"completed","skipped":"skipped"})
+        self.assertEqual(len(calls),2)
+
+
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
         self.assertGreaterEqual(len(runner.TOOLS),72)
