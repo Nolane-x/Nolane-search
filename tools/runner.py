@@ -1778,6 +1778,17 @@ def _runner_output_path(raw_path, root):
         raise RuntimeError("Pipeline intermediate output exceeds 45 MB.")
     return resolved
 
+
+def _safe_trace_text(value,root):
+    text=str(value).strip()
+    roots=[str(root.resolve())]
+    for path in roots:
+        text=text.replace(path,"[runner-path]").replace(path.replace("/","\\"),"[runner-path]")
+    text=re.sub(r"(?:(?:/home/runner|/tmp|/private/var/folders)/[^\s\"']+)", "[runner-path]", text)
+    text=re.sub(r"[A-Za-z]:\\[^\s\"']+", "[runner-path]", text)
+    return text
+
+
 class PipelineExecutionError(RuntimeError):
     def __init__(self,message,trace):
         super().__init__(message)
@@ -1817,7 +1828,7 @@ def run_tool_pipeline(job, source, root):
             trace.append({
                 "step":index+1,"total":len(steps),"toolId":tool_id,"status":"completed",
                 "durationMs":duration_ms,"inputBytes":input_bytes,"outputBytes":output_bytes,
-                "summary":summary[:800],
+                "summary":_safe_trace_text(summary,root)[:180],
             })
             summaries.append(f"Step {index+1}/{len(steps)} · {tool_id}: {summary or 'completed'}")
         except Exception as exc:
@@ -1828,7 +1839,7 @@ def run_tool_pipeline(job, source, root):
             trace.append({
                 "step":index+1,"total":len(steps),"toolId":tool_id,"status":"failed",
                 "durationMs":duration_ms,"inputBytes":input_bytes,"outputBytes":None,
-                "summary":message[:800],"error":message[:500],
+                "summary":_safe_trace_text(message,root)[:180],"error":_safe_trace_text(message,root)[:250],
             })
             raise PipelineExecutionError(message,trace) from exc
     final_output=str(_runner_output_path(result.get("output_path",""),root) or "")
