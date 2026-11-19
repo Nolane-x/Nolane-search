@@ -102,13 +102,18 @@ export async function saveToolWorkflow(
   const candidate = Array.isArray(rawSteps) ? rawSteps[0] : null;
   const dagMode = !!candidate && typeof candidate === "object" && !Array.isArray(candidate) &&
     typeof candidate.id === "string" && Array.isArray(candidate.dependsOn);
-  const dagValidation = dagMode ? validateToolDagDefinition(rawSteps) : null;
-  const pipeline = dagMode ? null : validateToolPipelineDefinition(rawSteps);
-  if (dagMode && !dagValidation.ok) throw new Error(dagValidation.error);
-  if (!dagMode && !pipeline.ok) throw new Error(pipeline.error);
-  const workflowSteps = dagMode
-    ? dagValidation.nodes.map(node => ({ toolId: node.toolId, ...(node.reason ? { reason: node.reason } : {}) }))
-    : pipeline.steps;
+  let workflowSteps: ToolPipelineStep[];
+  let workflowDag: ToolDagNode[] | undefined;
+  if (dagMode) {
+    const validation = validateToolDagDefinition(rawSteps);
+    if (!validation.ok) throw new Error(validation.error);
+    workflowDag = validation.nodes;
+    workflowSteps = validation.nodes.map(node => ({ toolId: node.toolId, ...(node.reason ? { reason: node.reason } : {}) }));
+  } else {
+    const validation = validateToolPipelineDefinition(rawSteps);
+    if (!validation.ok) throw new Error(validation.error);
+    workflowSteps = validation.steps;
+  }
 
   const existing = await listToolWorkflows(env, userId);
   if (existing.some(item => item.name.toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US"))) {
@@ -125,7 +130,7 @@ export async function saveToolWorkflow(
   if (!id) throw new Error("Không thể tạo ID workflow duy nhất. Hãy thử lại.");
   const workflow: ToolWorkflow = {
     id, userId, chatId, name, steps: workflowSteps,
-    ...(dagMode ? { dag: dagValidation.nodes } : {}),
+    ...(workflowDag ? { dag: workflowDag } : {}),
     createdAt: now, updatedAt: now,
   };
   await env.DB.prepare(
