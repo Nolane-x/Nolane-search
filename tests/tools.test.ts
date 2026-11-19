@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TOOL_CATALOG, getTool, inferToolForUpload, isToolCompatible, validateToolPipeline } from "../src/tools";
+import { TOOL_CATALOG, getTool, inferToolForUpload, isToolCompatible, validateToolPipeline, validateToolPipelineDefinition } from "../src/tools";
 
 describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
@@ -53,6 +53,19 @@ describe("Nolane Tools registry", () => {
     ]).ok).toBe(true);
     expect(validateToolPipeline({mimeType:"text/csv",fileName:"rows.csv"}, [{toolId:"csv-to-json"},{toolId:"json-format"}]).ok).toBe(true);
     expect(validateToolPipeline({mimeType:"application/pdf",fileName:"scan.pdf"}, [{toolId:"pdf-extract-images"},{toolId:"archive-inspect"}]).ok).toBe(true);
+  });
+
+  it("validates reusable workflow definitions without assuming an uploaded file", () => {
+    const valid = validateToolPipelineDefinition([
+      { toolId: "video-audio" },
+      { toolId: "audio-convert" },
+      { toolId: "audio-transcribe" },
+    ]);
+    expect(valid.ok).toBe(true);
+    expect(validateToolPipelineDefinition([{ toolId: "not-real" }]).ok).toBe(false);
+    expect(validateToolPipelineDefinition([{ toolId: "video-info" }, { toolId: "audio-transcribe" }]).ok).toBe(false);
+    expect(validateToolPipelineDefinition([{ toolId: "image-ocr" }, { toolId: "text-clean" }, { toolId: "text-clean" }]).ok).toBe(false);
+    expect(validateToolPipelineDefinition(Array.from({ length: 5 }, () => ({ toolId: "file-hash" }))).ok).toBe(false);
   });
 
   it("validates explicit tool selection against MIME types and extensions", () => {

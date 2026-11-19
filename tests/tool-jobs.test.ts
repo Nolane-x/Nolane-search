@@ -81,6 +81,30 @@ describe("GitHub Actions tool dispatch", () => {
     expect(stored.pipeline).toHaveLength(3);
   });
 
+  it("persists saved workflow identity without sending it or file identifiers to GitHub Actions", async () => {
+    const { db, rows } = fakeDb();
+    const fetchMock=vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body=JSON.parse(String(init?.body||"{}")) as {inputs?:{job_id?:string}};
+      expect(body.inputs?.job_id).toBeTruthy();
+      expect(JSON.stringify(body)).not.toContain("private-file-id-abcdefghijkl");
+      expect(JSON.stringify(body)).not.toContain("workflow-name-private");
+      return new Response(null,{status:204});
+    });
+    vi.stubGlobal("fetch",fetchMock);
+    const env={DB:db,NOLANE_GH_ACTIONS_TOKEN:"test-actions-token"} as unknown as Env;
+    const job=await createToolJob(env,{
+      userId:42,chatId:42,toolId:"json-to-csv",fileId:"private-file-id-abcdefghijkl",
+      fileName:"records.json",mimeType:"application/json",fileSize:100,
+      pipeline:[{toolId:"json-to-csv"},{toolId:"csv-clean"},{toolId:"csv-to-xlsx"}],
+      workflowId:"abcdef123456",workflowName:"workflow-name-private",
+      agentPrompt:"Run a saved workflow",
+    });
+    const stored=JSON.parse(rows.get("tool-job:"+job.id)||"{}");
+    expect(stored.workflowId).toBe("abcdef123456");
+    expect(stored.workflowName).toBe("workflow-name-private");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects an unsupported pipeline before any D1 write or dispatch", async () => {
     const DB = { prepare: () => { throw new Error("D1 should not be used"); } } as unknown as D1Database;
     const fetchMock=vi.fn();

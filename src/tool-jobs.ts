@@ -23,6 +23,9 @@ export interface ToolJob {
   agentTask?: string;
   agentToolReason?: string;
   pipeline?: ToolPipelineStep[];
+  /** Saved workflow identity, kept for per-run history and summaries. */
+  workflowId?: string;
+  workflowName?: string;
 }
 
 const PREFIX = "tool-job:";
