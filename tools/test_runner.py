@@ -564,6 +564,14 @@ class ToolRunnerUnitTests(unittest.TestCase):
             {"toolId":"video-audio"},{"toolId":"audio-convert"},{"toolId":"audio-transcribe"},
             {"toolId":"text-clean"},{"toolId":"text-deduplicate"},{"toolId":"text-stats"}]}
         self.assertEqual(len(runner.validate_pipeline(job)),6)
+        source_code=self.write("metrics.py","value = 42
+print(value)
+")
+        chain={"toolId":"code-size-report","pipeline":[
+            {"toolId":"code-size-report"},{"toolId":"text-clean"}]}
+        output=runner.run_tool_pipeline(chain,source_code,self.input_dir.resolve())
+        self.assertTrue(Path(output["output_path"]).is_file())
+        self.assertIn("Total lines:",Path(output["output_path"]).read_text(encoding="utf-8"))
 
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
