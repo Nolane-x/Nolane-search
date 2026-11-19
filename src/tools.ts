@@ -213,6 +213,92 @@ export function validateToolPipelineDefinition(rawSteps: unknown): ToolPipelineV
   return { ok: true, steps };
 }
 
+
+export interface ToolDagNode {
+  id: string;
+  toolId: string;
+  /** Zero dependencies read the uploaded source; one dependency reads its parent's artifact. */
+  dependsOn: string[];
+  reason?: string;
+}
+
+export const TOOL_DAG_MAX_NODES = 12;
+export const TOOL_DAG_MAX_CONCURRENCY = 3;
+
+export type ToolDagValidation =
+  | { ok: true; nodes: ToolDagNode[]; roots: string[]; leaves: string[] }
+  | { ok: false; error: string };
+
+export function validateToolDagDefinition(rawNodes: unknown): ToolDagValidation {
+  if (!Array.isArray(rawNodes) || rawNodes.length < 2 || rawNodes.length > TOOL_DAG_MAX_NODES) {
+    return { ok: false, error: "DAG phải có từ 2 đến " + TOOL_DAG_MAX_NODES + " node." };
+  }
+  const nodes: ToolDagNode[] = [];
+  const byId = new Map<string, ToolDagNode>();
+  const children = new Map<string, number>();
+  const roots: string[] = [];
+  for (let index = 0; index < rawNodes.length; index++) {
+    const raw = rawNodes[index];
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      return { ok: false, error: "Node " + (index + 1) + " không hợp lệ." };
+    }
+    const item = raw as Record<string, unknown>;
+    const id = typeof item.id === "string" ? item.id.trim().toLowerCase() : "";
+    if (!/^[a-z][a-z0-9_-]{0,19}$/.test(id) || byId.has(id)) {
+      return { ok: false, error: "Node ID không hợp lệ hoặc bị trùng: " + (id || "unknown") };
+    }
+    const toolId = typeof item.toolId === "string" ? item.toolId : "";
+    const tool = getTool(toolId);
+    if (!tool?.ready) return { ok: false, error: "Tool không tồn tại hoặc chưa sẵn sàng: " + (toolId || "unknown") };
+    if (!Array.isArray(item.dependsOn) || item.dependsOn.length > 1) {
+      return { ok: false, error: "Mỗi node chỉ được nhận tệp từ một node cha; dùng nhiều nhánh độc lập để tạo kết quả hợp nhất." };
+    }
+    const dependsOn: string[] = [];
+    if (item.dependsOn.length === 0) {
+      roots.push(id);
+    } else {
+      const parentId = item.dependsOn[0];
+      if (typeof parentId !== "string" || parentId === id) {
+        return { ok: false, error: "Phụ thuộc của node " + id + " không hợp lệ." };
+      }
+      const parent = byId.get(parentId);
+      if (!parent) return { ok: false, error: "Node cha phải được khai báo trước node con: " + id + " ← " + String(parentId) };
+      const allowed = TOOL_PIPELINE_TRANSITIONS[parent.toolId] || [];
+      if (!allowed.includes(toolId)) {
+        return { ok: false, error: "Không có luồng dữ liệu được hỗ trợ từ " + parent.toolId + " sang " + toolId + " (" + parent.id + " → " + id + ")." };
+      }
+      dependsOn.push(parentId);
+      children.set(parentId, (children.get(parentId) || 0) + 1);
+    }
+    const reason = typeof item.reason === "string" ? item.reason.trim().slice(0, 240) : "";
+    const node: ToolDagNode = { id, toolId, dependsOn, ...(reason ? { reason } : {}) };
+    nodes.push(node);
+    byId.set(id, node);
+  }
+  if (!roots.length) return { ok: false, error: "DAG phải có ít nhất một node gốc đọc tệp đầu vào." };
+  const hasParallelLayer = roots.length > 1 || [...children.values()].some(count => count > 1);
+  if (!hasParallelLayer) return { ok: false, error: "DAG cần ít nhất hai nhánh độc lập để có thể chạy song song." };
+  const leaves = nodes.filter(node => (children.get(node.id) || 0) === 0).map(node => node.id);
+  if (!leaves.length) return { ok: false, error: "DAG không có node kết thúc hợp lệ." };
+  return { ok: true, nodes, roots, leaves };
+}
+
+export function validateToolDag(
+  file: { mimeType: string; fileName: string },
+  rawNodes: unknown,
+): ToolDagValidation {
+  const definition = validateToolDagDefinition(rawNodes);
+  if (!definition.ok) return definition;
+  for (const rootId of definition.roots) {
+    const node = definition.nodes.find(item => item.id === rootId)!;
+    const tool = getTool(node.toolId);
+    if (!tool || !isToolCompatible(tool, file.mimeType, file.fileName)) {
+      return { ok: false, error: "Node gốc " + rootId + " không tương thích với tệp đầu vào: " + node.toolId };
+    }
+  }
+  return definition;
+}
+
 export function validateToolPipeline(
   file: { mimeType: string; fileName: string },
   rawSteps: unknown,
