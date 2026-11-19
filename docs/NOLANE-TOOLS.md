@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **55 công cụ đã có handler và kiểm thử**, gồm 45 công cụ trước đó và 10 công cụ mới trong đợt mở rộng này. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **72 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -12,6 +12,33 @@ Nolane Tools hiện có **55 công cụ đã có handler và kiểm thử**, g�
 Web Workspace có tab Tools để xem catalog và sao chép lệnh; thao tác gửi tệp vẫn thực hiện qua Telegram.
 
 ## Danh mục
+
+### PDF nâng cao, bộ ảnh & xử lý theo lô
+
+| ID | Công cụ | Chức năng | Đầu ra |
+|---|---|---|---|
+| `/tool pdf-merge` | Gộp nhiều PDF | Gửi ZIP chứa PDF; kiểm tra tệp và gộp theo thứ tự tên, tối đa 300 trang. | PDF đã gộp |
+| `/tool pdf-metadata-clean` | Xóa metadata PDF | Xóa metadata chuẩn và XMP, không raster hóa trang. | PDF đã làm sạch |
+| `/tool pdf-outline` | Trích mục lục PDF | Xuất bookmark và mục lục phân cấp. | Báo cáo TXT |
+| `/tool image-contact-sheet` | Contact sheet ảnh theo lô | Dựng bảng xem trước cho ảnh trong ZIP, tối đa 80 ảnh. | Ảnh contact sheet |
+| `/tool image-duplicates` | Tìm ảnh trùng / gần trùng | So SHA-256 và perceptual hash; xuất các cặp nghi trùng. | CSV |
+| `/tool video-frames` | Trích xuất frame video | Lấy mẫu cách đều tối đa 60 frame JPEG. | ZIP frame |
+
+### Dữ liệu, phụ đề, âm thanh & mã nguồn
+
+| ID | Công cụ | Chức năng | Đầu ra |
+|---|---|---|---|
+| `/tool csv-split` | Chia CSV | Chia tối đa 100.000 dòng thành phần 10.000 dòng, giữ header. | ZIP CSV |
+| `/tool csv-join` | Gộp CSV | Gộp CSV trong ZIP khi header giống nhau. | CSV |
+| `/tool json-schema` | Suy luận JSON Schema | Sinh schema 2020-12 cho kiểu dữ liệu, trường lồng nhau, required và nullable. | JSON Schema |
+| `/tool json-to-yaml` | JSON sang YAML | Chuyển JSON sang YAML bằng SafeDumper. | YAML |
+| `/tool sqlite-integrity` | Kiểm tra toàn vẹn SQLite | Chạy integrity và foreign-key checks trong chế độ chỉ đọc. | Báo cáo TXT |
+| `/tool audio-silence-report` | Phát hiện khoảng lặng audio | Tìm timestamp im lặng bằng FFmpeg. | Báo cáo TXT |
+| `/tool video-silence-report` | Phát hiện khoảng lặng video | Phân tích audio track của video để tìm đoạn im lặng. | Báo cáo TXT |
+| `/tool subtitle-convert` | Chuyển SRT ↔ VTT | Tự nhận dạng định dạng đầu vào, giữ nguyên cue. | SRT hoặc VTT |
+| `/tool text-deduplicate` | Loại dòng trùng | Chuẩn hóa Unicode và loại dòng trùng, giữ thứ tự đầu tiên. | TXT/Markdown |
+| `/tool text-diff` | So sánh hai tệp văn bản | Tạo unified diff từ đúng hai tệp trong ZIP. | TXT |
+| `/tool code-size-report` | Thống kê quy mô mã nguồn | Đếm dòng, comment-like, whitespace và độ dài dòng, không chạy code. | Báo cáo TXT |
 
 ### Ảnh & OCR
 
@@ -96,13 +123,13 @@ Web Workspace có tab Tools để xem catalog và sao chép lệnh; thao tác g�
 ## AI Agent
 
 ### Pipeline orchestration
-- AI File no longer has to select exactly one processor. It can plan an ordered chain of up to 4 processors, such as `video-audio → audio-convert → audio-transcribe`, `pdf-text → text-clean`, or `json-to-csv → csv-clean → csv-to-xlsx`.
+- AI File no longer has to select exactly one processor. It can plan an ordered chain of distinct processors without the old four-step cap, such as `video-audio → audio-convert → audio-transcribe`, `pdf-text → text-clean`, or `json-to-csv → csv-clean → csv-to-xlsx`.
 - The Worker validates the first tool against the uploaded MIME type/extension and checks every later edge against an explicit allowlist. The runner independently verifies pipeline length, known IDs, first-step identity and allowed transitions.
 - The runner receives the ordered tool IDs plus only the job/file metadata needed to fetch and execute the upload; the user prompt and AI rationale remain in Worker/D1. Intermediate outputs stay inside the ephemeral runner input directory. The final artifact alone is delivered to Telegram.
-- Pipelines are limited to 4 unique tools, each intermediate output is capped at 45 MB, and unsupported chains fall back to one deterministic processor rather than executing an arbitrary sequence.
+- Pipelines can contain any useful chain of distinct catalog processors connected by the explicit transition graph. Each intermediate output remains capped at 45 MB; uploaded code is never executed as a pipeline step.
 
 - Telegram: dùng `/ai câu hỏi` để AI tự quyết định có gọi tìm kiếm web, đọc trang công khai, tra danh mục Nolane Tools, xử lý text/CSV/JSON/HTML/phụ đề hoặc tính SHA-256 hay không.
-- Xử lý tệp: dùng `/ai_file yêu cầu`, sau đó gửi tối đa 5 tệp trong vòng 5 phút; dùng `/ai_file_done` để đóng đợt sớm. Mỗi tệp nhận một pipeline riêng tối đa 4 processor; Worker kiểm tra MIME/extension và từng cạnh dữ liệu trước khi dispatch GitHub Actions. Tệp cũng có thể gửi trực tiếp kèm caption `/ai_file yêu cầu`. Sau khi chạy, file cuối và bản tổng hợp AI được gửi về Telegram.
+- Xử lý tệp: dùng `/ai_file yêu cầu`, sau đó gửi tối đa 5 tệp trong vòng 5 phút; dùng `/ai_file_done` để đóng đợt sớm. Mỗi tệp nhận một pipeline riêng gồm các processor tương thích, không áp giới hạn 4 bước; Worker kiểm tra MIME/extension và từng cạnh dữ liệu trước khi dispatch GitHub Actions. Tệp cũng có thể gửi trực tiếp kèm caption `/ai_file yêu cầu`. Sau khi chạy, file cuối và bản tổng hợp AI được gửi về Telegram.
 - Web Workspace `/api/chat` dùng cùng agent loop; phản hồi API kèm danh sách `toolsUsed`.
 - Native function calling hiện dùng các route OpenAI-compatible (ví dụ các endpoint Chat Completions có hỗ trợ tools). Khi không có route tương thích hoặc model không trả tool call hợp lệ, agent sẽ fallback về chat thường; AI File dùng nhận diện định dạng xác định thay vì giả vờ đã chạy một tool.
 - Agent giới hạn tối đa 6 lần gọi tool, 4 vòng điều phối, mỗi kết quả tool tối đa 12.000 ký tự. Nội dung tệp/web là dữ liệu không tin cậy; agent không làm theo prompt injection trong tài liệu. Không có shell/command execution tool.
@@ -121,6 +148,12 @@ Web Workspace có tab Tools để xem catalog và sao chép lệnh; thao tác g�
 - Archive manifest tối đa 200 mục và 150 MB nội dung; từ chối symlink, special file, đường dẫn nguy hiểm và compression ratio bất thường.
 - JSONL tối đa 100.000 dòng; YAML-to-JSON tối đa 100 document, 100.000 node, 80 cấp và chỉ chấp nhận cấu trúc JSON an toàn.
 - Text statistics dùng tokenization trung tính theo ngôn ngữ; tiếng Việt không được tách từ chuyên sâu.
+- Batch image tools nhận ZIP an toàn; contact sheet tối đa 80 ảnh và duplicate scan tối đa 120 ảnh.
+- PDF merge nhận ZIP tối đa 50 PDF/100 MB giải nén và tổng 300 trang; PDF outline tối đa 500 trang; metadata cleaner không raster hóa trang.
+- CSV split/join giới hạn 100.000 dòng và 200 cột; CSV join yêu cầu header khớp hoàn toàn.
+- JSON Schema giới hạn 40 cấp lồng nhau; JSON-to-YAML dùng SafeDumper; SQLite integrity chỉ đọc.
+- Audio/video silence analysis giới hạn 30 phút; video frame extraction lấy tối đa 60 frame.
+- Text diff chỉ nhận ZIP có đúng hai tệp văn bản; code-size report chỉ phân tích tĩnh, không thực thi code.
 - Video contact sheet giới hạn 30 phút; nén video giới hạn 6 phút và đầu ra 44 MB. Video được mã hóa H.264/AAC.
 - Whisper dùng model small trên CPU; tác vụ dài có thể mất thời gian và tiêu tốn quota runner.
 - Các file được xử lý trong thư mục tạm của runner; không commit tệp đầu vào/đầu ra vào Git và không đưa tệp vào D1. Metadata tác vụ được giữ tối đa 30 ngày; Telegram file reference được xóa khi tác vụ kết thúc.
@@ -133,11 +166,11 @@ Tool runner dùng Python 3.12, Pillow, PyMuPDF, FFmpeg và các thư viện chuy
 ## Saved Workflows
 
 The private Workflow Library stores reusable, validated tool pipelines in the existing D1 `search_cache` table; it does not provision another database or runner.
-- `/workflow_save Name | tool-a -> tool-b` saves a named sequence of 1–4 real processors. Each adjacent transition must be present in the same explicit allowlist enforced by Worker and runner.
+- `/workflow_save Name | tool-a -> tool-b` saves a named sequence of distinct real processors. The old four-step limit is removed; each adjacent transition must still be present in the same explicit allowlist enforced by Worker and runner.
 - `/workflows` lists the current user's workflows; `/workflow_run ID` arms one workflow for the next upload; `/workflow_delete ID` removes a workflow.
-- A user can save up to 20 workflows. Definitions expire after 365 days; a one-file pending run expires after 15 minutes and is consumed only after the job is successfully dispatched.
+- There is no application-level workflow-count quota or expiry for saved definitions. A one-file pending run still expires after 15 minutes and is consumed only after the job is successfully dispatched.
 - The actual uploaded MIME type and extension are revalidated at run time. An incompatible file does not consume the pending workflow.
 - Every run is a separate existing Tool Job on an ephemeral GitHub Actions runner. Job history retains the workflow ID/name and reports the executed pipeline. The original reusable definition is not mutated by a run.
 - Workflows are private to the allowlisted Telegram account and the bot's private chat. They contain tool IDs only, not file contents or Telegram file IDs.
 
-This is a reusable linear-pipeline library, not yet a general branching DAG engine: no user-authored loops, shell commands, arbitrary conditions or parallel branches are accepted. Keep this limitation explicit until a separately validated DAG scheduler is implemented.
+This remains a validated linear-pipeline engine, not yet a general branching DAG scheduler. Arbitrary shell commands and uploaded-code execution are deliberately excluded; branch conditions and parallel fan-out require a dedicated scheduler.
