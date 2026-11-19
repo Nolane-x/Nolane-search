@@ -144,6 +144,15 @@ describe("GitHub Actions tool dispatch", () => {
     expect(validateToolStepTrace([{...trace[0],status:"failed",error:"codec error"}],pipeline,"failed").ok).toBe(true);
     expect(validateToolStepTrace(undefined,pipeline,"failed")).toEqual({ok:true,trace:[]});
     expect(validateToolStepTrace(undefined,pipeline,"completed").ok).toBe(false);
+    expect(validateToolStepTrace([
+      {...trace[0],status:"failed",error:"first step failed"},
+      trace[1],
+    ],pipeline,"failed").ok).toBe(false);
+    expect(validateToolStepTrace([
+      {...trace[0],summary:"x".repeat(181)},
+      trace[1],
+    ],pipeline,"completed").ok).toBe(false);
+
   });
 
   it("retries only an owner's failed job using its private source reference", async () => {
