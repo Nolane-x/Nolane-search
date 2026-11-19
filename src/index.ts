@@ -765,7 +765,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       return;
     }
     await clearPendingTelegramMode(env, userId, chatId);
-    await env.DB.prepare("DELETE FROM search_cache WHERE cache_key IN (?, ?)").bind(
+    await env.DB.prepare("DELETE FROM search_cache WHERE cache_key IN (?, ?, ?)").bind(
       "ai-file-pending:" + userId + ":" + chatId,
       "tool-pending:" + userId + ":" + chatId,
       "tool-workflow-pending:" + userId + ":" + chatId,
@@ -1125,8 +1125,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       return;
     }
     try {
-      const deleted = await deleteToolWorkflow(env, userId, id);
       const pending = await getPendingToolWorkflow(env, userId, chatId);
+      const deleted = await deleteToolWorkflow(env, userId, id);
       if (deleted && pending?.pending.workflowId === id) await clearPendingToolWorkflow(env, userId, chatId);
       await reply(env, chatId, deleted ? "Đã xóa workflow <code>" + id + "</code>." : "Không tìm thấy workflow thuộc tài khoản của bạn.");
     } catch (error) {
@@ -1785,6 +1785,7 @@ async function handleToolUpload(env: Env, message: NonNullable<TelegramUpdate["m
   const pendingBatch=await getPendingAiFileBatch(env,userId,chatId);
   const aiPrompt=aiCaption?.[1]?.trim() || pendingBatch?.prompt || "";
   if(aiPrompt){
+    if (aiCaption?.[1]) await clearPendingToolWorkflow(env, userId, chatId);
     const started=await handleAiFileUpload(env,message,userId,file,aiPrompt);
     if(started && pendingBatch && !aiCaption?.[1]){
       const used=await markPendingAiFileUsed(env,pendingBatch);
@@ -1965,6 +1966,8 @@ async function handleToolRunnerApi(request: Request, env: Env): Promise<Response
     delete runnerJob.agentPrompt;
     delete runnerJob.agentTask;
     delete runnerJob.agentToolReason;
+    delete runnerJob.workflowId;
+    delete runnerJob.workflowName;
     runnerJob.pipeline = (running.pipeline || [{toolId:running.toolId}]).map(step => ({toolId:step.toolId}));
     return jsonResponse({ job: runnerJob });
   }
