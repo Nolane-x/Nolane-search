@@ -186,14 +186,15 @@ Tool runner dùng Python 3.12, Pillow, PyMuPDF, FFmpeg và các thư viện chuy
 ## Saved Workflows
 
 The private Workflow Library stores reusable, validated tool pipelines in the existing D1 `search_cache` table; it does not provision another database or runner.
-- `/workflow_save Name | tool-a -> tool-b` saves a named sequence of distinct real processors. The old four-step limit is removed; each adjacent transition must still be present in the same explicit allowlist enforced by Worker and runner.
+- `/workflow_save Name | tool-a -> tool-b` saves a linear sequence of real processors. Each adjacent transition must be present in the explicit allowlist enforced by Worker and runner.
+- `/workflow_save Name | source=video-audio@input; transcript=audio-transcribe@source; converted=audio-convert@source` saves a branching DAG. Every node has a stable ID, a tool ID and either `input` or one earlier parent node. DAGs contain 2–12 nodes and must have at least two branches that can run independently.
 - `/workflows` lists the current user's workflows; `/workflow_run ID` arms one workflow for the next upload; `/workflow_delete ID` removes a workflow.
 - There is no application-level workflow-count quota or expiry for saved definitions. A one-file pending run still expires after 15 minutes and is consumed only after the job is successfully dispatched.
 - The actual uploaded MIME type and extension are revalidated at run time. An incompatible file does not consume the pending workflow.
 - Every run is a separate existing Tool Job on an ephemeral GitHub Actions runner. Job history retains the workflow ID/name and reports the executed pipeline. The original reusable definition is not mutated by a run.
 - Workflows are private to the allowlisted Telegram account and the bot's private chat. They contain tool IDs only, not file contents or Telegram file IDs.
 
-This remains a validated linear-pipeline engine, not yet a general branching DAG scheduler. Arbitrary shell commands and uploaded-code execution are deliberately excluded; branch conditions and parallel fan-out require a dedicated scheduler.
+The runner executes DAG nodes in topological dependency layers, with a hard maximum of three concurrent processors. Nodes read the original upload when they are roots or a parent node artifact when they have one dependency. Terminal branch artifacts are bundled into `workflow-results.zip`, alongside `manifest.json`; combined terminal outputs and the final archive are each bounded to 45 MB. A processor still receives exactly one input file. Multi-parent joins, branch conditions, loops, arbitrary shell commands and uploaded-code execution are not supported. The DAG trace is validated against node IDs and parent completion before it is persisted.
 ## Tool execution traces and retries
 
 - `/tool_jobs` lists recent jobs; `/tool_job ID` shows the validated per-step trace (processor, elapsed milliseconds, input/output bytes, summary and any failure).
