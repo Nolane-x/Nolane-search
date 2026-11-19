@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Private GitHub-hosted execution engine for Nolane Tools."""
 from __future__ import annotations
-import argparse, csv, hashlib, json, mimetypes, os, posixpath, re, shutil, stat, subprocess, sys, tarfile, tempfile, time, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
+import argparse, concurrent.futures, csv, hashlib, json, mimetypes, os, posixpath, re, shutil, stat, subprocess, sys, tarfile, tempfile, time, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
 from pathlib import Path
 from html import unescape
 from html.parser import HTMLParser
@@ -113,7 +113,12 @@ def load_job(path):
     job = json.loads(Path(path).read_text(encoding="utf-8")).get("job", {})
     if not re.fullmatch(r"[0-9a-f-]{36}", str(job.get("id","")), re.I) or job.get("toolId") not in RUNNERS:
         raise RuntimeError("Invalid or unsupported tool job.")
-    job["pipeline"] = validate_pipeline(job)
+    if job.get("workflowGraph") is not None:
+        job["workflowGraph"] = validate_workflow_graph(job)["nodes"]
+        # Preserve the canonical graph envelope expected by the scheduler.
+        job["workflowGraph"] = {"nodes":job["workflowGraph"]}
+    else:
+        job["pipeline"] = validate_pipeline(job)
     return job
 
 def download_telegram(file_id, filename):
@@ -1846,6 +1851,225 @@ def run_tool_pipeline(job, source, root):
     total_summary="\n\n".join(summaries)
     return {"summary":total_summary[:6000],"output_path":final_output,"trace":trace}
 
+
+def validate_workflow_graph(job):
+    raw=job.get("workflowGraph")
+    if not isinstance(raw,dict) or not isinstance(raw.get("nodes"),list):
+        raise RuntimeError("Invalid DAG workflow graph.")
+    raw_nodes=raw["nodes"]
+    if not 1<=len(raw_nodes)<=len(RUNNERS):
+        raise RuntimeError("DAG node count is outside the supported processor catalog.")
+    nodes={}; tool_ids=set()
+    for index,item in enumerate(raw_nodes):
+        if not isinstance(item,dict):
+            raise RuntimeError(f"Invalid DAG node {index+1}.")
+        node_id=str(item.get("id") or "").strip()
+        tool_id=item.get("toolId")
+        if not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}",node_id) or node_id in nodes:
+            raise RuntimeError("DAG node IDs must be unique, lowercase identifiers up to 32 characters.")
+        if tool_id not in RUNNERS or tool_id in tool_ids:
+            raise RuntimeError("DAG contains an unknown or repeated processor.")
+        tool_ids.add(tool_id)
+        deps=item.get("dependsOn")
+        if not isinstance(deps,list) or len(deps)>8:
+            raise RuntimeError(f"Invalid dependency list for node {node_id}.")
+        normalized=[]
+        for dependency in deps:
+            if not isinstance(dependency,str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}",dependency) or dependency==node_id or dependency in normalized:
+                raise RuntimeError(f"Invalid dependency in node {node_id}.")
+            normalized.append(dependency)
+        input_mode=item.get("input","parent" if len(normalized)==1 else "source")
+        when=item.get("when","all-success")
+        if input_mode not in {"source","parent"} or when not in {"all-success","any-failure","always"}:
+            raise RuntimeError(f"Unsupported input or condition for node {node_id}.")
+        if not normalized and (input_mode!="source" or when!="all-success"):
+            raise RuntimeError("DAG root nodes must read the original source without a condition.")
+        if input_mode=="parent" and (len(normalized)!=1 or when!="all-success"):
+            raise RuntimeError("input=parent requires one dependency and when=all-success.")
+        if len(normalized)>1 and input_mode!="source":
+            raise RuntimeError("Multi-dependency DAG nodes must use input=source as a barrier.")
+        if input_mode=="source" and len(normalized)==1 and when=="all-success":
+            raise RuntimeError("A single successful data dependency must use input=parent.")
+        nodes[node_id]={
+            "id":node_id,"toolId":tool_id,"dependsOn":normalized,
+            "input":input_mode,"when":when,
+            "reason":str(item.get("reason") or "")[:160],
+        }
+    children={node_id:[] for node_id in nodes}
+    indegree={node_id:len(node["dependsOn"]) for node_id,node in nodes.items()}
+    for node in nodes.values():
+        for parent_id in node["dependsOn"]:
+            parent=nodes.get(parent_id)
+            if not parent:
+                raise RuntimeError(f"Node {node['id']} references a missing dependency: {parent_id}.")
+            if node["input"]=="parent" and node["toolId"] not in PIPELINE_TRANSITIONS.get(parent["toolId"],set()):
+                raise RuntimeError(f"Unsupported DAG data edge: {parent['toolId']} -> {node['toolId']}.")
+            children[parent_id].append(node["id"])
+    roots=[node_id for node_id,node in nodes.items() if not node["dependsOn"]]
+    if not roots:
+        raise RuntimeError("DAG must contain at least one root node.")
+    queue=list(roots); ordered=[]
+    while queue:
+        node_id=queue.pop(0); ordered.append(nodes[node_id])
+        for child in children[node_id]:
+            indegree[child]-=1
+            if indegree[child]==0: queue.append(child)
+    if len(ordered)!=len(nodes):
+        raise RuntimeError("DAG contains a cycle.")
+    leaves=[node["id"] for node in ordered if not children[node["id"]]]
+    if job.get("toolId")!=nodes[roots[0]]["toolId"]:
+        raise RuntimeError("The selected tool must match the first DAG root node.")
+    return {"nodes":ordered,"roots":roots,"leaves":leaves}
+
+
+def _copy_dag_input(source,destination):
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    shutil.copyfile(source,destination)
+    if destination.stat().st_size>MAX_INPUT:
+        raise RuntimeError("DAG intermediate input exceeds the configured file size limit.")
+    return destination
+
+
+def _execute_dag_node(node, source, root, parent_outputs, total):
+    node_root=root/"dag"/node["id"]
+    node_root.mkdir(parents=True,exist_ok=True)
+    if node["input"]=="parent":
+        parent_id=node["dependsOn"][0]
+        parent_output=parent_outputs.get(parent_id)
+        if not parent_output or not parent_output.is_file():
+            raise RuntimeError("DAG parent output is missing.")
+        suffix=parent_output.suffix.lower()[:16]
+        input_path=_copy_dag_input(parent_output,node_root/("input"+suffix))
+    else:
+        suffix=source.suffix.lower()[:16]
+        input_path=_copy_dag_input(source,node_root/("source"+suffix))
+    input_bytes=input_path.stat().st_size
+    started=time.perf_counter()
+    try:
+        result=TOOLS[node["toolId"]](input_path)
+        if not isinstance(result,dict):
+            raise RuntimeError(f"Processor {node['toolId']} returned an invalid result.")
+        summary=str(result.get("summary","")).strip()
+        output=_runner_output_path(result.get("output_path",""),node_root)
+        if not output:
+            output=node_root/"result-summary.txt"
+            output.write_text(_safe_trace_text(summary,node_root)[:12000] or "Processor completed without a textual summary.",encoding="utf-8")
+        output_bytes=output.stat().st_size
+        if output_bytes>MAX_PIPELINE_OUTPUT:
+            raise RuntimeError("DAG node output exceeds the configured output limit.")
+        duration=max(0,int((time.perf_counter()-started)*1000))
+        trace={
+            "nodeId":node["id"],"dependsOn":node["dependsOn"],"toolId":node["toolId"],
+            "status":"completed","durationMs":duration,"inputBytes":input_bytes,
+            "outputBytes":output_bytes,"summary":_safe_trace_text(summary,node_root)[:180],
+        }
+        return {"output":output,"trace":trace,"summary":summary}
+    except Exception as exc:
+        duration=max(0,int((time.perf_counter()-started)*1000))
+        message=_safe_trace_text(exc,node_root)
+        trace={
+            "nodeId":node["id"],"dependsOn":node["dependsOn"],"toolId":node["toolId"],
+            "status":"failed","durationMs":duration,"inputBytes":input_bytes,
+            "outputBytes":None,"summary":message[:180],"error":message[:250],
+        }
+        return {"output":None,"trace":trace,"error":message}
+
+
+def run_tool_workflow_dag(job, source, root, max_concurrency=3):
+    graph=validate_workflow_graph(job)
+    nodes=graph["nodes"]
+    by_id={node["id"]:node for node in nodes}
+    states={}; outputs={}; summaries={}; traces={}
+    pending=set(by_id)
+    max_concurrency=max(1,min(3,int(max_concurrency)))
+    while pending:
+        ready=[node for node in nodes if node["id"] in pending and all(dep in states for dep in node["dependsOn"])]
+        if not ready:
+            raise RuntimeError("DAG scheduler stalled; no eligible node remains.")
+        runnable=[]
+        for node in ready:
+            parent_states=[states[dep] for dep in node["dependsOn"]]
+            should_run=(
+                not parent_states or
+                (node["when"]=="all-success" and all(state=="completed" for state in parent_states)) or
+                (node["when"]=="any-failure" and any(state=="failed" for state in parent_states)) or
+                node["when"]=="always"
+            )
+            pending.remove(node["id"])
+            if not should_run:
+                states[node["id"]]="skipped"
+                traces[node["id"]]={
+                    "nodeId":node["id"],"dependsOn":node["dependsOn"],"toolId":node["toolId"],
+                    "status":"skipped","durationMs":0,"inputBytes":0,"outputBytes":None,
+                    "summary":"Condition '"+node["when"]+"' was not satisfied.",
+                }
+            else:
+                runnable.append(node)
+        if not runnable:
+            continue
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrency,thread_name_prefix="nolane-dag") as pool:
+            futures={
+                pool.submit(_execute_dag_node,node,source,root,outputs,len(nodes)):node
+                for node in runnable[:max_concurrency]
+            }
+            # Process a bounded wave; remaining ready nodes stay pending for the next wave.
+            for future,node in futures.items():
+                try:
+                    result=future.result()
+                except Exception as exc:
+                    message=_safe_trace_text(exc,root)
+                    result={
+                        "output":None,"error":message,
+                        "trace":{
+                            "nodeId":node["id"],"dependsOn":node["dependsOn"],"toolId":node["toolId"],
+                            "status":"failed","durationMs":0,"inputBytes":0,"outputBytes":None,
+                            "summary":message[:180],"error":message[:250],
+                        },
+                    }
+                trace=result["trace"]
+                traces[node["id"]]=trace
+                states[node["id"]]=trace["status"]
+                if result.get("output"): outputs[node["id"]]=result["output"]
+                if result.get("summary"): summaries[node["id"]]=result["summary"]
+        # Put not-yet-launched ready nodes back into the pending set.
+        for node in runnable[max_concurrency:]:
+            pending.add(node["id"])
+    trace=[traces[node["id"]] for node in nodes]
+    failures=[item for item in trace if item["status"]=="failed"]
+    summary_lines=[]
+    for item in trace:
+        summary_lines.append(
+            ("✅" if item["status"]=="completed" else "❌" if item["status"]=="failed" else "⏭")+
+            f" {item['nodeId']} · {item['toolId']} · {item['status']} · {item['durationMs']} ms"+
+            (": "+(item.get("error") or item["summary"]) if item["status"]!="skipped" else "")
+        )
+    if failures:
+        message="; ".join(f"{item['nodeId']}: {item.get('error','failed')}" for item in failures)
+        raise PipelineExecutionError(message,trace)
+
+    output_zip=root/"dag-workflow-results.zip"
+    manifest={"nodes":trace,"outputs":[]}
+    total_bytes=0
+    with zipfile.ZipFile(output_zip,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=3) as archive:
+        for node_id in graph["leaves"]:
+            output=outputs.get(node_id)
+            if not output or not output.is_file():
+                continue
+            size=output.stat().st_size
+            total_bytes+=size
+            if total_bytes>MAX_PIPELINE_OUTPUT:
+                raise RuntimeError("Combined DAG outputs exceed the configured 45 MB limit.")
+            arc_name=f"{node_id}/{output.name}"
+            archive.write(output,arc_name)
+            manifest["outputs"].append({"nodeId":node_id,"path":arc_name,"bytes":size})
+        archive.writestr("manifest.json",json.dumps(manifest,ensure_ascii=False,indent=2))
+    if output_zip.stat().st_size>MAX_PIPELINE_OUTPUT:
+        output_zip.unlink(missing_ok=True)
+        raise RuntimeError("DAG results archive exceeds the configured output limit.")
+    summary="DAG completed.\\n"+"\\n".join(summary_lines)
+    return {"summary":summary[:6000],"output_path":str(output_zip),"trace":trace}
+
+
 def cmd_fetch(args):
     secret=os.environ.get("TELEGRAM_WEBHOOK_SECRET")
     if not secret: raise RuntimeError("Missing TELEGRAM_WEBHOOK_SECRET.")
@@ -1867,7 +2091,7 @@ def cmd_run(args):
     if resolved.parent != root or not resolved.is_file():
         raise RuntimeError("Input file is outside the private runner input directory.")
     try:
-        result=run_tool_pipeline(job,resolved,root)
+        result=run_tool_workflow_dag(job,resolved,root) if job.get("workflowGraph") else run_tool_pipeline(job,resolved,root)
     except PipelineExecutionError as exc:
         Path(args.output).write_text(json.dumps({"error":_safe_trace_text(exc,root)[:1000],"trace":exc.trace},ensure_ascii=False),encoding="utf-8")
         raise
