@@ -189,8 +189,18 @@ export function validateToolWorkflowTrace(
       ...(typeof item.error === "string" ? { error: item.error } : {}),
     });
   }
-  const hasFailure = trace.some(item => item.status === "failed");
-  if (finalStatus === "completed" && hasFailure) return { ok: false, error: "A successful DAG cannot contain failed nodes." };
+  if (finalStatus === "completed") {
+    const recoveredFailures = new Set<string>();
+    for (const node of graph.nodes) {
+      if (node.when === "any-failure" && states.get(node.id) === "completed") {
+        for (const parentId of node.dependsOn) {
+          if (states.get(parentId) === "failed") recoveredFailures.add(parentId);
+        }
+      }
+    }
+    const unhandledFailure = trace.find(item => item.status === "failed" && !recoveredFailures.has(item.nodeId || ""));
+    if (unhandledFailure) return { ok: false, error: "A completed DAG must recover every failed node with a successful any-failure handler." };
+  }
   return { ok: true, trace };
 }
 
