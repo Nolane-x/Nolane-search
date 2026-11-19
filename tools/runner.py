@@ -20,6 +20,7 @@ RUNNERS = {
     "image-png", "csv-clean", "json-to-csv", "csv-to-xlsx", "xlsx-to-csv", "pdf-split", "audio-convert",
     "csv-to-json", "jsonl-format", "yaml-to-json", "xml-to-json", "sqlite-export", "xlsx-to-json",
     "pdf-extract-images", "archive-manifest", "text-stats", "image-grayscale",
+    "pdf-merge", "pdf-metadata-clean", "pdf-outline", "image-contact-sheet", "image-duplicates", "csv-split", "csv-join", "json-schema", "json-to-yaml", "sqlite-integrity", "audio-silence-report", "video-silence-report", "video-frames", "subtitle-convert", "text-deduplicate", "text-diff", "code-size-report",
 }
 
 PIPELINE_TRANSITIONS = {
@@ -46,10 +47,27 @@ PIPELINE_TRANSITIONS = {
     "sqlite-export": {"archive-inspect","archive-safe-extract"},
     "archive-manifest": {"csv-profile","csv-clean","csv-to-xlsx"},
     "image-grayscale": {"image-info","image-ocr","qr-read","image-to-pdf","image-png","image-webp","image-compress","image-palette"},
+    "pdf-merge": {"pdf-info","pdf-text","pdf-compress","pdf-to-images","pdf-split","pdf-extract-images","pdf-metadata-clean","pdf-outline"},
+    "pdf-metadata-clean": {"pdf-info","pdf-text","pdf-compress","pdf-to-images","pdf-split","pdf-extract-images","pdf-outline"},
+    "pdf-outline": {"text-clean"},
+    "image-contact-sheet": {"image-info","image-clean-exif","image-compress","image-resize","image-webp","image-palette","image-ocr","qr-read","image-to-pdf","image-grayscale","image-png"},
+    "image-duplicates": {"csv-profile","csv-clean","csv-to-xlsx","csv-to-json"},
+    "csv-split": {"archive-inspect","archive-safe-extract","archive-manifest"},
+    "csv-join": {"csv-clean","csv-profile","csv-to-xlsx","csv-to-json"},
+    "json-schema": {"json-format"},
+    "json-to-yaml": {"yaml-format"},
+    "sqlite-integrity": {"text-clean"},
+    "audio-silence-report": {"text-clean"},
+    "video-silence-report": {"text-clean"},
+    "video-frames": {"archive-inspect","archive-safe-extract","archive-manifest"},
+    "subtitle-convert": {"subtitle-text"},
+    "text-deduplicate": {"text-clean","text-stats"},
+    "text-diff": {"text-clean","text-stats"},
+    "code-size-report": {"text-clean","text-stats"},
 }
 
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text"}
-MAX_PIPELINE_STEPS = 4
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report"}
+MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
 def api_json(url: str, method="GET", data=None, token=None):
@@ -73,7 +91,7 @@ def validate_pipeline(job):
     if steps is None:
         steps = [{"toolId": job.get("toolId")}]
     if not isinstance(steps, list) or not 1 <= len(steps) <= MAX_PIPELINE_STEPS:
-        raise RuntimeError("Pipeline must contain between 1 and 4 steps.")
+        raise RuntimeError("Pipeline must contain at least one step and cannot repeat a processor.")
     ids=[]
     for item in steps:
         if not isinstance(item,dict):
@@ -1352,7 +1370,358 @@ def text_stats(p):
     ]
     return tool_text("\n".join(report),"Text statistics")
 
-def image_grayscale(p):
+
+def _safe_zip_members(archive, suffixes, max_files=200, max_bytes=100*1024*1024):
+    selected=[]; count=0; total=0
+    allowed={suffix.lower() for suffix in suffixes}
+    for item in archive.infolist():
+        if item.is_dir(): continue
+        count+=1
+        if count>max_files: raise RuntimeError(f"ZIP vượt giới hạn {max_files} tệp.")
+        if item.flag_bits & 0x1: raise RuntimeError("ZIP chứa tệp mã hóa.")
+        mode=(item.external_attr>>16)&0xFFFF
+        if stat.S_ISLNK(mode) or (mode and not (stat.S_ISREG(mode) or stat.S_ISDIR(mode))):
+            raise RuntimeError("ZIP chứa symlink hoặc special file.")
+        _safe_archive_parts(item.filename)
+        total+=item.file_size
+        if total>max_bytes: raise RuntimeError("ZIP vượt giới hạn dữ liệu giải nén.")
+        if item.file_size>2*1024*1024 and item.compress_size and item.file_size/max(1,item.compress_size)>250:
+            raise RuntimeError("ZIP có tỷ lệ nén bất thường.")
+        if Path(item.filename).suffix.lower() in allowed: selected.append(item)
+    return selected,total
+
+
+def pdf_merge(p):
+    import fitz
+    if not zipfile.is_zipfile(p): raise RuntimeError("Gửi ZIP chứa các PDF cần gộp.")
+    out=p.with_name(p.stem+"-merged.pdf"); merged=fitz.open(); total_pages=0; members=[]; total_bytes=0
+    try:
+        with zipfile.ZipFile(p) as archive:
+            members,total_bytes=_safe_zip_members(archive,{".pdf"},max_files=50,max_bytes=100*1024*1024)
+            if not members: raise RuntimeError("ZIP không chứa PDF.")
+            members.sort(key=lambda item:item.filename.casefold())
+            for item in members:
+                source=fitz.open(stream=archive.read(item),filetype="pdf")
+                try:
+                    if source.is_encrypted and source.needs_pass: raise RuntimeError("PDF mã hóa mật khẩu: "+Path(item.filename).name)
+                    total_pages+=source.page_count
+                    if total_pages>300: raise RuntimeError("Tổng tài liệu vượt quá 300 trang.")
+                    merged.insert_pdf(source)
+                finally: source.close()
+        if merged.page_count<1: raise RuntimeError("Không có trang PDF hợp lệ để gộp.")
+        merged.save(str(out),garbage=4,deflate=True,clean=True)
+    finally: merged.close()
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True); raise RuntimeError("PDF gộp vượt giới hạn đầu ra 45 MB.")
+    return {"summary":f"Đã gộp {len(members)} PDF, tổng {total_pages} trang ({total_bytes:,} bytes ZIP), theo thứ tự tên tệp.","output_path":str(out)}
+
+
+def pdf_metadata_clean(p):
+    import fitz
+    document=fitz.open(p)
+    if document.is_encrypted and document.needs_pass:
+        document.close(); raise RuntimeError("PDF được mã hóa bằng mật khẩu.")
+    out=p.with_name(p.stem+"-metadata-clean.pdf")
+    try:
+        document.set_metadata({"title":"","author":"","subject":"","keywords":"","creator":"","producer":"","creationDate":"","modDate":"","trapped":""})
+        try: document.del_xml_metadata()
+        except Exception: pass
+        document.save(str(out),garbage=4,deflate=True,clean=True)
+    finally: document.close()
+    return {"summary":"Đã xóa các trường metadata chuẩn và XML metadata khỏi PDF; nội dung trang không bị raster hóa.","output_path":str(out)}
+
+
+def pdf_outline(p):
+    import fitz
+    document=fitz.open(p)
+    try:
+        if document.is_encrypted and document.needs_pass: raise RuntimeError("PDF được mã hóa bằng mật khẩu.")
+        if document.page_count>500: raise RuntimeError("PDF outline giới hạn 500 trang.")
+        toc=document.get_toc()
+        if not toc: return tool_text("PDF không có bookmark hoặc mục lục nhúng.","PDF outline")
+        rows=[f"Pages: {document.page_count}",f"Bookmarks: {len(toc)}",""]
+        rows.extend("  "*(max(0,int(level)-1))+f"- {title} (page {page})" for level,title,page in toc[:5000])
+        return tool_text("\n".join(rows),"PDF outline")
+    finally: document.close()
+
+
+def image_contact_sheet(p):
+    import io
+    from PIL import Image,ImageOps,ImageDraw
+    if not zipfile.is_zipfile(p): raise RuntimeError("Gửi ZIP chứa các ảnh cần xem.")
+    thumbnails=[]; labels=[]
+    with zipfile.ZipFile(p) as archive:
+        members,total=_safe_zip_members(archive,{".jpg",".jpeg",".png",".webp",".bmp",".tif",".tiff"},max_files=120,max_bytes=100*1024*1024)
+        if not members: raise RuntimeError("ZIP không chứa ảnh được hỗ trợ.")
+        for index,item in enumerate(members[:80],1):
+            with Image.open(io.BytesIO(archive.read(item))) as raw:
+                _guard_image_dimensions(raw)
+                image=ImageOps.exif_transpose(raw).convert("RGB")
+                image.thumbnail((232,158),Image.Resampling.LANCZOS)
+                thumbnails.append(image.copy()); labels.append(f"{index:03d} {Path(item.filename).name[:46]}")
+    columns=4; cell_w=260; cell_h=198; rows=(len(thumbnails)+columns-1)//columns
+    sheet=Image.new("RGB",(columns*cell_w,rows*cell_h),(248,248,248)); draw=ImageDraw.Draw(sheet)
+    for index,(image,label) in enumerate(zip(thumbnails,labels)):
+        x=(index%columns)*cell_w; y=(index//columns)*cell_h
+        sheet.paste(image,(x+(cell_w-image.width)//2,y+6+(158-image.height)//2))
+        draw.text((x+8,y+168),f"Image {index+1:03d}",fill=(30,30,30))
+    out=p.with_name(p.stem+"-contact-sheet.jpg")
+    sheet.save(out,"JPEG",quality=88,optimize=True); sheet.close()
+    for image in thumbnails: image.close()
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True); raise RuntimeError("Contact sheet vượt giới hạn đầu ra.")
+    return {"summary":f"Đã tạo contact sheet cho {len(thumbnails)} ảnh ({total:,} bytes giải nén). Tệp: "+"; ".join(labels),"output_path":str(out)}
+
+
+def image_duplicates(p):
+    import io
+    from PIL import Image,ImageOps
+    if not zipfile.is_zipfile(p): raise RuntimeError("Gửi ZIP chứa bộ ảnh cần so sánh.")
+    records=[]
+    with zipfile.ZipFile(p) as archive:
+        members,total=_safe_zip_members(archive,{".jpg",".jpeg",".png",".webp",".bmp",".tif",".tiff"},max_files=120,max_bytes=100*1024*1024)
+        if not members: raise RuntimeError("ZIP không chứa ảnh hợp lệ.")
+        for item in members:
+            payload=archive.read(item)
+            with Image.open(io.BytesIO(payload)) as raw:
+                _guard_image_dimensions(raw)
+                image=ImageOps.exif_transpose(raw).convert("L").resize((8,8),Image.Resampling.LANCZOS)
+                pixels=list(image.getdata()); average=sum(pixels)/len(pixels)
+                phash=sum((1<<index) for index,value in enumerate(pixels) if value>=average)
+            records.append((item.filename,hashlib.sha256(payload).hexdigest(),phash))
+    out=p.with_name(p.stem+"-image-duplicates.csv"); matches=[]
+    for left in range(len(records)):
+        for right in range(left+1,len(records)):
+            a=records[left]; b=records[right]; distance=(a[2]^b[2]).bit_count()
+            if a[1]==b[1]: matches.append((a[0],b[0],"exact-sha256",0))
+            elif distance<=4: matches.append((a[0],b[0],"near-visual",distance))
+    with out.open("w",encoding="utf-8-sig",newline="") as target:
+        writer=csv.writer(target,lineterminator="\n"); writer.writerow(["file_a","file_b","match_type","perceptual_distance"])
+        writer.writerows([(_spreadsheet_safe(a),_spreadsheet_safe(b),kind,distance) for a,b,kind,distance in matches])
+    return {"summary":f"Đã phân tích {len(records)} ảnh ({total:,} bytes). Tìm thấy {len(matches)} cặp giống/gần giống; perceptual hash 8×8, ngưỡng ≤4.","output_path":str(out)}
+
+
+def csv_split(p):
+    import io
+    out=p.with_name(p.stem+"-parts.zip"); total_rows=0; parts=0
+    with p.open("r",encoding="utf-8-sig",newline="") as source,zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=6) as archive:
+        reader=csv.reader(source,strict=True); header=next(reader,None)
+        if not header: raise RuntimeError("CSV không có header.")
+        if len(header)>200: raise RuntimeError("CSV vượt 200 cột.")
+        rows=[]
+        for row in reader:
+            total_rows+=1
+            if total_rows>100000: raise RuntimeError("CSV split hỗ trợ tối đa 100.000 dòng dữ liệu.")
+            if len(row)>200: raise RuntimeError("Một dòng CSV vượt 200 cột.")
+            rows.append(row)
+            if len(rows)>=10000:
+                parts+=1; buffer=io.StringIO(newline=""); writer=csv.writer(buffer,lineterminator="\n")
+                writer.writerow(header); writer.writerows(rows); archive.writestr(f"part-{parts:03d}.csv",buffer.getvalue().encode("utf-8-sig")); rows=[]
+        if rows or parts==0:
+            parts+=1; buffer=io.StringIO(newline=""); writer=csv.writer(buffer,lineterminator="\n")
+            writer.writerow(header); writer.writerows(rows); archive.writestr(f"part-{parts:03d}.csv",buffer.getvalue().encode("utf-8-sig"))
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True); raise RuntimeError("CSV parts ZIP vượt giới hạn đầu ra.")
+    return {"summary":f"Đã chia {total_rows:,} dòng thành {parts} CSV; mỗi phần giữ header và tối đa 10.000 dòng.","output_path":str(out)}
+
+
+def csv_join(p):
+    import io
+    if not zipfile.is_zipfile(p): raise RuntimeError("Gửi ZIP chứa các CSV cần gộp.")
+    out=p.with_name(p.stem+"-joined.csv"); total_rows=0; files=0; expected_header=None
+    with zipfile.ZipFile(p) as archive:
+        members,total=_safe_zip_members(archive,{".csv"},max_files=100,max_bytes=100*1024*1024)
+        if not members: raise RuntimeError("ZIP không chứa CSV.")
+        members.sort(key=lambda item:item.filename.casefold())
+        with out.open("w",encoding="utf-8-sig",newline="") as target:
+            writer=csv.writer(target,lineterminator="\n")
+            for item in members:
+                with archive.open(item) as raw:
+                    text=io.TextIOWrapper(raw,encoding="utf-8-sig",newline=""); reader=csv.reader(text,strict=True); header=next(reader,None)
+                    if not header: raise RuntimeError("CSV rỗng hoặc không có header: "+Path(item.filename).name)
+                    if len(header)>200: raise RuntimeError("CSV vượt 200 cột.")
+                    if expected_header is None:
+                        expected_header=header; writer.writerow([_spreadsheet_safe(value) for value in header])
+                    elif header!=expected_header: raise RuntimeError("Header giữa các CSV không khớp: "+Path(item.filename).name)
+                    for row in reader:
+                        total_rows+=1
+                        if total_rows>100000: raise RuntimeError("CSV join vượt 100.000 dòng tổng cộng.")
+                        if len(row)>200: raise RuntimeError("Một dòng CSV vượt 200 cột.")
+                        writer.writerow([_spreadsheet_safe(value) for value in row])
+                files+=1
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True); raise RuntimeError("CSV joined vượt giới hạn đầu ra.")
+    return {"summary":f"Đã gộp {files} CSV, {total_rows:,} dòng ({total:,} bytes giải nén); header phải khớp và ô nguy hiểm được escape.","output_path":str(out)}
+
+
+def _schema_for_values(values,depth=0):
+    if depth>40: raise RuntimeError("JSON schema vượt 40 cấp lồng nhau.")
+    non_null=[value for value in values if value is not None]; nullable=len(non_null)!=len(values)
+    if not non_null: return {"type":"null"}
+    if all(isinstance(value,dict) for value in non_null):
+        keys=sorted(set().union(*(value.keys() for value in non_null)))
+        properties={key:_schema_for_values([value[key] for value in non_null if key in value],depth+1) for key in keys}
+        required=sorted(key for key in keys if all(key in value for value in non_null))
+        result={"type":"object","properties":properties,"additionalProperties":True}
+        if required: result["required"]=required
+    elif all(isinstance(value,list) for value in non_null):
+        children=[child for value in non_null for child in value[:500]]
+        result={"type":"array","items":_schema_for_values(children,depth+1) if children else {}}
+    else:
+        kinds=[]
+        for value in non_null:
+            if isinstance(value,bool): kind="boolean"
+            elif isinstance(value,int): kind="integer"
+            elif isinstance(value,float): kind="number"
+            elif isinstance(value,str): kind="string"
+            else: kind="object" if isinstance(value,dict) else "array" if isinstance(value,list) else "null"
+            if kind not in kinds: kinds.append(kind)
+        result={"type":kinds[0] if len(kinds)==1 else kinds}
+    if nullable and result.get("type")!="null":
+        value_type=result["type"]; result["type"]=value_type+["null"] if isinstance(value_type,list) else [value_type,"null"]
+    return result
+
+
+def json_schema(p):
+    value=json.loads(p.read_text(encoding="utf-8-sig"))
+    schema={"$schema":"https://json-schema.org/draft/2020-12/schema",**_schema_for_values([value])}
+    out=p.with_name(p.stem+"-schema.json")
+    out.write_text(json.dumps(schema,ensure_ascii=False,indent=2,allow_nan=False)+"\n",encoding="utf-8")
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True); raise RuntimeError("JSON Schema vượt giới hạn đầu ra.")
+    return {"summary":"Đã suy luận JSON Schema 2020-12 từ cấu trúc dữ liệu; hỗ trợ nested, required và nullable.","output_path":str(out)}
+
+
+def json_to_yaml(p):
+    import yaml
+    value=json.loads(p.read_text(encoding="utf-8-sig")); out=p.with_name(p.stem+"-converted.yaml")
+    out.write_text(yaml.safe_dump(value,allow_unicode=True,sort_keys=False,default_flow_style=False),encoding="utf-8")
+    return {"summary":"Đã chuyển JSON sang YAML bằng SafeDumper, giữ Unicode và thứ tự key.","output_path":str(out)}
+
+
+def sqlite_integrity(p):
+    from urllib.parse import quote
+    import sqlite3
+    uri="file:"+quote(str(p.resolve()),safe="/:")+"?mode=ro&immutable=1"
+    connection=sqlite3.connect(uri,uri=True,timeout=5)
+    try:
+        connection.execute("PRAGMA query_only=ON")
+        connection.set_progress_handler(lambda:1,2_000_000)
+        integrity=[row[0] for row in connection.execute("PRAGMA integrity_check(100)").fetchmany(100)]
+        foreign=list(connection.execute("PRAGMA foreign_key_check").fetchmany(100))
+        tables=connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchone()[0]
+        report=["SQLite integrity report",f"Tables: {tables}",f"Integrity result: {', '.join(integrity) if integrity else 'no result'}",f"Foreign-key violations: {len(foreign)}"]
+        report.extend("Foreign key: "+", ".join(str(value) for value in row) for row in foreign[:20])
+        report.append("Database opened read-only; no schema or data was modified.")
+        report.append("STATUS: issues detected." if integrity!=["ok"] or foreign else "STATUS: integrity check passed.")
+        return tool_text("\n".join(report),"SQLite integrity")
+    finally: connection.close()
+
+
+def _silence_report(p,media_kind):
+    data=ffprobe(p); duration=float(data.get("format",{}).get("duration") or 0)
+    if duration<=0 or duration>1800: raise RuntimeError("Silence analysis hỗ trợ media dài tối đa 30 phút.")
+    audio=[stream for stream in data.get("streams",[]) if stream.get("codec_type")=="audio"]
+    if not audio: raise RuntimeError("Video không có track audio để phân tích." if media_kind=="video" else "Không tìm thấy track audio.")
+    process=subprocess.run(["ffmpeg","-hide_banner","-i",str(p),"-map","0:a:0","-af","silencedetect=noise=-35dB:d=0.4","-f","null","-"],capture_output=True,text=True,timeout=900,check=False)
+    if process.returncode!=0: raise RuntimeError("FFmpeg silence detection failed: "+(process.stderr or process.stdout)[-900:])
+    starts=[]; intervals=[]
+    for line in (process.stderr or "").splitlines():
+        match=re.search(r"silence_start:\s*([0-9.]+)",line)
+        if match: starts.append(float(match.group(1)))
+        match=re.search(r"silence_end:\s*([0-9.]+)",line)
+        if match and starts:
+            start=starts.pop(0); end=float(match.group(1)); intervals.append((start,max(start,end)))
+    for start in starts: intervals.append((start,duration))
+    total=sum(end-start for start,end in intervals)
+    rows=[f"Media: {p.name}",f"Duration: {duration:.3f} seconds",f"Silence intervals: {len(intervals)}",f"Total detected silence: {total:.3f} seconds","Threshold: -35 dB for at least 0.4 seconds",""]
+    rows.extend(f"{i}. {start:.3f}s → {end:.3f}s ({end-start:.3f}s)" for i,(start,end) in enumerate(intervals,1))
+    if not intervals: rows.append("No silence interval crossed the selected threshold.")
+    return tool_text("\n".join(rows),f"{media_kind.title()} silence analysis")
+
+
+def audio_silence_report(p): return _silence_report(p,"audio")
+def video_silence_report(p): return _silence_report(p,"video")
+
+
+def video_frames(p):
+    data=ffprobe(p); duration=float(data.get("format",{}).get("duration") or 0)
+    if duration<=0 or duration>1800: raise RuntimeError("Frame extraction hỗ trợ video dài tối đa 30 phút.")
+    root=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"
+    temp=Path(tempfile.mkdtemp(prefix="video-frames-",dir=root)); out=p.with_name(p.stem+"-frames.zip")
+    interval=max(1.0,duration/60.0); pattern=temp/"frame-%03d.jpg"
+    try:
+        cmd("ffmpeg",["-y","-i",str(p),"-vf",f"fps=1/{interval:.5f},scale='min(960,iw)':-2","-frames:v","60","-q:v","4",str(pattern)],900)
+        frames=sorted(temp.glob("frame-*.jpg"))
+        if not frames: raise RuntimeError("FFmpeg không trích xuất được frame.")
+        with zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=4) as archive:
+            for frame in frames: archive.write(frame,frame.name)
+    finally: shutil.rmtree(temp,ignore_errors=True)
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True); raise RuntimeError("Video frames ZIP vượt giới hạn đầu ra.")
+    return {"summary":f"Đã trích {len(frames)} frame JPEG, cách đều khoảng {interval:.2f} giây trên video {duration:.1f} giây.","output_path":str(out)}
+
+
+def subtitle_convert(p):
+    source=p.read_text(encoding="utf-8-sig")
+    is_vtt=p.suffix.lower()==".vtt" or source.lstrip().startswith("WEBVTT")
+    if is_vtt:
+        lines=source.replace("\r\n","\n").replace("\r","\n").split("\n")
+        while lines and (not lines[0].strip() or lines[0].strip().startswith(("WEBVTT","NOTE","STYLE","REGION"))): lines.pop(0)
+        rendered="\n".join(lines)
+        rendered=re.sub(r"(?<!\d)(\d{2}:\d{2}:\d{2})\.(\d{3})(?!\d)",r"\1,\2",rendered)
+        out=p.with_name(p.stem+"-converted.srt")
+    else:
+        rendered=re.sub(r"(?<!\d)(\d{2}:\d{2}:\d{2}),(\d{3})(?!\d)",r"\1.\2",source.replace("\r\n","\n").replace("\r","\n"))
+        rendered="WEBVTT\n\n"+rendered.lstrip(); out=p.with_name(p.stem+"-converted.vtt")
+    if not re.search(r"\d{2}:\d{2}:\d{2}[,.]\d{3}\s+-->",rendered): raise RuntimeError("Không phát hiện cue timestamp SRT/VTT hợp lệ.")
+    out.write_text(rendered.rstrip()+"\n",encoding="utf-8")
+    return {"summary":"Đã chuyển định dạng phụ đề "+("WebVTT → SRT" if is_vtt else "SRT → WebVTT")+"; nội dung cue được giữ nguyên.","output_path":str(out)}
+
+
+def text_deduplicate(p):
+    raw=p.read_text(encoding="utf-8-sig"); seen=set(); kept=[]; removed=0
+    for line in raw.splitlines():
+        key=unicodedata.normalize("NFC",line).strip().casefold()
+        if key and key in seen: removed+=1; continue
+        if key: seen.add(key)
+        kept.append(line)
+    out=p.with_name(p.stem+"-deduplicated"+p.suffix)
+    out.write_text("\n".join(kept)+("\n" if raw.endswith(("\n","\r")) else ""),encoding="utf-8")
+    return {"summary":f"Đã giữ {len(kept):,} dòng và loại {removed:,} dòng trùng (Unicode NFC, không phân biệt hoa/thường).","output_path":str(out)}
+
+
+def text_diff(p):
+    import difflib
+    if not zipfile.is_zipfile(p): raise RuntimeError("Gửi ZIP chứa đúng hai tệp văn bản cần so sánh.")
+    with zipfile.ZipFile(p) as archive:
+        members,total=_safe_zip_members(archive,{".txt",".md",".log",".srt",".vtt",".json",".csv",".yaml",".yml",".xml"},max_files=20,max_bytes=10*1024*1024)
+        if len(members)!=2: raise RuntimeError("ZIP phải có đúng hai tệp văn bản được hỗ trợ.")
+        members.sort(key=lambda item:item.filename.casefold())
+        left=archive.read(members[0]).decode("utf-8-sig").splitlines(keepends=True)
+        right=archive.read(members[1]).decode("utf-8-sig").splitlines(keepends=True)
+    diff="".join(difflib.unified_diff(left,right,fromfile=members[0].filename,tofile=members[1].filename,n=3))
+    same=not diff
+    if same: diff="Hai tệp không có khác biệt về nội dung.\n"
+    out=p.with_name(p.stem+"-diff.txt"); out.write_text(diff,encoding="utf-8")
+    return {"summary":f"Đã so sánh {Path(members[0].filename).name} và {Path(members[1].filename).name}; "+("không có khác biệt." if same else "unified diff được đính kèm."),"output_path":str(out)}
+
+
+def code_size_report(p):
+    supported={".py",".pyw",".js",".mjs",".cjs",".ts",".tsx",".jsx",".css",".html",".htm",".json",".yaml",".yml",".sh",".bash",".go",".rs",".java",".c",".cpp",".h",".hpp",".cs",".sql",".md"}
+    if p.suffix.lower() not in supported: raise RuntimeError("Định dạng source file không được hỗ trợ.")
+    if p.stat().st_size>5*1024*1024: raise RuntimeError("Code size report giới hạn file 5 MB.")
+    lines=p.read_text(encoding="utf-8-sig").splitlines()
+    blank=sum(1 for line in lines if not line.strip())
+    prefix=("#","//","/*","*","--",";","<!--")
+    comment=sum(1 for line in lines if line.strip() and line.lstrip().startswith(prefix))
+    trailing=sum(1 for line in lines if line.rstrip()!=line)
+    longest=max(((len(line),index+1) for index,line in enumerate(lines)),default=(0,0))
+    report=[f"File: {p.name}",f"Bytes: {p.stat().st_size:,}",f"Total lines: {len(lines):,}",f"Blank lines: {blank:,}",f"Comment-like lines: {comment:,}",f"Non-blank non-comment lines (approx): {max(0,len(lines)-blank-comment):,}",f"Trailing whitespace: {trailing:,}",f"Longest line: {longest[0]:,} characters (line {longest[1]})","Note: comment counting uses a lightweight prefix heuristic, not a language-aware parser."]
+    return tool_text("\n".join(report),"Source size report")
+
+
+def image_grayscale(p):def image_grayscale(p):
     from PIL import Image, ImageOps
     out=p.with_name(p.stem+"-grayscale.png")
     with Image.open(p) as raw:
@@ -1389,6 +1758,7 @@ TOOLS={
  "csv-to-json":csv_to_json,"jsonl-format":jsonl_format,"yaml-to-json":yaml_to_json,"xml-to-json":xml_to_json,
  "sqlite-export":sqlite_export,"xlsx-to-json":xlsx_to_json,"pdf-extract-images":pdf_extract_images,
  "archive-manifest":archive_manifest,"text-stats":text_stats,"image-grayscale":image_grayscale,
+ "pdf-merge":pdf_merge, "pdf-metadata-clean":pdf_metadata_clean, "pdf-outline":pdf_outline, "image-contact-sheet":image_contact_sheet, "image-duplicates":image_duplicates, "csv-split":csv_split, "csv-join":csv_join, "json-schema":json_schema, "json-to-yaml":json_to_yaml, "sqlite-integrity":sqlite_integrity, "audio-silence-report":audio_silence_report, "video-silence-report":video_silence_report, "video-frames":video_frames, "subtitle-convert":subtitle_convert, "text-deduplicate":text_deduplicate, "text-diff":text_diff, "code-size-report":code_size_report,
 }
 
 
