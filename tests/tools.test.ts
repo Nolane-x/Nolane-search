@@ -5,7 +5,7 @@ describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
     const ids = TOOL_CATALOG.map(tool => tool.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(45);
+    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(55);
     expect(TOOL_CATALOG.every(tool => tool.ready && tool.description.length > 12 && tool.accepts.length > 0)).toBe(true);
   });
 
@@ -28,6 +28,7 @@ describe("Nolane Tools registry", () => {
     expect(inferToolForUpload({ mimeType: "video/mp4", fileName: "clip.mp4" })).toBe("video-info");
     expect(inferToolForUpload({ mimeType: "text/csv", fileName: "data.csv" })).toBe("csv-profile");
     expect(inferToolForUpload({ mimeType: "application/json", fileName: "data.json" })).toBe("json-format");
+    expect(inferToolForUpload({ mimeType: "application/x-ndjson", fileName: "events.jsonl" })).toBe("jsonl-format");
     expect(inferToolForUpload({ mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", fileName: "notes.docx" })).toBe("office-text");
   });
 
@@ -50,6 +51,8 @@ describe("Nolane Tools registry", () => {
     expect(validateToolPipeline({mimeType:"application/json",fileName:"rows.json"}, [
       {toolId:"json-to-csv"},{toolId:"csv-clean"},{toolId:"csv-to-xlsx"},
     ]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"text/csv",fileName:"rows.csv"}, [{toolId:"csv-to-json"},{toolId:"json-format"}]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"application/pdf",fileName:"scan.pdf"}, [{toolId:"pdf-extract-images"},{toolId:"archive-inspect"}]).ok).toBe(true);
   });
 
   it("validates explicit tool selection against MIME types and extensions", () => {
@@ -69,6 +72,11 @@ describe("Nolane Tools registry", () => {
     expect(isToolCompatible(getTool("archive-safe-extract")!, "application/zip", "bundle.zip")).toBe(true);
     expect(isToolCompatible(getTool("pdf-text")!, "image/jpeg", "photo.jpg")).toBe(false);
     expect(isToolCompatible(getTool("office-text")!, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "notes.docx")).toBe(true);
+    expect(isToolCompatible(getTool("csv-to-json")!, "text/csv", "people.csv")).toBe(true);
+    expect(isToolCompatible(getTool("jsonl-format")!, "application/x-ndjson", "events.jsonl")).toBe(true);
+    expect(isToolCompatible(getTool("pdf-extract-images")!, "application/pdf", "scan.pdf")).toBe(true);
+    expect(isToolCompatible(getTool("sqlite-export")!, "application/octet-stream", "data.sqlite3")).toBe(true);
+    expect(isToolCompatible(getTool("image-grayscale")!, "image/png", "photo.png")).toBe(true);
     expect(getTool("not-a-tool")).toBeNull();
   });
 });
