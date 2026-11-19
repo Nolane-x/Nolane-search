@@ -286,11 +286,10 @@ export function validateToolWorkflowGraphInput(
 ): ToolWorkflowGraphValidation {
   const result = validateToolWorkflowGraph(raw);
   if (!result.ok) return result;
-  for (const rootId of result.roots) {
-    const node = result.graph.nodes.find(item => item.id === rootId)!;
+  for (const node of result.graph.nodes.filter(item => item.input === "source")) {
     const tool = getTool(node.toolId)!;
     if (!isToolCompatible(tool, file.mimeType, file.fileName)) {
-      return { ok: false, error: "Node gốc " + node.id + " (" + tool.name + ") không chấp nhận tệp " + file.fileName + "." };
+      return { ok: false, error: "Node source " + node.id + " (" + tool.name + ") không chấp nhận tệp " + file.fileName + "." };
     }
   }
   return result;
