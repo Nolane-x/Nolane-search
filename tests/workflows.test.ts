@@ -138,6 +138,17 @@ describe("Saved Nolane Tool Workflows", () => {
     expect(rows.size).toBe(0);
   });
 
+
+  it("persists fan-in DAGs that package multiple parent artifacts for a ZIP tool", async () => {
+    const {db}=fakeDb();
+    const workflow=await saveDagToolWorkflow(envFor(db),42,42,"PDF merge DAG",{nodes:[
+      {id:"compress",toolId:"pdf-compress",dependsOn:[]},
+      {id:"clean",toolId:"pdf-metadata-clean",dependsOn:[]},
+      {id:"merge",toolId:"pdf-merge",dependsOn:["compress","clean"],input:"zip",when:"all-success"},
+    ]});
+    expect(workflow.graph?.nodes[2]).toMatchObject({id:"merge",input:"zip",dependsOn:["compress","clean"]});
+  });
+
   it("validates conditional failure branches and multi-dependency barriers", async () => {
     const {db}=fakeDb();
     const env=envFor(db);
