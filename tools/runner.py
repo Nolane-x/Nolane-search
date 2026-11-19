@@ -1869,7 +1869,7 @@ def cmd_run(args):
     try:
         result=run_tool_pipeline(job,resolved,root)
     except PipelineExecutionError as exc:
-        Path(args.output).write_text(json.dumps({"error":str(exc)[:1000],"trace":exc.trace},ensure_ascii=False),encoding="utf-8")
+        Path(args.output).write_text(json.dumps({"error":_safe_trace_text(exc,root)[:1000],"trace":exc.trace},ensure_ascii=False),encoding="utf-8")
         raise
     summary=str(result.get("summary",""))
     output=result.get("output_path","")
