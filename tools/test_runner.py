@@ -473,9 +473,101 @@ class ToolRunnerUnitTests(unittest.TestCase):
             self.assertGreaterEqual(luminance,0)
             self.assertEqual(alpha,90)
 
+
+    def test_pdf_merge_metadata_clean_and_outline(self):
+        import fitz,zipfile
+        first=fitz.open(); page=first.new_page(); page.insert_text((72,72),"First page")
+        first.set_metadata({"title":"Private title","author":"Private author"})
+        first_bytes=first.tobytes(); first.close()
+        second=fitz.open(); page=second.new_page(); page.insert_text((72,72),"Second page")
+        second_bytes=second.tobytes(); second.close()
+        bundle=self.input_dir/"pdfs.zip"
+        with zipfile.ZipFile(bundle,"w") as archive:
+            archive.writestr("02-second.pdf",second_bytes); archive.writestr("01-first.pdf",first_bytes)
+        merged=runner.pdf_merge(bundle)
+        document=fitz.open(merged["output_path"])
+        self.assertEqual(document.page_count,2)
+        self.assertIn("First page",document[0].get_text())
+        document.close()
+        cleaned=runner.pdf_metadata_clean(Path(merged["output_path"]))
+        document=fitz.open(cleaned["output_path"])
+        self.assertFalse((document.metadata or {}).get("author"))
+        document.close()
+        outline=runner.pdf_outline(Path(merged["output_path"]))
+        self.assertIn("PDF không có bookmark",outline["summary"])
+
+    def test_image_contact_sheet_and_duplicate_detection(self):
+        import io,zipfile,csv
+        from PIL import Image
+        buffer=io.BytesIO(); Image.new("RGB",(32,32),(200,20,30)).save(buffer,format="PNG")
+        payload=buffer.getvalue(); bundle=self.input_dir/"images.zip"
+        with zipfile.ZipFile(bundle,"w") as archive:
+            archive.writestr("one.png",payload); archive.writestr("copy.png",payload)
+            other=io.BytesIO(); Image.new("RGB",(32,32),(20,30,200)).save(other,format="PNG")
+            archive.writestr("other.png",other.getvalue())
+        sheet=runner.image_contact_sheet(bundle)
+        with Image.open(sheet["output_path"]) as image: self.assertGreater(image.width,0)
+        duplicates=runner.image_duplicates(bundle)
+        with open(duplicates["output_path"],encoding="utf-8-sig",newline="") as handle:
+            rows=list(csv.DictReader(handle))
+        self.assertTrue(any(row["match_type"]=="exact-sha256" for row in rows))
+
+    def test_csv_split_join_json_schema_and_json_to_yaml(self):
+        import zipfile,csv,json
+        csv_path=self.write("rows.csv","name,score\nMai,9\nAn,8\n")
+        split=runner.csv_split(csv_path)
+        with zipfile.ZipFile(split["output_path"]) as archive: self.assertEqual(len(archive.namelist()),1)
+        bundle=self.input_dir/"csvs.zip"
+        with zipfile.ZipFile(bundle,"w") as archive:
+            archive.writestr("b.csv","name,score\nAn,8\n"); archive.writestr("a.csv","name,score\nMai,9\n")
+        joined=runner.csv_join(bundle)
+        with open(joined["output_path"],encoding="utf-8-sig",newline="") as handle:
+            rows=list(csv.reader(handle))
+        self.assertEqual(rows[1],["Mai","9"]); self.assertEqual(rows[2],["An","8"])
+        json_path=self.write("schema.json",'[{"name":"Mai","score":9},{"name":"An","score":null}]')
+        schema=runner.json_schema(json_path)
+        result=json.loads(Path(schema["output_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(result["type"],"array")
+        self.assertIn("name",result["items"]["properties"])
+        self.assertEqual(result["items"]["properties"]["score"]["type"],["integer","null"])
+        converted=runner.json_to_yaml(self.write("settings.json",'{"name":"Hải Phòng","enabled":true}'))
+        self.assertIn("Hải Phòng",Path(converted["output_path"]).read_text(encoding="utf-8"))
+
+    def test_sqlite_integrity_text_deduplicate_diff_and_code_metrics(self):
+        import sqlite3,zipfile
+        db=self.input_dir/"integrity.sqlite"
+        connection=sqlite3.connect(db)
+        connection.execute("CREATE TABLE items(id INTEGER PRIMARY KEY, name TEXT)")
+        connection.execute("INSERT INTO items(name) VALUES ('Nolane')")
+        connection.commit(); connection.close()
+        report=runner.sqlite_integrity(db)["summary"]
+        self.assertIn("integrity check passed",report)
+        source=self.write("repeat.txt","Alpha\nBeta\nalpha\nGamma\n")
+        result=runner.text_deduplicate(source)
+        self.assertEqual(Path(result["output_path"]).read_text(encoding="utf-8"),"Alpha\nBeta\nGamma\n")
+        bundle=self.input_dir/"diff.zip"
+        with zipfile.ZipFile(bundle,"w") as archive:
+            archive.writestr("old.txt","one\ntwo\n"); archive.writestr("new.txt","one\nthree\n")
+        output=Path(runner.text_diff(bundle)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("-two",output); self.assertIn("+three",output)
+        code=self.write("source.py","x = 1  \n\n# note\nprint(x)\n")
+        metrics=runner.code_size_report(code)["summary"]
+        self.assertIn("Total lines: 4",metrics); self.assertIn("Trailing whitespace: 1",metrics)
+
+    def test_subtitle_conversion_and_extended_pipeline(self):
+        source=self.write("captions.srt","1\n00:00:01,000 --> 00:00:02,500\nXin chào\n")
+        converted=runner.subtitle_convert(source)
+        output=Path(converted["output_path"]).read_text(encoding="utf-8")
+        self.assertTrue(output.startswith("WEBVTT"))
+        self.assertIn("00:00:01.000 --> 00:00:02.500",output)
+        job={"toolId":"video-audio","pipeline":[
+            {"toolId":"video-audio"},{"toolId":"audio-convert"},{"toolId":"audio-transcribe"},
+            {"toolId":"text-clean"},{"toolId":"text-deduplicate"},{"toolId":"text-stats"}]}
+        self.assertEqual(len(runner.validate_pipeline(job)),6)
+
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
-        self.assertGreaterEqual(len(runner.TOOLS),55)
+        self.assertGreaterEqual(len(runner.TOOLS),72)
 
 
 if __name__ == "__main__":
