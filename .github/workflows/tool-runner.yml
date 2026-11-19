@@ -65,7 +65,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends libzbar0
           python -m pip install --disable-pip-version-check pyzbar
       - name: Install FFmpeg
-        if: contains(steps.job.outputs.tool_ids, 'audio-transcribe') || contains(steps.job.outputs.tool_ids, 'audio-subtitles') || contains(steps.job.outputs.tool_ids, 'audio-info') || contains(steps.job.outputs.tool_ids, 'video-info') || contains(steps.job.outputs.tool_ids, 'video-thumbnail') || contains(steps.job.outputs.tool_ids, 'audio-normalize') || contains(steps.job.outputs.tool_ids, 'video-audio') || contains(steps.job.outputs.tool_ids, 'video-gif') || contains(steps.job.outputs.tool_ids, 'video-contact-sheet') || contains(steps.job.outputs.tool_ids, 'video-compress') || contains(steps.job.outputs.tool_ids, 'audio-convert')
+        if: contains(steps.job.outputs.tool_ids, 'audio-transcribe') || contains(steps.job.outputs.tool_ids, 'audio-subtitles') || contains(steps.job.outputs.tool_ids, 'audio-info') || contains(steps.job.outputs.tool_ids, 'video-info') || contains(steps.job.outputs.tool_ids, 'video-thumbnail') || contains(steps.job.outputs.tool_ids, 'audio-normalize') || contains(steps.job.outputs.tool_ids, 'video-audio') || contains(steps.job.outputs.tool_ids, 'video-gif') || contains(steps.job.outputs.tool_ids, 'video-contact-sheet') || contains(steps.job.outputs.tool_ids, 'video-compress') || contains(steps.job.outputs.tool_ids, 'audio-convert') || contains(steps.job.outputs.tool_ids, 'audio-silence-report') || contains(steps.job.outputs.tool_ids, 'video-silence-report') || contains(steps.job.outputs.tool_ids, 'video-frames')
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Cache Whisper model files
         if: contains(steps.job.outputs.tool_ids, 'audio-transcribe') || contains(steps.job.outputs.tool_ids, 'audio-subtitles')
@@ -77,7 +77,7 @@ jobs:
         if: contains(steps.job.outputs.tool_ids, 'audio-transcribe') || contains(steps.job.outputs.tool_ids, 'audio-subtitles')
         run: python -m pip install --disable-pip-version-check faster-whisper
       - name: Install YAML parser
-        if: contains(steps.job.outputs.tool_ids, 'yaml-format') || contains(steps.job.outputs.tool_ids, 'code-check') || contains(steps.job.outputs.tool_ids, 'yaml-to-json')
+        if: contains(steps.job.outputs.tool_ids, 'yaml-format') || contains(steps.job.outputs.tool_ids, 'code-check') || contains(steps.job.outputs.tool_ids, 'yaml-to-json') || contains(steps.job.outputs.tool_ids, 'json-to-yaml')
         run: python -m pip install --disable-pip-version-check pyyaml
       - name: Setup Node for JavaScript syntax checks
         if: contains(steps.job.outputs.tool_ids, 'code-check')
