@@ -564,9 +564,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
             {"toolId":"video-audio"},{"toolId":"audio-convert"},{"toolId":"audio-transcribe"},
             {"toolId":"text-clean"},{"toolId":"text-deduplicate"},{"toolId":"text-stats"}]}
         self.assertEqual(len(runner.validate_pipeline(job)),6)
-        source_code=self.write("metrics.py","value = 42
-print(value)
-")
+        source_code=self.write("metrics.py","value = 42\nprint(value)\n")
         chain={"toolId":"code-size-report","pipeline":[
             {"toolId":"code-size-report"},{"toolId":"text-clean"}]}
         output=runner.run_tool_pipeline(chain,source_code,self.input_dir.resolve())
