@@ -18,6 +18,8 @@ RUNNERS = {
     "pdf-compress", "pdf-to-images", "epub-text", "sqlite-inspect", "yaml-format", "xml-format",
     "code-check", "video-contact-sheet", "video-compress", "audio-subtitles", "archive-safe-extract", "xlsx-profile",
     "image-png", "csv-clean", "json-to-csv", "csv-to-xlsx", "xlsx-to-csv", "pdf-split", "audio-convert",
+    "csv-to-json", "jsonl-format", "yaml-to-json", "xml-to-json", "sqlite-export", "xlsx-to-json",
+    "pdf-extract-images", "archive-manifest", "text-stats", "image-grayscale",
 }
 
 PIPELINE_TRANSITIONS = {
@@ -38,6 +40,12 @@ PIPELINE_TRANSITIONS = {
     "image-png": {"image-info","image-compress","image-webp","image-palette","image-ocr","qr-read","image-to-pdf"},
     "image-webp": {"image-info","image-compress","image-png","image-palette","image-ocr","qr-read","image-to-pdf"},
     "video-compress": {"video-info","video-thumbnail","video-audio","video-contact-sheet","video-gif"},
+    "csv-to-json": {"json-format"}, "yaml-to-json": {"json-format"}, "xml-to-json": {"json-format"},
+    "xlsx-to-json": {"json-format"}, "json-format": {"json-to-csv"},
+    "pdf-extract-images": {"archive-inspect","archive-safe-extract"},
+    "sqlite-export": {"archive-inspect","archive-safe-extract"},
+    "archive-manifest": {"csv-profile","csv-clean","csv-to-xlsx"},
+    "image-grayscale": {"image-info","image-ocr","qr-read","image-to-pdf","image-png","image-webp","image-compress","image-palette"},
 }
 
 TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text"}
@@ -952,6 +960,419 @@ def audio_convert(p):
     return {"summary":f"Đã chuyển audio {duration:.1f}s sang WAV PCM 16 kHz mono, phù hợp speech-to-text.","output_path":str(out)}
 
 
+
+def csv_to_json(p):
+    out=p.with_name(p.stem+"-converted.json")
+    rows=[]
+    with p.open("r",encoding="utf-8-sig",newline="") as source:
+        reader=csv.reader(source)
+        headers=next(reader,None)
+        if not headers:
+            raise RuntimeError("CSV không có header.")
+        if len(headers)>200:
+            raise RuntimeError("CSV vượt quá 200 cột.")
+        headers=[str(value).strip() for value in headers]
+        if any(not value for value in headers):
+            raise RuntimeError("CSV có tên cột rỗng; hãy đặt header cho mọi cột.")
+        if len({value.casefold() for value in headers})!=len(headers):
+            raise RuntimeError("CSV có header trùng nhau; không thể chuyển đổi mà không làm mất dữ liệu.")
+        for line_number,row in enumerate(reader,2):
+            if len(row)>len(headers):
+                raise RuntimeError(f"Dòng CSV {line_number} có nhiều ô hơn header.")
+            row=row+[""]*(len(headers)-len(row))
+            rows.append(dict(zip(headers,row)))
+            if len(rows)>100000:
+                raise RuntimeError("CSV vượt quá 100.000 dòng dữ liệu.")
+    out.write_text(json.dumps(rows,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("JSON output exceeds the 45 MB delivery limit.")
+    return {"summary":f"Đã chuyển {len(rows):,} dòng và {len(headers)} cột CSV thành mảng JSON; giá trị được giữ nguyên dưới dạng chuỗi.","output_path":str(out)}
+
+def jsonl_format(p):
+    out=p.with_name(p.stem+"-formatted.jsonl")
+    rendered=[]
+    def reject_constant(value):
+        raise ValueError("Non-standard JSON constant: "+value)
+    with p.open("r",encoding="utf-8-sig") as source:
+        for line_number,line in enumerate(source,1):
+            if not line.strip():
+                continue
+            try:
+                value=json.loads(line,parse_constant=reject_constant)
+            except (json.JSONDecodeError,ValueError) as exc:
+                raise RuntimeError(f"JSONL lỗi tại dòng {line_number}: {str(exc)[:220]}") from exc
+            rendered.append(json.dumps(value,ensure_ascii=False,separators=(",",":")))
+            if len(rendered)>100000:
+                raise RuntimeError("JSONL vượt quá 100.000 dòng dữ liệu.")
+    if not rendered:
+        raise RuntimeError("JSONL không có dòng dữ liệu hợp lệ.")
+    out.write_text("\n".join(rendered)+"\n",encoding="utf-8")
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("JSONL output exceeds the 45 MB delivery limit.")
+    return {"summary":f"JSONL hợp lệ: {len(rendered):,} dòng đã được chuẩn hóa; dòng trống được bỏ qua.","output_path":str(out)}
+
+def _yaml_json_value(value, depth=0, seen=None, counter=None):
+    import datetime as _datetime
+    if seen is None: seen=set()
+    if counter is None: counter=[0]
+    counter[0]+=1
+    if counter[0]>100000 or depth>80:
+        raise RuntimeError("YAML structure exceeds the 100,000-node or 80-level safety limit.")
+    if value is None or isinstance(value,(str,bool,int)):
+        return value
+    if isinstance(value,float):
+        if not __import__("math").isfinite(value):
+            raise RuntimeError("YAML non-finite numbers cannot be represented as strict JSON.")
+        return value
+    if isinstance(value,(_datetime.datetime,_datetime.date,_datetime.time)):
+        return value.isoformat()
+    if isinstance(value,(list,tuple,dict)):
+        identity=id(value)
+        if identity in seen:
+            raise RuntimeError("YAML recursive aliases are not supported.")
+        seen.add(identity)
+        try:
+            if isinstance(value,dict):
+                result={}
+                for key,item in value.items():
+                    if not isinstance(key,str):
+                        raise RuntimeError("YAML mapping keys must be strings for JSON conversion.")
+                    result[key]=_yaml_json_value(item,depth+1,seen,counter)
+                return result
+            return [_yaml_json_value(item,depth+1,seen,counter) for item in value]
+        finally:
+            seen.remove(identity)
+    raise RuntimeError("YAML contains a value type that cannot be represented safely as JSON.")
+
+def yaml_to_json(p):
+    import yaml
+    out=p.with_name(p.stem+"-converted.json")
+    try:
+        documents=[]
+        for document in yaml.safe_load_all(p.read_text(encoding="utf-8-sig")):
+            documents.append(_yaml_json_value(document))
+            if len(documents)>100:
+                raise RuntimeError("YAML vượt quá 100 document.")
+    except yaml.YAMLError as exc:
+        raise RuntimeError("YAML không hợp lệ: "+str(exc)[:500]) from exc
+    value=documents[0] if len(documents)==1 else documents
+    out.write_text(json.dumps(value,ensure_ascii=False,indent=2,allow_nan=False)+"\n",encoding="utf-8")
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("JSON output exceeds the 45 MB delivery limit.")
+    return {"summary":f"Đã chuyển {len(documents)} YAML document bằng SafeLoader sang JSON; alias vòng lặp và key không phải chuỗi bị từ chối.","output_path":str(out)}
+
+def xml_to_json(p):
+    import xml.etree.ElementTree as ET
+    raw=p.read_text(encoding="utf-8-sig")
+    if re.search(r"<!\s*(DOCTYPE|ENTITY)\b",raw,re.I):
+        raise RuntimeError("XML DTD/ENTITY is disabled.")
+    try:
+        root=ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise RuntimeError("XML không hợp lệ: "+str(exc)[:300]) from exc
+    counter=[0]
+    def convert(element,depth=0):
+        counter[0]+=1
+        if depth>80 or counter[0]>50000:
+            raise RuntimeError("XML vượt giới hạn 80 cấp hoặc 50.000 node.")
+        children=list(element)
+        text_value=(element.text or "").strip()
+        if not children and not element.attrib:
+            return text_value or None
+        result={}
+        if element.attrib:
+            result["@attributes"]={key:value for key,value in element.attrib.items()}
+        for child in children:
+            value=convert(child,depth+1)
+            if child.tag in result:
+                if not isinstance(result[child.tag],list):
+                    result[child.tag]=[result[child.tag]]
+                result[child.tag].append(value)
+            else:
+                result[child.tag]=value
+        if text_value:
+            result["#text"]=text_value
+        return result
+    value={root.tag:convert(root)}
+    out=p.with_name(p.stem+"-converted.json")
+    out.write_text(json.dumps(value,ensure_ascii=False,indent=2,allow_nan=False)+"\n",encoding="utf-8")
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("JSON output exceeds the 45 MB delivery limit.")
+    return {"summary":f"Đã chuyển XML root '{root.tag}' thành JSON; giữ thuộc tính, text và phần tử lặp. DTD/ENTITY bị chặn.","output_path":str(out)}
+
+def sqlite_export(p):
+    import sqlite3
+    from urllib.parse import quote
+    root=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"
+    temp=Path(tempfile.mkdtemp(prefix="sqlite-export-",dir=root))
+    out=p.with_name(p.stem+"-tables.zip")
+    uri="file:"+quote(str(p.resolve()),safe="/:")+"?mode=ro&immutable=1"
+    connection=sqlite3.connect(uri,uri=True,timeout=5)
+    exported=[]; total_rows=0
+    try:
+        connection.execute("PRAGMA query_only=ON")
+        connection.set_progress_handler(lambda: 1,2_000_000)
+        tables=connection.execute(
+            "SELECT name,sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name LIMIT 21"
+        ).fetchall()
+        if len(tables)>20:
+            raise RuntimeError("SQLite export hỗ trợ tối đa 20 bảng.")
+        for table_index,(name,create_sql) in enumerate(tables,1):
+            if create_sql and "CREATE VIRTUAL TABLE" in create_sql.upper():
+                continue
+            columns=connection.execute('PRAGMA table_info("'+name.replace('"','""')+'")').fetchall()
+            if not columns:
+                continue
+            if len(columns)>200:
+                raise RuntimeError(f"Bảng {name} vượt quá 200 cột.")
+            safe_name=re.sub(r"[^A-Za-z0-9._-]+","_",name).strip("._-")[:55] or f"table-{table_index}"
+            target=temp/(f"{table_index:02d}-{safe_name}.csv")
+            quoted='"'+name.replace('"','""')+'"'
+            cursor=connection.execute("SELECT * FROM "+quoted)
+            count=0
+            with target.open("w",encoding="utf-8-sig",newline="") as handle:
+                writer=csv.writer(handle,lineterminator="\n")
+                writer.writerow([_spreadsheet_safe(str(column[1])) for column in columns])
+                while True:
+                    batch=cursor.fetchmany(500)
+                    if not batch:
+                        break
+                    for row in batch:
+                        count+=1; total_rows+=1
+                        if total_rows>100000:
+                            raise RuntimeError("SQLite export vượt quá 100.000 dòng tổng cộng.")
+                        values=[]
+                        for value in row:
+                            if isinstance(value,bytes):
+                                value="hex:"+value.hex()
+                            values.append(_spreadsheet_safe(value))
+                        writer.writerow(values)
+            exported.append((target,target.name,count))
+    finally:
+        connection.close()
+    if not exported:
+        shutil.rmtree(temp,ignore_errors=True)
+        raise RuntimeError("SQLite không có bảng dữ liệu thường để xuất.")
+    try:
+        with zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=6) as archive:
+            for source,arcname,_count in exported:
+                archive.write(source,arcname=arcname)
+    finally:
+        shutil.rmtree(temp,ignore_errors=True)
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("SQLite export ZIP exceeds the 45 MB delivery limit.")
+    return {"summary":f"Đã xuất {len(exported)} bảng SQLite và {total_rows:,} dòng thành CSV trong ZIP; database được mở chỉ đọc.","output_path":str(out)}
+
+def xlsx_to_json(p):
+    from openpyxl import load_workbook
+    import datetime as _datetime
+    workbook=load_workbook(p,read_only=True,data_only=True)
+    output={"sheets":[]}; total_rows=0
+    try:
+        if len(workbook.worksheets)>20:
+            raise RuntimeError("Workbook vượt quá 20 sheets.")
+        for sheet_index,ws in enumerate(workbook.worksheets,1):
+            rows=[]
+            iterator=ws.iter_rows(values_only=True)
+            header_row=next(iterator,None)
+            if header_row is None:
+                output["sheets"].append({"name":ws.title,"columns":[],"rows":[]})
+                continue
+            raw_headers=list(header_row[:200])
+            headers=[]
+            used=set()
+            for column_index,value in enumerate(raw_headers,1):
+                base=str(value).strip() if value is not None else ""
+                base=base or f"Column {column_index}"
+                candidate=base; suffix=2
+                while candidate.casefold() in used:
+                    candidate=f"{base}_{suffix}"; suffix+=1
+                used.add(candidate.casefold()); headers.append(candidate)
+            for row in iterator:
+                total_rows+=1
+                if total_rows>50000:
+                    raise RuntimeError("XLSX-to-JSON vượt quá 50.000 dòng tổng cộng.")
+                if len(row)>200:
+                    raise RuntimeError(f"Sheet {ws.title} vượt quá 200 cột.")
+                item={}
+                for index,header in enumerate(headers):
+                    value=row[index] if index<len(row) else None
+                    if isinstance(value,(bytes,bytearray)):
+                        value="hex:"+bytes(value).hex()
+                    elif isinstance(value,(_datetime.datetime,_datetime.date,_datetime.time)):
+                        value=value.isoformat()
+                    elif value is not None and not isinstance(value,(str,int,float,bool)):
+                        value=str(value)
+                    item[header]=value
+                rows.append(item)
+            output["sheets"].append({"name":ws.title,"columns":headers,"rows":rows})
+    finally:
+        workbook.close()
+    out=p.with_name(p.stem+"-converted.json")
+    out.write_text(json.dumps(output,ensure_ascii=False,indent=2,allow_nan=False)+"\n",encoding="utf-8")
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("JSON output exceeds the 45 MB delivery limit.")
+    return {"summary":f"Đã xuất {len(output['sheets'])} sheet và {total_rows:,} dòng thành JSON. Giá trị công thức đọc từ cache; workbook không được thực thi.","output_path":str(out)}
+
+def pdf_extract_images(p):
+    import fitz
+    document=fitz.open(p)
+    out=p.with_name(p.stem+"-embedded-images.zip")
+    count=0; total_bytes=0; seen=set()
+    try:
+        if document.is_encrypted and document.needs_pass:
+            raise RuntimeError("PDF được mã hóa bằng mật khẩu.")
+        if document.page_count>100:
+            raise RuntimeError("PDF image extraction giới hạn tối đa 100 trang.")
+        with zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=6) as archive:
+            for page_number,page in enumerate(document,1):
+                for image_ref in page.get_images(full=True):
+                    xref=int(image_ref[0])
+                    if xref in seen:
+                        continue
+                    seen.add(xref)
+                    extracted=document.extract_image(xref)
+                    payload=extracted.get("image",b"")
+                    if not payload:
+                        continue
+                    count+=1; total_bytes+=len(payload)
+                    if count>100 or len(payload)>20*1024*1024 or total_bytes>120*1024*1024:
+                        raise RuntimeError("PDF vượt giới hạn 100 ảnh, 20 MB mỗi ảnh hoặc 120 MB tổng ảnh.")
+                    extension=re.sub(r"[^a-z0-9]","",str(extracted.get("ext","bin")).lower())[:5] or "bin"
+                    archive.writestr(f"page-{page_number:03d}-image-{count:03d}.{extension}",payload)
+    except Exception:
+        out.unlink(missing_ok=True)
+        raise
+    finally:
+        document.close()
+    if count==0:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("PDF không có ảnh raster nhúng để trích xuất. Tool này không render nguyên trang PDF.")
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("Extracted images ZIP exceeds the 45 MB delivery limit.")
+    return {"summary":f"Đã trích {count} ảnh raster nhúng ({total_bytes:,} bytes) từ PDF và đóng gói ZIP; ảnh dùng chung được khử trùng theo xref.","output_path":str(out)}
+
+def archive_manifest(p):
+    out=p.with_name(p.stem+"-sha256-manifest.csv")
+    rows=[]; total_size=0
+    def digest_stream(handle,expected_size):
+        digest=hashlib.sha256(); read_size=0
+        while True:
+            chunk=handle.read(1024*1024)
+            if not chunk: break
+            read_size+=len(chunk)
+            if read_size>expected_size or read_size>150*1024*1024:
+                raise RuntimeError("Archive member vượt kích thước khai báo hoặc giới hạn 150 MB.")
+            digest.update(chunk)
+        if read_size!=expected_size:
+            raise RuntimeError("Archive member có kích thước thực tế không khớp metadata.")
+        return digest.hexdigest()
+    if zipfile.is_zipfile(p):
+        with zipfile.ZipFile(p) as archive:
+            infos=archive.infolist()
+            if len(infos)>200:
+                raise RuntimeError("Archive manifest hỗ trợ tối đa 200 mục.")
+            for info in infos:
+                if info.is_dir():
+                    continue
+                parts=_safe_archive_parts(info.filename)
+                mode=(info.external_attr>>16)&0xFFFF
+                file_type=stat.S_IFMT(mode)
+                # Some ZIP writers store permission bits without S_IFREG; zero type bits are not special files.
+                if stat.S_ISLNK(mode) or (file_type and file_type not in (stat.S_IFREG,stat.S_IFDIR)):
+                    raise RuntimeError("Archive chứa symlink hoặc special file bị chặn.")
+                if info.flag_bits&0x1:
+                    raise RuntimeError("Archive mã hóa không được hỗ trợ.")
+                if info.file_size>150*1024*1024 or (info.compress_size and info.file_size/max(1,info.compress_size)>200):
+                    raise RuntimeError("Archive member vượt giới hạn kích thước hoặc compression ratio.")
+                total_size+=info.file_size
+                if total_size>150*1024*1024:
+                    raise RuntimeError("Archive vượt 150 MB dữ liệu giải nén.")
+                with archive.open(info,"r") as handle:
+                    checksum=digest_stream(handle,info.file_size)
+                rows.append(("/".join(parts),info.file_size,checksum))
+    elif tarfile.is_tarfile(p):
+        with tarfile.open(p,"r:*") as archive:
+            members=archive.getmembers()
+            if len(members)>200:
+                raise RuntimeError("Archive manifest hỗ trợ tối đa 200 mục.")
+            for member in members:
+                if member.isdir():
+                    continue
+                if not member.isfile():
+                    raise RuntimeError("TAR chứa symlink, hardlink hoặc special file bị chặn.")
+                parts=_safe_archive_parts(member.name)
+                if member.size<0:
+                    raise RuntimeError("TAR member có kích thước không hợp lệ.")
+                total_size+=member.size
+                if total_size>150*1024*1024:
+                    raise RuntimeError("Archive vượt 150 MB dữ liệu giải nén.")
+                handle=archive.extractfile(member)
+                if handle is None:
+                    raise RuntimeError("Không thể đọc TAR member.")
+                with handle:
+                    checksum=digest_stream(handle,member.size)
+                rows.append(("/".join(parts),member.size,checksum))
+    else:
+        raise RuntimeError("Archive manifest chỉ hỗ trợ ZIP, TAR, TGZ và TAR.GZ hợp lệ.")
+    if not rows:
+        raise RuntimeError("Archive không có tệp thường để tạo manifest.")
+    with out.open("w",encoding="utf-8-sig",newline="") as target:
+        writer=csv.writer(target,lineterminator="\n")
+        writer.writerow(["path","size_bytes","sha256"])
+        writer.writerows(rows)
+    return {"summary":f"Đã tạo SHA-256 manifest cho {len(rows)} tệp trong archive ({total_size:,} bytes) mà không giải nén ra đĩa.","output_path":str(out)}
+
+def text_stats(p):
+    from collections import Counter
+    raw=p.read_text(encoding="utf-8-sig")
+    words=re.findall(r"[^\W_]+(?:['’][^\W_]+)?",raw,flags=re.UNICODE)
+    normalized=[word.casefold() for word in words]
+    counts=Counter(normalized)
+    sentences=len(re.findall(r"[.!?。！？]+",raw))
+    paragraphs=sum(1 for block in re.split(r"\n\s*\n",raw) if block.strip())
+    report=[
+        f"File: {p.name}",
+        f"Characters (including whitespace): {len(raw):,}",
+        f"Characters (excluding whitespace): {sum(not char.isspace() for char in raw):,}",
+        f"Words: {len(words):,}",
+        f"Unique words: {len(counts):,}",
+        f"Sentences (punctuation-based estimate): {sentences:,}",
+        f"Non-empty paragraphs: {paragraphs:,}",
+        f"Estimated reading time at 200 words/min: {max(1,(len(words)+199)//200)} minute(s)",
+        "Top terms: "+(", ".join(f"{word} ({count})" for word,count in counts.most_common(20)) if counts else "No words detected"),
+        "Note: tokenization is language-neutral and does not perform Vietnamese syllable/word segmentation.",
+    ]
+    return tool_text("\n".join(report),"Text statistics")
+
+def image_grayscale(p):
+    from PIL import Image, ImageOps
+    out=p.with_name(p.stem+"-grayscale.png")
+    with Image.open(p) as raw:
+        _guard_image_dimensions(raw)
+        oriented=ImageOps.exif_transpose(raw)
+        has_alpha=("A" in oriented.getbands()) or ("transparency" in oriented.info)
+        if has_alpha:
+            rgba=oriented.convert("RGBA")
+            gray=ImageOps.grayscale(rgba)
+            gray.putalpha(rgba.getchannel("A"))
+        else:
+            gray=ImageOps.grayscale(oriented)
+        gray.save(out,"PNG",optimize=True)
+        gray.close()
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("Grayscale PNG exceeds the 45 MB delivery limit.")
+    return {"summary":f"Đã chuyển ảnh {p.suffix.lower()} thành PNG thang xám; EXIF orientation được áp dụng và alpha được giữ nếu có.","output_path":str(out)}
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -965,6 +1386,9 @@ TOOLS={
  "archive-safe-extract":archive_safe_extract,"xlsx-profile":xlsx_profile,
  "image-png":image_png,"csv-clean":csv_clean,"json-to-csv":json_to_csv,"csv-to-xlsx":csv_to_xlsx,
  "xlsx-to-csv":xlsx_to_csv,"pdf-split":pdf_split,"audio-convert":audio_convert,
+ "csv-to-json":csv_to_json,"jsonl-format":jsonl_format,"yaml-to-json":yaml_to_json,"xml-to-json":xml_to_json,
+ "sqlite-export":sqlite_export,"xlsx-to-json":xlsx_to_json,"pdf-extract-images":pdf_extract_images,
+ "archive-manifest":archive_manifest,"text-stats":text_stats,"image-grayscale":image_grayscale,
 }
 
 

@@ -50,7 +50,7 @@ jobs:
       - name: Install base libraries
         run: python -m pip install --disable-pip-version-check pillow pymupdf
       - name: Install Office libraries
-        if: contains(steps.job.outputs.tool_ids, 'office-text') || contains(steps.job.outputs.tool_ids, 'xlsx-profile') || contains(steps.job.outputs.tool_ids, 'csv-to-xlsx') || contains(steps.job.outputs.tool_ids, 'xlsx-to-csv')
+        if: contains(steps.job.outputs.tool_ids, 'office-text') || contains(steps.job.outputs.tool_ids, 'xlsx-profile') || contains(steps.job.outputs.tool_ids, 'csv-to-xlsx') || contains(steps.job.outputs.tool_ids, 'xlsx-to-csv') || contains(steps.job.outputs.tool_ids, 'xlsx-to-json')
         run: python -m pip install --disable-pip-version-check python-docx openpyxl python-pptx
       - name: Install Vietnamese and English OCR engine
         if: contains(steps.job.outputs.tool_ids, 'image-ocr') || contains(steps.job.outputs.tool_ids, 'pdf-text')
@@ -77,7 +77,7 @@ jobs:
         if: contains(steps.job.outputs.tool_ids, 'audio-transcribe') || contains(steps.job.outputs.tool_ids, 'audio-subtitles')
         run: python -m pip install --disable-pip-version-check faster-whisper
       - name: Install YAML parser
-        if: contains(steps.job.outputs.tool_ids, 'yaml-format') || contains(steps.job.outputs.tool_ids, 'code-check')
+        if: contains(steps.job.outputs.tool_ids, 'yaml-format') || contains(steps.job.outputs.tool_ids, 'code-check') || contains(steps.job.outputs.tool_ids, 'yaml-to-json')
         run: python -m pip install --disable-pip-version-check pyyaml
       - name: Setup Node for JavaScript syntax checks
         if: contains(steps.job.outputs.tool_ids, 'code-check')

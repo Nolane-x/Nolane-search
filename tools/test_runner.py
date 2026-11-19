@@ -364,9 +364,118 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertIn("Café",seen[0])
         self.assertEqual(Path(result["output_path"]).name,"cleaned.txt")
 
+
+    def test_csv_to_json_rejects_duplicate_headers_and_preserves_unicode(self):
+        path=self.write("people.csv","name,city\nMai,Hải Phòng\nAn,Hà Nội\n")
+        result=runner.csv_to_json(path)
+        import json
+        payload=json.loads(Path(result["output_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(payload[0],{"name":"Mai","city":"Hải Phòng"})
+        duplicate=self.write("duplicate.csv","name,name\nA,B\n")
+        with self.assertRaisesRegex(RuntimeError,"header trùng"):
+            runner.csv_to_json(duplicate)
+
+    def test_jsonl_formatter_reports_line_and_normalizes_records(self):
+        path=self.write("events.jsonl",'{"a":1}\n\n{"name":"Hải Phòng"}\n')
+        result=runner.jsonl_format(path)
+        content=Path(result["output_path"]).read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(content),2)
+        import json
+        self.assertEqual(json.loads(content[1]),{"name":"Hải Phòng"})
+        invalid=self.write("bad.jsonl",'{"ok":true}\nnot-json\n')
+        with self.assertRaisesRegex(RuntimeError,"dòng 2"):
+            runner.jsonl_format(invalid)
+
+    def test_yaml_and_xml_conversion_are_safe_and_preserve_repeated_elements(self):
+        yaml_path=self.write("config.yaml","name: Nolane\nitems:\n  - one\n  - two\n")
+        yaml_result=runner.yaml_to_json(yaml_path)
+        import json
+        self.assertEqual(json.loads(Path(yaml_result["output_path"]).read_text(encoding="utf-8"))["items"],["one","two"])
+        xml_path=self.write("feed.xml",'<root id="7"><item>A</item><item>B</item><empty /></root>')
+        xml_result=runner.xml_to_json(xml_path)
+        xml_payload=json.loads(Path(xml_result["output_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(xml_payload["root"]["item"],["A","B"])
+        unsafe=self.write("unsafe.xml",'<!DOCTYPE root [<!ENTITY x "bad">]><root>&x;</root>')
+        with self.assertRaisesRegex(RuntimeError,"DTD/ENTITY"):
+            runner.xml_to_json(unsafe)
+
+    def test_sqlite_export_packages_tables_as_csv_without_modifying_database(self):
+        import sqlite3, zipfile, csv
+        database=self.input_dir/"report.sqlite"
+        connection=sqlite3.connect(database)
+        connection.execute("CREATE TABLE people(name TEXT, score INTEGER)")
+        connection.executemany("INSERT INTO people VALUES (?,?)",[("Mai",9),("An",8)])
+        connection.commit(); connection.close()
+        before=database.stat().st_mtime_ns
+        result=runner.sqlite_export(database)
+        with zipfile.ZipFile(result["output_path"]) as archive:
+            name=archive.namelist()[0]
+            rows=list(csv.reader(archive.open(name).read().decode("utf-8-sig").splitlines()))
+        self.assertEqual(rows[1],["Mai","9"])
+        self.assertEqual(database.stat().st_mtime_ns,before)
+
+    def test_xlsx_to_json_exports_sheet_rows_and_disambiguates_headers(self):
+        from openpyxl import Workbook
+        import json
+        path=self.input_dir/"sheet.xlsx"
+        book=Workbook(); sheet=book.active; sheet.title="Sales"
+        sheet.append(["name","name"]); sheet.append(["Mai","An"])
+        book.save(path); book.close()
+        result=runner.xlsx_to_json(path)
+        payload=json.loads(Path(result["output_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(payload["sheets"][0]["columns"],["name","name_2"])
+        self.assertEqual(payload["sheets"][0]["rows"][0],{"name":"Mai","name_2":"An"})
+
+    def test_pdf_extract_images_returns_embedded_raster_assets(self):
+        import fitz
+        from PIL import Image
+        import io, zipfile
+        image=Image.new("RGB",(8,8),(200,30,20))
+        buffer=io.BytesIO(); image.save(buffer,format="PNG")
+        path=self.input_dir/"embedded.pdf"
+        doc=fitz.open(); page=doc.new_page(); page.insert_image(fitz.Rect(10,10,80,80),stream=buffer.getvalue())
+        doc.save(path); doc.close()
+        result=runner.pdf_extract_images(path)
+        with zipfile.ZipFile(result["output_path"]) as archive:
+            self.assertEqual(len(archive.namelist()),1)
+            self.assertTrue(archive.read(archive.namelist()[0]).startswith(b"\x89PNG"))
+
+    def test_archive_manifest_hashes_members_and_rejects_traversal(self):
+        import zipfile, hashlib, csv, io
+        path=self.input_dir/"bundle.zip"
+        payload=b"hello nolane"
+        with zipfile.ZipFile(path,"w") as archive:
+            archive.writestr("folder/readme.txt",payload)
+        result=runner.archive_manifest(path)
+        with open(result["output_path"],encoding="utf-8-sig",newline="") as handle:
+            rows=list(csv.DictReader(handle))
+        self.assertEqual(rows[0]["sha256"],hashlib.sha256(payload).hexdigest())
+        self.assertEqual(rows[0]["path"],"folder/readme.txt")
+        unsafe=self.input_dir/"unsafe.zip"
+        with zipfile.ZipFile(unsafe,"w") as archive:
+            archive.writestr("../escape.txt",payload)
+        with self.assertRaises(RuntimeError):
+            runner.archive_manifest(unsafe)
+
+    def test_text_statistics_and_grayscale_image_output(self):
+        from PIL import Image
+        text_path=self.write("essay.txt","Café là đẹp. Café rất đẹp!\n\nMột đoạn khác.")
+        report=runner.text_stats(text_path)["summary"]
+        self.assertIn("Words:",report)
+        self.assertIn("Unique words:",report)
+        image_path=self.input_dir/"color.png"
+        Image.new("RGBA",(12,12),(255,0,0,90)).save(image_path)
+        result=runner.image_grayscale(image_path)
+        with Image.open(result["output_path"]) as gray:
+            # Pillow's compact LA mode is a valid grayscale+alpha representation.
+            self.assertEqual(gray.mode,"LA")
+            luminance,alpha=gray.getpixel((0,0))
+            self.assertGreaterEqual(luminance,0)
+            self.assertEqual(alpha,90)
+
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
-        self.assertGreaterEqual(len(runner.TOOLS),45)
+        self.assertGreaterEqual(len(runner.TOOLS),55)
 
 
 if __name__ == "__main__":
