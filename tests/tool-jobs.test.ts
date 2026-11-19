@@ -171,6 +171,22 @@ describe("GitHub Actions tool dispatch", () => {
     expect(validateToolWorkflowTrace([trace[0],trace[2],trace[1]],graph,"completed").ok).toBe(false);
     expect(validateToolWorkflowTrace([trace[0],{...trace[1],dependsOn:[]},trace[2]],graph,"completed").ok).toBe(false);
     expect(validateToolWorkflowTrace([trace[0],{...trace[1],status:"skipped"},trace[2]],graph,"completed").ok).toBe(false);
+    const fallbackGraph={nodes:[
+      {id:"primary",toolId:"video-audio",dependsOn:[],input:"source" as const,when:"all-success" as const},
+      {id:"normal",toolId:"audio-info",dependsOn:["primary"],input:"parent" as const,when:"all-success" as const},
+      {id:"fallback",toolId:"video-info",dependsOn:["primary"],input:"source" as const,when:"any-failure" as const},
+    ]};
+    const recoveredTrace=[
+      {step:1,total:3,nodeId:"primary",dependsOn:[],toolId:"video-audio",status:"failed",durationMs:12,inputBytes:100,outputBytes:null,summary:"decode failed",error:"decode failed"},
+      {step:2,total:3,nodeId:"normal",dependsOn:["primary"],toolId:"audio-info",status:"skipped",durationMs:0,inputBytes:0,outputBytes:null,summary:"condition not met"},
+      {step:3,total:3,nodeId:"fallback",dependsOn:["primary"],toolId:"video-info",status:"completed",durationMs:8,inputBytes:100,outputBytes:50,summary:"fallback output"},
+    ];
+    expect(validateToolWorkflowTrace(recoveredTrace,fallbackGraph,"completed").ok).toBe(true);
+    expect(validateToolWorkflowTrace(recoveredTrace,fallbackGraph,"failed").ok).toBe(true);
+    expect(validateToolWorkflowTrace([
+      recoveredTrace[0],recoveredTrace[1],{...recoveredTrace[2],status:"failed",error:"fallback failed"},
+    ],fallbackGraph,"completed").ok).toBe(false);
+
   });
 
   it("creates and retries DAG jobs without flattening away their dependencies", async () => {
