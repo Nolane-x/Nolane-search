@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createToolJob, retryToolJob, updateToolJob, validateToolStepTrace } from "../src/tool-jobs";
+import { createToolJob, retryToolJob, updateToolJob, validateToolDagTrace, validateToolStepTrace } from "../src/tool-jobs";
 import type { D1Database, D1Result, D1Statement, Env } from "../src/types";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -222,4 +222,40 @@ describe("GitHub Actions tool dispatch", () => {
       fileName: "photo.png", mimeType: "image/png", fileSize: 100,
     })).rejects.toThrow("NOLANE_GH_ACTIONS_TOKEN");
   });
+  it("persists an owner-scoped DAG job and validates node traces independently of branch completion order", async () => {
+    const { db, rows } = fakeDb();
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || "{}")) as { inputs?: { job_id?: string } };
+      expect(body.inputs?.job_id).toBeTruthy();
+      expect(JSON.stringify(body)).not.toContain("dag-private-telegram-file-id");
+      return new Response(null, { status: 204 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = { DB: db, NOLANE_GH_ACTIONS_TOKEN: "test-actions-token" } as unknown as Env;
+    const dag = [
+      { id: "source", toolId: "video-audio", dependsOn: [] },
+      { id: "transcript", toolId: "audio-transcribe", dependsOn: ["source"] },
+      { id: "converted", toolId: "audio-convert", dependsOn: ["source"] },
+    ];
+    const job = await createToolJob(env, {
+      userId: 42, chatId: 42, toolId: "video-audio", fileId: "dag-private-telegram-file-id",
+      fileName: "clip.mp4", mimeType: "video/mp4", fileSize: 1234, workflowDag: dag,
+      workflowId: "abcdef123456", workflowName: "Parallel video",
+    });
+    expect(job.workflowDag).toEqual(dag);
+    expect(job.pipeline?.map(step => step.toolId)).toEqual(["video-audio", "audio-transcribe", "audio-convert"]);
+    const stored = JSON.parse(rows.get("tool-job:" + job.id) || "{}");
+    expect(stored.workflowDag).toEqual(dag);
+    const trace = [
+      { nodeId: "source", step: 1, total: 3, toolId: "video-audio", status: "completed", durationMs: 100, inputBytes: 1000, outputBytes: 900, summary: "Audio extracted" },
+      { nodeId: "transcript", step: 2, total: 3, toolId: "audio-transcribe", status: "failed", durationMs: 200, inputBytes: 900, outputBytes: null, summary: "Decode error", error: "Decode error" },
+      { nodeId: "converted", step: 3, total: 3, toolId: "audio-convert", status: "completed", durationMs: 150, inputBytes: 900, outputBytes: 800, summary: "Converted" },
+    ];
+    expect(validateToolDagTrace(trace, dag, "failed").ok).toBe(true);
+    expect(validateToolDagTrace(trace.slice(0, 2), dag, "completed").ok).toBe(false);
+    expect(validateToolDagTrace([{ ...trace[1], nodeId: "unknown" }], dag, "failed").ok).toBe(false);
+    expect(validateToolDagTrace([trace[1], trace[0]], dag, "failed").ok).toBe(false);
+    expect(validateToolDagTrace(trace, dag, "completed").ok).toBe(false);
+  });
+
 });
