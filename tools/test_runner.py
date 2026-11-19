@@ -640,6 +640,25 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertIn("[runner-path]", runner._safe_trace_text("failed /home/runner/work/nolane/tmp/file.pdf", self.input_dir))
 
 
+
+    def test_cmd_run_writes_failure_trace_before_returning_nonzero(self):
+        import argparse,json
+        source=self.write("source.txt","Original\n")
+        job_file=self.root/"job.json"
+        job_file.write_text(json.dumps({"toolId":"text-deduplicate","pipeline":[{"toolId":"text-deduplicate"}]}),encoding="utf-8")
+        input_file=self.root/"input-path.txt"
+        input_file.write_text(str(source),encoding="utf-8")
+        result_file=self.root/"result.json"
+        def fail(_path):
+            raise RuntimeError("failed at /home/runner/work/private/source.txt")
+        with patch.dict(runner.TOOLS,{"text-deduplicate":fail}):
+            with self.assertRaises(runner.PipelineExecutionError):
+                runner.cmd_run(argparse.Namespace(job_file=str(job_file),input_path_file=str(input_file),output=str(result_file)))
+        result=json.loads(result_file.read_text(encoding="utf-8"))
+        self.assertEqual(result["trace"][-1]["status"],"failed")
+        self.assertIn("[runner-path]",result["error"])
+        self.assertNotIn("/home/runner/work",result["error"])
+
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
         self.assertGreaterEqual(len(runner.TOOLS),72)
