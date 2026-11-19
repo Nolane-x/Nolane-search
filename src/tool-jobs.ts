@@ -148,11 +148,6 @@ export function validateToolWorkflowTrace(
     if (!value || typeof value !== "object" || Array.isArray(value)) return { ok: false, error: "DAG trace contains an invalid node." };
     const item = value as Record<string, unknown>;
     const status = item.status;
-    const expectedStatus = node.dependsOn.length === 0
-      ? "completed"
-      : node.when === "any-failure"
-        ? "failed"
-        : "completed";
     if (item.step !== index + 1 || item.total !== graph.nodes.length || item.nodeId !== node.id ||
         item.toolId !== node.toolId || !Array.isArray(item.dependsOn) ||
         item.dependsOn.length !== node.dependsOn.length ||
