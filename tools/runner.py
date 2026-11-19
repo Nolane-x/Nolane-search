@@ -70,6 +70,8 @@ PIPELINE_TRANSITIONS = {
 
 TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
+MAX_WORKFLOW_NODES = 256
+MAX_WORKFLOW_DEPENDENCIES = 64
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
 def api_json(url: str, method="GET", data=None, token=None):
@@ -1859,9 +1861,9 @@ def validate_workflow_graph(job):
     if not isinstance(raw,dict) or not isinstance(raw.get("nodes"),list):
         raise RuntimeError("Invalid DAG workflow graph.")
     raw_nodes=raw["nodes"]
-    if not 1<=len(raw_nodes)<=len(RUNNERS):
+    if not 1<=len(raw_nodes)<=MAX_WORKFLOW_NODES:
         raise RuntimeError("DAG node count is outside the supported processor catalog.")
-    nodes={}; tool_ids=set()
+    nodes={}
     for index,item in enumerate(raw_nodes):
         if not isinstance(item,dict):
             raise RuntimeError(f"Invalid DAG node {index+1}.")
@@ -1869,11 +1871,10 @@ def validate_workflow_graph(job):
         tool_id=item.get("toolId")
         if not re.fullmatch(r"[a-z][a-z0-9_-]{0,31}",node_id) or node_id in nodes:
             raise RuntimeError("DAG node IDs must be unique, lowercase identifiers up to 32 characters.")
-        if tool_id not in RUNNERS or tool_id in tool_ids:
-            raise RuntimeError("DAG contains an unknown or repeated processor.")
-        tool_ids.add(tool_id)
+        if tool_id not in RUNNERS:
+            raise RuntimeError("DAG contains an unknown processor.")
         deps=item.get("dependsOn")
-        if not isinstance(deps,list) or len(deps)>8:
+        if not isinstance(deps,list) or len(deps)>MAX_WORKFLOW_DEPENDENCIES:
             raise RuntimeError(f"Invalid dependency list for node {node_id}.")
         normalized=[]
         for dependency in deps:
@@ -2056,6 +2057,13 @@ def run_tool_workflow_dag(job, source, root, max_concurrency=3):
             pending.add(node["id"])
     trace=[{**traces[node["id"]],"step":index+1,"total":len(nodes)} for index,node in enumerate(nodes)]
     failures=[item for item in trace if item["status"]=="failed"]
+    recovered_failures=set()
+    for node in nodes:
+        if node["when"]=="any-failure" and states.get(node["id"])=="completed":
+            recovered_failures.update(
+                parent_id for parent_id in node["dependsOn"] if states.get(parent_id)=="failed"
+            )
+    unhandled_failures=[item for item in failures if item["nodeId"] not in recovered_failures]
     summary_lines=[]
     for item in trace:
         summary_lines.append(
@@ -2063,9 +2071,11 @@ def run_tool_workflow_dag(job, source, root, max_concurrency=3):
             f" {item['nodeId']} · {item['toolId']} · {item['status']} · {item['durationMs']} ms"+
             (": "+(item.get("error") or item["summary"]) if item["status"]!="skipped" else "")
         )
-    if failures:
-        message="; ".join(f"{item['nodeId']}: {item.get('error','failed')}" for item in failures)
+    if unhandled_failures:
+        message="; ".join(f"{item['nodeId']}: {item.get('error','failed')}" for item in unhandled_failures)
         raise PipelineExecutionError(message,trace)
+    if recovered_failures:
+        summary_lines.append("🩹 Recovered failed nodes: "+", ".join(sorted(recovered_failures)))
 
     output_zip=root/"dag-workflow-results.zip"
     manifest={"nodes":trace,"outputs":[]}
