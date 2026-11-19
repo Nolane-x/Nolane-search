@@ -1723,7 +1723,7 @@ def code_size_report(p):
     return tool_text("\n".join(report),"Source size report")
 
 
-def image_grayscale(p):def image_grayscale(p):
+def image_grayscale(p):
     from PIL import Image, ImageOps
     out=p.with_name(p.stem+"-grayscale.png")
     with Image.open(p) as raw:
