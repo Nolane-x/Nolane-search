@@ -645,7 +645,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         import argparse,json
         source=self.write("source.txt","Original\n")
         job_file=self.root/"job.json"
-        job_file.write_text(json.dumps({"toolId":"text-deduplicate","pipeline":[{"toolId":"text-deduplicate"}]}),encoding="utf-8")
+        job_file.write_text(json.dumps({"job":{"id":"12345678-1234-1234-1234-123456789abc","toolId":"text-deduplicate","pipeline":[{"toolId":"text-deduplicate"}]}}),encoding="utf-8")
         input_file=self.root/"input-path.txt"
         input_file.write_text(str(source),encoding="utf-8")
         result_file=self.root/"result.json"
