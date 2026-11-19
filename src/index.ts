@@ -1911,26 +1911,25 @@ async function handleToolUpload(env: Env, message: NonNullable<TelegramUpdate["m
     const pendingWorkflow = await getPendingToolWorkflow(env, userId, chatId);
     if (pendingWorkflow) {
       const workflow = pendingWorkflow.workflow;
-      const dagValidation = workflow.dag
-        ? validateToolDag({ mimeType: file.mimeType, fileName: file.fileName }, workflow.dag)
-        : null;
-      const pipelineValidation = workflow.dag
-        ? null
-        : validateToolPipeline({ mimeType: file.mimeType, fileName: file.fileName }, workflow.steps);
-      const valid = workflow.dag ? dagValidation.ok : pipelineValidation.ok;
-      if (!valid) {
-        const first = getTool(workflow.steps[0]?.toolId || "");
-        const error = workflow.dag ? dagValidation.error : pipelineValidation.error;
-        await reply(env, chatId,
-          "Tệp này không phù hợp với workflow <b>" + htmlEscape(workflow.name) + "</b>.\n" +
-          htmlEscape(error) + (first ? "\nĐịnh dạng đầu vào của node gốc: " + htmlEscape(first.accepts.join(", ")) : "") +
-          "\nWorkflow vẫn đang chờ; gửi tệp phù hợp hoặc /cancel để hủy.");
-        return;
+      let dagNodes = workflow.dag;
+      let steps: ToolPipelineStep[];
+      if (dagNodes) {
+        const validation = validateToolDag({ mimeType: file.mimeType, fileName: file.fileName }, dagNodes);
+        if (!validation.ok) {
+          await reply(env, chatId, "Tệp này không phù hợp với workflow <b>" + htmlEscape(workflow.name) + "</b>.\n" + htmlEscape(validation.error) + "\nWorkflow vẫn đang chờ; gửi tệp phù hợp hoặc /cancel để hủy.");
+          return;
+        }
+        dagNodes = validation.nodes;
+        steps = validation.nodes.map(node => ({ toolId: node.toolId, ...(node.reason ? { reason: node.reason } : {}) }));
+      } else {
+        const validation = validateToolPipeline({ mimeType: file.mimeType, fileName: file.fileName }, workflow.steps);
+        if (!validation.ok) {
+          await reply(env, chatId, "Tệp này không phù hợp với workflow <b>" + htmlEscape(workflow.name) + "</b>.\n" + htmlEscape(validation.error) + "\nWorkflow vẫn đang chờ; gửi tệp phù hợp hoặc /cancel để hủy.");
+          return;
+        }
+        steps = validation.steps;
       }
       try {
-        const steps = workflow.dag
-          ? dagValidation.nodes.map(node => ({ toolId: node.toolId, ...(node.reason ? { reason: node.reason } : {}) }))
-          : pipelineValidation.steps;
         const firstToolId = steps[0]!.toolId;
         const chain = workflow.dag
           ? workflow.dag.map(node => node.id + "=" + node.toolId + "@" + (node.dependsOn[0] || "input")).join("\n")
@@ -1938,7 +1937,7 @@ async function handleToolUpload(env: Env, message: NonNullable<TelegramUpdate["m
         const job = await createToolJob(env, {
           userId, chatId, toolId: firstToolId, fileId: file.fileId, fileName: file.fileName,
           mimeType: file.mimeType, fileSize: file.fileSize,
-          pipeline: steps, workflowDag: workflow.dag,
+          pipeline: steps, workflowDag: dagNodes,
           workflowId: workflow.id, workflowName: workflow.name,
           agentPrompt: "Run the saved workflow '" + workflow.name + "' and explain the actual processor outputs.",
           agentTask: "summary", agentToolReason: "User-selected saved workflow.",
