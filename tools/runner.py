@@ -21,6 +21,9 @@ RUNNERS = {
     "csv-to-json", "jsonl-format", "yaml-to-json", "xml-to-json", "sqlite-export", "xlsx-to-json",
     "pdf-extract-images", "archive-manifest", "text-stats", "image-grayscale",
     "pdf-merge", "pdf-metadata-clean", "pdf-outline", "image-contact-sheet", "image-duplicates", "csv-split", "csv-join", "json-schema", "json-to-yaml", "sqlite-integrity", "audio-silence-report", "video-silence-report", "video-frames", "subtitle-convert", "text-deduplicate", "text-diff", "code-size-report",
+    "pdf-rotate-cw","pdf-remove-blank","image-trim-border","image-pixelate","image-diff",
+    "audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean",
+    "json-flatten-csv","csv-to-sqlite","log-insights","json-diff",
 }
 
 PIPELINE_TRANSITIONS = {
@@ -66,9 +69,22 @@ PIPELINE_TRANSITIONS = {
     "code-size-report": {"text-clean","text-stats"},
     "text-clean": {"text-stats","text-deduplicate"},
     "text-stats": {"text-clean"},
+    "pdf-rotate-cw": {"pdf-info","pdf-text","pdf-compress","pdf-to-images","pdf-split","pdf-extract-images","pdf-metadata-clean","pdf-outline","pdf-remove-blank"},
+    "pdf-remove-blank": {"pdf-info","pdf-text","pdf-compress","pdf-to-images","pdf-split","pdf-extract-images","pdf-metadata-clean","pdf-outline"},
+    "image-trim-border": {"image-info","image-compress","image-resize","image-png","image-webp","image-palette","image-ocr","qr-read","image-to-pdf","image-pixelate"},
+    "image-pixelate": {"image-info","image-png","image-webp","image-compress","image-to-pdf"},
+    "image-diff": {"archive-inspect","archive-safe-extract","archive-manifest"},
+    "audio-stereo-split": {"archive-inspect","archive-safe-extract","archive-manifest"},
+    "audio-metadata-clean": {"audio-info","audio-normalize","audio-transcribe","audio-subtitles","audio-convert"},
+    "video-scene-frames": {"archive-inspect","archive-safe-extract","archive-manifest"},
+    "video-metadata-clean": {"video-info","video-thumbnail","video-audio","video-contact-sheet","video-gif","video-silence-report","video-frames","video-scene-frames"},
+    "json-flatten-csv": {"csv-profile","csv-clean","csv-to-xlsx","csv-to-sqlite","csv-join"},
+    "csv-to-sqlite": {"sqlite-inspect","sqlite-integrity","sqlite-export"},
+    "log-insights": {"text-clean","text-stats","text-deduplicate"},
+    "json-diff": {"text-clean","text-stats","text-deduplicate"},
 }
 
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -1745,6 +1761,434 @@ def image_grayscale(p):
     return {"summary":f"Đã chuyển ảnh {p.suffix.lower()} thành PNG thang xám; EXIF orientation được áp dụng và alpha được giữ nếu có.","output_path":str(out)}
 
 
+def pdf_rotate_cw(p):
+    import fitz
+    document=fitz.open(p)
+    if document.is_encrypted and document.needs_pass:
+        document.close()
+        raise RuntimeError("PDF được mã hóa bằng mật khẩu.")
+    if document.page_count>500:
+        document.close()
+        raise RuntimeError("Xoay PDF hỗ trợ tối đa 500 trang mỗi lượt.")
+    page_count=document.page_count
+    out=p.with_name(p.stem+"-rotated-cw.pdf")
+    try:
+        for page in document:
+            page.set_rotation((page.rotation+90)%360)
+        document.save(str(out),garbage=4,deflate=True,clean=True)
+    finally:
+        document.close()
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("PDF sau khi xoay vượt giới hạn đầu ra 45 MB.")
+    return {"summary":f"Đã xoay theo chiều kim đồng hồ 90° cho {page_count} trang; text/vector được giữ nguyên.","output_path":str(out)}
+
+
+def pdf_remove_blank(p):
+    import fitz
+    from PIL import Image
+    source=fitz.open(p)
+    if source.is_encrypted and source.needs_pass:
+        source.close()
+        raise RuntimeError("PDF được mã hóa bằng mật khẩu.")
+    if source.page_count>500:
+        source.close()
+        raise RuntimeError("Kiểm tra trang trắng hỗ trợ tối đa 500 trang.")
+    kept=[]; removed=0
+    out=p.with_name(p.stem+"-no-blank-pages.pdf")
+    try:
+        for index,page in enumerate(source):
+            if page.get_text("text").strip():
+                kept.append(index)
+                continue
+            pix=page.get_pixmap(matrix=fitz.Matrix(0.5,0.5),alpha=False)
+            image=Image.frombytes("RGB",(pix.width,pix.height),pix.samples).convert("L")
+            histogram=image.histogram()
+            ink=sum(histogram[:245])/max(1,pix.width*pix.height)
+            image.close()
+            if ink>=0.0001:
+                kept.append(index)
+            else:
+                removed+=1
+        if not kept:
+            raise RuntimeError("Tất cả trang đều có vẻ trắng; từ chối tạo PDF rỗng.")
+        if removed==0:
+            raise RuntimeError("Không phát hiện trang trắng chắc chắn để loại bỏ.")
+        output=fitz.open()
+        try:
+            for index in kept:
+                output.insert_pdf(source,from_page=index,to_page=index)
+            metadata=source.metadata or {}
+            if metadata:
+                output.set_metadata(metadata)
+            output.save(str(out),garbage=4,deflate=True,clean=True)
+        finally:
+            output.close()
+    finally:
+        source.close()
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("PDF đầu ra vượt giới hạn 45 MB.")
+    return {"summary":f"Đã giữ {len(kept)} trang và loại {removed} trang trắng; trang có text layer hoặc dấu raster được giữ lại.","output_path":str(out)}
+
+
+def image_trim_border(p):
+    from PIL import Image, ImageChops, ImageStat, ImageOps
+    with Image.open(p) as raw:
+        _guard_image_dimensions(raw)
+        oriented=ImageOps.exif_transpose(raw)
+        rgb=oriented.convert("RGB")
+        w,h=rgb.size
+        patch=max(1,min(5,w//20,h//20))
+        corners=[
+            rgb.crop((0,0,patch,patch)),rgb.crop((w-patch,0,w,patch)),
+            rgb.crop((0,h-patch,patch,h)),rgb.crop((w-patch,h-patch,w,h)),
+        ]
+        stats=[ImageStat.Stat(item).mean for item in corners]
+        background=tuple(round(sum(row[channel] for row in stats)/len(stats)) for channel in range(3))
+        backdrop=Image.new("RGB",rgb.size,background)
+        delta=ImageChops.difference(rgb,backdrop).convert("L")
+        mask=delta.point(lambda value:255 if value>22 else 0)
+        bbox=mask.getbbox()
+        for item in corners: item.close()
+        backdrop.close(); delta.close(); mask.close(); rgb.close()
+        if not bbox:
+            raise RuntimeError("Ảnh gần như đồng nhất; không tìm thấy nội dung để crop.")
+        left,top,right,bottom=bbox
+        pad=2
+        bbox=(max(0,left-pad),max(0,top-pad),min(w,right+pad),min(h,bottom+pad))
+        if bbox==(0,0,w,h):
+            raise RuntimeError("Không phát hiện viền thừa đủ lớn để crop.")
+        out=p.with_name(p.stem+"-trimmed.png")
+        cropped=oriented.crop(bbox)
+        cropped.save(out,"PNG",optimize=True)
+        cropped.close()
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("Ảnh sau crop vượt giới hạn đầu ra 45 MB.")
+    return {"summary":f"Đã cắt viền ảnh từ {w}×{h} xuống {bbox[2]-bbox[0]}×{bbox[3]-bbox[1]} px; giữ 2 px padding quanh nội dung.","output_path":str(out)}
+
+
+def image_pixelate(p):
+    from PIL import Image, ImageOps
+    with Image.open(p) as raw:
+        _guard_image_dimensions(raw)
+        image=ImageOps.exif_transpose(raw)
+        width,height=image.size
+        reduced=(max(1,round(width/48)),max(1,round(height/48)))
+        small=image.resize(reduced,Image.Resampling.BILINEAR)
+        pixelated=small.resize((width,height),Image.Resampling.NEAREST)
+        out=p.with_name(p.stem+"-pixelated.png")
+        pixelated.save(out,"PNG",optimize=True)
+        small.close(); pixelated.close()
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("Ảnh pixelate vượt giới hạn đầu ra 45 MB.")
+    return {"summary":f"Đã pixel hóa toàn bộ ảnh {width}×{height} bằng lưới xấp xỉ 48×48 ô; kết quả là ảnh mới, không ghi đè file gốc.","output_path":str(out)}
+
+
+def image_diff(p):
+    import io
+    from PIL import Image, ImageChops, ImageEnhance, ImageOps
+    if not zipfile.is_zipfile(p):
+        raise RuntimeError("Gửi ZIP chứa đúng hai ảnh cần so sánh.")
+    with zipfile.ZipFile(p) as archive:
+        members,total=_safe_zip_members(archive,{".jpg",".jpeg",".png",".webp",".bmp",".tif",".tiff"},max_files=10,max_bytes=50*1024*1024)
+        if len(members)!=2:
+            raise RuntimeError("ZIP phải chứa đúng hai ảnh.")
+        members.sort(key=lambda item:item.filename.casefold())
+        images=[]
+        for item in members:
+            with Image.open(io.BytesIO(archive.read(item))) as raw:
+                _guard_image_dimensions(raw)
+                images.append(ImageOps.exif_transpose(raw).convert("RGB"))
+    try:
+        width=max(item.width for item in images); height=max(item.height for item in images)
+        canvas_a=Image.new("RGB",(width,height),"white")
+        canvas_b=Image.new("RGB",(width,height),"white")
+        canvas_a.paste(images[0],(0,0)); canvas_b.paste(images[1],(0,0))
+        raw_difference=ImageChops.difference(canvas_a,canvas_b)
+        changed=raw_difference.getbbox()
+        difference=ImageEnhance.Contrast(raw_difference).enhance(3.0)
+        overlay=Image.blend(canvas_a,canvas_b,0.5)
+        out=p.with_name(p.stem+"-image-diff.zip")
+        diff_path=p.with_name(p.stem+"-difference.png")
+        overlay_path=p.with_name(p.stem+"-overlay.png")
+        difference.save(diff_path,"PNG",optimize=True)
+        overlay.save(overlay_path,"PNG",optimize=True)
+        with zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=4) as result:
+            result.write(diff_path,"difference.png")
+            result.write(overlay_path,"overlay.png")
+        diff_path.unlink(missing_ok=True); overlay_path.unlink(missing_ok=True)
+    finally:
+        for item in images: item.close()
+        for item in (locals().get("canvas_a"),locals().get("canvas_b"),locals().get("raw_difference"),locals().get("difference"),locals().get("overlay")):
+            if item is not None: item.close()
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("ZIP ảnh so sánh vượt giới hạn 45 MB.")
+    note="có vùng khác biệt" if changed else "hai ảnh giống nhau sau khi đặt lên cùng canvas"
+    return {"summary":f"Đã so sánh {members[0].filename} và {members[1].filename}; {note}. ZIP gồm ảnh difference và overlay ({width}×{height}).","output_path":str(out)}
+
+
+def audio_stereo_split(p):
+    data=ffprobe(p)
+    streams=[item for item in data.get("streams",[]) if item.get("codec_type")=="audio"]
+    if not streams:
+        raise RuntimeError("Không tìm thấy audio stream.")
+    if int(streams[0].get("channels") or 0)<2:
+        raise RuntimeError("Tệp nguồn không có ít nhất hai kênh audio.")
+    duration=float(data.get("format",{}).get("duration") or 0)
+    if duration<=0 or duration>1800:
+        raise RuntimeError("Tách stereo hỗ trợ audio dài tối đa 30 phút.")
+    root=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"
+    root.mkdir(parents=True,exist_ok=True)
+    temp=Path(tempfile.mkdtemp(prefix="stereo-split-",dir=root))
+    left=temp/"left.mp3"; right=temp/"right.mp3"
+    out=p.with_name(p.stem+"-stereo-split.zip")
+    try:
+        cmd("ffmpeg",["-y","-i",str(p),"-map","0:a:0","-af","pan=mono|c0=FL","-ac","1","-c:a","libmp3lame","-q:a","2",str(left)],900)
+        cmd("ffmpeg",["-y","-i",str(p),"-map","0:a:0","-af","pan=mono|c0=FR","-ac","1","-c:a","libmp3lame","-q:a","2",str(right)],900)
+        if not left.is_file() or not right.is_file():
+            raise RuntimeError("FFmpeg không tạo đủ hai kênh stereo.")
+        with zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=4) as archive:
+            archive.write(left,"left.mp3"); archive.write(right,"right.mp3")
+    finally:
+        shutil.rmtree(temp,ignore_errors=True)
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("ZIP stereo vượt giới hạn đầu ra 45 MB.")
+    return {"summary":f"Đã tách audio stereo thành kênh Left và Right riêng ({duration:.1f} giây); hai MP3 được đóng gói trong ZIP.","output_path":str(out)}
+
+
+def audio_metadata_clean(p):
+    data=ffprobe(p)
+    if not any(item.get("codec_type")=="audio" for item in data.get("streams",[])):
+        raise RuntimeError("Không tìm thấy audio stream.")
+    if p.suffix.lower() not in {".mp3",".wav",".m4a",".ogg",".flac",".aac"}:
+        raise RuntimeError("Định dạng audio này không được hỗ trợ remux.")
+    out=p.with_name(p.stem+"-metadata-clean"+p.suffix.lower())
+    cmd("ffmpeg",["-y","-i",str(p),"-map","0:a:0","-map_metadata","-1","-map_chapters","-1","-c:a","copy",str(out)],900)
+    if not out.is_file() or out.stat().st_size==0:
+        raise RuntimeError("FFmpeg không tạo được audio sau khi xóa metadata.")
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("Audio đầu ra vượt giới hạn 45 MB.")
+    return {"summary":"Đã remux audio stream đầu tiên và loại metadata/chapter tags; codec không bị re-encode.","output_path":str(out)}
+
+
+def video_scene_frames(p):
+    data=ffprobe(p)
+    streams=[item for item in data.get("streams",[]) if item.get("codec_type")=="video"]
+    duration=float(data.get("format",{}).get("duration") or 0)
+    if not streams or duration<=0 or duration>1800:
+        raise RuntimeError("Phát hiện scene hỗ trợ video hợp lệ dài tối đa 30 phút.")
+    root=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"
+    root.mkdir(parents=True,exist_ok=True)
+    temp=Path(tempfile.mkdtemp(prefix="scene-frames-",dir=root))
+    pattern=temp/"scene-%03d.jpg"
+    out=p.with_name(p.stem+"-scene-frames.zip")
+    try:
+        cmd("ffmpeg",["-y","-i",str(p),"-vf","select='gt(scene,0.35)',scale='min(1280,iw)':-2","-fps_mode","vfr","-frames:v","80","-an","-q:v","3",str(pattern)],900)
+        frames=sorted(temp.glob("scene-*.jpg"))
+        if not frames:
+            raise RuntimeError("Không phát hiện chuyển cảnh vượt ngưỡng 0,35; thử dùng video-frames để lấy mẫu đều.")
+        with zipfile.ZipFile(out,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=4) as archive:
+            for frame in frames:
+                archive.write(frame,frame.name)
+    finally:
+        shutil.rmtree(temp,ignore_errors=True)
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("Scene frames ZIP vượt giới hạn đầu ra 45 MB.")
+    return {"summary":f"Đã phát hiện và trích {len(frames)} keyframe chuyển cảnh (ngưỡng 0,35) từ video {duration:.1f} giây.","output_path":str(out)}
+
+
+def video_metadata_clean(p):
+    data=ffprobe(p)
+    if not any(item.get("codec_type")=="video" for item in data.get("streams",[])):
+        raise RuntimeError("Không tìm thấy video stream.")
+    duration=float(data.get("format",{}).get("duration") or 0)
+    if duration<=0 or duration>1800:
+        raise RuntimeError("Remux metadata hỗ trợ video dài tối đa 30 phút.")
+    out=p.with_name(p.stem+"-metadata-clean.mkv")
+    cmd("ffmpeg",["-y","-i",str(p),"-map","0","-map_metadata","-1","-map_chapters","-1","-c","copy",str(out)],900)
+    if not out.is_file() or out.stat().st_size==0:
+        raise RuntimeError("FFmpeg không tạo được video MKV sau khi xóa metadata.")
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("Video đầu ra vượt giới hạn 45 MB.")
+    return {"summary":"Đã remux toàn bộ stream sang MKV và loại metadata/chapter tags; video/audio không bị re-encode.","output_path":str(out)}
+
+
+def json_flatten_csv(p):
+    import json
+    import csv
+    if p.stat().st_size>20*1024*1024:
+        raise RuntimeError("JSON flatten giới hạn đầu vào 20 MB.")
+    try:
+        data=json.loads(p.read_text(encoding="utf-8-sig"))
+    except (UnicodeError,ValueError) as exc:
+        raise RuntimeError("Tệp JSON không hợp lệ hoặc không phải UTF-8.") from exc
+    if isinstance(data,dict):
+        records=[data]
+    elif isinstance(data,list) and all(isinstance(item,dict) for item in data):
+        records=data
+    else:
+        raise RuntimeError("JSON root phải là object hoặc mảng các object.")
+    if len(records)>200000:
+        raise RuntimeError("JSON flatten giới hạn 200.000 records.")
+    def flatten(value,prefix="",depth=0,target=None):
+        if target is None:
+            target={}
+        if depth>24:
+            raise RuntimeError("JSON nesting vượt quá 24 cấp.")
+        if isinstance(value,dict) and value:
+            for key,item in value.items():
+                column=f"{prefix}.{key}" if prefix else str(key)
+                flatten(item,column,depth+1,target)
+        elif prefix:
+            target[prefix]=json.dumps(value,ensure_ascii=False,separators=(",",":")) if isinstance(value,(dict,list)) else value
+        return target
+    rows=[flatten(record) for record in records]
+    columns=[]; seen=set()
+    for row in rows:
+        for key in row:
+            if key not in seen:
+                seen.add(key); columns.append(key)
+                if len(columns)>500:
+                    raise RuntimeError("JSON flatten giới hạn 500 cột.")
+    if not columns:
+        columns=["value"]
+    out=p.with_name(p.stem+"-flattened.csv")
+    with out.open("w",encoding="utf-8-sig",newline="") as handle:
+        writer=csv.DictWriter(handle,fieldnames=columns,extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("CSV đầu ra vượt giới hạn 45 MB.")
+    return {"summary":f"Đã làm phẳng {len(rows):,} record thành {len(columns):,} cột CSV; object con dùng tên cột dạng path, array được serialize an toàn.","output_path":str(out)}
+
+
+def csv_to_sqlite(p):
+    import csv
+    import sqlite3
+    if p.stat().st_size>20*1024*1024:
+        raise RuntimeError("CSV sang SQLite giới hạn đầu vào 20 MB.")
+    out=p.with_name(p.stem+".sqlite")
+    names=[]; seen=set(); inserted=0
+    connection=sqlite3.connect(out)
+    try:
+        with p.open("r",encoding="utf-8-sig",newline="") as handle:
+            sample=handle.read(8192); handle.seek(0)
+            try:
+                dialect=csv.Sniffer().sniff(sample,delimiters=",;\t|")
+            except csv.Error:
+                dialect=csv.excel
+            reader=csv.reader(handle,dialect)
+            headers=next(reader,None)
+            if not headers:
+                raise RuntimeError("CSV không có header.")
+            if len(headers)>500:
+                raise RuntimeError("CSV sang SQLite giới hạn 500 cột.")
+            for index,raw in enumerate(headers,1):
+                base=(raw or "").strip() or f"column_{index}"
+                candidate=base; suffix=2
+                while candidate.casefold() in seen:
+                    candidate=f"{base}_{suffix}"; suffix+=1
+                seen.add(candidate.casefold()); names.append(candidate)
+            quoted=['"' + name.replace('"','""') + '"' for name in names]
+            connection.execute("CREATE TABLE records ("+",".join(name+" TEXT" for name in quoted)+")")
+            placeholders=",".join("?" for _ in names)
+            statement="INSERT INTO records ("+",".join(quoted)+") VALUES ("+placeholders+")"
+            batch=[]
+            for row in reader:
+                if not row:
+                    continue
+                if len(row)>len(names):
+                    raise RuntimeError("CSV có dòng chứa nhiều giá trị hơn số cột header.")
+                row=row+[""]*(len(names)-len(row))
+                batch.append(row); inserted+=1
+                if inserted>250000:
+                    raise RuntimeError("CSV sang SQLite giới hạn 250.000 dòng.")
+                if len(batch)>=2000:
+                    connection.executemany(statement,batch); batch.clear()
+            if batch:
+                connection.executemany(statement,batch)
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        connection.close()
+        out.unlink(missing_ok=True)
+        raise
+    else:
+        connection.close()
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("SQLite đầu ra vượt giới hạn 45 MB.")
+    return {"summary":f"Đã nhập {inserted:,} dòng và {len(names):,} cột vào bảng SQLite records; mọi giá trị được lưu TEXT để tránh mất định dạng hoặc độ chính xác.","output_path":str(out)}
+
+
+def log_insights(p):
+    if p.stat().st_size>20*1024*1024:
+        raise RuntimeError("Log insights giới hạn đầu vào 20 MB.")
+    raw=p.read_text(encoding="utf-8-sig",errors="replace")
+    lines=raw.splitlines()
+    levels={name:0 for name in ("FATAL","CRITICAL","ERROR","WARN","INFO","DEBUG","TRACE")}
+    patterns={}
+    level_re=re.compile(r"\b(FATAL|CRITICAL|ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE)\b",re.I)
+    timestamp_re=re.compile(r"^\s*\[?\d{4}-\d{2}-\d{2}[T ][^\]\s]+\]?\s*")
+    for line in lines:
+        match=level_re.search(line)
+        if not match:
+            continue
+        level=match.group(1).upper()
+        if level=="WARNING":
+            level="WARN"
+        levels[level]=levels.get(level,0)+1
+        if level in ("FATAL","CRITICAL","ERROR"):
+            message=timestamp_re.sub("",line[match.end():])
+            message=re.sub(r"\b[0-9a-f]{8}-[0-9a-f-]{27,}\b","<id>",message,flags=re.I)
+            message=re.sub(r"\b\d+\b","#",message)
+            message=" ".join(message.split())[:180] or "(empty error message)"
+            patterns[message]=patterns.get(message,0)+1
+    report=[f"File: {p.name}",f"Total lines: {len(lines):,}",f"Total bytes: {p.stat().st_size:,}","","Level counts:"]
+    report.extend(f"{name}: {levels[name]:,}" for name in levels)
+    report.extend(["","Most repeated error patterns:"])
+    ranked=sorted(patterns.items(),key=lambda item:(-item[1],item[0]))[:20]
+    report.extend(f"{count:>6,} x {message}" for message,count in ranked)
+    if not ranked:
+        report.append("No FATAL/CRITICAL/ERROR lines detected.")
+    report.append("")
+    report.append("Note: this is heuristic log grouping, not a root-cause diagnosis.")
+    return tool_text("\n".join(report),"Log insights")
+
+
+def json_diff(p):
+    import difflib
+    if not zipfile.is_zipfile(p):
+        raise RuntimeError("Gửi ZIP chứa đúng hai tệp JSON cần so sánh.")
+    with zipfile.ZipFile(p) as archive:
+        members,total=_safe_zip_members(archive,{".json"},max_files=10,max_bytes=20*1024*1024)
+        if len(members)!=2:
+            raise RuntimeError("ZIP phải chứa đúng hai tệp JSON.")
+        members.sort(key=lambda item:item.filename.casefold())
+        documents=[]
+        for item in members:
+            try:
+                parsed=json.loads(archive.read(item).decode("utf-8-sig"))
+            except (UnicodeError,ValueError) as exc:
+                raise RuntimeError("JSON không hợp lệ: "+Path(item.filename).name) from exc
+            documents.append(json.dumps(parsed,ensure_ascii=False,indent=2,sort_keys=True).splitlines(keepends=True))
+    diff="".join(difflib.unified_diff(documents[0],documents[1],fromfile=members[0].filename,tofile=members[1].filename,n=3))
+    if not diff:
+        diff="Hai tài liệu JSON giống nhau sau khi chuẩn hóa key order và indentation.\n"
+    return tool_text(diff,"JSON diff")
+
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -1762,6 +2206,11 @@ TOOLS={
  "sqlite-export":sqlite_export,"xlsx-to-json":xlsx_to_json,"pdf-extract-images":pdf_extract_images,
  "archive-manifest":archive_manifest,"text-stats":text_stats,"image-grayscale":image_grayscale,
  "pdf-merge":pdf_merge, "pdf-metadata-clean":pdf_metadata_clean, "pdf-outline":pdf_outline, "image-contact-sheet":image_contact_sheet, "image-duplicates":image_duplicates, "csv-split":csv_split, "csv-join":csv_join, "json-schema":json_schema, "json-to-yaml":json_to_yaml, "sqlite-integrity":sqlite_integrity, "audio-silence-report":audio_silence_report, "video-silence-report":video_silence_report, "video-frames":video_frames, "subtitle-convert":subtitle_convert, "text-deduplicate":text_deduplicate, "text-diff":text_diff, "code-size-report":code_size_report,
+ "pdf-rotate-cw":pdf_rotate_cw,"pdf-remove-blank":pdf_remove_blank,
+ "image-trim-border":image_trim_border,"image-pixelate":image_pixelate,"image-diff":image_diff,
+ "audio-stereo-split":audio_stereo_split,"audio-metadata-clean":audio_metadata_clean,
+ "video-scene-frames":video_scene_frames,"video-metadata-clean":video_metadata_clean,
+ "json-flatten-csv":json_flatten_csv,"csv-to-sqlite":csv_to_sqlite,"log-insights":log_insights,"json-diff":json_diff,
 }
 
 
