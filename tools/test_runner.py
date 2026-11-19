@@ -557,7 +557,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         with zipfile.ZipFile(bundle,"w") as archive:
             archive.writestr("old.txt","one\ntwo\n"); archive.writestr("new.txt","one\nthree\n")
         output=Path(runner.text_diff(bundle)["output_path"]).read_text(encoding="utf-8")
-        self.assertIn("-two",output); self.assertIn("+three",output)
+        self.assertIn("-three",output); self.assertIn("+two",output)
         code=self.write("source.py","x = 1  \n\n# note\nprint(x)\n")
         metrics=runner.code_size_report(code)["summary"]
         self.assertIn("Total lines: 4",metrics); self.assertIn("Trailing whitespace: 1",metrics)
@@ -583,6 +583,35 @@ class ToolRunnerUnitTests(unittest.TestCase):
             {"toolId":"text-stats"},{"toolId":"text-clean"}]}
         stats_output=runner.run_tool_pipeline(stats_chain,stats_source,self.input_dir.resolve())
         self.assertIn("Words:",Path(stats_output["output_path"]).read_text(encoding="utf-8"))
+
+
+    def test_audio_video_silence_reports_and_video_frame_sampling(self):
+        import types,zipfile
+        media=self.write("capture.mp4","not real media; FFmpeg calls are mocked")
+        probe={"format":{"duration":"12.0"},"streams":[{"codec_type":"video"},{"codec_type":"audio"}]}
+        process=types.SimpleNamespace(
+            returncode=0,
+            stderr="[silencedetect] silence_start: 1.000\n[silencedetect] silence_end: 2.500 | silence_duration: 1.500\n",
+        )
+        captured=[]
+        with patch.object(runner,"ffprobe",return_value=probe),patch.object(runner.subprocess,"run",return_value=process) as fake_run:
+            audio=runner.audio_silence_report(media)
+            video=runner.video_silence_report(media)
+            self.assertEqual(fake_run.call_count,2)
+            self.assertTrue(all("silencedetect=noise=-35dB:d=0.4" in call.args[0][call.args[0].index("-af")+1] for call in fake_run.call_args_list))
+        self.assertIn("1.500 seconds",audio["summary"])
+        self.assertIn("1.500 seconds",video["summary"])
+        def fake_cmd(name,args,timeout=180):
+            captured.append((name,args,timeout))
+            output=Path(str(args[-1]).replace("%03d","001"))
+            output.write_bytes(b"mock-jpeg-frame")
+            return ""
+        with patch.object(runner,"ffprobe",return_value=probe),patch.object(runner,"cmd",side_effect=fake_cmd):
+            result=runner.video_frames(media)
+        self.assertIn("-frames:v",captured[0][1])
+        with zipfile.ZipFile(result["output_path"]) as archive:
+            self.assertEqual(len(archive.namelist()),1)
+            self.assertTrue(archive.namelist()[0].endswith(".jpg"))
 
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
