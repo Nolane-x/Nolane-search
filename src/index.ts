@@ -1204,7 +1204,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       const status = job.status === "completed" ? "✅ Hoàn thành" : job.status === "failed" ? "❌ Thất bại" : job.status === "running" ? "⚙️ Đang chạy" : "⏳ Đang chờ";
       const workflow = job.workflowName ? " · Workflow: " + htmlEscape(job.workflowName) : "";
       const attempt = job.attempt && job.attempt > 1 ? " · lần " + job.attempt : "";
-      const trace = job.trace?.length ? " · " + job.trace.length + "/" + (job.pipeline?.length || 1) + " bước" : "";
+      const traceTotal = job.workflowGraph?.nodes.length || job.pipeline?.length || 1;
+      const trace = job.trace?.length ? " · " + job.trace.length + "/" + traceTotal + " bước" : "";
       return status + " · <b>" + htmlEscape(tool?.name || job.toolId) + "</b>" + workflow + attempt + trace +
         "\n<code>" + htmlEscape(job.id) + "</code> · " + htmlEscape(job.fileName) +
         "\n<code>/tool_job " + htmlEscape(job.id) + "</code>" + (job.status === "failed" && job.fileId ? " · <code>/tool_retry " + htmlEscape(job.id) + "</code>" : "");
@@ -1233,23 +1234,27 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       return;
     }
     const state = job.status === "completed" ? "Hoàn thành" : job.status === "failed" ? "Thất bại" : job.status === "running" ? "Đang chạy" : "Đang chờ";
-    const steps = job.pipeline || [{ toolId: job.toolId }];
+    const steps = job.workflowGraph
+      ? job.workflowGraph.nodes.map(node => ({ toolId: node.toolId, nodeId: node.id, dependsOn: node.dependsOn }))
+      : (job.pipeline || [{ toolId: job.toolId }]).map(step => ({ toolId: step.toolId, nodeId: "", dependsOn: [] as string[] }));
     const lines = [
       "<b>Nolane Tool Job</b>",
       "ID: <code>" + htmlEscape(job.id) + "</code>",
       "Trạng thái: " + state + " · lần chạy " + (job.attempt || 1),
       "Tệp: " + htmlEscape(job.fileName),
-      "Pipeline: " + htmlEscape(steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ")),
+      job.workflowGraph
+        ? "DAG:\\n" + steps.map(step => htmlEscape(step.nodeId + ": " + (getTool(step.toolId)?.name || step.toolId) + " ← " + (step.dependsOn.join(", ") || "source"))).join("\\n")
+        : "Pipeline: " + htmlEscape(steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ")),
     ];
     if (job.retryOf) lines.push("Retry từ: <code>" + htmlEscape(job.retryOf) + "</code>");
     if (job.workflowName) lines.push("Workflow: " + htmlEscape(job.workflowName));
     if (job.trace?.length) {
       lines.push("", "<b>Execution trace</b>");
       for (const step of job.trace) {
-        const stateIcon = step.status === "completed" ? "✅" : "❌";
+        const stateIcon = step.status === "completed" ? "✅" : step.status === "skipped" ? "⏭" : "❌";
         const outputSize = step.outputBytes === null ? "text/no file" : step.outputBytes + " bytes";
         lines.push(
-          stateIcon + " Step " + step.step + "/" + step.total + " · " + htmlEscape(step.toolId) +
+          stateIcon + " Step " + step.step + "/" + step.total + (step.nodeId ? " · " + htmlEscape(step.nodeId) : "") + " · " + htmlEscape(step.toolId) +
           " · " + step.durationMs + " ms · input " + step.inputBytes + " bytes · output " + outputSize +
           "\n" + htmlEscape((step.error || step.summary).slice(0, 420))
         );
@@ -2054,7 +2059,7 @@ async function setToolJobResult(
     (job.workflowName ? " · Workflow: " + job.workflowName : "") +
     (status === "completed" ? " · Hoàn thành" : " · Thất bại");
   const traceText = (job.trace || []).map(step =>
-    (step.status === "completed" ? "✅ " : "❌ ") + "Step " + step.step + "/" + step.total +
+    (step.status === "completed" ? "✅ " : step.status === "skipped" ? "⏭ " : "❌ ") + "Step " + step.step + "/" + step.total + (step.nodeId ? " · " + step.nodeId : "") +
     " · " + step.toolId + " · " + step.durationMs + " ms · " +
     step.inputBytes + " → " + (step.outputBytes === null ? "text" : step.outputBytes + " bytes") +
     "\n" + (step.error || step.summary).slice(0, 300)
