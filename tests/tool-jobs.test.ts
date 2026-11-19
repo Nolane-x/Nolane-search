@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createToolJob } from "../src/tool-jobs";
+import { createToolJob, retryToolJob, updateToolJob, validateToolStepTrace } from "../src/tool-jobs";
 import type { D1Database, D1Result, D1Statement, Env } from "../src/types";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -128,6 +128,91 @@ describe("GitHub Actions tool dispatch", () => {
       fileName: "photo.jpg", mimeType: "image/jpeg", fileSize: 100,
     })).rejects.toThrow("không tương thích");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+
+  it("validates trace entries against the stored pipeline and bounds untrusted fields", () => {
+    const pipeline=[{toolId:"video-audio"},{toolId:"audio-transcribe"}];
+    const trace=[
+      {step:1,total:2,toolId:"video-audio",status:"completed",durationMs:1200,inputBytes:1000,outputBytes:900,summary:"Audio extracted"},
+      {step:2,total:2,toolId:"audio-transcribe",status:"completed",durationMs:3400,inputBytes:900,outputBytes:null,summary:"Transcript ready"},
+    ];
+    expect(validateToolStepTrace(trace,pipeline,"completed")).toEqual({ok:true,trace});
+    expect(validateToolStepTrace(trace.slice(0,1),pipeline,"completed").ok).toBe(false);
+    expect(validateToolStepTrace([{...trace[0],toolId:"file-hash"},trace[1]],pipeline,"completed").ok).toBe(false);
+    expect(validateToolStepTrace([{...trace[0],summary:"x".repeat(900)},trace[1]],pipeline,"completed").ok).toBe(false);
+    expect(validateToolStepTrace([{...trace[0],status:"failed",error:"codec error"}],pipeline,"failed").ok).toBe(true);
+    expect(validateToolStepTrace(undefined,pipeline,"failed")).toEqual({ok:true,trace:[]});
+    expect(validateToolStepTrace(undefined,pipeline,"completed").ok).toBe(false);
+    expect(validateToolStepTrace([
+      {...trace[0],status:"failed",error:"first step failed"},
+      trace[1],
+    ],pipeline,"failed").ok).toBe(false);
+    expect(validateToolStepTrace([
+      {...trace[0],summary:"x".repeat(181)},
+      trace[1],
+    ],pipeline,"completed").ok).toBe(false);
+
+  });
+
+  it("retries only an owner's failed job using its private source reference", async () => {
+    const {db,rows}=fakeDb();
+    const dispatches: string[]=[];
+    const fetchMock=vi.fn(async (_input:RequestInfo|URL,init?:RequestInit)=>{
+      const body=JSON.parse(String(init?.body||"{}")) as {inputs?:{job_id?:string}};
+      dispatches.push(body.inputs?.job_id||"");
+      expect(JSON.stringify(body)).not.toContain("telegram-file-id-123456");
+      return new Response(null,{status:204});
+    });
+    vi.stubGlobal("fetch",fetchMock);
+    const env={DB:db,NOLANE_GH_ACTIONS_TOKEN:"test-actions-token"} as unknown as Env;
+    const original=await createToolJob(env,{
+      userId:42,chatId:42,toolId:"video-audio",fileId:"telegram-file-id-123456",
+      fileName:"clip.mp4",mimeType:"video/mp4",fileSize:1234,
+      pipeline:[{toolId:"video-audio"},{toolId:"audio-convert"}],
+      agentPrompt:"Convert this clip",workflowId:"abcdef123456",workflowName:"Media workflow",
+    });
+    await updateToolJob(env,original.id,{status:"failed",finishedAt:Date.now(),fileId:"telegram-file-id-123456",error:"FFmpeg failed"});
+    await expect(retryToolJob(env,99,99,original.id)).rejects.toThrow("Không tìm thấy");
+    await expect(retryToolJob(env,42,42,original.id)).resolves.toMatchObject({
+      status:"queued",attempt:2,retryOf:original.id,workflowName:"Media workflow",
+      pipeline:[{toolId:"video-audio"},{toolId:"audio-convert"}],
+    });
+    expect(dispatches).toHaveLength(2);
+    expect(dispatches[0]).not.toBe(dispatches[1]);
+    const retryId=dispatches[1]!;
+    const retry=JSON.parse(rows.get("tool-job:"+retryId)||"{}");
+    expect(retry.fileId).toBe("telegram-file-id-123456");
+    expect(retry.retryOf).toBe(original.id);
+  });
+
+  it("does not retry active or successful jobs", async () => {
+    const {db}=fakeDb();
+    const fetchMock=vi.fn(async ()=>new Response(null,{status:204}));
+    vi.stubGlobal("fetch",fetchMock);
+    const env={DB:db,NOLANE_GH_ACTIONS_TOKEN:"test-actions-token"} as unknown as Env;
+    const active=await createToolJob(env,{
+      userId:42,chatId:42,toolId:"image-ocr",fileId:"telegram-file-id-123456",
+      fileName:"photo.png",mimeType:"image/png",fileSize:100,
+    });
+    await expect(retryToolJob(env,42,42,active.id)).rejects.toThrow("đã thất bại");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+
+  it("retains the source reference when Actions dispatch itself fails", async () => {
+    const {db,rows}=fakeDb();
+    vi.stubGlobal("fetch",vi.fn(async()=>new Response("dispatch unavailable",{status:503})));
+    const env={DB:db,NOLANE_GH_ACTIONS_TOKEN:"test-actions-token"} as unknown as Env;
+    await expect(createToolJob(env,{
+      userId:42,chatId:42,toolId:"image-ocr",fileId:"telegram-file-id-123456",
+      fileName:"photo.png",mimeType:"image/png",fileSize:100,
+    })).rejects.toThrow("dispatch thất bại");
+    const saved=[...rows.entries()].find(([key])=>key.startsWith("tool-job:"));
+    expect(saved).toBeTruthy();
+    const job=JSON.parse(saved![1]);
+    expect(job.status).toBe("failed");
+    expect(job.fileId).toBe("telegram-file-id-123456");
   });
 
   it("explains a missing Actions write token before persisting work", async () => {

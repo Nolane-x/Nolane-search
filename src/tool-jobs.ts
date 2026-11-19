@@ -2,6 +2,18 @@ import type { Env } from "./types";
 import { getTool, validateToolPipeline } from "./tools";
 import type { ToolPipelineStep } from "./tools";
 
+export interface ToolStepTrace {
+  step: number;
+  total: number;
+  toolId: string;
+  status: "completed" | "failed";
+  durationMs: number;
+  inputBytes: number;
+  outputBytes: number | null;
+  summary: string;
+  error?: string;
+}
+
 export interface ToolJob {
   id: string;
   userId: number;
@@ -26,6 +38,10 @@ export interface ToolJob {
   /** Saved workflow identity, kept for per-run history and summaries. */
   workflowId?: string;
   workflowName?: string;
+  /** One-based attempt number within a manual retry chain. */
+  attempt?: number;
+  retryOf?: string;
+  trace?: ToolStepTrace[];
 }
 
 const PREFIX = "tool-job:";
@@ -49,7 +65,7 @@ async function saveToolJob(env: Env, job: ToolJob): Promise<void> {
 export async function updateToolJob(
   env: Env,
   id: string,
-  patch: Partial<Pick<ToolJob, "status" | "updatedAt" | "finishedAt" | "resultSummary" | "error" | "fileId" | "notifiedAt" | "agentPrompt" | "agentTask" | "agentToolReason">>,
+  patch: Partial<Pick<ToolJob, "status" | "updatedAt" | "finishedAt" | "resultSummary" | "error" | "fileId" | "notifiedAt" | "agentPrompt" | "agentTask" | "agentToolReason" | "trace" | "attempt" | "retryOf">>,
 ): Promise<ToolJob | null> {
   const previous = await getToolJob(env, id);
   if (!previous) return null;
@@ -72,6 +88,65 @@ export async function listToolJobs(env: Env, userId: number, limit = 20): Promis
   return jobs.slice(0, limit);
 }
 
+export function validateToolStepTrace(
+  raw: unknown,
+  pipeline: ToolPipelineStep[],
+  finalStatus: "completed" | "failed",
+): { ok: true; trace: ToolStepTrace[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw)) {
+    if (finalStatus === "failed" && (raw === undefined || raw === null)) return { ok: true, trace: [] };
+    return { ok: false, error: "Tool trace has an invalid number of steps." };
+  }
+  if (raw.length > pipeline.length) return { ok: false, error: "Tool trace has an invalid number of steps." };
+  const trace: ToolStepTrace[] = [];
+  for (let index = 0; index < raw.length; index++) {
+    const value = raw[index];
+    if (!value || typeof value !== "object" || Array.isArray(value)) return { ok: false, error: "Tool trace contains an invalid step." };
+    const item = value as Record<string, unknown>;
+    const expected = pipeline[index]?.toolId;
+    if (item.step !== index + 1 || item.total !== pipeline.length ||
+        typeof expected !== "string" || item.toolId !== expected ||
+        (item.status !== "completed" && item.status !== "failed") ||
+        !Number.isSafeInteger(item.durationMs) || Number(item.durationMs) < 0 || Number(item.durationMs) > 45 * 60 * 1000 ||
+        !Number.isSafeInteger(item.inputBytes) || Number(item.inputBytes) < 0 || Number(item.inputBytes) > 45 * 1024 * 1024 ||
+        (item.outputBytes !== null && (!Number.isSafeInteger(item.outputBytes) || Number(item.outputBytes) < 0 || Number(item.outputBytes) > 45 * 1024 * 1024)) ||
+        typeof item.summary !== "string" || item.summary.length > 180 ||
+        (item.error !== undefined && (typeof item.error !== "string" || item.error.length > 250))) {
+      return { ok: false, error: "Tool trace step does not match the stored pipeline." };
+    }
+    if (item.status === "failed" && index !== raw.length - 1) return { ok: false, error: "A failed trace step must be the final recorded step." };
+    trace.push({
+      step: index + 1, total: pipeline.length, toolId: expected, status: item.status,
+      durationMs: Number(item.durationMs), inputBytes: Number(item.inputBytes),
+      outputBytes: item.outputBytes === null ? null : Number(item.outputBytes), summary: item.summary,
+      ...(typeof item.error === "string" ? { error: item.error } : {}),
+    });
+  }
+  if (finalStatus === "completed" && (trace.length !== pipeline.length || trace.some(item => item.status !== "completed"))) {
+    return { ok: false, error: "A completed job must contain a successful trace for every pipeline step." };
+  }
+  return { ok: true, trace };
+}
+
+export async function retryToolJob(env: Env, userId: number, chatId: number, sourceJobId: string): Promise<ToolJob> {
+  const previous = await getToolJob(env, sourceJobId);
+  if (!previous || previous.userId !== userId || previous.chatId !== chatId) {
+    throw new Error("Không tìm thấy tool job thuộc cuộc trò chuyện của bạn.");
+  }
+  if (previous.status !== "failed") throw new Error("Chỉ có thể retry job đã thất bại.");
+  if (!previous.fileId || previous.fileId.length < 8) {
+    throw new Error("Job cũ không còn Telegram file reference. Hãy gửi lại tệp gốc để chạy lại.");
+  }
+  return createToolJob(env, {
+    userId: previous.userId, chatId: previous.chatId, toolId: previous.toolId, fileId: previous.fileId,
+    fileName: previous.fileName, mimeType: previous.mimeType, fileSize: previous.fileSize,
+    pipeline: previous.pipeline || [{ toolId: previous.toolId }],
+    workflowId: previous.workflowId, workflowName: previous.workflowName,
+    agentPrompt: previous.agentPrompt, agentTask: previous.agentTask, agentToolReason: previous.agentToolReason,
+    retryOf: previous.id, attempt: (previous.attempt || 1) + 1,
+  });
+}
+
 export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "status" | "createdAt" | "updatedAt">): Promise<ToolJob> {
   const tool = getTool(input.toolId);
   if (!tool?.ready) throw new Error("Công cụ này chưa được kích hoạt.");
@@ -91,7 +166,7 @@ export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "statu
   }
   if (input.fileSize > 20 * 1024 * 1024) throw new Error("Telegram Bot API chỉ tải được tệp tối đa 20 MB qua getFile.");
   const now = Date.now();
-  const job: ToolJob = { ...input, pipeline: pipeline.steps, id: crypto.randomUUID(), status: "queued", createdAt: now, updatedAt: now };
+  const job: ToolJob = { ...input, pipeline: pipeline.steps, trace: undefined, attempt: input.attempt || 1, id: crypto.randomUUID(), status: "queued", createdAt: now, updatedAt: now };
   await saveToolJob(env, job);
   try {
     const response = await fetch(
@@ -116,7 +191,7 @@ export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "statu
     await updateToolJob(env, job.id, {
       status: "failed",
       finishedAt: Date.now(),
-      fileId: "",
+      fileId: input.fileId,
       error: error instanceof Error ? error.message.slice(0, 500) : "Không thể kích hoạt GitHub Actions.",
     });
     throw error;

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Private GitHub-hosted execution engine for Nolane Tools."""
 from __future__ import annotations
-import argparse, csv, hashlib, json, mimetypes, os, posixpath, re, shutil, stat, subprocess, sys, tarfile, tempfile, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
+import argparse, csv, hashlib, json, mimetypes, os, posixpath, re, shutil, stat, subprocess, sys, tarfile, tempfile, time, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
 from pathlib import Path
 from html import unescape
 from html.parser import HTMLParser
@@ -1778,30 +1778,73 @@ def _runner_output_path(raw_path, root):
         raise RuntimeError("Pipeline intermediate output exceeds 45 MB.")
     return resolved
 
+
+def _safe_trace_text(value,root):
+    text=str(value).strip()
+    roots=[str(root.resolve())]
+    for path in roots:
+        text=text.replace(path,"[runner-path]").replace(path.replace("/","\\"),"[runner-path]")
+    text=re.sub(r"(?:(?:/home/runner|/tmp|/private/var/folders)/[^\s\"']+)", "[runner-path]", text)
+    text=re.sub(r"[A-Za-z]:\\[^\s\"']+", "[runner-path]", text)
+    return text
+
+
+class PipelineExecutionError(RuntimeError):
+    def __init__(self,message,trace):
+        super().__init__(message)
+        self.trace=trace
+
+
 def run_tool_pipeline(job, source, root):
     steps=validate_pipeline(job)
     current=source
     summaries=[]
+    trace=[]
+    result={}
     for index,step in enumerate(steps):
         tool_id=step["toolId"]
-        result=TOOLS[tool_id](current)
-        if not isinstance(result,dict):
-            raise RuntimeError(f"Processor {tool_id} returned an invalid result.")
-        summary=str(result.get("summary","")).strip()
-        output=_runner_output_path(result.get("output_path",""),root)
-        is_last=index==len(steps)-1
-        if output:
-            current=output
-        elif not is_last:
-            next_id=steps[index+1]["toolId"]
-            if next_id != "text-clean" or tool_id not in TEXT_OUTPUT_TOOLS:
-                raise RuntimeError(f"Processor {tool_id} did not produce a file for the next pipeline step.")
-            current=root/f"pipeline-step-{index+1}.txt"
-            current.write_text(summary or "Không phát hiện nội dung.",encoding="utf-8")
-        summaries.append(f"Step {index+1}/{len(steps)} · {tool_id}: {summary or 'completed'}")
+        started=time.perf_counter()
+        try:
+            input_bytes=current.stat().st_size if current.is_file() else 0
+            result=TOOLS[tool_id](current)
+            if not isinstance(result,dict):
+                raise RuntimeError(f"Processor {tool_id} returned an invalid result.")
+            summary=str(result.get("summary","")).strip()
+            output=_runner_output_path(result.get("output_path",""),root)
+            is_last=index==len(steps)-1
+            if output:
+                current=output
+                output_bytes=output.stat().st_size
+            elif not is_last:
+                next_id=steps[index+1]["toolId"]
+                if next_id != "text-clean" or tool_id not in TEXT_OUTPUT_TOOLS:
+                    raise RuntimeError(f"Processor {tool_id} did not produce a file for the next pipeline step.")
+                current=root/f"pipeline-step-{index+1}.txt"
+                current.write_text(summary or "Không phát hiện nội dung.",encoding="utf-8")
+                output_bytes=current.stat().st_size
+            else:
+                output_bytes=None
+            duration_ms=max(0,int((time.perf_counter()-started)*1000))
+            trace.append({
+                "step":index+1,"total":len(steps),"toolId":tool_id,"status":"completed",
+                "durationMs":duration_ms,"inputBytes":input_bytes,"outputBytes":output_bytes,
+                "summary":_safe_trace_text(summary,root)[:180],
+            })
+            summaries.append(f"Step {index+1}/{len(steps)} · {tool_id}: {summary or 'completed'}")
+        except Exception as exc:
+            duration_ms=max(0,int((time.perf_counter()-started)*1000))
+            try: input_bytes=current.stat().st_size if current.is_file() else 0
+            except OSError: input_bytes=0
+            message=str(exc).strip() or type(exc).__name__
+            trace.append({
+                "step":index+1,"total":len(steps),"toolId":tool_id,"status":"failed",
+                "durationMs":duration_ms,"inputBytes":input_bytes,"outputBytes":None,
+                "summary":_safe_trace_text(message,root)[:180],"error":_safe_trace_text(message,root)[:250],
+            })
+            raise PipelineExecutionError(message,trace) from exc
     final_output=str(_runner_output_path(result.get("output_path",""),root) or "")
     total_summary="\n\n".join(summaries)
-    return {"summary":total_summary[:6000],"output_path":final_output}
+    return {"summary":total_summary[:6000],"output_path":final_output,"trace":trace}
 
 def cmd_fetch(args):
     secret=os.environ.get("TELEGRAM_WEBHOOK_SECRET")
@@ -1823,7 +1866,11 @@ def cmd_run(args):
     resolved=source.resolve(strict=True)
     if resolved.parent != root or not resolved.is_file():
         raise RuntimeError("Input file is outside the private runner input directory.")
-    result=run_tool_pipeline(job,resolved,root)
+    try:
+        result=run_tool_pipeline(job,resolved,root)
+    except PipelineExecutionError as exc:
+        Path(args.output).write_text(json.dumps({"error":_safe_trace_text(exc,root)[:1000],"trace":exc.trace},ensure_ascii=False),encoding="utf-8")
+        raise
     summary=str(result.get("summary",""))
     output=result.get("output_path","")
     if output:
@@ -1838,7 +1885,7 @@ def cmd_run(args):
                         summary += "\n\nNội dung trích xuất (trích đoạn tối đa 3.800 ký tự; tệp đầy đủ được gửi kèm):\n" + preview
         except (OSError,UnicodeError):
             pass
-    Path(args.output).write_text(json.dumps({"summary":summary[:6000],"output_path":output},ensure_ascii=False),encoding="utf-8")
+    Path(args.output).write_text(json.dumps({"summary":summary[:6000],"output_path":output,"trace":result.get("trace",[])},ensure_ascii=False),encoding="utf-8")
 
 def send_document(chat_id,path,caption):
     token=os.environ["TELEGRAM_BOT_TOKEN"]; boundary="----NolaneToolBoundary-31d9"
@@ -1881,10 +1928,21 @@ def cmd_complete(args):
         if p.parent!=root or not p.is_file() or p.stat().st_size>45*1024*1024:
             raise RuntimeError("Tool output must be a regular file inside the private runner input directory and stay under 45 MB.")
         send_document(int(job["chatId"]),p,"Nolane Tools · "+job["toolId"])
-    callback(args.job_id,{"status":"completed","summary":result.get("summary","Đã hoàn thành.")})
+    callback(args.job_id,{"status":"completed","summary":result.get("summary","Đã hoàn thành."),"trace":result.get("trace",[])})
 
 def cmd_fail(args):
-    try: callback(args.job_id,{"status":"failed","error":args.message[:1000]})
+    try:
+        payload={"status":"failed","error":args.message[:1000]}
+        result_path=Path(args.result_file) if args.result_file else None
+        if result_path and result_path.is_file():
+            try:
+                result=json.loads(result_path.read_text(encoding="utf-8"))
+                if isinstance(result,dict):
+                    if isinstance(result.get("trace"),list): payload["trace"]=result["trace"]
+                    if isinstance(result.get("error"),str) and result["error"].strip(): payload["error"]=result["error"][:1000]
+            except (OSError,ValueError):
+                pass
+        callback(args.job_id,payload)
     except Exception as exc: print(f"Unable to report failure: {exc}",file=sys.stderr)
 
 
@@ -1894,7 +1952,7 @@ def main():
     p=sub.add_parser("download"); p.add_argument("job_file"); p.add_argument("output"); p.set_defaults(func=cmd_download)
     p=sub.add_parser("run"); p.add_argument("job_file"); p.add_argument("input_path_file"); p.add_argument("output"); p.set_defaults(func=cmd_run)
     p=sub.add_parser("complete"); p.add_argument("job_id"); p.add_argument("result_file"); p.set_defaults(func=cmd_complete)
-    p=sub.add_parser("fail"); p.add_argument("job_id"); p.add_argument("--message",default="Tool runner failed; see Actions logs."); p.set_defaults(func=cmd_fail)
+    p=sub.add_parser("fail"); p.add_argument("job_id"); p.add_argument("--message",default="Tool runner failed; see Actions logs."); p.add_argument("--result-file",default=""); p.set_defaults(func=cmd_fail)
     args=parser.parse_args()
     try: args.func(args)
     except Exception as exc:

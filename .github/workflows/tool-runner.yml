@@ -96,4 +96,4 @@ jobs:
         if: failure()
         env:
           TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
-        run: python tools/runner.py fail "$JOB_ID" --message "Tool runner failed. Open this GitHub Actions run for the diagnostic details."
+        run: python tools/runner.py fail "$JOB_ID" --message "Tool runner failed. Open this GitHub Actions run for the diagnostic details." --result-file "$RUNNER_TEMP/nolane-result.json"

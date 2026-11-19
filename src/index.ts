@@ -8,7 +8,7 @@ import { parseJsonObjectBody } from "./http";
 import { deleteIndexedContent, listIndexedPages, normalizeIndexDomain, normalizeIndexPageUrl } from "./index-management";
 import { TOOL_CATALOG, TOOL_PIPELINE_TRANSITIONS, getTool, inferToolForUpload, isToolCompatible, validateToolPipeline, toolCategoryLabel } from "./tools";
 import type { ToolPipelineStep } from "./tools";
-import { createToolJob, getToolJob, listToolJobs, updateToolJob } from "./tool-jobs";
+import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, validateToolStepTrace } from "./tool-jobs";
 import { clearPendingToolWorkflow, deleteToolWorkflow, getPendingToolWorkflow, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow } from "./workflows";
 import { webAppResponse } from "./web-ui";
 import { completeAi, getAiRouterStatus } from "./ai-router";
@@ -1152,9 +1152,88 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       const tool = getTool(job.toolId);
       const status = job.status === "completed" ? "✅ Hoàn thành" : job.status === "failed" ? "❌ Thất bại" : job.status === "running" ? "⚙️ Đang chạy" : "⏳ Đang chờ";
       const workflow = job.workflowName ? " · Workflow: " + htmlEscape(job.workflowName) : "";
-      return status + " · <b>" + htmlEscape(tool?.name || job.toolId) + "</b>" + workflow + "\n<code>" + htmlEscape(job.id) + "</code> · " + htmlEscape(job.fileName);
+      const attempt = job.attempt && job.attempt > 1 ? " · lần " + job.attempt : "";
+      const trace = job.trace?.length ? " · " + job.trace.length + "/" + (job.pipeline?.length || 1) + " bước" : "";
+      return status + " · <b>" + htmlEscape(tool?.name || job.toolId) + "</b>" + workflow + attempt + trace +
+        "\n<code>" + htmlEscape(job.id) + "</code> · " + htmlEscape(job.fileName) +
+        "\n<code>/tool_job " + htmlEscape(job.id) + "</code>" + (job.status === "failed" && job.fileId ? " · <code>/tool_retry " + htmlEscape(job.id) + "</code>" : "");
     });
-    await reply(env, chatId, "<b>Nolane Tools · lịch sử</b>\n\n" + lines.join("\n\n"));
+    let message = "<b>Nolane Tools · lịch sử</b>\n\n";
+    for (const line of lines) {
+      if (message.length + line.length + 4 > 3400) {
+        await reply(env, chatId, message);
+        message = "<b>Nolane Tools · lịch sử (tiếp)</b>\n\n";
+      }
+      message += line + "\n\n";
+    }
+    await reply(env, chatId, message.trim());
+    return;
+  }
+
+  if (command === "tool_job") {
+    if (chatId !== userId || !allowedUser(env, userId)) {
+      await reply(env, chatId, "Chi tiết tool job chỉ hiển thị trong chat riêng được cấp quyền.");
+      return;
+    }
+    const id = args.trim();
+    const job = await getToolJob(env, id);
+    if (!job || job.userId !== userId || job.chatId !== chatId) {
+      await reply(env, chatId, "Không tìm thấy tool job thuộc cuộc trò chuyện của bạn.");
+      return;
+    }
+    const state = job.status === "completed" ? "Hoàn thành" : job.status === "failed" ? "Thất bại" : job.status === "running" ? "Đang chạy" : "Đang chờ";
+    const steps = job.pipeline || [{ toolId: job.toolId }];
+    const lines = [
+      "<b>Nolane Tool Job</b>",
+      "ID: <code>" + htmlEscape(job.id) + "</code>",
+      "Trạng thái: " + state + " · lần chạy " + (job.attempt || 1),
+      "Tệp: " + htmlEscape(job.fileName),
+      "Pipeline: " + htmlEscape(steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ")),
+    ];
+    if (job.retryOf) lines.push("Retry từ: <code>" + htmlEscape(job.retryOf) + "</code>");
+    if (job.workflowName) lines.push("Workflow: " + htmlEscape(job.workflowName));
+    if (job.trace?.length) {
+      lines.push("", "<b>Execution trace</b>");
+      for (const step of job.trace) {
+        const stateIcon = step.status === "completed" ? "✅" : "❌";
+        const outputSize = step.outputBytes === null ? "text/no file" : step.outputBytes + " bytes";
+        lines.push(
+          stateIcon + " Step " + step.step + "/" + step.total + " · " + htmlEscape(step.toolId) +
+          " · " + step.durationMs + " ms · input " + step.inputBytes + " bytes · output " + outputSize +
+          "\n" + htmlEscape((step.error || step.summary).slice(0, 420))
+        );
+      }
+    } else {
+      lines.push("", "Runner chưa gửi trace bước (có thể tác vụ lỗi trước khi chạy processor).");
+    }
+    if (job.resultSummary) lines.push("", "<b>Kết quả</b>", htmlEscape(job.resultSummary.slice(0, 1200)));
+    if (job.error) lines.push("", "<b>Lỗi</b>", htmlEscape(job.error));
+    if (job.status === "failed" && job.fileId) lines.push("", "Chạy lại bằng <code>/tool_retry " + job.id + "</code>.");
+    await reply(env, chatId, lines.join("\n"));
+    return;
+  }
+
+  if (command === "tool_retry") {
+    if (chatId !== userId || !allowedUser(env, userId)) {
+      await reply(env, chatId, "Retry chỉ được dùng trong chat riêng được cấp quyền.");
+      return;
+    }
+    const id = args.trim();
+    if (!id) {
+      await reply(env, chatId, "Cú pháp: <code>/tool_retry JOB_ID</code>. Xem ID bằng /tool_jobs.");
+      return;
+    }
+    try {
+      const job = await retryToolJob(env, userId, chatId, id);
+      await reply(env, chatId,
+        "⏳ <b>Đã tạo lượt chạy mới</b>\n" +
+        "Job cũ: <code>" + htmlEscape(id) + "</code>\n" +
+        "Job mới: <code>" + htmlEscape(job.id) + "</code> · lần " + (job.attempt || 1) + "\n" +
+        "Pipeline: " + htmlEscape((job.pipeline || []).map(step => getTool(step.toolId)?.name || step.toolId).join(" → ")) +
+        "\nTệp gốc được tải lại từ Telegram; lịch sử job cũ được giữ nguyên.");
+    } catch (error) {
+      await reply(env, chatId, "Không thể retry: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
+    }
     return;
   }
 
@@ -1164,6 +1243,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/tools</code> — mở danh mục công cụ xử lý file\n" +
       "<code>/tool ID</code> — chọn tool cho file gửi tiếp theo\n" +
       "<code>/tool_jobs</code> — lịch sử xử lý file\n" +
+      "<code>/tool_job ID</code> — trace chi tiết từng bước xử lý\n" +
+      "<code>/tool_retry ID</code> — chạy lại job lỗi từ file gốc\n" +
       "<code>/workflow_save Tên | tool-1 -> tool-2</code> — lưu pipeline dùng lại\n" +
       "<code>/workflows</code> — xem thư viện workflow\n" +
       "<code>/workflow_run ID</code> — chạy workflow với tệp tiếp theo\n" +
@@ -1876,6 +1957,7 @@ async function setToolJobResult(
   requestedStatus: "completed" | "failed",
   summary: string,
   errorMessage: string,
+  trace: import("./tool-jobs").ToolStepTrace[],
 ): Promise<boolean> {
   const previous = await getToolJob(env, jobId);
   if (!previous) return false;
@@ -1887,9 +1969,10 @@ async function setToolJobResult(
     const updated = await updateToolJob(env, jobId, {
       status: requestedStatus,
       finishedAt: now,
-      fileId: "",
+      fileId: requestedStatus === "completed" ? "" : previous.fileId,
       resultSummary: requestedStatus === "completed" ? summary.slice(0, 6000) : undefined,
       error: requestedStatus === "failed" ? errorMessage.slice(0, 1000) : undefined,
+      trace,
     });
     if (!updated) return false;
     job = updated;
@@ -1902,7 +1985,14 @@ async function setToolJobResult(
   const title = (status === "completed" ? "✅ " : "❌ ") + (tool?.name || job.toolId) +
     (job.workflowName ? " · Workflow: " + job.workflowName : "") +
     (status === "completed" ? " · Hoàn thành" : " · Thất bại");
-  const content = status === "completed" ? (job.resultSummary || summary) : (job.error || errorMessage);
+  const traceText = (job.trace || []).map(step =>
+    (step.status === "completed" ? "✅ " : "❌ ") + "Step " + step.step + "/" + step.total +
+    " · " + step.toolId + " · " + step.durationMs + " ms · " +
+    step.inputBytes + " → " + (step.outputBytes === null ? "text" : step.outputBytes + " bytes") +
+    "\n" + (step.error || step.summary).slice(0, 300)
+  ).join("\n\n");
+  const content = (status === "completed" ? (job.resultSummary || summary) : (job.error || errorMessage)) +
+    (traceText ? "\n\nExecution trace:\n" + traceText : "");
   const chunks: string[] = [];
   let remaining = content || (status === "completed" ? "Đã hoàn thành." : "Tool runner failed.");
   while (remaining.length > 2800) {
@@ -1946,7 +2036,7 @@ async function setToolJobResult(
       });
     }
   }
-  await updateToolJob(env, jobId, { notifiedAt: Date.now(), agentPrompt:"", agentToolReason:"" });
+  await updateToolJob(env, jobId, status === "completed" ? { notifiedAt: Date.now(), agentPrompt:"", agentToolReason:"" } : { notifiedAt: Date.now() });
   return true;
 }
 
@@ -1975,7 +2065,7 @@ async function handleToolRunnerApi(request: Request, env: Env): Promise<Response
     return jsonResponse({ job: runnerJob });
   }
   if (request.method === "POST") {
-    const body = await parseJsonBody(request);
+    const body = await parseJsonObjectBody(request, 100_000);
     const id = typeof body?.job_id === "string" ? body.job_id : "";
     const status = body?.status;
     const summary = typeof body?.summary === "string" ? body.summary : "";
@@ -1985,7 +2075,12 @@ async function handleToolRunnerApi(request: Request, env: Env): Promise<Response
     }
     if (summary.length > 6000 || error.length > 1000) return jsonResponse({ error: "Tool result is too large" }, 413);
     try {
-      const saved = await setToolJobResult(env, id, status, summary, error);
+      const existing = await getToolJob(env, id);
+      if (!existing) return jsonResponse({ error: "Tool job not found" }, 404);
+      const pipeline = existing.pipeline || [{ toolId: existing.toolId }];
+      const checkedTrace = validateToolStepTrace(body?.trace, pipeline, status);
+      if (!checkedTrace.ok) return jsonResponse({ error: checkedTrace.error }, 400);
+      const saved = await setToolJobResult(env, id, status, summary, error, checkedTrace.trace);
       return saved ? jsonResponse({ ok: true }) : jsonResponse({ error: "Tool job not found" }, 404);
     } catch (reason) {
       console.error("Tool callback failed:", reason instanceof Error ? reason.message : "unknown");
