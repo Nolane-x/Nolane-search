@@ -86,7 +86,7 @@ Telegram `/ai` and the authenticated Web Workspace chat use a bounded function-c
 
 ### AI file orchestration
 
-Telegram `/ai_file <request>` opens a 5-minute batch for up to five files. The agent can plan a validated chain of distinct compatible processors per file (for example, video → audio extraction → speech-ready WAV → transcription). Each file receives its own isolated GitHub Actions job and AI summary; use `/ai_file_done` to close the batch early. The Worker and runner both enforce the explicit tool-transition allowlist, step-count limit and intermediate-file size cap.
+Telegram `/ai_file <request>` opens a rolling-idle-timeout batch for as many files as you send. The agent can plan a validated chain of distinct compatible processors per file (for example, video → audio extraction → speech-ready WAV → transcription). Each file receives its own isolated GitHub Actions job and AI summary; use `/ai_file_done` to close the batch early. The Worker and runner both enforce the explicit tool-transition allowlist, step-count limit and intermediate-file size cap.
 
 
 ### Saved Tool Workflows
