@@ -93,7 +93,11 @@ export function validateToolStepTrace(
   pipeline: ToolPipelineStep[],
   finalStatus: "completed" | "failed",
 ): { ok: true; trace: ToolStepTrace[] } | { ok: false; error: string } {
-  if (!Array.isArray(raw) || raw.length > pipeline.length) return { ok: false, error: "Tool trace has an invalid number of steps." };
+  if (!Array.isArray(raw)) {
+    if (finalStatus === "failed" && (raw === undefined || raw === null)) return { ok: true, trace: [] };
+    return { ok: false, error: "Tool trace has an invalid number of steps." };
+  }
+  if (raw.length > pipeline.length) return { ok: false, error: "Tool trace has an invalid number of steps." };
   const trace: ToolStepTrace[] = [];
   for (let index = 0; index < raw.length; index++) {
     const value = raw[index];
@@ -106,8 +110,8 @@ export function validateToolStepTrace(
         !Number.isSafeInteger(item.durationMs) || Number(item.durationMs) < 0 || Number(item.durationMs) > 45 * 60 * 1000 ||
         !Number.isSafeInteger(item.inputBytes) || Number(item.inputBytes) < 0 || Number(item.inputBytes) > 45 * 1024 * 1024 ||
         (item.outputBytes !== null && (!Number.isSafeInteger(item.outputBytes) || Number(item.outputBytes) < 0 || Number(item.outputBytes) > 45 * 1024 * 1024)) ||
-        typeof item.summary !== "string" || item.summary.length > 800 ||
-        (item.error !== undefined && (typeof item.error !== "string" || item.error.length > 500))) {
+        typeof item.summary !== "string" || item.summary.length > 180 ||
+        (item.error !== undefined && (typeof item.error !== "string" || item.error.length > 250))) {
       return { ok: false, error: "Tool trace step does not match the stored pipeline." };
     }
     if (item.status === "failed" && index !== raw.length - 1) return { ok: false, error: "A failed trace step must be the final recorded step." };
