@@ -762,6 +762,27 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual(len(calls),2)
 
 
+
+    def test_dag_dependency_failure_trace_allows_skipped_parent_input(self):
+        trace_graph={"nodes":[
+            {"id":"primary","toolId":"video-audio","dependsOn":[],"input":"source","when":"all-success"},
+            {"id":"child","toolId":"audio-info","dependsOn":["primary"],"input":"parent","when":"all-success"},
+            {"id":"fallback","toolId":"video-info","dependsOn":["primary"],"input":"source","when":"any-failure"},
+        ]}
+        source=self.write("source.mp4","input")
+        def fail(_path): raise RuntimeError("fail")
+        def fallback(path):
+            output=path.with_name("fallback.mp4.txt")
+            output.write_text("fallback",encoding="utf-8")
+            return {"summary":"fallback","output_path":str(output)}
+        job={"toolId":"video-audio","workflowGraph":trace_graph}
+        with patch.dict(runner.TOOLS,{"video-audio":fail,"video-info":fallback}):
+            with self.assertRaises(runner.PipelineExecutionError) as caught:
+                runner.run_tool_workflow_dag(job,source,self.input_dir.resolve())
+        statuses={entry["nodeId"]:entry["status"] for entry in caught.exception.trace}
+        self.assertEqual(statuses,{"primary":"failed","child":"skipped","fallback":"completed"})
+
+
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
         self.assertGreaterEqual(len(runner.TOOLS),72)
