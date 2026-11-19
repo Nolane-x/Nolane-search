@@ -1,13 +1,15 @@
 import type { Env } from "./types";
-import { validateToolPipelineDefinition } from "./tools";
-import type { ToolPipelineStep } from "./tools";
+import { validateToolPipelineDefinition, validateToolWorkflowGraph } from "./tools";
+import type { ToolPipelineStep, ToolWorkflowGraph } from "./tools";
 
 export interface ToolWorkflow {
   id: string;
   userId: number;
   chatId: number;
   name: string;
+  /** Legacy linear definition. For DAG workflows this is the topological tool order. */
   steps: ToolPipelineStep[];
+  graph?: ToolWorkflowGraph;
   createdAt: number;
   updatedAt: number;
 }
@@ -42,14 +44,25 @@ function parseWorkflow(value: unknown, expectedUserId: number): ToolWorkflow | n
       !/^[a-f0-9]{12}$/i.test(item.id) || typeof item.chatId !== "number" ||
       !Number.isSafeInteger(item.chatId) || typeof item.name !== "string" ||
       typeof item.createdAt !== "number" || typeof item.updatedAt !== "number") return null;
-  const pipeline = validateToolPipelineDefinition(item.steps);
-  if (!pipeline.ok) return null;
+  let steps: ToolPipelineStep[];
+  let graph: ToolWorkflowGraph | undefined;
+  if (item.graph !== undefined) {
+    const checked = validateToolWorkflowGraph(item.graph);
+    if (!checked.ok) return null;
+    graph = checked.graph;
+    steps = checked.graph.nodes.map(node => ({ toolId: node.toolId, ...(node.reason ? { reason: node.reason } : {}) }));
+  } else {
+    const pipeline = validateToolPipelineDefinition(item.steps);
+    if (!pipeline.ok) return null;
+    steps = pipeline.steps;
+  }
   return {
     id: item.id,
     userId: expectedUserId,
     chatId: item.chatId,
     name: normalizeWorkflowName(item.name),
-    steps: pipeline.steps,
+    steps,
+    ...(graph ? { graph } : {}),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
@@ -109,6 +122,45 @@ export async function saveToolWorkflow(
   if (!id) throw new Error("Không thể tạo ID workflow duy nhất. Hãy thử lại.");
   const workflow: ToolWorkflow = {
     id, userId, chatId, name, steps: pipeline.steps, createdAt: now, updatedAt: now,
+  };
+  await env.DB.prepare(
+    "INSERT INTO search_cache (cache_key, payload, expires_at, created_at) VALUES (?, ?, ?, ?)",
+  ).bind(workflowKey(userId, id), JSON.stringify(workflow), WORKFLOW_EXPIRES_AT, now).run();
+  return workflow;
+}
+
+
+export async function saveDagToolWorkflow(
+  env: Env,
+  userId: number,
+  chatId: number,
+  rawName: string,
+  rawGraph: unknown,
+): Promise<ToolWorkflow> {
+  const name = normalizeWorkflowName(rawName);
+  if (name.length < 3 || name.length > 40 || /[\u0000-\u001f\u007f]/.test(name)) {
+    throw new Error("Tên workflow phải dài 3–40 ký tự và không chứa ký tự điều khiển.");
+  }
+  const checked = validateToolWorkflowGraph(rawGraph);
+  if (!checked.ok) throw new Error(checked.error);
+  const existing = await listToolWorkflows(env, userId);
+  if (existing.some(item => item.name.toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US"))) {
+    throw new Error("Đã có workflow trùng tên. Hãy chọn tên khác hoặc xóa bản cũ.");
+  }
+  const now = Date.now();
+  let id = "";
+  for (let attempt = 0; attempt < 4; attempt++) {
+    id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    if (!(await getToolWorkflow(env, userId, id))) break;
+    id = "";
+  }
+  if (!id) throw new Error("Không thể tạo ID workflow duy nhất. Hãy thử lại.");
+  const workflow: ToolWorkflow = {
+    id, userId, chatId, name,
+    steps: checked.graph.nodes.map(node => ({ toolId: node.toolId, ...(node.reason ? { reason: node.reason } : {}) })),
+    graph: checked.graph,
+    createdAt: now,
+    updatedAt: now,
   };
   await env.DB.prepare(
     "INSERT INTO search_cache (cache_key, payload, expires_at, created_at) VALUES (?, ?, ?, ?)",
