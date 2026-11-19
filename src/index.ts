@@ -1243,6 +1243,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/tools</code> — mở danh mục công cụ xử lý file\n" +
       "<code>/tool ID</code> — chọn tool cho file gửi tiếp theo\n" +
       "<code>/tool_jobs</code> — lịch sử xử lý file\n" +
+      "<code>/tool_job ID</code> — trace chi tiết từng bước xử lý\n" +
+      "<code>/tool_retry ID</code> — chạy lại job lỗi từ file gốc\n" +
       "<code>/workflow_save Tên | tool-1 -> tool-2</code> — lưu pipeline dùng lại\n" +
       "<code>/workflows</code> — xem thư viện workflow\n" +
       "<code>/workflow_run ID</code> — chạy workflow với tệp tiếp theo\n" +
