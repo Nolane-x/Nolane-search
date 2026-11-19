@@ -157,7 +157,7 @@ export type ToolPipelineValidation =
 
 
 export type WorkflowNodeCondition = "all-success" | "any-failure" | "always";
-export type WorkflowNodeInput = "source" | "parent";
+export type WorkflowNodeInput = "source" | "parent" | "zip";
 
 export interface ToolWorkflowNode {
   id: string;
@@ -231,8 +231,11 @@ export function validateToolWorkflowGraph(raw: unknown): ToolWorkflowGraphValida
     if (input === "parent" && (dependsOn.length !== 1 || when !== "all-success")) {
       return { ok: false, error: "input=parent yêu cầu đúng một dependency và when=all-success." };
     }
-    if (dependsOn.length > 1 && input !== "source") {
-      return { ok: false, error: "Node có nhiều dependency phải dùng input=source làm barrier; chưa hỗ trợ gộp nhiều file đầu vào." };
+    if (input === "zip" && (dependsOn.length < 2 || when !== "all-success" || !isToolCompatible(tool, "application/zip", "dag-input.zip"))) {
+      return { ok: false, error: "input=zip yêu cầu ít nhất hai dependency thành công và processor phải chấp nhận ZIP." };
+    }
+    if (dependsOn.length > 1 && input === "parent") {
+      return { ok: false, error: "Node có nhiều dependency phải dùng input=source (barrier) hoặc input=zip (gộp artifact)." };
     }
     if (input === "source" && dependsOn.length === 1 && when === "all-success") {
       return { ok: false, error: "Node phụ thuộc đơn dùng input=parent; input=source chỉ dành cho nhánh điều kiện hoặc barrier." };
