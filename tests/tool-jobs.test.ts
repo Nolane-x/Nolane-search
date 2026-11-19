@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createToolJob, retryToolJob, updateToolJob, validateToolStepTrace } from "../src/tool-jobs";
+import { createToolJob, retryToolJob, updateToolJob, validateToolStepTrace, validateToolWorkflowTrace } from "../src/tool-jobs";
 import type { D1Database, D1Result, D1Statement, Env } from "../src/types";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -153,6 +153,54 @@ describe("GitHub Actions tool dispatch", () => {
       trace[1],
     ],pipeline,"completed").ok).toBe(false);
 
+  });
+
+
+  it("validates DAG traces against node order, dependencies and conditions", () => {
+    const graph={nodes:[
+      {id:"extract",toolId:"video-audio",dependsOn:[],input:"source" as const,when:"all-success" as const},
+      {id:"inspect",toolId:"audio-info",dependsOn:["extract"],input:"parent" as const,when:"all-success" as const},
+      {id:"transcribe",toolId:"audio-transcribe",dependsOn:["extract"],input:"parent" as const,when:"all-success" as const},
+    ]};
+    const trace=[
+      {step:1,total:3,nodeId:"extract",dependsOn:[],toolId:"video-audio",status:"completed",durationMs:10,inputBytes:100,outputBytes:80,summary:"extracted"},
+      {step:2,total:3,nodeId:"inspect",dependsOn:["extract"],toolId:"audio-info",status:"completed",durationMs:20,inputBytes:80,outputBytes:20,summary:"inspected"},
+      {step:3,total:3,nodeId:"transcribe",dependsOn:["extract"],toolId:"audio-transcribe",status:"completed",durationMs:30,inputBytes:80,outputBytes:30,summary:"transcribed"},
+    ];
+    expect(validateToolWorkflowTrace(trace,graph,"completed").ok).toBe(true);
+    expect(validateToolWorkflowTrace([trace[0],trace[2],trace[1]],graph,"completed").ok).toBe(false);
+    expect(validateToolWorkflowTrace([trace[0],{...trace[1],dependsOn:[]},trace[2]],graph,"completed").ok).toBe(false);
+    expect(validateToolWorkflowTrace([trace[0],{...trace[1],status:"skipped"},trace[2]],graph,"completed").ok).toBe(false);
+  });
+
+  it("creates and retries DAG jobs without flattening away their dependencies", async () => {
+    const {db,rows}=fakeDb();
+    const dispatches:string[]=[];
+    vi.stubGlobal("fetch",vi.fn(async (_input:RequestInfo|URL,init?:RequestInit)=>{
+      const body=JSON.parse(String(init?.body||"{}")) as {inputs?:{job_id?:string}};
+      dispatches.push(body.inputs?.job_id||"");
+      return new Response(null,{status:204});
+    }));
+    const env={DB:db,NOLANE_GH_ACTIONS_TOKEN:"test-actions-token"} as unknown as Env;
+    const graph={nodes:[
+      {id:"extract",toolId:"video-audio",dependsOn:[],input:"source" as const,when:"all-success" as const},
+      {id:"inspect",toolId:"audio-info",dependsOn:["extract"],input:"parent" as const,when:"all-success" as const},
+      {id:"transcribe",toolId:"audio-transcribe",dependsOn:["extract"],input:"parent" as const,when:"all-success" as const},
+    ]};
+    const original=await createToolJob(env,{
+      userId:42,chatId:42,toolId:"video-audio",fileId:"telegram-file-id-123456",
+      fileName:"clip.mp4",mimeType:"video/mp4",fileSize:1234,workflowGraph:graph,
+      workflowId:"abcdef123456",workflowName:"Parallel video",
+    });
+    expect(original.workflowGraph?.nodes[1]?.dependsOn).toEqual(["extract"]);
+    await updateToolJob(env,original.id,{status:"failed",finishedAt:Date.now(),fileId:"telegram-file-id-123456",error:"branch failed"});
+    const retried=await retryToolJob(env,42,42,original.id);
+    expect(retried.workflowGraph?.nodes[2]?.toolId).toBe("audio-transcribe");
+    expect(retried.retryOf).toBe(original.id);
+    expect(retried.attempt).toBe(2);
+    expect(dispatches).toHaveLength(2);
+    const persisted=JSON.parse(rows.get("tool-job:"+retried.id)||"{}");
+    expect(persisted.workflowGraph.nodes[1].dependsOn).toEqual(["extract"]);
   });
 
   it("retries only an owner's failed job using its private source reference", async () => {
