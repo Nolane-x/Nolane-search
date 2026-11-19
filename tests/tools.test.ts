@@ -5,8 +5,9 @@ describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
     const ids = TOOL_CATALOG.map(tool => tool.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(72);
+    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(85);
     expect(TOOL_CATALOG.every(tool => tool.ready && tool.description.length > 12 && tool.accepts.length > 0)).toBe(true);
+    for (const id of ["pdf-rotate-cw","pdf-remove-blank","image-trim-border","image-pixelate","image-diff","audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean","json-flatten-csv","csv-to-sqlite","log-insights","json-diff"]) expect(getTool(id)).not.toBeNull();
   });
 
   it("infers a suitable default tool from common uploaded media", () => {

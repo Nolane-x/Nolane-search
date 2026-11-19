@@ -13,6 +13,26 @@ Web Workspace có tab Tools để xem catalog và sao chép lệnh; thao tác g�
 
 ## Danh mục
 
+### Bộ xử lý bổ sung: PDF, ảnh, media, dữ liệu và log
+
+| Lệnh | Chức năng | Đầu ra |
+|---|---|---|
+| /tool pdf-rotate-cw | Xoay tất cả trang PDF 90° theo chiều kim đồng hồ, giữ text/vector. | PDF |
+| /tool pdf-remove-blank | Phát hiện trang trắng bằng text layer và raster fallback; từ chối tạo PDF rỗng. | PDF |
+| /tool image-trim-border | Ước lượng nền từ bốn góc, tự crop nội dung và giữ padding. | PNG |
+| /tool image-pixelate | Pixelate toàn ảnh thành bản mới để che chi tiết. | PNG |
+| /tool image-diff | ZIP đúng hai ảnh; xuất ảnh difference và overlay. | ZIP |
+| /tool audio-stereo-split | Kiểm tra stereo, tách Left/Right thành hai MP3 mono. | ZIP |
+| /tool audio-metadata-clean | Remux audio và xóa metadata/chapter tags, không re-encode. | Audio |
+| /tool video-scene-frames | Phát hiện chuyển cảnh FFmpeg, trích tối đa 80 keyframe. | ZIP |
+| /tool video-metadata-clean | Remux tất cả stream sang MKV và loại metadata/chapter tags. | MKV |
+| /tool json-flatten-csv | Làm phẳng object JSON lồng nhau thành cột CSV dạng path. | CSV |
+| /tool csv-to-sqlite | Nhập CSV vào SQLite, lưu giá trị dạng TEXT để tránh ép kiểu. | SQLite |
+| /tool log-insights | Đếm severity và nhóm lỗi lặp lại theo heuristic. | TXT |
+| /tool json-diff | ZIP đúng hai JSON; chuẩn hóa key order rồi tạo unified diff. | TXT |
+
+Giới hạn an toàn theo từng processor được kiểm tra ở runner: ví dụ PDF tối đa 500 trang, media tối đa 30 phút, JSON/CSV có giới hạn dung lượng và số dòng/cột. Các processor không thực thi nội dung file như code.
+
 ### PDF nâng cao, bộ ảnh & xử lý theo lô
 
 | ID | Công cụ | Chức năng | Đầu ra |

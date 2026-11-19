@@ -85,6 +85,20 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "text-diff", name: "So sánh hai tệp văn bản", category: "document", description: "Nhận ZIP gồm hai tệp văn bản và tạo unified diff để xem chính xác dòng được thêm, xóa hoặc sửa.", accepts: [".zip"], output: "Báo cáo diff TXT", ready: true },
   { id: "code-size-report", name: "Thống kê quy mô mã nguồn", category: "utility", description: "Đếm tổng dòng, dòng trống, dòng comment, dòng nội dung và dòng dài nhất mà không thực thi code.", accepts: [".py",".pyw",".js",".mjs",".cjs",".ts",".tsx",".jsx",".css",".html",".htm",".json",".yaml",".yml",".sh",".bash",".go",".rs",".java",".c",".cpp",".h",".hpp",".cs",".sql",".md"], output: "Báo cáo mã nguồn TXT", ready: true },
 
+  { id: "pdf-rotate-cw", name: "Xoay PDF 90°", category: "document", description: "Xoay mọi trang PDF theo chiều kim đồng hồ, giữ nguyên vector và text layer.", accepts: ["application/pdf", ".pdf"], output: "PDF đã xoay", ready: true },
+  { id: "pdf-remove-blank", name: "Loại trang trắng PDF", category: "document", description: "Phát hiện trang trắng bằng text layer và kiểm tra raster fallback, không xóa trang có nội dung nhìn thấy.", accepts: ["application/pdf", ".pdf"], output: "PDF đã loại trang trắng", ready: true },
+  { id: "image-trim-border", name: "Cắt viền ảnh tự động", category: "image", description: "Phát hiện nền đồng nhất quanh ảnh và cắt viền thừa, giữ nội dung cùng một khoảng đệm an toàn.", accepts: ["image/*", ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"], output: "PNG đã crop", ready: true },
+  { id: "image-pixelate", name: "Pixelate ảnh riêng tư", category: "image", description: "Pixel hóa mạnh toàn ảnh để che chi tiết trước khi chia sẻ; không thể khôi phục chi tiết đã làm mờ.", accepts: ["image/*", ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"], output: "PNG pixelated", ready: true },
+  { id: "image-diff", name: "So sánh hai ảnh", category: "image", description: "Nhận ZIP đúng hai ảnh, tạo ảnh chênh lệch và ảnh overlay để kiểm tra thay đổi trực quan.", accepts: [".zip"], output: "ZIP ảnh difference và overlay", ready: true },
+  { id: "audio-stereo-split", name: "Tách kênh stereo", category: "audio-video", description: "Tách kênh trái/phải của audio stereo thành hai MP3 mono độc lập và đóng gói ZIP.", accepts: ["audio/*", ".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac"], output: "ZIP Left và Right MP3", ready: true },
+  { id: "audio-metadata-clean", name: "Xóa metadata audio", category: "audio-video", description: "Remux audio stream đầu tiên, loại metadata và chapter tags mà không re-encode âm thanh.", accepts: ["audio/*", ".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac"], output: "Audio đã làm sạch metadata", ready: true },
+  { id: "video-scene-frames", name: "Phát hiện cảnh video", category: "audio-video", description: "Dùng scene-change detection của FFmpeg để trích tối đa 80 frame tại các điểm chuyển cảnh.", accepts: ["video/*", ".mp4", ".mov", ".mkv", ".webm", ".avi"], output: "ZIP keyframe theo cảnh", ready: true },
+  { id: "video-metadata-clean", name: "Xóa metadata video", category: "audio-video", description: "Remux toàn bộ stream sang MKV, loại metadata và chapter tags mà không mã hóa lại stream.", accepts: ["video/*", ".mp4", ".mov", ".mkv", ".webm", ".avi"], output: "MKV đã làm sạch metadata", ready: true },
+  { id: "json-flatten-csv", name: "Flatten JSON sang CSV", category: "data", description: "Làm phẳng object JSON lồng nhau thành cột dạng path; mảng được giữ dưới dạng JSON an toàn.", accepts: ["application/json", "text/json", ".json"], output: "CSV UTF-8", ready: true },
+  { id: "csv-to-sqlite", name: "CSV sang SQLite", category: "data", description: "Nhập CSV vào SQLite với header chuẩn hóa, giá trị lưu dạng TEXT để tránh ép kiểu mất dữ liệu.", accepts: ["text/csv", ".csv"], output: "Database SQLite", ready: true },
+  { id: "log-insights", name: "Phân tích log", category: "utility", description: "Thống kê level ERROR/FATAL/WARN/INFO/DEBUG và nhóm thông điệp lỗi lặp lại, không thực thi log.", accepts: ["text/plain", ".txt", ".log"], output: "Báo cáo TXT", ready: true },
+  { id: "json-diff", name: "So sánh JSON", category: "data", description: "Nhận ZIP đúng hai JSON, chuẩn hóa key order rồi tạo unified diff dễ đọc.", accepts: [".zip"], output: "Báo cáo JSON diff TXT", ready: true },
+
 ];
 
 
@@ -149,6 +163,20 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "code-size-report": ["text-clean","text-stats"],
   "text-clean": ["text-stats","text-deduplicate"],
   "text-stats": ["text-clean"],
+
+  "pdf-rotate-cw": ["pdf-info","pdf-text","pdf-compress","pdf-to-images","pdf-split","pdf-extract-images","pdf-metadata-clean","pdf-outline","pdf-remove-blank"],
+  "pdf-remove-blank": ["pdf-info","pdf-text","pdf-compress","pdf-to-images","pdf-split","pdf-extract-images","pdf-metadata-clean","pdf-outline"],
+  "image-trim-border": ["image-info","image-compress","image-resize","image-png","image-webp","image-palette","image-ocr","qr-read","image-to-pdf","image-pixelate"],
+  "image-pixelate": ["image-info","image-png","image-webp","image-compress","image-to-pdf"],
+  "image-diff": ["archive-inspect","archive-safe-extract","archive-manifest"],
+  "audio-stereo-split": ["archive-inspect","archive-safe-extract","archive-manifest"],
+  "audio-metadata-clean": ["audio-info","audio-normalize","audio-transcribe","audio-subtitles","audio-convert"],
+  "video-scene-frames": ["archive-inspect","archive-safe-extract","archive-manifest"],
+  "video-metadata-clean": ["video-info","video-thumbnail","video-audio","video-contact-sheet","video-gif","video-silence-report","video-frames","video-scene-frames"],
+  "json-flatten-csv": ["csv-profile","csv-clean","csv-to-xlsx","csv-to-sqlite","csv-join"],
+  "csv-to-sqlite": ["sqlite-inspect","sqlite-integrity","sqlite-export"],
+  "log-insights": ["text-clean","text-stats","text-deduplicate"],
+  "json-diff": ["text-clean","text-stats","text-deduplicate"],
 };
 
 export type ToolPipelineValidation =
