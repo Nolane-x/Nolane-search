@@ -172,7 +172,7 @@ export function validateToolWorkflowTrace(
         : true;
     if (!shouldRun && status !== "skipped") return { ok: false, error: "DAG node ran although its condition was false." };
     if (shouldRun && status === "skipped") return { ok: false, error: "DAG node was skipped although its condition was true." };
-    if (node.input === "parent" && parents[0] !== "completed") return { ok: false, error: "DAG node consumed a missing parent output." };
+    if (node.input === "parent" && status !== "skipped" && parents[0] !== "completed") return { ok: false, error: "DAG node consumed a missing parent output." };
     if (status === "failed" && (typeof item.error !== "string" || !item.error)) return { ok: false, error: "Failed DAG node must include an error." };
     states.set(node.id, status);
     trace.push({
