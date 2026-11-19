@@ -153,7 +153,7 @@ describe("Saved Nolane Tool Workflows", () => {
     ]})).rejects.toThrow("input=source");
     const barrier=await saveDagToolWorkflow(env,42,42,"Barrier",{nodes:[
       {id:"left",toolId:"video-audio",dependsOn:[]},
-      {id:"right",toolId:"pdf-info",dependsOn:[]},
+      {id:"right",toolId:"video-info",dependsOn:[]},
       {id:"after-both",toolId:"text-stats",dependsOn:["left","right"],input:"source",when:"all-success"},
     ]});
     expect(barrier.graph?.nodes.at(-1)?.dependsOn).toEqual(["left","right"]);
