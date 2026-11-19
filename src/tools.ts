@@ -276,8 +276,7 @@ export function validateToolWorkflowGraph(raw: unknown): ToolWorkflowGraphValida
     }
   }
   if (ordered.length !== nodes.size) return { ok: false, error: "DAG chứa chu trình; workflow không được có vòng lặp." };
-  const parents = new Set([...children.keys()]);
-  const leaves = [...nodes.keys()].filter(id => !parents.has(id));
+  const leaves = [...nodes.keys()].filter(id => (children.get(id) || []).length === 0);
   return { ok: true, graph: { nodes: ordered }, roots, leaves };
 }
 
