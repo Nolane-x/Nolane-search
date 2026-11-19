@@ -1000,7 +1000,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     await reply(env, chatId,
       "<b>Nolane Tools · " + TOOL_CATALOG.length + " công cụ</b>\n" +
       (env.NOLANE_GH_ACTIONS_TOKEN ? "" : "⚠️ Chưa cấu hình GitHub Actions token. Hãy thêm secret NOLANE_GH_ACTIONS_TOKEN vào repository trước khi chạy công cụ.\n\n") +
-      "Gửi /tool ID để chọn công cụ, rồi gửi tệp. Ảnh sẽ tự chạy OCR nếu không chọn trước.\n\n" +
+      "Gửi /tool ID để chọn công cụ hoặc /workflows để chạy pipeline đã lưu. Ảnh sẽ tự chạy OCR nếu không chọn trước.\n\n" +
       lines.join("\n\n") + "\n\nDùng /tool_jobs để xem lịch sử xử lý.");
     return;
   }
@@ -1203,7 +1203,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       env.DB.prepare("SELECT COUNT(*) AS count FROM watches WHERE active = 1").first<{ count: number }>(),
       env.DB.prepare("SELECT COUNT(*) AS count FROM indexed_pages").first<{ count: number }>(),
       env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE cache_key LIKE 'personal-memory:%' AND expires_at > ?").bind(Date.now()).first<{ count: number }>(),
-      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ? AND cache_key NOT LIKE 'telegram-search:%' AND cache_key NOT LIKE 'search-feedback:%' AND cache_key NOT LIKE 'search-vote:%' AND cache_key NOT LIKE 'search-event:%' AND cache_key NOT LIKE 'site-crawl:%' AND cache_key NOT LIKE 'telegram-ui:%' AND cache_key NOT LIKE 'personal-memory:%' AND cache_key NOT LIKE 'ai-synthesis:%' AND cache_key NOT LIKE 'tool-job:%' AND cache_key NOT LIKE 'tool-pending:%'").bind(Date.now()).first<{ count: number }>(),
+      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ? AND cache_key NOT LIKE 'telegram-search:%' AND cache_key NOT LIKE 'search-feedback:%' AND cache_key NOT LIKE 'search-vote:%' AND cache_key NOT LIKE 'search-event:%' AND cache_key NOT LIKE 'site-crawl:%' AND cache_key NOT LIKE 'telegram-ui:%' AND cache_key NOT LIKE 'personal-memory:%' AND cache_key NOT LIKE 'ai-synthesis:%' AND cache_key NOT LIKE 'tool-job:%' AND cache_key NOT LIKE 'tool-pending:%' AND cache_key NOT LIKE 'tool-workflow:%' AND cache_key NOT LIKE 'tool-workflow-pending:%'").bind(Date.now()).first<{ count: number }>(),
       env.DB.prepare("SELECT status, COUNT(*) AS count FROM deep_search_jobs WHERE created_at >= ? GROUP BY status")
         .bind(Date.now() - 7 * 24 * 60 * 60 * 1000).all<{ status: string; count: number }>(),
     ]);
@@ -1800,6 +1800,7 @@ async function handleToolUpload(env: Env, message: NonNullable<TelegramUpdate["m
   }
 
   const explicitToolCaption = message.caption?.trim().match(/^\/tool\s+([a-z0-9-]+)$/i);
+  if (explicitToolCaption) await clearPendingToolWorkflow(env, userId, chatId);
   if (!explicitToolCaption) {
     const pendingWorkflow = await getPendingToolWorkflow(env, userId, chatId);
     if (pendingWorkflow) {
