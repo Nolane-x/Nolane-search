@@ -637,6 +637,8 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual(caught.exception.trace[-1]["status"],"failed")
         self.assertEqual(caught.exception.trace[-1]["error"],"deliberate processor failure")
         self.assertEqual(caught.exception.trace[-1]["inputBytes"],source.stat().st_size)
+        self.assertIn("[runner-path]", runner._safe_trace_text("failed /home/runner/work/nolane/tmp/file.pdf", self.input_dir))
+
 
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
