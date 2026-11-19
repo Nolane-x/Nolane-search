@@ -9,7 +9,7 @@ const commands = [
   { command: "tool_jobs", description: "Xem lịch sử công cụ đã chạy" },
   { command: "tool_job", description: "Xem trace chi tiết một lần chạy" },
   { command: "tool_retry", description: "Chạy lại tool job thất bại từ file gốc" },
-  { command: "workflow_save", description: "Lưu pipeline Nolane Tools để dùng lại" },
+  { command: "workflow_save", description: "Lưu pipeline hoặc DAG Nolane Tools" },
   { command: "workflows", description: "Xem workflow đã lưu" },
   { command: "workflow_run", description: "Chạy workflow đã lưu với tệp tiếp theo" },
   { command: "workflow_delete", description: "Xóa workflow đã lưu" },
