@@ -1032,7 +1032,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     if (separator < 0) {
       await reply(env, chatId,
         "Cú pháp: <code>/workflow_save Tên quy trình | tool-1 -> tool-2</code>\n" +
-        "Ví dụ tuyến tính: <code>/workflow_save Video transcript | video-audio -> audio-transcribe</code>\\n" +\n        "Ví dụ DAG: <code>/workflow_save Video branches | source=video-audio@input; transcript=audio-transcribe@source; converted=audio-convert@source</code>");
+        "Ví dụ tuyến tính: <code>/workflow_save Video transcript | video-audio -> audio-transcribe</code>\n" +
+        "Ví dụ DAG: <code>/workflow_save Video branches | source=video-audio@input; transcript=audio-transcribe@source; converted=audio-convert@source</code>");
       return;
     }
     const name = args.slice(0, separator).trim();
@@ -1212,7 +1213,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "Trạng thái: " + state + " · lần chạy " + (job.attempt || 1),
       "Tệp: " + htmlEscape(job.fileName),
       (job.workflowDag
-        ? "DAG:\\n" + htmlEscape(job.workflowDag.map(node => node.id + " = " + (getTool(node.toolId)?.name || node.toolId) + " ← " + (node.dependsOn[0] || "input")).join("\\n"))
+        ? "DAG:\n" + htmlEscape(job.workflowDag.map(node => node.id + " = " + (getTool(node.toolId)?.name || node.toolId) + " ← " + (node.dependsOn[0] || "input")).join("\n"))
         : "Pipeline: " + htmlEscape(steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → "))),
     ];
     if (job.retryOf) lines.push("Retry từ: <code>" + htmlEscape(job.retryOf) + "</code>");
