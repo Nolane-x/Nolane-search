@@ -187,7 +187,7 @@ export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "statu
     await updateToolJob(env, job.id, {
       status: "failed",
       finishedAt: Date.now(),
-      fileId: "",
+      fileId: input.fileId,
       error: error instanceof Error ? error.message.slice(0, 500) : "Không thể kích hoạt GitHub Actions.",
     });
     throw error;
