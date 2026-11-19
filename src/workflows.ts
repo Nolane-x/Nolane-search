@@ -20,9 +20,8 @@ export interface PendingToolWorkflow {
 
 const WORKFLOW_PREFIX = "tool-workflow:";
 const PENDING_PREFIX = "tool-workflow-pending:";
-const WORKFLOW_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+const WORKFLOW_EXPIRES_AT = Number.MAX_SAFE_INTEGER;
 const PENDING_TTL_MS = 15 * 60 * 1000;
-export const MAX_TOOL_WORKFLOWS_PER_USER = 20;
 
 function workflowKey(userId: number, id: string): string {
   return WORKFLOW_PREFIX + userId + ":" + id;
@@ -58,8 +57,8 @@ function parseWorkflow(value: unknown, expectedUserId: number): ToolWorkflow | n
 
 export async function listToolWorkflows(env: Env, userId: number): Promise<ToolWorkflow[]> {
   const rows = await env.DB.prepare(
-    "SELECT payload FROM search_cache WHERE cache_key LIKE ? AND expires_at > ? ORDER BY created_at DESC LIMIT ?",
-  ).bind(WORKFLOW_PREFIX + userId + ":%", Date.now(), MAX_TOOL_WORKFLOWS_PER_USER + 1)
+    "SELECT payload FROM search_cache WHERE cache_key LIKE ? AND expires_at > ? ORDER BY created_at DESC",
+  ).bind(WORKFLOW_PREFIX + userId + ":%", Date.now())
     .all<{ payload: string }>();
   const workflows: ToolWorkflow[] = [];
   for (const row of rows.results) {
@@ -68,7 +67,7 @@ export async function listToolWorkflows(env: Env, userId: number): Promise<ToolW
       if (item) workflows.push(item);
     } catch { /* Ignore malformed or obsolete workflow records. */ }
   }
-  return workflows.slice(0, MAX_TOOL_WORKFLOWS_PER_USER);
+  return workflows;
 }
 
 export async function getToolWorkflow(env: Env, userId: number, id: string): Promise<ToolWorkflow | null> {
@@ -96,9 +95,6 @@ export async function saveToolWorkflow(
   if (!pipeline.ok) throw new Error(pipeline.error);
 
   const existing = await listToolWorkflows(env, userId);
-  if (existing.length >= MAX_TOOL_WORKFLOWS_PER_USER) {
-    throw new Error("Mỗi tài khoản lưu tối đa " + MAX_TOOL_WORKFLOWS_PER_USER + " workflow. Hãy xóa workflow cũ trước.");
-  }
   if (existing.some(item => item.name.toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US"))) {
     throw new Error("Đã có workflow trùng tên. Hãy chọn tên khác hoặc xóa bản cũ.");
   }
@@ -116,7 +112,7 @@ export async function saveToolWorkflow(
   };
   await env.DB.prepare(
     "INSERT INTO search_cache (cache_key, payload, expires_at, created_at) VALUES (?, ?, ?, ?)",
-  ).bind(workflowKey(userId, id), JSON.stringify(workflow), now + WORKFLOW_TTL_MS, now).run();
+  ).bind(workflowKey(userId, id), JSON.stringify(workflow), WORKFLOW_EXPIRES_AT, now).run();
   return workflow;
 }
 
