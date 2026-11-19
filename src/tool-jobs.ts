@@ -1,12 +1,14 @@
 import type { Env } from "./types";
-import { getTool, validateToolPipeline } from "./tools";
-import type { ToolPipelineStep } from "./tools";
+import { getTool, validateToolPipeline, validateToolWorkflowGraph, validateToolWorkflowGraphInput } from "./tools";
+import type { ToolPipelineStep, ToolWorkflowGraph } from "./tools";
 
 export interface ToolStepTrace {
   step: number;
   total: number;
   toolId: string;
-  status: "completed" | "failed";
+  status: "completed" | "failed" | "skipped";
+  nodeId?: string;
+  dependsOn?: string[];
   durationMs: number;
   inputBytes: number;
   outputBytes: number | null;
@@ -35,6 +37,7 @@ export interface ToolJob {
   agentTask?: string;
   agentToolReason?: string;
   pipeline?: ToolPipelineStep[];
+  workflowGraph?: ToolWorkflowGraph;
   /** Saved workflow identity, kept for per-run history and summaries. */
   workflowId?: string;
   workflowName?: string;
@@ -128,6 +131,72 @@ export function validateToolStepTrace(
   return { ok: true, trace };
 }
 
+
+export function validateToolWorkflowTrace(
+  raw: unknown,
+  graph: ToolWorkflowGraph,
+  finalStatus: "completed" | "failed",
+): { ok: true; trace: ToolStepTrace[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw) || raw.length !== graph.nodes.length) {
+    return { ok: false, error: "DAG trace must contain one entry for every graph node." };
+  }
+  const states = new Map<string, "completed" | "failed" | "skipped">();
+  const trace: ToolStepTrace[] = [];
+  for (let index = 0; index < graph.nodes.length; index++) {
+    const node = graph.nodes[index]!;
+    const value = raw[index];
+    if (!value || typeof value !== "object" || Array.isArray(value)) return { ok: false, error: "DAG trace contains an invalid node." };
+    const item = value as Record<string, unknown>;
+    const status = item.status;
+    const expectedStatus = node.dependsOn.length === 0
+      ? "completed"
+      : node.when === "any-failure"
+        ? "failed"
+        : "completed";
+    if (item.step !== index + 1 || item.total !== graph.nodes.length || item.nodeId !== node.id ||
+        item.toolId !== node.toolId || !Array.isArray(item.dependsOn) ||
+        item.dependsOn.length !== node.dependsOn.length ||
+        item.dependsOn.some((id,index) => id !== node.dependsOn[index]) ||
+        (status !== "completed" && status !== "failed" && status !== "skipped") ||
+        !Number.isSafeInteger(item.durationMs) || Number(item.durationMs) < 0 || Number(item.durationMs) > 45 * 60 * 1000 ||
+        !Number.isSafeInteger(item.inputBytes) || Number(item.inputBytes) < 0 || Number(item.inputBytes) > 45 * 1024 * 1024 ||
+        (item.outputBytes !== null && (!Number.isSafeInteger(item.outputBytes) || Number(item.outputBytes) < 0 || Number(item.outputBytes) > 45 * 1024 * 1024)) ||
+        typeof item.summary !== "string" || item.summary.length > 180 ||
+        (item.error !== undefined && (typeof item.error !== "string" || item.error.length > 250))) {
+      return { ok: false, error: "DAG trace node does not match the saved graph." };
+    }
+    const parents = node.dependsOn.map(id => states.get(id));
+    if (parents.some(state => state === undefined)) return { ok: false, error: "DAG trace is not in topological order." };
+    const shouldRun = node.when === "all-success"
+      ? parents.every(state => state === "completed")
+      : node.when === "any-failure"
+        ? parents.some(state => state === "failed")
+        : true;
+    if (!shouldRun && status !== "skipped") return { ok: false, error: "DAG node ran although its condition was false." };
+    if (shouldRun && status === "skipped") return { ok: false, error: "DAG node was skipped although its condition was true." };
+    if (node.input === "parent" && parents[0] !== "completed") return { ok: false, error: "DAG node consumed a missing parent output." };
+    if (status === "failed" && (typeof item.error !== "string" || !item.error)) return { ok: false, error: "Failed DAG node must include an error." };
+    states.set(node.id, status);
+    trace.push({
+      step: index + 1,
+      total: graph.nodes.length,
+      nodeId: node.id,
+      dependsOn: node.dependsOn.slice(),
+      toolId: node.toolId,
+      status,
+      durationMs: Number(item.durationMs),
+      inputBytes: Number(item.inputBytes),
+      outputBytes: item.outputBytes === null ? null : Number(item.outputBytes),
+      summary: item.summary,
+      ...(typeof item.error === "string" ? { error: item.error } : {}),
+    });
+  }
+  const hasFailure = trace.some(item => item.status === "failed");
+  if (finalStatus === "completed" && hasFailure) return { ok: false, error: "A successful DAG cannot contain failed nodes." };
+  if (finalStatus === "failed" && !hasFailure) return { ok: false, error: "A failed DAG must contain at least one failed node." };
+  return { ok: true, trace };
+}
+
 export async function retryToolJob(env: Env, userId: number, chatId: number, sourceJobId: string): Promise<ToolJob> {
   const previous = await getToolJob(env, sourceJobId);
   if (!previous || previous.userId !== userId || previous.chatId !== chatId) {
@@ -140,7 +209,7 @@ export async function retryToolJob(env: Env, userId: number, chatId: number, sou
   return createToolJob(env, {
     userId: previous.userId, chatId: previous.chatId, toolId: previous.toolId, fileId: previous.fileId,
     fileName: previous.fileName, mimeType: previous.mimeType, fileSize: previous.fileSize,
-    pipeline: previous.pipeline || [{ toolId: previous.toolId }],
+    ...(previous.workflowGraph ? { workflowGraph: previous.workflowGraph } : { pipeline: previous.pipeline || [{ toolId: previous.toolId }] }),
     workflowId: previous.workflowId, workflowName: previous.workflowName,
     agentPrompt: previous.agentPrompt, agentTask: previous.agentTask, agentToolReason: previous.agentToolReason,
     retryOf: previous.id, attempt: (previous.attempt || 1) + 1,
@@ -150,13 +219,20 @@ export async function retryToolJob(env: Env, userId: number, chatId: number, sou
 export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "status" | "createdAt" | "updatedAt">): Promise<ToolJob> {
   const tool = getTool(input.toolId);
   if (!tool?.ready) throw new Error("Công cụ này chưa được kích hoạt.");
-  const pipeline = validateToolPipeline(
-    { mimeType: input.mimeType, fileName: input.fileName },
-    input.pipeline || [{ toolId: input.toolId }],
-  );
-  if (!pipeline.ok) throw new Error("Tool pipeline không hợp lệ: " + pipeline.error);
-  if (pipeline.steps[0]?.toolId !== input.toolId) {
-    throw new Error("Tool ID phải trùng với bước đầu tiên trong pipeline.");
+  const graph = input.workflowGraph
+    ? validateToolWorkflowGraphInput(input.workflowGraph, { mimeType: input.mimeType, fileName: input.fileName })
+    : null;
+  if (graph && !graph.ok) throw new Error("DAG workflow không hợp lệ: " + graph.error);
+  const pipeline = graph
+    ? null
+    : validateToolPipeline(
+        { mimeType: input.mimeType, fileName: input.fileName },
+        input.pipeline || [{ toolId: input.toolId }],
+      );
+  if (pipeline && !pipeline.ok) throw new Error("Tool pipeline không hợp lệ: " + pipeline.error);
+  const firstToolId = graph?.ok ? graph.roots.map(id => graph.graph.nodes.find(node => node.id === id)!.toolId)[0] : pipeline?.ok ? pipeline.steps[0]?.toolId : undefined;
+  if (firstToolId !== input.toolId) {
+    throw new Error("Tool ID phải trùng với tool đầu tiên của pipeline hoặc DAG.");
   }
   if (!env.NOLANE_GH_ACTIONS_TOKEN) {
     throw new Error("Thiếu GitHub Actions token. Hãy thêm GitHub Secret NOLANE_GH_ACTIONS_TOKEN với quyền Actions: write cho repository Nolane-x/Nolane-search.");
@@ -166,7 +242,7 @@ export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "statu
   }
   if (input.fileSize > 20 * 1024 * 1024) throw new Error("Telegram Bot API chỉ tải được tệp tối đa 20 MB qua getFile.");
   const now = Date.now();
-  const job: ToolJob = { ...input, pipeline: pipeline.steps, trace: undefined, attempt: input.attempt || 1, id: crypto.randomUUID(), status: "queued", createdAt: now, updatedAt: now };
+  const job: ToolJob = { ...input, ...(pipeline?.ok ? { pipeline: pipeline.steps } : {}), ...(graph?.ok ? { workflowGraph: graph.graph } : {}), trace: undefined, attempt: input.attempt || 1, id: crypto.randomUUID(), status: "queued", createdAt: now, updatedAt: now };
   await saveToolJob(env, job);
   try {
     const response = await fetch(
