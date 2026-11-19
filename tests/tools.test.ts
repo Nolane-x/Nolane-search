@@ -5,7 +5,7 @@ describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
     const ids = TOOL_CATALOG.map(tool => tool.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(55);
+    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(72);
     expect(TOOL_CATALOG.every(tool => tool.ready && tool.description.length > 12 && tool.accepts.length > 0)).toBe(true);
   });
 
@@ -66,6 +66,14 @@ describe("Nolane Tools registry", () => {
     expect(validateToolPipelineDefinition([{ toolId: "video-info" }, { toolId: "audio-transcribe" }]).ok).toBe(false);
     expect(validateToolPipelineDefinition([{ toolId: "image-ocr" }, { toolId: "text-clean" }, { toolId: "text-clean" }]).ok).toBe(false);
     expect(validateToolPipelineDefinition(Array.from({ length: 5 }, () => ({ toolId: "file-hash" }))).ok).toBe(false);
+    const longer = validateToolPipelineDefinition([
+      "video-audio", "audio-convert", "audio-transcribe", "text-clean", "text-deduplicate", "text-stats",
+    ].map(toolId => ({ toolId })));
+    expect(longer.ok).toBe(true);
+    expect(longer.ok && longer.steps).toHaveLength(6);
+    for (const id of ["pdf-merge","pdf-metadata-clean","pdf-outline","image-contact-sheet","image-duplicates","csv-split","csv-join","json-schema","json-to-yaml","sqlite-integrity","audio-silence-report","video-silence-report","video-frames","subtitle-convert","text-deduplicate","text-diff","code-size-report"]) {
+      expect(getTool(id)?.ready).toBe(true);
+    }
   });
 
   it("validates explicit tool selection against MIME types and extensions", () => {
