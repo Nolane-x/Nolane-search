@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           TOOL_ID="$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['job']['toolId'])" "$RUNNER_TEMP/nolane-job.json")"
-          TOOL_IDS="$(python -c "import json,sys; j=json.load(open(sys.argv[1]))['job']; print(' '.join(s['toolId'] for s in j.get('pipeline',[{'toolId':j['toolId']}])))" "$RUNNER_TEMP/nolane-job.json")"
+          TOOL_IDS="$(python -c "import json,sys; j=json.load(open(sys.argv[1]))['job']; g=j.get('workflowGraph'); print(' '.join(n['toolId'] for n in g['nodes']) if g else ' '.join(s['toolId'] for s in j.get('pipeline',[{'toolId':j['toolId']}])))" "$RUNNER_TEMP/nolane-job.json")"
           echo "tool_id=$TOOL_ID" >> "$GITHUB_OUTPUT"
           echo "tool_ids=$TOOL_IDS" >> "$GITHUB_OUTPUT"
       - name: Download Telegram input (bot token scoped to download only)
