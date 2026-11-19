@@ -1852,6 +1852,8 @@ def run_tool_pipeline(job, source, root):
     return {"summary":total_summary[:6000],"output_path":final_output,"trace":trace}
 
 
+ZIP_INPUT_TOOLS = {"archive-inspect","archive-safe-extract","archive-manifest","csv-join","image-contact-sheet","image-duplicates","pdf-merge","text-diff"}
+
 def validate_workflow_graph(job):
     raw=job.get("workflowGraph")
     if not isinstance(raw,dict) or not isinstance(raw.get("nodes"),list):
@@ -1880,14 +1882,16 @@ def validate_workflow_graph(job):
             normalized.append(dependency)
         input_mode=item.get("input","parent" if len(normalized)==1 else "source")
         when=item.get("when","all-success")
-        if input_mode not in {"source","parent"} or when not in {"all-success","any-failure","always"}:
+        if input_mode not in {"source","parent","zip"} or when not in {"all-success","any-failure","always"}:
             raise RuntimeError(f"Unsupported input or condition for node {node_id}.")
         if not normalized and (input_mode!="source" or when!="all-success"):
             raise RuntimeError("DAG root nodes must read the original source without a condition.")
         if input_mode=="parent" and (len(normalized)!=1 or when!="all-success"):
             raise RuntimeError("input=parent requires one dependency and when=all-success.")
-        if len(normalized)>1 and input_mode!="source":
-            raise RuntimeError("Multi-dependency DAG nodes must use input=source as a barrier.")
+        if input_mode=="zip" and (len(normalized)<2 or when!="all-success" or tool_id not in ZIP_INPUT_TOOLS):
+            raise RuntimeError("input=zip requires at least two successful dependencies and a ZIP-compatible processor.")
+        if len(normalized)>1 and input_mode=="parent":
+            raise RuntimeError("Multi-dependency nodes must use source barrier or ZIP fan-in.")
         if input_mode=="source" and len(normalized)==1 and when=="all-success":
             raise RuntimeError("A single successful data dependency must use input=parent.")
         nodes[node_id]={
@@ -1940,6 +1944,22 @@ def _execute_dag_node(node, source, root, parent_outputs, total):
             raise RuntimeError("DAG parent output is missing.")
         suffix=parent_output.suffix.lower()[:16]
         input_path=_copy_dag_input(parent_output,node_root/("input"+suffix))
+    elif node["input"]=="zip":
+        input_path=node_root/"dag-parents.zip"
+        total_bytes=0
+        with zipfile.ZipFile(input_path,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=3) as archive:
+            for parent_id in node["dependsOn"]:
+                parent_output=parent_outputs.get(parent_id)
+                if not parent_output or not parent_output.is_file():
+                    raise RuntimeError("DAG ZIP fan-in parent output is missing.")
+                size=parent_output.stat().st_size
+                total_bytes+=size
+                if total_bytes>MAX_PIPELINE_OUTPUT:
+                    raise RuntimeError("DAG ZIP fan-in inputs exceed the 45 MB limit.")
+                archive.write(parent_output,f"{parent_id}/{parent_output.name}")
+        if input_path.stat().st_size>MAX_PIPELINE_OUTPUT:
+            input_path.unlink(missing_ok=True)
+            raise RuntimeError("DAG ZIP fan-in archive exceeds the 45 MB limit.")
     else:
         suffix=source.suffix.lower()[:16]
         input_path=_copy_dag_input(source,node_root/("source"+suffix))
