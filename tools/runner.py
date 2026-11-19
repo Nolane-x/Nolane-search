@@ -1284,7 +1284,9 @@ def archive_manifest(p):
                     continue
                 parts=_safe_archive_parts(info.filename)
                 mode=(info.external_attr>>16)&0xFFFF
-                if stat.S_ISLNK(mode) or (mode and not (stat.S_ISREG(mode) or stat.S_ISDIR(mode))):
+                file_type=stat.S_IFMT(mode)
+                # Some ZIP writers store permission bits without S_IFREG; zero type bits are not special files.
+                if stat.S_ISLNK(mode) or (file_type and file_type not in (stat.S_IFREG,stat.S_IFDIR)):
                     raise RuntimeError("Archive chứa symlink hoặc special file bị chặn.")
                 if info.flag_bits&0x1:
                     raise RuntimeError("Archive mã hóa không được hỗ trợ.")
