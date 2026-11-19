@@ -783,6 +783,35 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual(statuses,{"primary":"failed","child":"skipped","fallback":"completed"})
 
 
+
+    def test_dag_zip_fan_in_combines_successful_parent_artifacts(self):
+        import zipfile
+        source=self.write("source.pdf","source pdf fixture")
+        def make_pdf(path):
+            out=path.with_name(path.stem+"-"+path.parent.name+".pdf")
+            out.write_bytes(b"%PDF-mock-"+path.parent.name.encode())
+            return {"summary":"made "+path.parent.name,"output_path":str(out)}
+        def merge_zip(path):
+            with zipfile.ZipFile(path) as archive:
+                names=sorted(archive.namelist())
+                self.assertEqual(len(names),2)
+                self.assertTrue(any(name.startswith("compress/") for name in names))
+                self.assertTrue(any(name.startswith("clean/") for name in names))
+            out=path.with_name("merged.pdf"); out.write_bytes(b"%PDF-merged")
+            return {"summary":"merged two PDF artifacts","output_path":str(out)}
+        job={"toolId":"pdf-compress","workflowGraph":{"nodes":[
+            {"id":"compress","toolId":"pdf-compress","dependsOn":[],"input":"source","when":"all-success"},
+            {"id":"clean","toolId":"pdf-metadata-clean","dependsOn":[],"input":"source","when":"all-success"},
+            {"id":"merge","toolId":"pdf-merge","dependsOn":["compress","clean"],"input":"zip","when":"all-success"},
+        ]}}
+        with patch.dict(runner.TOOLS,{"pdf-compress":make_pdf,"pdf-metadata-clean":make_pdf,"pdf-merge":merge_zip}):
+            result=runner.run_tool_workflow_dag(job,source,self.input_dir.resolve())
+        self.assertEqual([item["status"] for item in result["trace"]],["completed","completed","completed"])
+        self.assertEqual(result["trace"][-1]["inputBytes"]>0,True)
+        with zipfile.ZipFile(result["output_path"]) as archive:
+            self.assertTrue(any(name.startswith("merge/") and name.endswith("merged.pdf") for name in archive.namelist()))
+
+
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
         self.assertGreaterEqual(len(runner.TOOLS),72)
