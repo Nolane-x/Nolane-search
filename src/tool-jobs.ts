@@ -188,6 +188,7 @@ export async function retryToolJob(env: Env, userId: number, chatId: number, sou
     userId: previous.userId, chatId: previous.chatId, toolId: previous.toolId, fileId: previous.fileId,
     fileName: previous.fileName, mimeType: previous.mimeType, fileSize: previous.fileSize,
     pipeline: previous.pipeline || [{ toolId: previous.toolId }],
+    workflowDag: previous.workflowDag,
     workflowId: previous.workflowId, workflowName: previous.workflowName,
     agentPrompt: previous.agentPrompt, agentTask: previous.agentTask, agentToolReason: previous.agentToolReason,
     retryOf: previous.id, attempt: (previous.attempt || 1) + 1,
@@ -197,13 +198,20 @@ export async function retryToolJob(env: Env, userId: number, chatId: number, sou
 export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "status" | "createdAt" | "updatedAt">): Promise<ToolJob> {
   const tool = getTool(input.toolId);
   if (!tool?.ready) throw new Error("Công cụ này chưa được kích hoạt.");
-  const pipeline = validateToolPipeline(
+  const dag = input.workflowDag
+    ? validateToolDag({ mimeType: input.mimeType, fileName: input.fileName }, input.workflowDag)
+    : null;
+  if (dag && !dag.ok) throw new Error("Workflow DAG không hợp lệ: " + dag.error);
+  const pipeline = dag ? null : validateToolPipeline(
     { mimeType: input.mimeType, fileName: input.fileName },
     input.pipeline || [{ toolId: input.toolId }],
   );
-  if (!pipeline.ok) throw new Error("Tool pipeline không hợp lệ: " + pipeline.error);
-  if (pipeline.steps[0]?.toolId !== input.toolId) {
-    throw new Error("Tool ID phải trùng với bước đầu tiên trong pipeline.");
+  if (pipeline && !pipeline.ok) throw new Error("Tool pipeline không hợp lệ: " + pipeline.error);
+  const normalizedPipeline = dag
+    ? dag.nodes.map(node => ({ toolId: node.toolId, ...(node.reason ? { reason: node.reason } : {}) }))
+    : pipeline.steps;
+  if (normalizedPipeline[0]?.toolId !== input.toolId) {
+    throw new Error("Tool ID phải trùng với node/bước đầu tiên trong quy trình.");
   }
   if (!env.NOLANE_GH_ACTIONS_TOKEN) {
     throw new Error("Thiếu GitHub Actions token. Hãy thêm GitHub Secret NOLANE_GH_ACTIONS_TOKEN với quyền Actions: write cho repository Nolane-x/Nolane-search.");
@@ -213,7 +221,7 @@ export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "statu
   }
   if (input.fileSize > 20 * 1024 * 1024) throw new Error("Telegram Bot API chỉ tải được tệp tối đa 20 MB qua getFile.");
   const now = Date.now();
-  const job: ToolJob = { ...input, pipeline: pipeline.steps, trace: undefined, attempt: input.attempt || 1, id: crypto.randomUUID(), status: "queued", createdAt: now, updatedAt: now };
+  const job: ToolJob = { ...input, pipeline: normalizedPipeline, workflowDag: dag ? dag.nodes : undefined, trace: undefined, attempt: input.attempt || 1, id: crypto.randomUUID(), status: "queued", createdAt: now, updatedAt: now };
   await saveToolJob(env, job);
   try {
     const response = await fetch(
