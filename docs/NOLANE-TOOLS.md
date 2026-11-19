@@ -173,7 +173,7 @@ The private Workflow Library stores reusable, validated tool pipelines in the ex
 - Every run is a separate existing Tool Job on an ephemeral GitHub Actions runner. Job history retains the workflow ID/name and reports the executed pipeline. The original reusable definition is not mutated by a run.
 - Workflows are private to the allowlisted Telegram account and the bot's private chat. They contain tool IDs only, not file contents or Telegram file IDs.
 
-This remains a validated linear-pipeline engine, not yet a general branching DAG scheduler. Arbitrary shell commands and uploaded-code execution are deliberately excluded; branch conditions and parallel fan-out require a dedicated scheduler.
+Nolane Tools supports both validated linear pipelines and a branching DAG scheduler. Arbitrary shell commands and uploaded-code execution remain deliberately excluded.
 ## Tool execution traces and retries
 
 - `/tool_jobs` lists recent jobs; `/tool_job ID` shows the validated per-step trace (processor, elapsed milliseconds, input/output bytes, summary and any failure).
@@ -185,13 +185,13 @@ This remains a validated linear-pipeline engine, not yet a general branching DAG
 
 ## DAG workflow engine
 
-DAG workflows are saved with `/workflow_save_dag Name | {"nodes":[...]}`; use `/workflow_dag_help` for a Telegram example. A node has a unique `id`, `toolId`, `dependsOn`, `input` and optional `when` condition. The graph is topologically validated; cycles, duplicate processors, missing parents, unsupported data edges and incompatible original-file inputs are rejected.
+DAG workflows are saved with `/workflow_save_dag Name | {"nodes":[...]}`; use `/workflow_dag_help` for a Telegram example. A node has a unique `id`, `toolId`, `dependsOn`, `input` and optional `when` condition. The graph is topologically validated; cycles, duplicate node IDs, missing parents, unsupported data edges and incompatible original-file inputs are rejected. The same processor may appear in multiple distinct nodes. The current safety envelope is 256 nodes and 64 dependencies per node.
 
 - `input: "source"` reads a private copy of the original Telegram file. Root nodes use source. Failure/always branches may also read source.
 - `input: "parent"` consumes the single successful parent artifact; the edge must be in the explicit tool transition allowlist.
 - `input: "zip"` packages outputs from at least two successful parents in a per-node ZIP and feeds it to a processor that accepts ZIP (for example `pdf-merge`). Parent outputs are stored under node-specific ZIP paths. It does not concatenate arbitrary content.
 - `when: "all-success"` (default) runs only when every dependency completed. `any-failure` runs when at least one dependency failed. `always` runs after all dependencies become terminal. Conditional source nodes must accept the original file type.
 - Independent nodes run concurrently, with a maximum of three active processors per job. Nodes write into isolated working directories. The terminal node artifacts are returned together in a results ZIP with a manifest.
-- If any processor fails, the DAG job is marked failed even when an any-failure fallback ran successfully; the trace records completed, failed and skipped nodes. Retry starts a fresh DAG run from the original file, not from intermediate artifacts.
+- A failed node is considered recovered when a directly dependent any-failure handler completes successfully. Unhandled failures still fail the DAG job. The trace preserves both the original failure and the recovery node. Retry starts a fresh DAG run from the original file, not from intermediate artifacts.
 
-This first DAG scheduler supports branching, status conditions, ZIP fan-in and bounded parallel execution. It does not yet merge multiple arbitrary data streams into a custom structured object, resume a partially completed job, or expose a visual graph editor.
+This DAG scheduler supports branching, status conditions, ZIP fan-in and up to three parallel nodes per job. It does not yet merge multiple arbitrary data streams into a custom structured object, resume a partially completed job, or expose a visual graph editor. Per-node output and combined result archives retain the existing 45 MB output safety boundary.
