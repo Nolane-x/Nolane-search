@@ -672,7 +672,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual([node["id"] for node in normalized["nodes"]],["extract","inspect","transcribe"])
         for invalid in [
             {"nodes":[{"id":"a","toolId":"video-audio","dependsOn":["b"],"input":"parent"},{"id":"b","toolId":"audio-info","dependsOn":["a"],"input":"parent"}]},
-            {"nodes":[{"id":"a","toolId":"video-audio","dependsOn":[]},{"id":"b","toolId":"video-audio","dependsOn":[]}]},
+            {"nodes":[{"id":"same","toolId":"video-audio","dependsOn":[]},{"id":"same","toolId":"audio-info","dependsOn":[]}]},
             {"nodes":[{"id":"a","toolId":"video-audio","dependsOn":[]},{"id":"b","toolId":"no-such-tool","dependsOn":["a"],"input":"parent"}]},
         ]:
             with self.assertRaises(RuntimeError):
@@ -723,6 +723,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
             self.assertIn("manifest.json",names)
 
     def test_dag_failure_condition_runs_fallback_and_skips_success_branch(self):
+        import zipfile
         source=self.write("fallback.txt","original input")
         def fail(_path): raise RuntimeError("primary branch failed")
         def success(path):
@@ -735,10 +736,12 @@ class ToolRunnerUnitTests(unittest.TestCase):
             {"id":"fallback","toolId":"text-clean","dependsOn":["primary"],"input":"source","when":"any-failure"},
         ]}}
         with patch.dict(runner.TOOLS,{"file-hash":fail,"text-clean":success}):
-            with self.assertRaises(runner.PipelineExecutionError) as caught:
-                runner.run_tool_workflow_dag(job,source,self.input_dir.resolve())
-        statuses={entry["nodeId"]:entry["status"] for entry in caught.exception.trace}
+            result=runner.run_tool_workflow_dag(job,source,self.input_dir.resolve())
+        statuses={entry["nodeId"]:entry["status"] for entry in result["trace"]}
         self.assertEqual(statuses,{"primary":"failed","normal":"skipped","fallback":"completed"})
+        self.assertIn("Recovered failed nodes: primary",result["summary"])
+        with zipfile.ZipFile(result["output_path"]) as archive:
+            self.assertTrue(any(name.startswith("fallback/") for name in archive.namelist()))
 
 
 
@@ -777,12 +780,37 @@ class ToolRunnerUnitTests(unittest.TestCase):
             return {"summary":"fallback","output_path":str(output)}
         job={"toolId":"video-audio","workflowGraph":trace_graph}
         with patch.dict(runner.TOOLS,{"video-audio":fail,"video-info":fallback}):
+            result=runner.run_tool_workflow_dag(job,source,self.input_dir.resolve())
+        statuses={entry["nodeId"]:entry["status"] for entry in result["trace"]}
+        self.assertEqual(statuses,{"primary":"failed","child":"skipped","fallback":"completed"})
+        self.assertIn("Recovered failed nodes: primary",result["summary"])
+
+
+
+    def test_dag_unhandled_failure_still_fails_the_workflow(self):
+        source=self.write("unhandled.mp4","input")
+        def fail(_path): raise RuntimeError("unhandled branch failed")
+        job={"toolId":"video-audio","workflowGraph":{"nodes":[
+            {"id":"root","toolId":"video-audio","dependsOn":[],"input":"source","when":"all-success"},
+            {"id":"child","toolId":"audio-info","dependsOn":["root"],"input":"parent","when":"all-success"},
+        ]}}
+        with patch.dict(runner.TOOLS,{"video-audio":fail}):
             with self.assertRaises(runner.PipelineExecutionError) as caught:
                 runner.run_tool_workflow_dag(job,source,self.input_dir.resolve())
-        statuses={entry["nodeId"]:entry["status"] for entry in caught.exception.trace}
-        self.assertEqual(statuses,{"primary":"failed","child":"skipped","fallback":"completed"})
+        self.assertEqual(caught.exception.trace[0]["status"],"failed")
+        self.assertEqual(caught.exception.trace[1]["status"],"skipped")
 
-
+    def test_dag_reuses_the_same_processor_in_distinct_nodes(self):
+        graph={"nodes":[
+            {"id":"left","toolId":"file-hash","dependsOn":[]},
+            {"id":"right","toolId":"file-hash","dependsOn":[]},
+        ]}
+        normalized=runner.validate_workflow_graph({"toolId":"file-hash","workflowGraph":graph})
+        self.assertEqual([node["toolId"] for node in normalized["nodes"]],["file-hash","file-hash"])
+        expanded={"nodes":[
+            {"id":f"node-{index}","toolId":"file-hash","dependsOn":[]} for index in range(80)
+        ]}
+        self.assertEqual(len(runner.validate_workflow_graph({"toolId":"file-hash","workflowGraph":expanded})["nodes"]),80)
 
     def test_dag_zip_fan_in_combines_successful_parent_artifacts(self):
         import zipfile
