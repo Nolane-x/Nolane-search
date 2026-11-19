@@ -130,6 +130,51 @@ export function validateToolStepTrace(
   return { ok: true, trace };
 }
 
+export function validateToolDagTrace(
+  raw: unknown,
+  nodes: ToolDagNode[],
+  finalStatus: "completed" | "failed",
+): { ok: true; trace: ToolStepTrace[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw)) {
+    if (finalStatus === "failed" && (raw === undefined || raw === null)) return { ok: true, trace: [] };
+    return { ok: false, error: "DAG trace has an invalid number of nodes." };
+  }
+  if (raw.length > nodes.length) return { ok: false, error: "DAG trace has too many nodes." };
+  const byId = new Map(nodes.map((node, index) => [node.id, { node, index }]));
+  const trace: ToolStepTrace[] = [];
+  const statuses = new Map<string, "completed" | "failed">();
+  for (const value of raw) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return { ok: false, error: "DAG trace contains an invalid node." };
+    const item = value as Record<string, unknown>;
+    const nodeId = typeof item.nodeId === "string" ? item.nodeId : "";
+    const match = byId.get(nodeId);
+    if (!match || statuses.has(nodeId) || item.step !== match.index + 1 || item.total !== nodes.length ||
+        item.toolId !== match.node.toolId || (item.status !== "completed" && item.status !== "failed") ||
+        !Number.isSafeInteger(item.durationMs) || Number(item.durationMs) < 0 || Number(item.durationMs) > 45 * 60 * 1000 ||
+        !Number.isSafeInteger(item.inputBytes) || Number(item.inputBytes) < 0 || Number(item.inputBytes) > 45 * 1024 * 1024 ||
+        (item.outputBytes !== null && (!Number.isSafeInteger(item.outputBytes) || Number(item.outputBytes) < 0 || Number(item.outputBytes) > 45 * 1024 * 1024)) ||
+        typeof item.summary !== "string" || item.summary.length > 180 ||
+        (item.error !== undefined && (typeof item.error !== "string" || item.error.length > 250))) {
+      return { ok: false, error: "DAG trace node does not match the stored graph." };
+    }
+    if (match.node.dependsOn.some(parentId => statuses.get(parentId) !== "completed")) {
+      return { ok: false, error: "DAG trace contains a node whose dependency did not complete." };
+    }
+    statuses.set(nodeId, item.status);
+    trace.push({ nodeId, step: match.index + 1, total: nodes.length, toolId: match.node.toolId,
+      status: item.status, durationMs: Number(item.durationMs), inputBytes: Number(item.inputBytes),
+      outputBytes: item.outputBytes === null ? null : Number(item.outputBytes), summary: item.summary,
+      ...(typeof item.error === "string" ? { error: item.error } : {}) });
+  }
+  trace.sort((a, b) => a.step - b.step);
+  if (finalStatus === "completed" && (trace.length !== nodes.length || trace.some(item => item.status !== "completed"))) {
+    return { ok: false, error: "A completed DAG must contain a successful trace for every node." };
+  }
+  if (finalStatus === "failed" && raw.length > 0 && !trace.some(item => item.status === "failed")) {
+    return { ok: false, error: "A failed DAG must record at least one failed node." };
+  }
+  return { ok: true, trace };
+}
 export async function retryToolJob(env: Env, userId: number, chatId: number, sourceJobId: string): Promise<ToolJob> {
   const previous = await getToolJob(env, sourceJobId);
   if (!previous || previous.userId !== userId || previous.chatId !== chatId) {
