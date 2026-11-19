@@ -137,9 +137,12 @@ export function validateToolWorkflowTrace(
   graph: ToolWorkflowGraph,
   finalStatus: "completed" | "failed",
 ): { ok: true; trace: ToolStepTrace[] } | { ok: false; error: string } {
-  if (!Array.isArray(raw) || raw.length !== graph.nodes.length) {
+  if (!Array.isArray(raw)) {
+    if (finalStatus === "failed" && (raw === undefined || raw === null)) return { ok: true, trace: [] };
     return { ok: false, error: "DAG trace must contain one entry for every graph node." };
   }
+  if (raw.length === 0 && finalStatus === "failed") return { ok: true, trace: [] };
+  if (raw.length !== graph.nodes.length) return { ok: false, error: "DAG trace must contain one entry for every graph node." };
   const states = new Map<string, "completed" | "failed" | "skipped">();
   const trace: ToolStepTrace[] = [];
   for (let index = 0; index < graph.nodes.length; index++) {
@@ -188,7 +191,6 @@ export function validateToolWorkflowTrace(
   }
   const hasFailure = trace.some(item => item.status === "failed");
   if (finalStatus === "completed" && hasFailure) return { ok: false, error: "A successful DAG cannot contain failed nodes." };
-  if (finalStatus === "failed" && !hasFailure) return { ok: false, error: "A failed DAG must contain at least one failed node." };
   return { ok: true, trace };
 }
 
