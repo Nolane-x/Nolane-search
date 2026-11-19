@@ -64,6 +64,8 @@ PIPELINE_TRANSITIONS = {
     "text-deduplicate": {"text-clean","text-stats"},
     "text-diff": {"text-clean","text-stats"},
     "code-size-report": {"text-clean","text-stats"},
+    "text-clean": {"text-stats","text-deduplicate"},
+    "text-stats": {"text-clean"},
 }
 
 TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report"}
