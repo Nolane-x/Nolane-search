@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   clearPendingToolWorkflow, deleteToolWorkflow, getPendingToolWorkflow,
   getToolWorkflow, listToolWorkflows,
-  saveToolWorkflow, setPendingToolWorkflow,
+  saveToolWorkflow, saveDagToolWorkflow, setPendingToolWorkflow,
 } from "../src/workflows";
 import type { D1Database, D1Result, D1Statement, Env } from "../src/types";
 
@@ -101,6 +101,64 @@ describe("Saved Nolane Tool Workflows", () => {
     expect(rows.size).toBe(25);
     expect([...rows.values()].every(row=>row.expiresAt>1_000_000_000_000_000)).toBe(true);
   });
+
+
+  it("saves and reloads a branching DAG with parallel siblings", async () => {
+    const {db,rows}=fakeDb();
+    const env=envFor(db);
+    const graph={nodes:[
+      {id:"extract",toolId:"video-audio",dependsOn:[]},
+      {id:"inspect",toolId:"audio-info",dependsOn:["extract"],input:"parent"},
+      {id:"transcribe",toolId:"audio-transcribe",dependsOn:["extract"],input:"parent"},
+    ]};
+    const saved=await saveDagToolWorkflow(env,42,42,"Parallel video analysis",graph);
+    expect(saved.graph?.nodes.map(node=>node.id)).toEqual(["extract","inspect","transcribe"]);
+    expect(saved.steps.map(step=>step.toolId)).toEqual(["video-audio","audio-info","audio-transcribe"]);
+    const loaded=await getToolWorkflow(env,42,saved.id);
+    expect(loaded?.graph?.nodes[1]?.dependsOn).toEqual(["extract"]);
+    expect(loaded?.graph?.nodes[2]?.toolId).toBe("audio-transcribe");
+    expect(await getToolWorkflow(env,43,saved.id)).toBeNull();
+    expect(rows.size).toBe(1);
+  });
+
+  it("rejects cycles, missing dependencies and unsupported parent data edges", async () => {
+    const {db,rows}=fakeDb();
+    const env=envFor(db);
+    await expect(saveDagToolWorkflow(env,42,42,"Cycle graph",{nodes:[
+      {id:"a",toolId:"video-audio",dependsOn:["b"],input:"parent"},
+      {id:"b",toolId:"audio-info",dependsOn:["a"],input:"parent"},
+    ]})).rejects.toThrow("chu trình");
+    await expect(saveDagToolWorkflow(env,42,42,"Missing parent",{nodes:[
+      {id:"a",toolId:"video-audio",dependsOn:["missing"],input:"parent"},
+    ]})).rejects.toThrow("không tồn tại");
+    await expect(saveDagToolWorkflow(env,42,42,"Bad edge",{nodes:[
+      {id:"extract",toolId:"video-audio",dependsOn:[]},
+      {id:"bad",toolId:"text-clean",dependsOn:["extract"],input:"parent"},
+    ]})).rejects.toThrow("luồng dữ liệu");
+    expect(rows.size).toBe(0);
+  });
+
+  it("validates conditional failure branches and multi-dependency barriers", async () => {
+    const {db}=fakeDb();
+    const env=envFor(db);
+    const workflow=await saveDagToolWorkflow(env,42,42,"Failure branch",{nodes:[
+      {id:"extract",toolId:"video-audio",dependsOn:[]},
+      {id:"transcribe",toolId:"audio-transcribe",dependsOn:["extract"],input:"parent"},
+      {id:"fallback",toolId:"text-stats",dependsOn:["transcribe"],input:"source",when:"any-failure"},
+    ]});
+    expect(workflow.graph?.nodes[2]).toMatchObject({id:"fallback",when:"any-failure",input:"source"});
+    await expect(saveDagToolWorkflow(env,42,42,"Bad branch",{nodes:[
+      {id:"extract",toolId:"video-audio",dependsOn:[]},
+      {id:"fallback",toolId:"text-stats",dependsOn:["extract"],input:"source",when:"all-success"},
+    ]})).rejects.toThrow("input=source");
+    const barrier=await saveDagToolWorkflow(env,42,42,"Barrier",{nodes:[
+      {id:"left",toolId:"video-audio",dependsOn:[]},
+      {id:"right",toolId:"pdf-info",dependsOn:[]},
+      {id:"after-both",toolId:"text-stats",dependsOn:["left","right"],input:"source",when:"all-success"},
+    ]});
+    expect(barrier.graph?.nodes.at(-1)?.dependsOn).toEqual(["left","right"]);
+  });
+
 
   it("arms, resolves and clears a pending run without exposing another user's workflow", async () => {
     const {db,rows}=fakeDb();
