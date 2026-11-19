@@ -1989,10 +1989,10 @@ async function setToolJobResult(
     (step.status === "completed" ? "✅ " : "❌ ") + "Step " + step.step + "/" + step.total +
     " · " + step.toolId + " · " + step.durationMs + " ms · " +
     step.inputBytes + " → " + (step.outputBytes === null ? "text" : step.outputBytes + " bytes") +
-    "\\n" + (step.error || step.summary).slice(0, 300)
-  ).join("\\n\\n");
+    "\n" + (step.error || step.summary).slice(0, 300)
+  ).join("\n\n");
   const content = (status === "completed" ? (job.resultSummary || summary) : (job.error || errorMessage)) +
-    (traceText ? "\\n\\nExecution trace:\\n" + traceText : "");
+    (traceText ? "\n\nExecution trace:\n" + traceText : "");
   const chunks: string[] = [];
   let remaining = content || (status === "completed" ? "Đã hoàn thành." : "Tool runner failed.");
   while (remaining.length > 2800) {
@@ -2065,7 +2065,7 @@ async function handleToolRunnerApi(request: Request, env: Env): Promise<Response
     return jsonResponse({ job: runnerJob });
   }
   if (request.method === "POST") {
-    const body = await parseJsonBody(request);
+    const body = await parseJsonObjectBody(request, 100_000);
     const id = typeof body?.job_id === "string" ? body.job_id : "";
     const status = body?.status;
     const summary = typeof body?.summary === "string" ? body.summary : "";
