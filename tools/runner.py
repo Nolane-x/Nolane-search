@@ -2080,23 +2080,25 @@ def run_tool_workflow_dag(job, source, root, max_concurrency=3):
     output_zip=root/"dag-workflow-results.zip"
     manifest={"nodes":trace,"outputs":[]}
     total_bytes=0
-    with zipfile.ZipFile(output_zip,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=3) as archive:
-        for node_id in graph["leaves"]:
-            output=outputs.get(node_id)
-            if not output or not output.is_file():
-                continue
-            size=output.stat().st_size
-            total_bytes+=size
-            if total_bytes>MAX_PIPELINE_OUTPUT:
-                raise RuntimeError("Combined DAG outputs exceed the configured 45 MB limit.")
-            arc_name=f"{node_id}/{output.name}"
-            archive.write(output,arc_name)
-            manifest["outputs"].append({"nodeId":node_id,"path":arc_name,"bytes":size})
-        archive.writestr("manifest.json",json.dumps(manifest,ensure_ascii=False,indent=2))
-    if output_zip.stat().st_size>MAX_PIPELINE_OUTPUT:
+    try:
+        with zipfile.ZipFile(output_zip,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=3) as archive:
+            for node_id in graph["leaves"]:
+                output=outputs.get(node_id)
+                if not output or not output.is_file():
+                    continue
+                size=output.stat().st_size
+                total_bytes+=size
+                if total_bytes>MAX_PIPELINE_OUTPUT:
+                    raise RuntimeError("Combined DAG outputs exceed the configured 45 MB limit.")
+                arc_name=f"{node_id}/{output.name}"
+                archive.write(output,arc_name)
+                manifest["outputs"].append({"nodeId":node_id,"path":arc_name,"bytes":size})
+            archive.writestr("manifest.json",json.dumps(manifest,ensure_ascii=False,indent=2))
+        if output_zip.stat().st_size>MAX_PIPELINE_OUTPUT:
+            raise RuntimeError("DAG results archive exceeds the configured output limit.")
+    except Exception as exc:
         output_zip.unlink(missing_ok=True)
-        raise RuntimeError("DAG results archive exceeds the configured output limit.")
-    summary="DAG completed.\\n"+"\\n".join(summary_lines)
+        raise PipelineExecutionError(_safe_trace_text(exc,root),trace) from exc
     return {"summary":summary[:6000],"output_path":str(output_zip),"trace":trace}
 
 
