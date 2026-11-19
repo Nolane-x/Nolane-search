@@ -659,6 +659,88 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertIn("[runner-path]",result["error"])
         self.assertNotIn("/home/runner/work",result["error"])
 
+
+    def test_dag_validation_and_parallel_branches(self):
+        graph={"nodes":[
+            {"id":"extract","toolId":"video-audio","dependsOn":[]},
+            {"id":"inspect","toolId":"audio-info","dependsOn":["extract"],"input":"parent"},
+            {"id":"transcribe","toolId":"audio-transcribe","dependsOn":["extract"],"input":"parent"},
+        ]}
+        normalized=runner.validate_workflow_graph({"toolId":"video-audio","workflowGraph":graph})
+        self.assertEqual(normalized["roots"],["extract"])
+        self.assertEqual(normalized["leaves"],["inspect","transcribe"])
+        self.assertEqual([node["id"] for node in normalized["nodes"]],["extract","inspect","transcribe"])
+        for invalid in [
+            {"nodes":[{"id":"a","toolId":"video-audio","dependsOn":["b"],"input":"parent"},{"id":"b","toolId":"audio-info","dependsOn":["a"],"input":"parent"}]},
+            {"nodes":[{"id":"a","toolId":"video-audio","dependsOn":[]},{"id":"b","toolId":"video-audio","dependsOn":[]}]},
+            {"nodes":[{"id":"a","toolId":"video-audio","dependsOn":[]},{"id":"b","toolId":"no-such-tool","dependsOn":["a"],"input":"parent"}]},
+        ]:
+            with self.assertRaises(RuntimeError):
+                runner.validate_workflow_graph({"toolId":"video-audio","workflowGraph":invalid})
+
+    def test_dag_scheduler_runs_siblings_in_parallel_and_bundles_leaf_outputs(self):
+        import threading,time,zipfile
+        source=self.write("parallel.mp4","source fixture")
+        lock=threading.Lock()
+        active={"count":0,"max":0}
+        def write_result(path,suffix,content):
+            output=path.with_name(path.stem+"-"+suffix+".txt")
+            output.write_text(content,encoding="utf-8")
+            return {"summary":content,"output_path":str(output)}
+        def extract(path):
+            return write_result(path,"audio","audio bytes")
+        def inspect(path):
+            with lock:
+                active["count"]+=1
+                active["max"]=max(active["max"],active["count"])
+            time.sleep(0.12)
+            result=write_result(path,"info","duration=12s")
+            with lock: active["count"]-=1
+            return result
+        def transcribe(path):
+            with lock:
+                active["count"]+=1
+                active["max"]=max(active["max"],active["count"])
+            time.sleep(0.12)
+            result=write_result(path,"transcript","hello world")
+            with lock: active["count"]-=1
+            return result
+        job={"toolId":"video-audio","workflowGraph":{"nodes":[
+            {"id":"extract","toolId":"video-audio","dependsOn":[],"input":"source","when":"all-success"},
+            {"id":"inspect","toolId":"audio-info","dependsOn":["extract"],"input":"parent","when":"all-success"},
+            {"id":"transcribe","toolId":"audio-transcribe","dependsOn":["extract"],"input":"parent","when":"all-success"},
+        ]}}
+        with patch.dict(runner.TOOLS,{"video-audio":extract,"audio-info":inspect,"audio-transcribe":transcribe}):
+            result=runner.run_tool_workflow_dag(job,source,self.input_dir.resolve(),max_concurrency=3)
+        self.assertGreaterEqual(active["max"],2)
+        self.assertEqual([item["status"] for item in result["trace"]],["completed","completed","completed"])
+        self.assertEqual([item["step"] for item in result["trace"]],[1,2,3])
+        self.assertTrue(Path(result["output_path"]).is_file())
+        with zipfile.ZipFile(result["output_path"]) as archive:
+            names=archive.namelist()
+            self.assertTrue(any(name.startswith("inspect/") for name in names))
+            self.assertTrue(any(name.startswith("transcribe/") for name in names))
+            self.assertIn("manifest.json",names)
+
+    def test_dag_failure_condition_runs_fallback_and_skips_success_branch(self):
+        source=self.write("fallback.txt","original input")
+        def fail(_path): raise RuntimeError("primary branch failed")
+        def success(path):
+            output=path.with_name("fallback-result.txt")
+            output.write_text("fallback handled",encoding="utf-8")
+            return {"summary":"fallback handled","output_path":str(output)}
+        job={"toolId":"file-hash","workflowGraph":{"nodes":[
+            {"id":"primary","toolId":"file-hash","dependsOn":[],"input":"source","when":"all-success"},
+            {"id":"normal","toolId":"text-stats","dependsOn":["primary"],"input":"parent","when":"all-success"},
+            {"id":"fallback","toolId":"text-clean","dependsOn":["primary"],"input":"source","when":"any-failure"},
+        ]}}
+        with patch.dict(runner.TOOLS,{"file-hash":fail,"text-clean":success}):
+            with self.assertRaises(runner.PipelineExecutionError) as caught:
+                runner.run_tool_workflow_dag(job,source,self.input_dir.resolve())
+        statuses={entry["nodeId"]:entry["status"] for entry in caught.exception.trace}
+        self.assertEqual(statuses,{"primary":"failed","normal":"skipped","fallback":"completed"})
+
+
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
         self.assertGreaterEqual(len(runner.TOOLS),72)
