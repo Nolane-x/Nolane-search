@@ -155,6 +155,148 @@ export type ToolPipelineValidation =
   | { ok: true; steps: ToolPipelineStep[] }
   | { ok: false; error: string };
 
+
+export type WorkflowNodeCondition = "all-success" | "any-failure" | "always";
+export type WorkflowNodeInput = "source" | "parent";
+
+export interface ToolWorkflowNode {
+  id: string;
+  toolId: string;
+  dependsOn: string[];
+  input: WorkflowNodeInput;
+  when: WorkflowNodeCondition;
+  reason?: string;
+}
+
+export interface ToolWorkflowGraph {
+  nodes: ToolWorkflowNode[];
+}
+
+export type ToolWorkflowGraphValidation =
+  | { ok: true; graph: ToolWorkflowGraph; roots: string[]; leaves: string[] }
+  | { ok: false; error: string };
+
+export function validateToolWorkflowGraph(raw: unknown): ToolWorkflowGraphValidation {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "DAG workflow phải là object có danh sách nodes." };
+  }
+  const value = raw as Record<string, unknown>;
+  if (!Array.isArray(value.nodes) || value.nodes.length < 1 || value.nodes.length > TOOL_CATALOG.length) {
+    return { ok: false, error: "DAG cần từ 1 đến " + TOOL_CATALOG.length + " node." };
+  }
+
+  const nodes = new Map<string, ToolWorkflowNode>();
+  const usedTools = new Set<string>();
+  for (let index = 0; index < value.nodes.length; index++) {
+    const rawNode = value.nodes[index];
+    if (!rawNode || typeof rawNode !== "object" || Array.isArray(rawNode)) {
+      return { ok: false, error: "Node " + (index + 1) + " không hợp lệ." };
+    }
+    const item = rawNode as Record<string, unknown>;
+    const id = typeof item.id === "string" ? item.id.trim() : "";
+    const toolId = typeof item.toolId === "string" ? item.toolId.trim() : "";
+    const tool = getTool(toolId);
+    if (!/^[a-z][a-z0-9_-]{0,31}$/.test(id) || nodes.has(id)) {
+      return { ok: false, error: "Node ID phải duy nhất, bắt đầu bằng chữ và chỉ dùng chữ thường, số, _ hoặc - (tối đa 32 ký tự)." };
+    }
+    if (!tool?.ready) return { ok: false, error: "Tool không tồn tại hoặc chưa sẵn sàng: " + (toolId || "unknown") };
+    if (usedTools.has(toolId)) return { ok: false, error: "Mỗi DAG chỉ được dùng một node cho mỗi processor: " + toolId };
+    usedTools.add(toolId);
+    if (!Array.isArray(item.dependsOn) || item.dependsOn.length > 8) {
+      return { ok: false, error: "dependsOn phải là danh sách tối đa 8 node." };
+    }
+    const dependsOn: string[] = [];
+    for (const dependency of item.dependsOn) {
+      if (typeof dependency !== "string" || !/^[a-z][a-z0-9_-]{0,31}$/.test(dependency) ||
+          dependency === id || dependsOn.includes(dependency)) {
+        return { ok: false, error: "Node " + id + " có dependency không hợp lệ." };
+      }
+      dependsOn.push(dependency);
+    }
+    const input: WorkflowNodeInput = item.input === undefined
+      ? (dependsOn.length === 1 ? "parent" : "source")
+      : item.input === "source" || item.input === "parent" ? item.input : "source";
+    if (item.input !== undefined && item.input !== "source" && item.input !== "parent") {
+      return { ok: false, error: "input của node " + id + " phải là source hoặc parent." };
+    }
+    const when: WorkflowNodeCondition = item.when === undefined
+      ? (input === "parent" ? "all-success" : "all-success")
+      : item.when === "all-success" || item.when === "any-failure" || item.when === "always" ? item.when : "all-success";
+    if (item.when !== undefined && item.when !== "all-success" && item.when !== "any-failure" && item.when !== "always") {
+      return { ok: false, error: "when của node " + id + " không hợp lệ." };
+    }
+    if (dependsOn.length === 0 && (input !== "source" || when !== "all-success")) {
+      return { ok: false, error: "Node gốc phải đọc source và không có điều kiện phụ thuộc." };
+    }
+    if (input === "parent" && (dependsOn.length !== 1 || when !== "all-success")) {
+      return { ok: false, error: "input=parent yêu cầu đúng một dependency và when=all-success." };
+    }
+    if (dependsOn.length > 1 && input !== "source") {
+      return { ok: false, error: "Node có nhiều dependency phải dùng input=source làm barrier; chưa hỗ trợ gộp nhiều file đầu vào." };
+    }
+    if (input === "source" && dependsOn.length === 1 && when === "all-success") {
+      return { ok: false, error: "Node phụ thuộc đơn dùng input=parent; input=source chỉ dành cho nhánh điều kiện hoặc barrier." };
+    }
+    const reason = typeof item.reason === "string" ? item.reason.trim().slice(0, 160) : "";
+    nodes.set(id, { id, toolId, dependsOn, input, when, ...(reason ? { reason } : {}) });
+  }
+
+  for (const node of nodes.values()) {
+    for (const dependency of node.dependsOn) {
+      const parent = nodes.get(dependency);
+      if (!parent) return { ok: false, error: "Node " + node.id + " tham chiếu dependency không tồn tại: " + dependency };
+      if (node.input === "parent" && !(TOOL_PIPELINE_TRANSITIONS[parent.toolId] || []).includes(node.toolId)) {
+        return { ok: false, error: "Không có luồng dữ liệu được hỗ trợ từ " + parent.toolId + " sang " + node.toolId + "." };
+      }
+    }
+  }
+
+  const indegree = new Map<string, number>();
+  const children = new Map<string, string[]>();
+  for (const node of nodes.values()) {
+    indegree.set(node.id, node.dependsOn.length);
+    for (const parent of node.dependsOn) {
+      const list = children.get(parent) || [];
+      list.push(node.id);
+      children.set(parent, list);
+    }
+  }
+  const roots = [...nodes.values()].filter(node => node.dependsOn.length === 0).map(node => node.id);
+  if (!roots.length) return { ok: false, error: "DAG phải có ít nhất một node gốc." };
+  const queue = roots.slice();
+  const ordered: ToolWorkflowNode[] = [];
+  while (queue.length) {
+    const id = queue.shift()!;
+    const node = nodes.get(id)!;
+    ordered.push(node);
+    for (const child of children.get(id) || []) {
+      const remaining = (indegree.get(child) || 0) - 1;
+      indegree.set(child, remaining);
+      if (remaining === 0) queue.push(child);
+    }
+  }
+  if (ordered.length !== nodes.size) return { ok: false, error: "DAG chứa chu trình; workflow không được có vòng lặp." };
+  const parents = new Set([...children.keys()]);
+  const leaves = [...nodes.keys()].filter(id => !parents.has(id));
+  return { ok: true, graph: { nodes: ordered }, roots, leaves };
+}
+
+export function validateToolWorkflowGraphInput(
+  raw: unknown,
+  file: { mimeType: string; fileName: string },
+): ToolWorkflowGraphValidation {
+  const result = validateToolWorkflowGraph(raw);
+  if (!result.ok) return result;
+  for (const rootId of result.roots) {
+    const node = result.graph.nodes.find(item => item.id === rootId)!;
+    const tool = getTool(node.toolId)!;
+    if (!isToolCompatible(tool, file.mimeType, file.fileName)) {
+      return { ok: false, error: "Node gốc " + node.id + " (" + tool.name + ") không chấp nhận tệp " + file.fileName + "." };
+    }
+  }
+  return result;
+}
+
 export function validateToolPipelineDefinition(rawSteps: unknown): ToolPipelineValidation {
   if (!Array.isArray(rawSteps) || rawSteps.length < 1 || rawSteps.length > TOOL_CATALOG.length) {
     return { ok: false, error: "Pipeline phải có ít nhất một bước và chỉ dùng mỗi tool tối đa một lần." };
