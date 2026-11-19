@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TOOL_CATALOG, getTool, inferToolForUpload, isToolCompatible, validateToolPipeline, validateToolPipelineDefinition } from "../src/tools";
+import { TOOL_CATALOG, getTool, inferToolForUpload, isToolCompatible, validateToolDag, validateToolDagDefinition, validateToolPipeline, validateToolPipelineDefinition } from "../src/tools";
 
 describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
@@ -101,4 +101,28 @@ describe("Nolane Tools registry", () => {
     expect(isToolCompatible(getTool("image-grayscale")!, "image/png", "photo.png")).toBe(true);
     expect(getTool("not-a-tool")).toBeNull();
   });
+  it("validates branching DAGs, topological dependencies and file-compatible roots", () => {
+    const dag = [
+      { id: "source", toolId: "video-audio", dependsOn: [] },
+      { id: "transcript", toolId: "audio-transcribe", dependsOn: ["source"] },
+      { id: "converted", toolId: "audio-convert", dependsOn: ["source"] },
+    ];
+    expect(validateToolDagDefinition(dag)).toMatchObject({ ok: true, roots: ["source"], leaves: ["transcript", "converted"] });
+    expect(validateToolDag({ mimeType: "video/mp4", fileName: "clip.mp4" }, dag).ok).toBe(true);
+    expect(validateToolDag({ mimeType: "image/png", fileName: "photo.png" }, dag).ok).toBe(false);
+    expect(validateToolDagDefinition([
+      { id: "source", toolId: "video-audio", dependsOn: [] },
+      { id: "bad", toolId: "pdf-text", dependsOn: ["source"] },
+    ]).ok).toBe(false);
+    expect(validateToolDagDefinition([
+      { id: "source", toolId: "video-audio", dependsOn: [] },
+      { id: "child", toolId: "audio-transcribe", dependsOn: ["later"] },
+      { id: "later", toolId: "audio-convert", dependsOn: ["source"] },
+    ]).ok).toBe(false);
+    expect(validateToolDagDefinition([
+      { id: "only", toolId: "file-hash", dependsOn: [] },
+      { id: "next", toolId: "text-clean", dependsOn: ["only"] },
+    ]).ok).toBe(false);
+  });
+
 });

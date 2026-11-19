@@ -785,5 +785,93 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertTrue(any("select='gt(scene,0.35)'" in " ".join(call[1]) for call in captured))
 
 
+    def test_workflow_dag_runs_ready_branches_concurrently_and_packages_outputs(self):
+        import json, threading, time, zipfile
+        source=self.write("clip.mp4","source-media")
+        dag=[
+            {"id":"source","toolId":"video-audio","dependsOn":[]},
+            {"id":"transcript","toolId":"audio-transcribe","dependsOn":["source"]},
+            {"id":"converted","toolId":"audio-convert","dependsOn":["source"]},
+        ]
+        lock=threading.Lock()
+        active=0
+        peak=0
+        def fake_processor(path):
+            nonlocal active,peak
+            with lock:
+                active+=1
+                peak=max(peak,active)
+            time.sleep(0.06)
+            output=path.with_name(path.stem+"-processed.bin")
+            output.write_bytes(path.read_bytes()+b"-processed")
+            with lock:
+                active-=1
+            return {"summary":path.name+" processed","output_path":str(output)}
+        with patch.dict(runner.TOOLS,{
+            "video-audio":fake_processor,
+            "audio-transcribe":fake_processor,
+            "audio-convert":fake_processor,
+        }):
+            result=runner.run_tool_dag({"toolId":"video-audio","workflowDag":dag},source,self.input_dir.resolve())
+        self.assertGreaterEqual(peak,2)
+        self.assertLessEqual(peak,3)
+        self.assertEqual({item["nodeId"] for item in result["trace"]},{"source","transcript","converted"})
+        self.assertTrue(all(item["status"]=="completed" for item in result["trace"]))
+        with zipfile.ZipFile(result["output_path"]) as archive:
+            names=set(archive.namelist())
+            self.assertIn("manifest.json",names)
+            self.assertTrue(any(name.startswith("branches/transcript/") for name in names))
+            self.assertTrue(any(name.startswith("branches/converted/") for name in names))
+            manifest=json.loads(archive.read("manifest.json"))
+            self.assertEqual(manifest["maxConcurrency"],3)
+            self.assertEqual(set(manifest["terminalOutputs"]),{"transcript","converted"})
+
+    def test_workflow_dag_stops_descendants_after_a_parallel_branch_failure(self):
+        import threading,time
+        source=self.write("clip.mp4","source-media")
+        dag=[
+            {"id":"source","toolId":"video-audio","dependsOn":[]},
+            {"id":"transcript","toolId":"audio-transcribe","dependsOn":["source"]},
+            {"id":"converted","toolId":"audio-convert","dependsOn":["source"]},
+            {"id":"descendant","toolId":"text-clean","dependsOn":["transcript"]},
+        ]
+        lock=threading.Lock()
+        active=0
+        peak=0
+        def succeed(path):
+            nonlocal active,peak
+            with lock:
+                active+=1
+                peak=max(peak,active)
+            time.sleep(0.04)
+            output=path.with_name(path.stem+"-ok.bin")
+            output.write_bytes(path.read_bytes()+b"-ok")
+            with lock:
+                active-=1
+            return {"summary":"completed","output_path":str(output)}
+        def fail(path):
+            with lock:
+                active+=1
+            time.sleep(0.04)
+            with lock:
+                active-=1
+            raise RuntimeError("branch decode failed")
+        with patch.dict(runner.TOOLS,{
+            "video-audio":succeed,
+            "audio-transcribe":fail,
+            "audio-convert":succeed,
+            "text-clean":succeed,
+        }):
+            with self.assertRaises(runner.PipelineExecutionError) as caught:
+                runner.run_tool_dag({"toolId":"video-audio","workflowDag":dag},source,self.input_dir.resolve())
+        trace=caught.exception.trace
+        self.assertEqual({item["nodeId"] for item in trace},{"source","transcript","converted"})
+        self.assertEqual(next(item for item in trace if item["nodeId"]=="transcript")["status"],"failed")
+        self.assertEqual(next(item for item in trace if item["nodeId"]=="converted")["status"],"completed")
+        self.assertNotIn("descendant",{item["nodeId"] for item in trace})
+        self.assertLessEqual(peak,3)
+
+
+
 if __name__ == "__main__":
     unittest.main()

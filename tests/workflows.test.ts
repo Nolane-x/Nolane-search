@@ -127,4 +127,20 @@ describe("Saved Nolane Tool Workflows", () => {
     expect(await deleteToolWorkflow(env,42,workflow.id)).toBe(true);
     expect(await getToolWorkflow(env,42,workflow.id)).toBeNull();
   });
+  it("persists and reloads a validated DAG without changing legacy pipeline records", async () => {
+    const { db } = fakeDb();
+    const env = envFor(db);
+    const nodes = [
+      { id: "source", toolId: "video-audio", dependsOn: [] },
+      { id: "transcript", toolId: "audio-transcribe", dependsOn: ["source"] },
+      { id: "converted", toolId: "audio-convert", dependsOn: ["source"] },
+    ];
+    const workflow = await saveToolWorkflow(env, 42, 42, "Parallel video", nodes);
+    expect(workflow.dag).toEqual(nodes);
+    expect(workflow.steps.map(step => step.toolId)).toEqual(["video-audio", "audio-transcribe", "audio-convert"]);
+    const loaded = await getToolWorkflow(env, 42, workflow.id);
+    expect(loaded?.dag).toEqual(nodes);
+    expect((await listToolWorkflows(env, 42))).toHaveLength(1);
+  });
+
 });

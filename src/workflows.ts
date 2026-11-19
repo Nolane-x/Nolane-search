@@ -1,6 +1,6 @@
 import type { Env } from "./types";
-import { validateToolPipelineDefinition } from "./tools";
-import type { ToolPipelineStep } from "./tools";
+import { validateToolDagDefinition, validateToolPipelineDefinition } from "./tools";
+import type { ToolDagNode, ToolPipelineStep } from "./tools";
 
 export interface ToolWorkflow {
   id: string;
@@ -8,6 +8,8 @@ export interface ToolWorkflow {
   chatId: number;
   name: string;
   steps: ToolPipelineStep[];
+  /** Present for DAG workflows; steps is the topological compatibility view. */
+  dag?: ToolDagNode[];
   createdAt: number;
   updatedAt: number;
 }
@@ -42,16 +44,22 @@ function parseWorkflow(value: unknown, expectedUserId: number): ToolWorkflow | n
       !/^[a-f0-9]{12}$/i.test(item.id) || typeof item.chatId !== "number" ||
       !Number.isSafeInteger(item.chatId) || typeof item.name !== "string" ||
       typeof item.createdAt !== "number" || typeof item.updatedAt !== "number") return null;
+  if (item.dag !== undefined) {
+    const dag = validateToolDagDefinition(item.dag);
+    if (!dag.ok) return null;
+    return {
+      id: item.id, userId: expectedUserId, chatId: item.chatId,
+      name: normalizeWorkflowName(item.name),
+      steps: dag.nodes.map(node => ({ toolId: node.toolId, ...(node.reason ? { reason: node.reason } : {}) })),
+      dag: dag.nodes, createdAt: item.createdAt, updatedAt: item.updatedAt,
+    };
+  }
   const pipeline = validateToolPipelineDefinition(item.steps);
   if (!pipeline.ok) return null;
   return {
-    id: item.id,
-    userId: expectedUserId,
-    chatId: item.chatId,
-    name: normalizeWorkflowName(item.name),
-    steps: pipeline.steps,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
+    id: item.id, userId: expectedUserId, chatId: item.chatId,
+    name: normalizeWorkflowName(item.name), steps: pipeline.steps,
+    createdAt: item.createdAt, updatedAt: item.updatedAt,
   };
 }
 
@@ -91,8 +99,21 @@ export async function saveToolWorkflow(
   if (name.length < 3 || name.length > 40 || /[\u0000-\u001f\u007f]/.test(name)) {
     throw new Error("Tên workflow phải dài 3–40 ký tự và không chứa ký tự điều khiển.");
   }
-  const pipeline = validateToolPipelineDefinition(rawSteps);
-  if (!pipeline.ok) throw new Error(pipeline.error);
+  const candidate = Array.isArray(rawSteps) ? rawSteps[0] : null;
+  const dagMode = !!candidate && typeof candidate === "object" && !Array.isArray(candidate) &&
+    typeof candidate.id === "string" && Array.isArray(candidate.dependsOn);
+  let workflowSteps: ToolPipelineStep[];
+  let workflowDag: ToolDagNode[] | undefined;
+  if (dagMode) {
+    const validation = validateToolDagDefinition(rawSteps);
+    if (!validation.ok) throw new Error(validation.error);
+    workflowDag = validation.nodes;
+    workflowSteps = validation.nodes.map(node => ({ toolId: node.toolId, ...(node.reason ? { reason: node.reason } : {}) }));
+  } else {
+    const validation = validateToolPipelineDefinition(rawSteps);
+    if (!validation.ok) throw new Error(validation.error);
+    workflowSteps = validation.steps;
+  }
 
   const existing = await listToolWorkflows(env, userId);
   if (existing.some(item => item.name.toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US"))) {
@@ -108,7 +129,9 @@ export async function saveToolWorkflow(
   }
   if (!id) throw new Error("Không thể tạo ID workflow duy nhất. Hãy thử lại.");
   const workflow: ToolWorkflow = {
-    id, userId, chatId, name, steps: pipeline.steps, createdAt: now, updatedAt: now,
+    id, userId, chatId, name, steps: workflowSteps,
+    ...(workflowDag ? { dag: workflowDag } : {}),
+    createdAt: now, updatedAt: now,
   };
   await env.DB.prepare(
     "INSERT INTO search_cache (cache_key, payload, expires_at, created_at) VALUES (?, ?, ?, ?)",

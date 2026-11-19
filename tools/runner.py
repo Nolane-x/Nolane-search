@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Private GitHub-hosted execution engine for Nolane Tools."""
 from __future__ import annotations
-import argparse, csv, hashlib, json, mimetypes, os, posixpath, re, shutil, stat, subprocess, sys, tarfile, tempfile, time, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
+import argparse, concurrent.futures, csv, hashlib, json, mimetypes, os, posixpath, re, shutil, stat, subprocess, sys, tarfile, tempfile, threading, time, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
 from pathlib import Path
 from html import unescape
 from html.parser import HTMLParser
@@ -125,11 +125,54 @@ def validate_pipeline(job):
             raise RuntimeError(f"Unsupported pipeline transition: {previous} -> {current}.")
     return [{"toolId":tool_id} for tool_id in ids]
 
+def validate_dag(job):
+    nodes=job.get("workflowDag")
+    if not isinstance(nodes,list) or not 2<=len(nodes)<=12:
+        raise RuntimeError("Workflow DAG must contain between 2 and 12 nodes.")
+    by_id={}; clean=[]; roots=[]; children={}
+    for index,item in enumerate(nodes):
+        if not isinstance(item,dict):
+            raise RuntimeError("Invalid DAG node.")
+        node_id=str(item.get("id") or "").strip().lower()
+        tool_id=item.get("toolId")
+        if not re.fullmatch(r"[a-z][a-z0-9_-]{0,19}",node_id) or node_id in by_id:
+            raise RuntimeError("Invalid or repeated DAG node ID.")
+        if tool_id not in RUNNERS:
+            raise RuntimeError("Unknown DAG processor: "+str(tool_id))
+        dependencies=item.get("dependsOn")
+        if not isinstance(dependencies,list) or len(dependencies)>1:
+            raise RuntimeError("Each DAG node must have zero or one parent dependency.")
+        if not dependencies:
+            roots.append(node_id)
+        else:
+            parent_id=dependencies[0]
+            if not isinstance(parent_id,str) or parent_id not in by_id or parent_id==node_id:
+                raise RuntimeError("DAG dependencies must reference an earlier node.")
+            parent=by_id[parent_id]
+            if tool_id not in PIPELINE_TRANSITIONS.get(parent["toolId"],set()):
+                raise RuntimeError(f"Unsupported DAG transition: {parent['toolId']} -> {tool_id}.")
+            children[parent_id]=children.get(parent_id,0)+1
+        node={"id":node_id,"toolId":tool_id,"dependsOn":list(dependencies),"reason":str(item.get("reason") or "")[:240]}
+        by_id[node_id]=node; clean.append(node)
+    if not roots:
+        raise RuntimeError("DAG must contain at least one input root.")
+    if len(roots)==1 and max(children.values() or [0])<2:
+        raise RuntimeError("DAG must contain at least two independent branches.")
+    if clean[0]["toolId"]!=job.get("toolId"):
+        raise RuntimeError("The first DAG node must match the selected tool.")
+    leaves=[node["id"] for node in clean if children.get(node["id"],0)==0]
+    if len(leaves)<2:
+        raise RuntimeError("DAG must retain at least two terminal branch outputs.")
+    return clean
 def load_job(path):
     job = json.loads(Path(path).read_text(encoding="utf-8")).get("job", {})
     if not re.fullmatch(r"[0-9a-f-]{36}", str(job.get("id","")), re.I) or job.get("toolId") not in RUNNERS:
         raise RuntimeError("Invalid or unsupported tool job.")
-    job["pipeline"] = validate_pipeline(job)
+    if job.get("workflowDag") is not None:
+        job["workflowDag"]=validate_dag(job)
+        job["pipeline"]=[{"toolId":node["toolId"]} for node in job["workflowDag"]]
+    else:
+        job["pipeline"] = validate_pipeline(job)
     return job
 
 def download_telegram(file_id, filename):
@@ -162,7 +205,7 @@ def tool_text(text, title):
     if len(text) > 2800:
         out_root=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"
         out_root.mkdir(parents=True,exist_ok=True)
-        out=out_root/"nolane-result.txt"
+        out=out_root/f"nolane-result-{threading.get_ident()}.txt"
         out.write_text(text,encoding="utf-8")
         return {"summary":f"{title}: hoàn tất, {len(text):,} ký tự. Toàn bộ kết quả được gửi kèm dưới dạng TXT.","output_path":str(out)}
     return {"summary":f"{title}\n\n{text}","output_path":""}
@@ -2244,7 +2287,90 @@ class PipelineExecutionError(RuntimeError):
         self.trace=trace
 
 
+def run_tool_dag(job,source,root):
+    nodes=validate_dag(job)
+    by_id={node["id"]:node for node in nodes}
+    order={node["id"]:index for index,node in enumerate(nodes)}
+    outputs={}; summaries={}; traces={}
+    children={node["id"]:0 for node in nodes}
+    for node in nodes:
+        for parent_id in node["dependsOn"]: children[parent_id]+=1
+    pending=list(nodes)
+    while pending:
+        ready=[node for node in pending if not node["dependsOn"] or node["dependsOn"][0] in outputs]
+        if not ready: raise RuntimeError("DAG scheduler found a cycle or unresolved dependency.")
+        def execute_node(node):
+            node_id=node["id"]; tool_id=node["toolId"]; started=time.perf_counter()
+            parent_id=node["dependsOn"][0] if node["dependsOn"] else None
+            incoming=outputs[parent_id] if parent_id else source
+            isolated=root/f"dag-input-{node_id}-{incoming.name}"
+            try:
+                shutil.copy2(incoming,isolated)
+                input_bytes=isolated.stat().st_size
+                result=TOOLS[tool_id](isolated)
+                if not isinstance(result,dict):
+                    raise RuntimeError(f"Processor {tool_id} returned an invalid result.")
+                summary=str(result.get("summary","")).strip()
+                output=_runner_output_path(result.get("output_path",""),root)
+                if output is None:
+                    output=root/f"dag-{node_id}-result.txt"
+                    output.write_text(summary or "Không phát hiện nội dung.",encoding="utf-8")
+                output_bytes=output.stat().st_size
+                trace={"nodeId":node_id,"step":order[node_id]+1,"total":len(nodes),"toolId":tool_id,
+                    "status":"completed","durationMs":max(0,int((time.perf_counter()-started)*1000)),
+                    "inputBytes":input_bytes,"outputBytes":output_bytes,"summary":_safe_trace_text(summary,root)[:180]}
+                return node_id,output,summary,trace,None
+            except Exception as exc:
+                try: input_bytes=isolated.stat().st_size if isolated.is_file() else 0
+                except OSError: input_bytes=0
+                message=str(exc).strip() or type(exc).__name__
+                trace={"nodeId":node_id,"step":order[node_id]+1,"total":len(nodes),"toolId":tool_id,
+                    "status":"failed","durationMs":max(0,int((time.perf_counter()-started)*1000)),
+                    "inputBytes":input_bytes,"outputBytes":None,"summary":_safe_trace_text(message,root)[:180],
+                    "error":_safe_trace_text(message,root)[:250]}
+                return node_id,None,message,trace,message
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3,thread_name_prefix="nolane-dag") as executor:
+            futures=[executor.submit(execute_node,node) for node in ready]
+            batch=[future.result() for future in futures]
+        failures=[]
+        for node_id,output,summary,trace,error in batch:
+            traces[node_id]=trace
+            if error:
+                failures.append((node_id,error))
+            else:
+                outputs[node_id]=output
+                summaries[node_id]=summary
+            pending=[node for node in pending if node["id"]!=node_id]
+        if failures:
+            ordered=[traces[node["id"]] for node in nodes if node["id"] in traces]
+            message="; ".join(node_id+": "+error for node_id,error in failures)
+            raise PipelineExecutionError(message,ordered)
+    leaves=[node["id"] for node in nodes if children[node["id"]]==0]
+    total_bytes=sum(outputs[node_id].stat().st_size for node_id in leaves)
+    if total_bytes>MAX_PIPELINE_OUTPUT:
+        raise RuntimeError("Combined DAG branch outputs exceed the 45 MB package limit.")
+    package=root/"workflow-results.zip"
+    manifest={"workflow":"Nolane DAG","maxConcurrency":3,"nodes":[],"terminalOutputs":leaves}
+    with zipfile.ZipFile(package,"w",compression=zipfile.ZIP_DEFLATED,compresslevel=4) as archive:
+        for node in nodes:
+            manifest["nodes"].append({"id":node["id"],"toolId":node["toolId"],"dependsOn":node["dependsOn"],
+                "summary":summaries.get(node["id"],""),"outputBytes":outputs[node["id"]].stat().st_size if node["id"] in outputs else None})
+        for node_id in leaves:
+            output=outputs[node_id]
+            if output.is_symlink() or output.resolve(strict=True).parent!=root.resolve():
+                raise RuntimeError("A DAG branch output escaped the private runner directory.")
+            archive.write(output,f"branches/{node_id}/{output.name}")
+        archive.writestr("manifest.json",json.dumps(manifest,ensure_ascii=False,indent=2))
+    if package.stat().st_size>MAX_PIPELINE_OUTPUT:
+        package.unlink(missing_ok=True)
+        raise RuntimeError("DAG result package exceeds the 45 MB output limit.")
+    trace=[traces[node["id"]] for node in nodes]
+    summary_lines=[f"Branch {node['id']} · {node['toolId']}: {summaries[node['id']]}" for node in nodes]
+    summary="DAG hoàn tất: "+str(len(nodes))+" node, tối đa 3 node chạy đồng thời; "+str(len(leaves))+" nhánh đầu ra được đóng gói.\n\n"+"\n\n".join(summary_lines)
+    return {"summary":summary[:6000],"output_path":str(package),"trace":trace}
 def run_tool_pipeline(job, source, root):
+    if job.get("workflowDag") is not None:
+        return run_tool_dag(job,source,root)
     steps=validate_pipeline(job)
     current=source
     summaries=[]

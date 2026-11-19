@@ -1,8 +1,9 @@
 import type { Env } from "./types";
-import { getTool, validateToolPipeline } from "./tools";
-import type { ToolPipelineStep } from "./tools";
+import { getTool, validateToolDag, validateToolPipeline } from "./tools";
+import type { ToolDagNode, ToolPipelineStep } from "./tools";
 
 export interface ToolStepTrace {
+  nodeId?: string;
   step: number;
   total: number;
   toolId: string;
@@ -35,6 +36,7 @@ export interface ToolJob {
   agentTask?: string;
   agentToolReason?: string;
   pipeline?: ToolPipelineStep[];
+  workflowDag?: ToolDagNode[];
   /** Saved workflow identity, kept for per-run history and summaries. */
   workflowId?: string;
   workflowName?: string;
@@ -128,6 +130,52 @@ export function validateToolStepTrace(
   return { ok: true, trace };
 }
 
+export function validateToolDagTrace(
+  raw: unknown,
+  nodes: ToolDagNode[],
+  finalStatus: "completed" | "failed",
+): { ok: true; trace: ToolStepTrace[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw)) {
+    if (finalStatus === "failed" && (raw === undefined || raw === null)) return { ok: true, trace: [] };
+    return { ok: false, error: "DAG trace has an invalid number of nodes." };
+  }
+  if (raw.length > nodes.length) return { ok: false, error: "DAG trace has too many nodes." };
+  const byId = new Map<string, { node: ToolDagNode; index: number }>();
+  nodes.forEach((node, index) => byId.set(node.id, { node, index }));
+  const trace: ToolStepTrace[] = [];
+  const statuses = new Map<string, "completed" | "failed">();
+  for (const value of raw) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return { ok: false, error: "DAG trace contains an invalid node." };
+    const item = value as Record<string, unknown>;
+    const nodeId = typeof item.nodeId === "string" ? item.nodeId : "";
+    const match = byId.get(nodeId);
+    if (!match || statuses.has(nodeId) || item.step !== match.index + 1 || item.total !== nodes.length ||
+        item.toolId !== match.node.toolId || (item.status !== "completed" && item.status !== "failed") ||
+        !Number.isSafeInteger(item.durationMs) || Number(item.durationMs) < 0 || Number(item.durationMs) > 45 * 60 * 1000 ||
+        !Number.isSafeInteger(item.inputBytes) || Number(item.inputBytes) < 0 || Number(item.inputBytes) > 45 * 1024 * 1024 ||
+        (item.outputBytes !== null && (!Number.isSafeInteger(item.outputBytes) || Number(item.outputBytes) < 0 || Number(item.outputBytes) > 45 * 1024 * 1024)) ||
+        typeof item.summary !== "string" || item.summary.length > 180 ||
+        (item.error !== undefined && (typeof item.error !== "string" || item.error.length > 250))) {
+      return { ok: false, error: "DAG trace node does not match the stored graph." };
+    }
+    if (match.node.dependsOn.some(parentId => statuses.get(parentId) !== "completed")) {
+      return { ok: false, error: "DAG trace contains a node whose dependency did not complete." };
+    }
+    statuses.set(nodeId, item.status);
+    trace.push({ nodeId, step: match.index + 1, total: nodes.length, toolId: match.node.toolId,
+      status: item.status, durationMs: Number(item.durationMs), inputBytes: Number(item.inputBytes),
+      outputBytes: item.outputBytes === null ? null : Number(item.outputBytes), summary: item.summary,
+      ...(typeof item.error === "string" ? { error: item.error } : {}) });
+  }
+  trace.sort((a, b) => a.step - b.step);
+  if (finalStatus === "completed" && (trace.length !== nodes.length || trace.some(item => item.status !== "completed"))) {
+    return { ok: false, error: "A completed DAG must contain a successful trace for every node." };
+  }
+  if (finalStatus === "failed" && raw.length > 0 && !trace.some(item => item.status === "failed")) {
+    return { ok: false, error: "A failed DAG must record at least one failed node." };
+  }
+  return { ok: true, trace };
+}
 export async function retryToolJob(env: Env, userId: number, chatId: number, sourceJobId: string): Promise<ToolJob> {
   const previous = await getToolJob(env, sourceJobId);
   if (!previous || previous.userId !== userId || previous.chatId !== chatId) {
@@ -141,6 +189,7 @@ export async function retryToolJob(env: Env, userId: number, chatId: number, sou
     userId: previous.userId, chatId: previous.chatId, toolId: previous.toolId, fileId: previous.fileId,
     fileName: previous.fileName, mimeType: previous.mimeType, fileSize: previous.fileSize,
     pipeline: previous.pipeline || [{ toolId: previous.toolId }],
+    workflowDag: previous.workflowDag,
     workflowId: previous.workflowId, workflowName: previous.workflowName,
     agentPrompt: previous.agentPrompt, agentTask: previous.agentTask, agentToolReason: previous.agentToolReason,
     retryOf: previous.id, attempt: (previous.attempt || 1) + 1,
@@ -150,13 +199,23 @@ export async function retryToolJob(env: Env, userId: number, chatId: number, sou
 export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "status" | "createdAt" | "updatedAt">): Promise<ToolJob> {
   const tool = getTool(input.toolId);
   if (!tool?.ready) throw new Error("Công cụ này chưa được kích hoạt.");
-  const pipeline = validateToolPipeline(
-    { mimeType: input.mimeType, fileName: input.fileName },
-    input.pipeline || [{ toolId: input.toolId }],
-  );
-  if (!pipeline.ok) throw new Error("Tool pipeline không hợp lệ: " + pipeline.error);
-  if (pipeline.steps[0]?.toolId !== input.toolId) {
-    throw new Error("Tool ID phải trùng với bước đầu tiên trong pipeline.");
+  let normalizedPipeline: ToolPipelineStep[];
+  let normalizedDag: ToolDagNode[] | undefined;
+  if (input.workflowDag) {
+    const dag = validateToolDag({ mimeType: input.mimeType, fileName: input.fileName }, input.workflowDag);
+    if (!dag.ok) throw new Error("Workflow DAG không hợp lệ: " + dag.error);
+    normalizedDag = dag.nodes;
+    normalizedPipeline = dag.nodes.map(node => ({ toolId: node.toolId, ...(node.reason ? { reason: node.reason } : {}) }));
+  } else {
+    const pipeline = validateToolPipeline(
+      { mimeType: input.mimeType, fileName: input.fileName },
+      input.pipeline || [{ toolId: input.toolId }],
+    );
+    if (!pipeline.ok) throw new Error("Tool pipeline không hợp lệ: " + pipeline.error);
+    normalizedPipeline = pipeline.steps;
+  }
+  if (normalizedPipeline[0]?.toolId !== input.toolId) {
+    throw new Error("Tool ID phải trùng với node/bước đầu tiên trong quy trình.");
   }
   if (!env.NOLANE_GH_ACTIONS_TOKEN) {
     throw new Error("Thiếu GitHub Actions token. Hãy thêm GitHub Secret NOLANE_GH_ACTIONS_TOKEN với quyền Actions: write cho repository Nolane-x/Nolane-search.");
@@ -166,7 +225,7 @@ export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "statu
   }
   if (input.fileSize > 20 * 1024 * 1024) throw new Error("Telegram Bot API chỉ tải được tệp tối đa 20 MB qua getFile.");
   const now = Date.now();
-  const job: ToolJob = { ...input, pipeline: pipeline.steps, trace: undefined, attempt: input.attempt || 1, id: crypto.randomUUID(), status: "queued", createdAt: now, updatedAt: now };
+  const job: ToolJob = { ...input, pipeline: normalizedPipeline, workflowDag: normalizedDag, trace: undefined, attempt: input.attempt || 1, id: crypto.randomUUID(), status: "queued", createdAt: now, updatedAt: now };
   await saveToolJob(env, job);
   try {
     const response = await fetch(

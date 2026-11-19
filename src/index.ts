@@ -6,9 +6,9 @@ import type { MemoryCategory } from "./memory";
 import { compactChatHistory } from "./chat-context";
 import { parseJsonObjectBody } from "./http";
 import { deleteIndexedContent, listIndexedPages, normalizeIndexDomain, normalizeIndexPageUrl } from "./index-management";
-import { TOOL_CATALOG, TOOL_PIPELINE_TRANSITIONS, getTool, inferToolForUpload, isToolCompatible, validateToolPipeline, toolCategoryLabel } from "./tools";
+import { TOOL_CATALOG, TOOL_PIPELINE_TRANSITIONS, getTool, inferToolForUpload, isToolCompatible, validateToolDag, validateToolPipeline, toolCategoryLabel } from "./tools";
 import type { ToolPipelineStep } from "./tools";
-import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, validateToolStepTrace } from "./tool-jobs";
+import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, validateToolDagTrace, validateToolStepTrace } from "./tool-jobs";
 import { clearPendingToolWorkflow, deleteToolWorkflow, getPendingToolWorkflow, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow } from "./workflows";
 import { webAppResponse } from "./web-ui";
 import { completeAi, getAiRouterStatus } from "./ai-router";
@@ -1032,25 +1032,45 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     if (separator < 0) {
       await reply(env, chatId,
         "Cú pháp: <code>/workflow_save Tên quy trình | tool-1 -> tool-2</code>\n" +
-        "Ví dụ: <code>/workflow_save Video transcript | video-audio -> audio-convert -> audio-transcribe</code>");
+        "Ví dụ tuyến tính: <code>/workflow_save Video transcript | video-audio -> audio-transcribe</code>\n" +
+        "Ví dụ DAG: <code>/workflow_save Video branches | source=video-audio@input; transcript=audio-transcribe@source; converted=audio-convert@source</code>");
       return;
     }
     const name = args.slice(0, separator).trim();
     const rawIds = args.slice(separator + 1).trim();
-    const ids = rawIds.split(/\s*(?:->|,)\s*/).map(value => value.trim()).filter(Boolean);
-    if (!rawIds || ids.length < 1 || ids.length > TOOL_CATALOG.length || ids.some(id => !/^[a-z0-9-]+$/i.test(id))) {
-      await reply(env, chatId, "Workflow chỉ cần các tool ID hợp lệ, phân cách bằng <code>→</code>; không lặp processor và mọi kết nối phải thuộc luồng dữ liệu được hỗ trợ.");
-      return;
+    const dagMode = rawIds.includes("=") && rawIds.includes(";");
+    let definition: unknown[];
+    if (dagMode) {
+      const nodes = rawIds.split(";").map(part => part.trim()).filter(Boolean).map(part => {
+        const match = part.match(/^([a-z][a-z0-9_-]{0,19})\s*=\s*([a-z0-9-]+)\s*@\s*(input|[a-z][a-z0-9_-]{0,19})$/i);
+        if (!match) return null;
+        return { id: match[1]!.toLowerCase(), toolId: match[2]!.toLowerCase(),
+          dependsOn: match[3]!.toLowerCase() === "input" ? [] : [match[3]!.toLowerCase()] };
+      });
+      if (nodes.length < 2 || nodes.length > 12 || nodes.some(node => !node)) {
+        await reply(env, chatId, "DAG không đúng cú pháp. Dùng <code>a=tool-id@input; b=tool-id@a; c=tool-id@a</code> với 2–12 node.");
+        return;
+      }
+      definition = nodes;
+    } else {
+      const ids = rawIds.split(/\s*(?:->|,)\s*/).map(value => value.trim()).filter(Boolean);
+      if (!rawIds || ids.length < 1 || ids.length > TOOL_CATALOG.length || ids.some(id => !/^[a-z0-9-]+$/i.test(id))) {
+        await reply(env, chatId, "Workflow cần các tool ID hợp lệ, phân cách bằng <code>→</code> hoặc khai báo DAG bằng <code>id=tool@parent</code>.");
+        return;
+      }
+      definition = ids.map(toolId => ({ toolId }));
     }
     try {
-      const workflow = await saveToolWorkflow(env, userId, chatId, name, ids.map(toolId => ({ toolId })));
-      const chain = workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
+      const workflow = await saveToolWorkflow(env, userId, chatId, name, definition);
+      const chain = workflow.dag
+        ? workflow.dag.map(node => node.id + "=" + node.toolId + "@" + (node.dependsOn[0] || "input")).join("\n")
+        : workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
       await reply(env, chatId,
         "<b>Đã lưu workflow</b>\n" +
         "Tên: <b>" + htmlEscape(workflow.name) + "</b>\n" +
         "ID: <code>" + workflow.id + "</code>\n" +
-        "Pipeline: " + htmlEscape(chain) + "\n\n" +
-        "Dùng <code>/workflow_run " + workflow.id + "</code> rồi gửi tệp phù hợp. Workflow được lưu trong D1 và có thể chạy lại.");
+        (workflow.dag ? "DAG:\n" : "Pipeline: ") + htmlEscape(chain) + "\n\n" +
+        "Dùng <code>/workflow_run " + workflow.id + "</code> rồi gửi tệp phù hợp. Workflow được lưu trong D1.");
     } catch (error) {
       await reply(env, chatId, "Không thể lưu workflow: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
     }
@@ -1072,9 +1092,11 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
         return;
       }
       const lines = workflows.map((workflow, index) => {
-        const chain = workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
+        const chain = workflow.dag
+          ? workflow.dag.map(node => node.id + " = " + node.toolId + " ← " + (node.dependsOn[0] || "input")).join("\n")
+          : workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
         return (index + 1) + ". <b>" + htmlEscape(workflow.name) + "</b> · <code>" + workflow.id + "</code>\n" +
-          htmlEscape(chain) + "\n" +
+          (workflow.dag ? "<i>DAG · song song tối đa 3 nhánh</i>\n" : "") + htmlEscape(chain) + "\n" +
           "<code>/workflow_run " + workflow.id + "</code> · <code>/workflow_delete " + workflow.id + "</code>";
       });
       let message = "<b>Nolane Workflow Library</b> · " + workflows.length + " workflow\n\n";
@@ -1109,12 +1131,14 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
         "tool-pending:" + userId + ":" + chatId,
         "ai-file-pending:" + userId + ":" + chatId,
       ).run();
-      const chain = workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
+      const chain = workflow.dag
+        ? workflow.dag.map(node => node.id + "=" + node.toolId + "@" + (node.dependsOn[0] || "input")).join("\n")
+        : workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
       await reply(env, chatId,
         "<b>Workflow đã sẵn sàng</b>\n" +
         "Tên: <b>" + htmlEscape(workflow.name) + "</b> · <code>" + workflow.id + "</code>\n" +
-        "Pipeline: " + htmlEscape(chain) + "\n\n" +
-        "Gửi một tệp phù hợp trong vòng 15 phút. Mỗi lần chạy chỉ nhận một tệp; dùng /cancel để hủy.");
+        (workflow.dag ? "DAG:\n" : "Pipeline: ") + htmlEscape(chain) + "\n\n" +
+        "Gửi một tệp phù hợp trong vòng 15 phút. DAG chạy tối đa 3 node đồng thời và gửi ZIP các nhánh kết thúc.");
     } catch (error) {
       await reply(env, chatId, "Không thể chuẩn bị workflow: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
     }
@@ -1188,7 +1212,9 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "ID: <code>" + htmlEscape(job.id) + "</code>",
       "Trạng thái: " + state + " · lần chạy " + (job.attempt || 1),
       "Tệp: " + htmlEscape(job.fileName),
-      "Pipeline: " + htmlEscape(steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ")),
+      (job.workflowDag
+        ? "DAG:\n" + htmlEscape(job.workflowDag.map(node => node.id + " = " + (getTool(node.toolId)?.name || node.toolId) + " ← " + (node.dependsOn[0] || "input")).join("\n"))
+        : "Pipeline: " + htmlEscape(steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → "))),
     ];
     if (job.retryOf) lines.push("Retry từ: <code>" + htmlEscape(job.retryOf) + "</code>");
     if (job.workflowName) lines.push("Workflow: " + htmlEscape(job.workflowName));
@@ -1198,7 +1224,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
         const stateIcon = step.status === "completed" ? "✅" : "❌";
         const outputSize = step.outputBytes === null ? "text/no file" : step.outputBytes + " bytes";
         lines.push(
-          stateIcon + " Step " + step.step + "/" + step.total + " · " + htmlEscape(step.toolId) +
+          stateIcon + " " + (step.nodeId ? "Node " + htmlEscape(step.nodeId) : "Step " + step.step) + "/" + step.total + " · " + htmlEscape(step.toolId) +
           " · " + step.durationMs + " ms · input " + step.inputBytes + " bytes · output " + outputSize +
           "\n" + htmlEscape((step.error || step.summary).slice(0, 420))
         );
@@ -1888,22 +1914,34 @@ async function handleToolUpload(env: Env, message: NonNullable<TelegramUpdate["m
     const pendingWorkflow = await getPendingToolWorkflow(env, userId, chatId);
     if (pendingWorkflow) {
       const workflow = pendingWorkflow.workflow;
-      const validation = validateToolPipeline({ mimeType: file.mimeType, fileName: file.fileName }, workflow.steps);
-      if (!validation.ok) {
-        const first = getTool(workflow.steps[0]?.toolId || "");
-        await reply(env, chatId,
-          "Tệp này không phù hợp với workflow <b>" + htmlEscape(workflow.name) + "</b>.\n" +
-          "Pipeline yêu cầu đầu vào: " + htmlEscape(first?.accepts.join(", ") || "định dạng đã lưu") + ".\n" +
-          "Workflow vẫn đang chờ; hãy gửi tệp đúng định dạng hoặc /cancel để hủy.");
-        return;
+      let dagNodes = workflow.dag;
+      let steps: ToolPipelineStep[];
+      if (dagNodes) {
+        const validation = validateToolDag({ mimeType: file.mimeType, fileName: file.fileName }, dagNodes);
+        if (!validation.ok) {
+          await reply(env, chatId, "Tệp này không phù hợp với workflow <b>" + htmlEscape(workflow.name) + "</b>.\n" + htmlEscape(validation.error) + "\nWorkflow vẫn đang chờ; gửi tệp phù hợp hoặc /cancel để hủy.");
+          return;
+        }
+        dagNodes = validation.nodes;
+        steps = validation.nodes.map(node => ({ toolId: node.toolId, ...(node.reason ? { reason: node.reason } : {}) }));
+      } else {
+        const validation = validateToolPipeline({ mimeType: file.mimeType, fileName: file.fileName }, workflow.steps);
+        if (!validation.ok) {
+          await reply(env, chatId, "Tệp này không phù hợp với workflow <b>" + htmlEscape(workflow.name) + "</b>.\n" + htmlEscape(validation.error) + "\nWorkflow vẫn đang chờ; gửi tệp phù hợp hoặc /cancel để hủy.");
+          return;
+        }
+        steps = validation.steps;
       }
       try {
-        const firstToolId = validation.steps[0]!.toolId;
-        const chain = validation.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
+        const firstToolId = steps[0]!.toolId;
+        const chain = workflow.dag
+          ? workflow.dag.map(node => node.id + "=" + node.toolId + "@" + (node.dependsOn[0] || "input")).join("\n")
+          : steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
         const job = await createToolJob(env, {
           userId, chatId, toolId: firstToolId, fileId: file.fileId, fileName: file.fileName,
           mimeType: file.mimeType, fileSize: file.fileSize,
-          pipeline: validation.steps, workflowId: workflow.id, workflowName: workflow.name,
+          pipeline: steps, workflowDag: dagNodes,
+          workflowId: workflow.id, workflowName: workflow.name,
           agentPrompt: "Run the saved workflow '" + workflow.name + "' and explain the actual processor outputs.",
           agentTask: "summary", agentToolReason: "User-selected saved workflow.",
         });
@@ -1914,7 +1952,7 @@ async function handleToolUpload(env: Env, message: NonNullable<TelegramUpdate["m
           "Pipeline: " + htmlEscape(chain) + "\n" +
           "Tệp: " + htmlEscape(file.fileName) + "\n" +
           "Job: <code>" + job.id + "</code>\n\n" +
-          "Workflow đã được kiểm tra lại theo MIME type và sẽ chạy tuần tự trên runner tạm thời.");
+          "Workflow đã được kiểm tra lại theo MIME type; các nhánh độc lập chạy đồng thời trên runner tạm thời.");
       } catch (error) {
         await reply(env, chatId, "Không thể khởi chạy workflow: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
       }
@@ -1986,7 +2024,7 @@ async function setToolJobResult(
     (job.workflowName ? " · Workflow: " + job.workflowName : "") +
     (status === "completed" ? " · Hoàn thành" : " · Thất bại");
   const traceText = (job.trace || []).map(step =>
-    (step.status === "completed" ? "✅ " : "❌ ") + "Step " + step.step + "/" + step.total +
+    (step.status === "completed" ? "✅ " : "❌ ") + (step.nodeId ? "Node " + step.nodeId : "Step " + step.step) + "/" + step.total +
     " · " + step.toolId + " · " + step.durationMs + " ms · " +
     step.inputBytes + " → " + (step.outputBytes === null ? "text" : step.outputBytes + " bytes") +
     "\n" + (step.error || step.summary).slice(0, 300)
@@ -2078,7 +2116,9 @@ async function handleToolRunnerApi(request: Request, env: Env): Promise<Response
       const existing = await getToolJob(env, id);
       if (!existing) return jsonResponse({ error: "Tool job not found" }, 404);
       const pipeline = existing.pipeline || [{ toolId: existing.toolId }];
-      const checkedTrace = validateToolStepTrace(body?.trace, pipeline, status);
+      const checkedTrace = existing.workflowDag
+        ? validateToolDagTrace(body?.trace, existing.workflowDag, status)
+        : validateToolStepTrace(body?.trace, pipeline, status);
       if (!checkedTrace.ok) return jsonResponse({ error: checkedTrace.error }, 400);
       const saved = await setToolJobResult(env, id, status, summary, error, checkedTrace.trace);
       return saved ? jsonResponse({ ok: true }) : jsonResponse({ error: "Tool job not found" }, 404);
