@@ -661,7 +661,128 @@ class ToolRunnerUnitTests(unittest.TestCase):
 
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
-        self.assertGreaterEqual(len(runner.TOOLS),72)
+        self.assertGreaterEqual(len(runner.TOOLS),85)
+
+
+    def test_pdf_rotation_and_blank_page_removal(self):
+        import fitz
+        source=self.input_dir/"pages.pdf"
+        document=fitz.open()
+        document.new_page(width=300,height=500)
+        page=document.new_page(width=300,height=500)
+        page.insert_text((40,80),"Visible content page")
+        document.save(source); document.close()
+        rotated=runner.pdf_rotate_cw(source)
+        rotated_doc=fitz.open(rotated["output_path"])
+        self.assertEqual(rotated_doc.page_count,2)
+        self.assertEqual(rotated_doc[0].rotation,90)
+        rotated_doc.close()
+        cleaned=runner.pdf_remove_blank(source)
+        output=fitz.open(cleaned["output_path"])
+        self.assertEqual(output.page_count,1)
+        self.assertIn("Visible content page",output[0].get_text())
+        output.close()
+
+    def test_image_trim_border_pixelate_and_pair_diff(self):
+        import io,zipfile
+        from PIL import Image,ImageDraw
+        source=self.input_dir/"border.png"
+        image=Image.new("RGB",(100,80),"white")
+        ImageDraw.Draw(image).rectangle((20,15,79,64),fill=(20,80,160))
+        image.save(source); image.close()
+        trimmed=runner.image_trim_border(source)
+        with Image.open(trimmed["output_path"]) as cropped:
+            self.assertLess(cropped.width,100)
+            self.assertLess(cropped.height,80)
+            self.assertEqual(cropped.format,"PNG")
+        pixelated=runner.image_pixelate(source)
+        with Image.open(pixelated["output_path"]) as pixel:
+            self.assertEqual(pixel.size,(100,80))
+            self.assertEqual(pixel.format,"PNG")
+        left=self.input_dir/"left.png"; right=self.input_dir/"right.png"
+        Image.new("RGB",(20,20),"red").save(left)
+        other=Image.new("RGB",(20,20),"red")
+        other.putpixel((10,10),(0,0,255)); other.save(right); other.close()
+        bundle=self.input_dir/"pair.zip"
+        with zipfile.ZipFile(bundle,"w") as archive:
+            archive.write(left,"a.png"); archive.write(right,"b.png")
+        result=runner.image_diff(bundle)
+        with zipfile.ZipFile(result["output_path"]) as archive:
+            self.assertEqual(set(archive.namelist()),{"difference.png","overlay.png"})
+            with Image.open(io.BytesIO(archive.read("difference.png"))) as diff:
+                self.assertEqual(diff.size,(20,20))
+                self.assertIsNotNone(diff.getbbox())
+
+    def test_json_flatten_csv_sqlite_and_json_diff(self):
+        import csv,sqlite3,zipfile
+        source=self.write("nested.json",'{"name":"An","profile":{"age":17,"city":"Hai Phong"},"tags":["ai","python"]}')
+        flattened=runner.json_flatten_csv(source)
+        with open(flattened["output_path"],encoding="utf-8-sig",newline="") as handle:
+            row=next(csv.DictReader(handle))
+        self.assertEqual(row["profile.age"],"17")
+        self.assertEqual(row["profile.city"],"Hai Phong")
+        self.assertEqual(row["tags"],'["ai","python"]')
+        csv_source=self.write("people.csv","name,age\\nAn,17\\nBinh,18\\n")
+        database=runner.csv_to_sqlite(csv_source)
+        connection=sqlite3.connect(database["output_path"])
+        try:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM records").fetchone()[0],2)
+            self.assertEqual(connection.execute('SELECT age FROM records WHERE name="An"').fetchone()[0],"17")
+        finally:
+            connection.close()
+        first=self.input_dir/"first.json"; second=self.input_dir/"second.json"
+        first.write_text('{"a":1,"b":2}',encoding="utf-8")
+        second.write_text('{"a":1,"b":3}',encoding="utf-8")
+        bundle=self.input_dir/"json-pair.zip"
+        with zipfile.ZipFile(bundle,"w") as archive:
+            archive.write(first,"a.json"); archive.write(second,"b.json")
+        diff=runner.json_diff(bundle)
+        self.assertIn('"b": 2',diff["summary"])
+        self.assertIn('"b": 3',diff["summary"])
+
+    def test_log_insights_groups_levels_and_repeated_errors(self):
+        path=self.write("service.log",
+            "2026-11-19T10:00:00Z ERROR database timeout request 12\\n"
+            "2026-11-19T10:01:00Z ERROR database timeout request 99\\n"
+            "2026-11-19T10:02:00Z WARNING slow query\\n"
+            "2026-11-19T10:03:00Z INFO ready\\n")
+        result=runner.log_insights(path)
+        self.assertIn("ERROR: 2",result["summary"])
+        self.assertIn("WARN: 1",result["summary"])
+        self.assertIn("database timeout request #",result["summary"])
+        self.assertIn("2 x",result["summary"])
+
+    def test_audio_video_metadata_and_scene_tools_use_bounded_ffmpeg_calls(self):
+        import zipfile
+        audio=self.write("stereo.wav","mock audio")
+        video=self.write("clip.mp4","mock video")
+        audio_probe={"format":{"duration":"12"},"streams":[{"codec_type":"audio","channels":2,"channel_layout":"stereo"}]}
+        video_probe={"format":{"duration":"12"},"streams":[{"codec_type":"video","width":640,"height":360}]}
+        captured=[]
+        def fake_cmd(name,args,timeout=180):
+            captured.append((name,args,timeout))
+            target=Path(args[-1])
+            if "%03d" in str(target):
+                target=Path(str(target).replace("%03d","001"))
+            target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_bytes(b"mock-output")
+            return ""
+        with patch.object(runner,"ffprobe",return_value=audio_probe),patch.object(runner,"cmd",side_effect=fake_cmd):
+            split=runner.audio_stereo_split(audio)
+            cleaned_audio=runner.audio_metadata_clean(audio)
+        with zipfile.ZipFile(split["output_path"]) as archive:
+            self.assertEqual(set(archive.namelist()),{"left.mp3","right.mp3"})
+        self.assertTrue(Path(cleaned_audio["output_path"]).is_file())
+        self.assertTrue(any("-map_metadata" in call[1] for call in captured))
+        captured.clear()
+        with patch.object(runner,"ffprobe",return_value=video_probe),patch.object(runner,"cmd",side_effect=fake_cmd):
+            scenes=runner.video_scene_frames(video)
+            cleaned_video=runner.video_metadata_clean(video)
+        with zipfile.ZipFile(scenes["output_path"]) as archive:
+            self.assertTrue(any(name.endswith(".jpg") for name in archive.namelist()))
+        self.assertTrue(cleaned_video["output_path"].endswith(".mkv"))
+        self.assertTrue(Path(cleaned_video["output_path"]).is_file())
+        self.assertTrue(any("select='gt(scene,0.35)'" in " ".join(call[1]) for call in captured))
 
 
 if __name__ == "__main__":
