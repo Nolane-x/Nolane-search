@@ -750,12 +750,12 @@ class ToolRunnerUnitTests(unittest.TestCase):
             output=path.with_name("handled.txt")
             output.write_text("handled",encoding="utf-8")
             return {"summary":"handled","output_path":str(output)}
-        job={"toolId":"file-hash","workflowGraph":{"nodes":[
-            {"id":"left","toolId":"file-hash","dependsOn":[],"input":"source","when":"all-success"},
-            {"id":"right","toolId":"text-clean","dependsOn":["left"],"input":"source","when":"always"},
-            {"id":"skipped","toolId":"text-stats","dependsOn":["left"],"input":"parent","when":"all-success"},
+        job={"toolId":"video-audio","workflowGraph":{"nodes":[
+            {"id":"left","toolId":"video-audio","dependsOn":[],"input":"source","when":"all-success"},
+            {"id":"right","toolId":"video-info","dependsOn":["left"],"input":"source","when":"always"},
+            {"id":"skipped","toolId":"audio-info","dependsOn":["left"],"input":"parent","when":"all-success"},
         ]}}
-        with patch.dict(runner.TOOLS,{"file-hash":success,"text-clean":success}):
+        with patch.dict(runner.TOOLS,{"video-audio":success,"video-info":success}):
             result=runner.run_tool_workflow_dag(job,source,self.input_dir.resolve())
         statuses={entry["nodeId"]:entry["status"] for entry in result["trace"]}
         self.assertEqual(statuses,{"left":"completed","right":"completed","skipped":"skipped"})
