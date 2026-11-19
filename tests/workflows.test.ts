@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clearPendingToolWorkflow, deleteToolWorkflow, getPendingToolWorkflow,
-  getToolWorkflow, listToolWorkflows, MAX_TOOL_WORKFLOWS_PER_USER,
+  getToolWorkflow, listToolWorkflows,
   saveToolWorkflow, setPendingToolWorkflow,
 } from "../src/workflows";
 import type { D1Database, D1Result, D1Statement, Env } from "../src/types";
@@ -33,11 +33,9 @@ function fakeDb() {
           if (!sql.includes("SELECT payload FROM search_cache WHERE cache_key LIKE ?")) return { results: [] };
           const prefix = String(values[0]).replace(/%$/, "");
           const now = Number(values[1]);
-          const limit = Number(values[2]);
           const results = [...rows.entries()]
             .filter(([key, row]) => key.startsWith(prefix) && row.expiresAt > now)
             .sort((a,b) => b[1].createdAt-a[1].createdAt)
-            .slice(0,limit)
             .map(([,row]) => ({ payload: row.payload }) as T);
           return { results };
         },
@@ -80,25 +78,28 @@ describe("Saved Nolane Tool Workflows", () => {
     expect(rows.size).toBe(1);
   });
 
-  it("enforces workflow name and four-step limits", async () => {
+  it("accepts long workflows and rejects repeated processors", async () => {
     const {db,rows}=fakeDb();
     const env=envFor(db);
     await expect(saveToolWorkflow(env,42,42,"x",[{toolId:"image-ocr"}])).rejects.toThrow("3–40");
-    await expect(saveToolWorkflow(env,42,42,"Five steps",Array.from({length:5},()=>({toolId:"file-hash"}))))
-      .rejects.toThrow("1 đến 4");
-    expect(rows.size).toBe(0);
+    const long=await saveToolWorkflow(env,42,42,"Long pipeline",[
+      "video-audio","audio-convert","audio-transcribe","text-clean","text-deduplicate","text-stats",
+    ].map(toolId=>({toolId})));
+    expect(long.steps).toHaveLength(6);
+    await expect(saveToolWorkflow(env,42,42,"Repeated",[{toolId:"file-hash"},{toolId:"file-hash"}]))
+      .rejects.toThrow("lặp lại");
+    expect(rows.size).toBe(1);
   });
 
-  it("limits each user to 20 saved workflows", async () => {
+  it("does not impose a workflow-count quota or expiry", async () => {
     const {db,rows}=fakeDb();
     const env=envFor(db);
-    for(let index=0;index<MAX_TOOL_WORKFLOWS_PER_USER;index++){
+    for(let index=0;index<25;index++){
       await saveToolWorkflow(env,42,42,"Workflow "+String(index+1).padStart(2,"0"),[{toolId:"file-hash"}]);
     }
-    expect((await listToolWorkflows(env,42))).toHaveLength(20);
-    await expect(saveToolWorkflow(env,42,42,"One too many",[{toolId:"file-hash"}]))
-      .rejects.toThrow("tối đa 20");
-    expect(rows.size).toBe(20);
+    expect((await listToolWorkflows(env,42))).toHaveLength(25);
+    expect(rows.size).toBe(25);
+    expect([...rows.values()].every(row=>row.expiresAt>1_000_000_000_000_000)).toBe(true);
   });
 
   it("arms, resolves and clears a pending run without exposing another user's workflow", async () => {
