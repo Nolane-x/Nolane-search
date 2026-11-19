@@ -74,7 +74,7 @@ describe("Nolane Tools registry", () => {
     ]}).ok).toBe(false);
   });
 
-  it("rejects cycles, duplicate processors and invalid conditional input modes", () => {
+  it("rejects cycles, duplicate node IDs and invalid conditional input modes", () => {
     expect(validateToolWorkflowGraph({nodes:[
       {id:"a",toolId:"video-audio",dependsOn:["b"],input:"parent"},
       {id:"b",toolId:"audio-info",dependsOn:["a"],input:"parent"},
@@ -82,7 +82,16 @@ describe("Nolane Tools registry", () => {
     expect(validateToolWorkflowGraph({nodes:[
       {id:"a",toolId:"video-audio",dependsOn:[]},
       {id:"b",toolId:"video-audio",dependsOn:[]},
+    ]}).ok).toBe(true);
+    expect(validateToolWorkflowGraph({nodes:[
+      {id:"same",toolId:"video-audio",dependsOn:[]},
+      {id:"same",toolId:"audio-info",dependsOn:[]},
     ]}).ok).toBe(false);
+    const expanded=validateToolWorkflowGraph({nodes:
+      Array.from({length:80},(_,index)=>({id:"node-"+index,toolId:"file-hash",dependsOn:[]})),
+    });
+    expect(expanded.ok).toBe(true);
+    if(expanded.ok) expect(expanded.graph.nodes).toHaveLength(80);
     expect(validateToolWorkflowGraph({nodes:[
       {id:"a",toolId:"video-audio",dependsOn:[]},
       {id:"b",toolId:"text-stats",dependsOn:["a"],input:"source",when:"all-success"},
