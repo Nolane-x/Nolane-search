@@ -1121,7 +1121,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       }
       const lines = workflows.map((workflow, index) => {
         const description = workflow.graph
-          ? workflow.graph.nodes.map(node => node.id + ": " + node.toolId + " ← " + (node.dependsOn.join(", ") || "source") + " [" + node.when + "]").join("\\n")
+          ? workflow.graph.nodes.map(node => node.id + ": " + node.toolId + " ← " + (node.dependsOn.join(", ") || "source") + " [" + node.when + "]").join("\n")
           : workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
         const kind = workflow.graph ? " · DAG " + workflow.graph.nodes.length + " nodes" : " · linear";
         return (index + 1) + ". <b>" + htmlEscape(workflow.name) + "</b>" + kind + " · <code>" + workflow.id + "</code>\n" +
@@ -1243,7 +1243,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "Trạng thái: " + state + " · lần chạy " + (job.attempt || 1),
       "Tệp: " + htmlEscape(job.fileName),
       job.workflowGraph
-        ? "DAG:\\n" + steps.map(step => htmlEscape(step.nodeId + ": " + (getTool(step.toolId)?.name || step.toolId) + " ← " + (step.dependsOn.join(", ") || "source"))).join("\\n")
+        ? "DAG:\n" + steps.map(step => htmlEscape(step.nodeId + ": " + (getTool(step.toolId)?.name || step.toolId) + " ← " + (step.dependsOn.join(", ") || "source"))).join("\n")
         : "Pipeline: " + htmlEscape(steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ")),
     ];
     if (job.retryOf) lines.push("Retry từ: <code>" + htmlEscape(job.retryOf) + "</code>");
@@ -2134,7 +2134,21 @@ async function handleToolRunnerApi(request: Request, env: Env): Promise<Response
     delete runnerJob.agentToolReason;
     delete runnerJob.workflowId;
     delete runnerJob.workflowName;
-    runnerJob.pipeline = (running.pipeline || [{toolId:running.toolId}]).map(step => ({toolId:step.toolId}));
+    if (running.workflowGraph) {
+      runnerJob.workflowGraph = {
+        nodes: running.workflowGraph.nodes.map(node => ({
+          id: node.id,
+          toolId: node.toolId,
+          dependsOn: node.dependsOn.slice(),
+          input: node.input,
+          when: node.when,
+        })),
+      };
+      delete runnerJob.pipeline;
+    } else {
+      runnerJob.pipeline = (running.pipeline || [{toolId:running.toolId}]).map(step => ({toolId:step.toolId}));
+      delete runnerJob.workflowGraph;
+    }
     return jsonResponse({ job: runnerJob });
   }
   if (request.method === "POST") {
