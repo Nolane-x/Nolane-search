@@ -511,6 +511,14 @@ class ToolRunnerUnitTests(unittest.TestCase):
         with open(duplicates["output_path"],encoding="utf-8-sig",newline="") as handle:
             rows=list(csv.DictReader(handle))
         self.assertTrue(any(row["match_type"]=="exact-sha256" for row in rows))
+        unsafe=self.input_dir/"symlink.zip"
+        import stat
+        with zipfile.ZipFile(unsafe,"w") as archive:
+            info=zipfile.ZipInfo("link.png")
+            info.external_attr=(stat.S_IFLNK|0o777)<<16
+            archive.writestr(info,b"not an image")
+        with self.assertRaisesRegex(RuntimeError,"symlink"):
+            runner.image_contact_sheet(unsafe)
 
     def test_csv_split_join_json_schema_and_json_to_yaml(self):
         import zipfile,csv,json
