@@ -2034,7 +2034,7 @@ def run_tool_workflow_dag(job, source, root, max_concurrency=3):
         # Put not-yet-launched ready nodes back into the pending set.
         for node in runnable[max_concurrency:]:
             pending.add(node["id"])
-    trace=[traces[node["id"]] for node in nodes]
+    trace=[{**traces[node["id"]],"step":index+1,"total":len(nodes)} for index,node in enumerate(nodes)]
     failures=[item for item in trace if item["status"]=="failed"]
     summary_lines=[]
     for item in trace:
