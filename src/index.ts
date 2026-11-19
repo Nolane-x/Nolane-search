@@ -1066,7 +1066,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "Ví dụ tách audio video thành hai nhánh độc lập:\n" +
       "<pre>{\"nodes\":[{\"id\":\"extract\",\"toolId\":\"video-audio\",\"dependsOn\":[]},{\"id\":\"inspect\",\"toolId\":\"audio-info\",\"dependsOn\":[\"extract\"],\"input\":\"parent\"},{\"id\":\"transcribe\",\"toolId\":\"audio-transcribe\",\"dependsOn\":[\"extract\"],\"input\":\"parent\"}]}</pre>" +
       "<b>input</b>: source hoặc parent. <b>when</b>: all-success (mặc định), any-failure, always. " +
-      "Nhánh any-failure/always đọc source để không dùng output của node lỗi. Node có nhiều dependency là barrier và phải đọc source. " +
+      "Nhánh any-failure/always đọc source để không dùng output của node lỗi. Nhiều dependency dùng source là barrier hoặc input=zip để gộp artifact (processor phải nhận ZIP). " +
       "Một graph không lặp processor, không có cycle. Scheduler chạy tối đa 3 node song song; output các node cuối được đóng gói ZIP.");
     return;
   }
