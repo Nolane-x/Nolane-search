@@ -147,6 +147,8 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "text-deduplicate": ["text-clean","text-stats"],
   "text-diff": ["text-clean","text-stats"],
   "code-size-report": ["text-clean","text-stats"],
+  "text-clean": ["text-stats","text-deduplicate"],
+  "text-stats": ["text-clean"],
 };
 
 export type ToolPipelineValidation =
