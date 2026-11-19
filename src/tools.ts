@@ -119,10 +119,7 @@ export type ToolPipelineValidation =
   | { ok: true; steps: ToolPipelineStep[] }
   | { ok: false; error: string };
 
-export function validateToolPipeline(
-  file: { mimeType: string; fileName: string },
-  rawSteps: unknown,
-): ToolPipelineValidation {
+export function validateToolPipelineDefinition(rawSteps: unknown): ToolPipelineValidation {
   if (!Array.isArray(rawSteps) || rawSteps.length < 1 || rawSteps.length > 4) {
     return { ok: false, error: "Pipeline phải có từ 1 đến 4 bước." };
   }
@@ -139,9 +136,6 @@ export function validateToolPipeline(
     if (!tool?.ready) return { ok: false, error: "Tool không tồn tại hoặc chưa sẵn sàng: " + (toolId || "unknown") };
     if (seen.has(toolId)) return { ok: false, error: "Không cho phép lặp lại cùng một tool trong pipeline." };
     seen.add(toolId);
-    if (index === 0 && !isToolCompatible(tool, file.mimeType, file.fileName)) {
-      return { ok: false, error: "Bước đầu tiên không tương thích với tệp đầu vào: " + toolId };
-    }
     if (index > 0) {
       const previous = steps[index - 1]!.toolId;
       const allowed = TOOL_PIPELINE_TRANSITIONS[previous] || [];
@@ -153,6 +147,20 @@ export function validateToolPipeline(
     steps.push({ toolId, ...(reason ? { reason } : {}) });
   }
   return { ok: true, steps };
+}
+
+export function validateToolPipeline(
+  file: { mimeType: string; fileName: string },
+  rawSteps: unknown,
+): ToolPipelineValidation {
+  const definition = validateToolPipelineDefinition(rawSteps);
+  if (!definition.ok) return definition;
+  const first = definition.steps[0]!;
+  const tool = getTool(first.toolId);
+  if (!tool || !isToolCompatible(tool, file.mimeType, file.fileName)) {
+    return { ok: false, error: "Bước đầu tiên không tương thích với tệp đầu vào: " + first.toolId };
+  }
+  return definition;
 }
 
 const BY_ID = new Map(TOOL_CATALOG.map(tool => [tool.id, tool]));
