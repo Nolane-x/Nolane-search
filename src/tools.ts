@@ -156,6 +156,9 @@ export type ToolPipelineValidation =
   | { ok: false; error: string };
 
 
+export const MAX_TOOL_WORKFLOW_NODES = 256;
+export const MAX_TOOL_WORKFLOW_DEPENDENCIES = 64;
+
 export type WorkflowNodeCondition = "all-success" | "any-failure" | "always";
 export type WorkflowNodeInput = "source" | "parent" | "zip";
 
@@ -181,12 +184,11 @@ export function validateToolWorkflowGraph(raw: unknown): ToolWorkflowGraphValida
     return { ok: false, error: "DAG workflow phải là object có danh sách nodes." };
   }
   const value = raw as Record<string, unknown>;
-  if (!Array.isArray(value.nodes) || value.nodes.length < 1 || value.nodes.length > TOOL_CATALOG.length) {
-    return { ok: false, error: "DAG cần từ 1 đến " + TOOL_CATALOG.length + " node." };
+  if (!Array.isArray(value.nodes) || value.nodes.length < 1 || value.nodes.length > MAX_TOOL_WORKFLOW_NODES) {
+    return { ok: false, error: "DAG cần từ 1 đến " + MAX_TOOL_WORKFLOW_NODES + " node." };
   }
 
   const nodes = new Map<string, ToolWorkflowNode>();
-  const usedTools = new Set<string>();
   for (let index = 0; index < value.nodes.length; index++) {
     const rawNode = value.nodes[index];
     if (!rawNode || typeof rawNode !== "object" || Array.isArray(rawNode)) {
@@ -200,10 +202,8 @@ export function validateToolWorkflowGraph(raw: unknown): ToolWorkflowGraphValida
       return { ok: false, error: "Node ID phải duy nhất, bắt đầu bằng chữ và chỉ dùng chữ thường, số, _ hoặc - (tối đa 32 ký tự)." };
     }
     if (!tool?.ready) return { ok: false, error: "Tool không tồn tại hoặc chưa sẵn sàng: " + (toolId || "unknown") };
-    if (usedTools.has(toolId)) return { ok: false, error: "Mỗi DAG chỉ được dùng một node cho mỗi processor: " + toolId };
-    usedTools.add(toolId);
-    if (!Array.isArray(item.dependsOn) || item.dependsOn.length > 8) {
-      return { ok: false, error: "dependsOn phải là danh sách tối đa 8 node." };
+    if (!Array.isArray(item.dependsOn) || item.dependsOn.length > MAX_TOOL_WORKFLOW_DEPENDENCIES) {
+      return { ok: false, error: "dependsOn phải là danh sách tối đa " + MAX_TOOL_WORKFLOW_DEPENDENCIES + " node." };
     }
     const dependsOn: string[] = [];
     for (const dependency of item.dependsOn) {
@@ -215,8 +215,8 @@ export function validateToolWorkflowGraph(raw: unknown): ToolWorkflowGraphValida
     }
     const input: WorkflowNodeInput = item.input === undefined
       ? (dependsOn.length === 1 ? "parent" : "source")
-      : item.input === "source" || item.input === "parent" ? item.input : "source";
-    if (item.input !== undefined && item.input !== "source" && item.input !== "parent") {
+      : item.input === "source" || item.input === "parent" || item.input === "zip" ? item.input : "source";
+    if (item.input !== undefined && item.input !== "source" && item.input !== "parent" && item.input !== "zip") {
       return { ok: false, error: "input của node " + id + " phải là source hoặc parent." };
     }
     const when: WorkflowNodeCondition = item.when === undefined
