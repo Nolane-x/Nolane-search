@@ -174,7 +174,10 @@ The private Workflow Library stores reusable, validated tool pipelines in the ex
 - Workflows are private to the allowlisted Telegram account and the bot's private chat. They contain tool IDs only, not file contents or Telegram file IDs.
 
 This remains a validated linear-pipeline engine, not yet a general branching DAG scheduler. Arbitrary shell commands and uploaded-code execution are deliberately excluded; branch conditions and parallel fan-out require a dedicated scheduler.
-NaN creates a new job linked to the failed job with a fresh ID and incremented attempt number. The original history is kept; the original Telegram file is downloaded again and the whole pipeline is rerun.
-- Successful jobs clear the Telegram file reference. Failed jobs retain that private reference so the owner can manually retry while the Telegram Bot API still makes the file available. Old failed jobs created before this change may not have a retained reference; re-upload the source file in that case.
+## Tool execution traces and retries
+
+- `/tool_jobs` lists recent jobs; `/tool_job ID` shows the validated per-step trace (processor, elapsed milliseconds, input/output bytes, summary and any failure).
+- `/tool_retry ID` creates a new job linked to the failed job with a fresh ID and incremented attempt number. The original history is kept; the original Telegram file is downloaded again and the whole pipeline is rerun.
+- Successful jobs clear the Telegram file reference. Failed jobs retain that private reference so the owner can manually retry while the Telegram Bot API still makes the file available. Older failed jobs created before this change may not have a retained reference; re-upload the source file in that case.
 - Intermediate files remain on the ephemeral runner and are not persisted between attempts. This is whole-pipeline retry, not resume-from-step. Trace entries are validated against the exact stored pipeline before D1 persistence.
 - The trace contains bounded metadata and processor summaries only; it does not include file bytes, Telegram file IDs, tokens, or local filesystem paths.
