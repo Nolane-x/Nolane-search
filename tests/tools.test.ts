@@ -55,6 +55,25 @@ describe("Nolane Tools registry", () => {
     ]},{mimeType:"image/png",fileName:"photo.png"}).ok).toBe(false);
   });
 
+
+  it("validates multi-parent ZIP fan-in only for ZIP-compatible processors", () => {
+    const graph=validateToolWorkflowGraph({nodes:[
+      {id:"compress",toolId:"pdf-compress",dependsOn:[]},
+      {id:"clean",toolId:"pdf-metadata-clean",dependsOn:[]},
+      {id:"merge",toolId:"pdf-merge",dependsOn:["compress","clean"],input:"zip",when:"all-success"},
+    ]});
+    expect(graph.ok).toBe(true);
+    expect(validateToolWorkflowGraph({nodes:[
+      {id:"compress",toolId:"pdf-compress",dependsOn:[]},
+      {id:"clean",toolId:"pdf-metadata-clean",dependsOn:[]},
+      {id:"bad",toolId:"text-clean",dependsOn:["compress","clean"],input:"zip",when:"all-success"},
+    ]}).ok).toBe(false);
+    expect(validateToolWorkflowGraph({nodes:[
+      {id:"compress",toolId:"pdf-compress",dependsOn:[]},
+      {id:"merge",toolId:"pdf-merge",dependsOn:["compress"],input:"zip",when:"all-success"},
+    ]}).ok).toBe(false);
+  });
+
   it("rejects cycles, duplicate processors and invalid conditional input modes", () => {
     expect(validateToolWorkflowGraph({nodes:[
       {id:"a",toolId:"video-audio",dependsOn:["b"],input:"parent"},
