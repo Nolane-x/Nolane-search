@@ -185,3 +185,13 @@ The Tools subsystem uses the existing Worker and D1 rather than introducing a pe
 5. The runner calls the private Worker callback to mark the D1 job completed or failed. The Web Tools hub and `/tool_jobs` read this history.
 
 The file is held in the runner's temporary filesystem for the lifetime of that job. It is not written to the Git tree, a repository artifact or D1. The runner currently accepts Telegram `getFile` downloads up to 20 MB and caps result-document delivery at 45 MB. Job records expire after 30 days; after a terminal state, the Telegram `file_id` is cleared and only bounded metadata plus a result summary (up to 6,000 characters) remains. The GitHub Actions PAT must be scoped to this repository with Actions write permission; Worker deployment and normal Search calls do not need the PAT for any other operation.
+
+
+## Saved Tool Workflow Library
+
+- The private Telegram owner can save up to 20 named 1–4-step linear processor pipelines via `/workflow_save Name | tool-a -> tool-b`.
+- The workflow module stores user-bound definitions under `tool-workflow:{userId}:{id}` in the existing D1 `search_cache`; definitions expire after 365 days. A pending run is stored separately and expires after 15 minutes.
+- `/workflows`, `/workflow_run ID` and `/workflow_delete ID` list, arm and delete recipes. Uploads are still handled by the existing single-file Tools flow.
+- Worker checks each stored definition against current tool IDs/transitions when reading it, then revalidates the first processor against the actual uploaded file before dispatch. The runner still independently validates each pipeline.
+- Each run creates an ordinary tool job, with workflow ID/name retained in job metadata for history. The file ID remains private to D1/Worker and is not sent in the GitHub Actions dispatch input.
+- This is intentionally a reusable linear pipeline library. It does not accept user-defined branches, loops, expressions, shell commands or arbitrary parallel graphs.

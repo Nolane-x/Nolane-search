@@ -128,3 +128,16 @@ Web Workspace có tab Tools để xem catalog và sao chép lệnh; thao tác g�
 ## Runtime
 
 Tool runner dùng Python 3.12, Pillow, PyMuPDF, FFmpeg và các thư viện chuyên biệt chỉ được cài khi tool tương ứng cần chúng. Không cần API key của AI provider cho các tool xử lý tệp thông thường; Whisper chạy bằng model tải trên runner.
+
+
+## Saved Workflows
+
+The private Workflow Library stores reusable, validated tool pipelines in the existing D1 `search_cache` table; it does not provision another database or runner.
+- `/workflow_save Name | tool-a -> tool-b` saves a named sequence of 1–4 real processors. Each adjacent transition must be present in the same explicit allowlist enforced by Worker and runner.
+- `/workflows` lists the current user's workflows; `/workflow_run ID` arms one workflow for the next upload; `/workflow_delete ID` removes a workflow.
+- A user can save up to 20 workflows. Definitions expire after 365 days; a one-file pending run expires after 15 minutes and is consumed only after the job is successfully dispatched.
+- The actual uploaded MIME type and extension are revalidated at run time. An incompatible file does not consume the pending workflow.
+- Every run is a separate existing Tool Job on an ephemeral GitHub Actions runner. Job history retains the workflow ID/name and reports the executed pipeline. The original reusable definition is not mutated by a run.
+- Workflows are private to the allowlisted Telegram account and the bot's private chat. They contain tool IDs only, not file contents or Telegram file IDs.
+
+This is a reusable linear-pipeline library, not yet a general branching DAG engine: no user-authored loops, shell commands, arbitrary conditions or parallel branches are accepted. Keep this limitation explicit until a separately validated DAG scheduler is implemented.

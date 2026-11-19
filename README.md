@@ -87,3 +87,8 @@ Telegram `/ai` and the authenticated Web Workspace chat use a bounded function-c
 ### AI file orchestration
 
 Telegram `/ai_file <request>` opens a 5-minute batch for up to five files. The agent can plan a validated chain of up to four compatible processors per file (for example, video → audio extraction → speech-ready WAV → transcription). Each file receives its own isolated GitHub Actions job and AI summary; use `/ai_file_done` to close the batch early. The Worker and runner both enforce the explicit tool-transition allowlist, step-count limit and intermediate-file size cap.
+
+
+### Saved Tool Workflows
+
+Save and replay validated processor chains from Telegram: `/workflow_save Name | tool-a -> tool-b`, `/workflows`, `/workflow_run ID` and `/workflow_delete ID`. Each account can store up to 20 reusable pipelines of up to four compatible processors. The next uploaded file is checked again against the first processor before GitHub Actions dispatch. This is a bounded linear workflow library, not a general-purpose DAG or shell automation system.

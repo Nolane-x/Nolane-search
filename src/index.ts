@@ -9,6 +9,7 @@ import { deleteIndexedContent, listIndexedPages, normalizeIndexDomain, normalize
 import { TOOL_CATALOG, TOOL_PIPELINE_TRANSITIONS, getTool, inferToolForUpload, isToolCompatible, validateToolPipeline, toolCategoryLabel } from "./tools";
 import type { ToolPipelineStep } from "./tools";
 import { createToolJob, getToolJob, listToolJobs, updateToolJob } from "./tool-jobs";
+import { clearPendingToolWorkflow, deleteToolWorkflow, getPendingToolWorkflow, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow } from "./workflows";
 import { webAppResponse } from "./web-ui";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import type { AiFunctionTool, AiTask } from "./ai-router";
@@ -767,6 +768,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     await env.DB.prepare("DELETE FROM search_cache WHERE cache_key IN (?, ?)").bind(
       "ai-file-pending:" + userId + ":" + chatId,
       "tool-pending:" + userId + ":" + chatId,
+      "tool-workflow-pending:" + userId + ":" + chatId,
     ).run();
     await sendHomeDashboard(env, chatId);
     return;
@@ -1004,6 +1006,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   }
 
   if (command === "tool") {
+    await clearPendingToolWorkflow(env, userId, chatId);
     const tool = getTool(args.toLowerCase());
     if (!tool?.ready) {
       await reply(env, chatId, "Không tìm thấy tool đang hoạt động. Gõ /tools để xem danh mục.");
@@ -1020,6 +1023,118 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     return;
   }
 
+  if (command === "workflow_save") {
+    if (chatId !== userId || !allowedUser(env, userId)) {
+      await reply(env, chatId, "Workflow chỉ được quản lý trong chat riêng được cấp quyền.");
+      return;
+    }
+    const separator = args.indexOf("|");
+    if (separator < 0) {
+      await reply(env, chatId,
+        "Cú pháp: <code>/workflow_save Tên quy trình | tool-1 -> tool-2</code>\n" +
+        "Ví dụ: <code>/workflow_save Video transcript | video-audio -> audio-convert -> audio-transcribe</code>");
+      return;
+    }
+    const name = args.slice(0, separator).trim();
+    const rawIds = args.slice(separator + 1).trim();
+    const ids = rawIds.split(/\s*(?:->|,)\s*/).map(value => value.trim()).filter(Boolean);
+    if (!rawIds || ids.length < 1 || ids.length > 4 || ids.some(id => !/^[a-z0-9-]+$/i.test(id))) {
+      await reply(env, chatId, "Workflow cần từ 1 đến 4 tool ID, phân cách bằng <code>→</code>. Dùng /tools để xem ID hợp lệ.");
+      return;
+    }
+    try {
+      const workflow = await saveToolWorkflow(env, userId, chatId, name, ids.map(toolId => ({ toolId })));
+      const chain = workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
+      await reply(env, chatId,
+        "<b>Đã lưu workflow</b>\n" +
+        "Tên: <b>" + htmlEscape(workflow.name) + "</b>\n" +
+        "ID: <code>" + workflow.id + "</code>\n" +
+        "Pipeline: " + htmlEscape(chain) + "\n\n" +
+        "Dùng <code>/workflow_run " + workflow.id + "</code> rồi gửi tệp phù hợp. Workflow được lưu trong D1 và có thể chạy lại.");
+    } catch (error) {
+      await reply(env, chatId, "Không thể lưu workflow: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
+    }
+    return;
+  }
+
+  if (command === "workflows") {
+    if (chatId !== userId || !allowedUser(env, userId)) {
+      await reply(env, chatId, "Workflow chỉ được xem trong chat riêng được cấp quyền.");
+      return;
+    }
+    try {
+      const workflows = await listToolWorkflows(env, userId);
+      if (!workflows.length) {
+        await reply(env, chatId,
+          "Chưa có workflow đã lưu. Tạo một quy trình bằng:\n" +
+          "<code>/workflow_save Tên quy trình | tool-1 -> tool-2</code>\n" +
+          "Tối đa 4 bước mỗi workflow và 20 workflow mỗi tài khoản.");
+        return;
+      }
+      const lines = workflows.map((workflow, index) => {
+        const chain = workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
+        return (index + 1) + ". <b>" + htmlEscape(workflow.name) + "</b> · <code>" + workflow.id + "</code>\n" +
+          htmlEscape(chain) + "\n" +
+          "<code>/workflow_run " + workflow.id + "</code> · <code>/workflow_delete " + workflow.id + "</code>";
+      });
+      await reply(env, chatId,
+        "<b>Nolane Workflow Library</b> · " + workflows.length + "/20\n\n" +
+        lines.join("\n\n") + "\n\nWorkflow chạy trên từng tệp; MIME và pipeline được xác minh lại trước khi dispatch.");
+    } catch (error) {
+      await reply(env, chatId, "Không thể tải workflow: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
+    }
+    return;
+  }
+
+  if (command === "workflow_run") {
+    if (chatId !== userId || !allowedUser(env, userId)) {
+      await reply(env, chatId, "Workflow chỉ được chạy trong chat riêng được cấp quyền.");
+      return;
+    }
+    const id = args.trim().toLowerCase();
+    if (!/^[a-f0-9]{12}$/.test(id)) {
+      await reply(env, chatId, "Cú pháp: <code>/workflow_run WORKFLOW_ID</code>. Xem ID bằng /workflows.");
+      return;
+    }
+    try {
+      const workflow = await setPendingToolWorkflow(env, userId, chatId, id);
+      await env.DB.prepare("DELETE FROM search_cache WHERE cache_key IN (?, ?)").bind(
+        "tool-pending:" + userId + ":" + chatId,
+        "ai-file-pending:" + userId + ":" + chatId,
+      ).run();
+      const chain = workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
+      await reply(env, chatId,
+        "<b>Workflow đã sẵn sàng</b>\n" +
+        "Tên: <b>" + htmlEscape(workflow.name) + "</b> · <code>" + workflow.id + "</code>\n" +
+        "Pipeline: " + htmlEscape(chain) + "\n\n" +
+        "Gửi một tệp phù hợp trong vòng 15 phút. Mỗi lần chạy chỉ nhận một tệp; dùng /cancel để hủy.");
+    } catch (error) {
+      await reply(env, chatId, "Không thể chuẩn bị workflow: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
+    }
+    return;
+  }
+
+  if (command === "workflow_delete") {
+    if (chatId !== userId || !allowedUser(env, userId)) {
+      await reply(env, chatId, "Workflow chỉ được xóa trong chat riêng được cấp quyền.");
+      return;
+    }
+    const id = args.trim().toLowerCase();
+    if (!/^[a-f0-9]{12}$/.test(id)) {
+      await reply(env, chatId, "Cú pháp: <code>/workflow_delete WORKFLOW_ID</code>.");
+      return;
+    }
+    try {
+      const deleted = await deleteToolWorkflow(env, userId, id);
+      const pending = await getPendingToolWorkflow(env, userId, chatId);
+      if (deleted && pending?.pending.workflowId === id) await clearPendingToolWorkflow(env, userId, chatId);
+      await reply(env, chatId, deleted ? "Đã xóa workflow <code>" + id + "</code>." : "Không tìm thấy workflow thuộc tài khoản của bạn.");
+    } catch (error) {
+      await reply(env, chatId, "Không thể xóa workflow: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
+    }
+    return;
+  }
+
   if (command === "tool_jobs") {
     const jobs = await listToolJobs(env, userId, 15);
     if (!jobs.length) {
@@ -1029,7 +1144,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     const lines = jobs.map(job => {
       const tool = getTool(job.toolId);
       const status = job.status === "completed" ? "✅ Hoàn thành" : job.status === "failed" ? "❌ Thất bại" : job.status === "running" ? "⚙️ Đang chạy" : "⏳ Đang chờ";
-      return status + " · <b>" + htmlEscape(tool?.name || job.toolId) + "</b>\n<code>" + htmlEscape(job.id) + "</code> · " + htmlEscape(job.fileName);
+      const workflow = job.workflowName ? " · Workflow: " + htmlEscape(job.workflowName) : "";
+      return status + " · <b>" + htmlEscape(tool?.name || job.toolId) + "</b>" + workflow + "\n<code>" + htmlEscape(job.id) + "</code> · " + htmlEscape(job.fileName);
     });
     await reply(env, chatId, "<b>Nolane Tools · lịch sử</b>\n\n" + lines.join("\n\n"));
     return;
@@ -1041,6 +1157,10 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/tools</code> — mở danh mục công cụ xử lý file\n" +
       "<code>/tool ID</code> — chọn tool cho file gửi tiếp theo\n" +
       "<code>/tool_jobs</code> — lịch sử xử lý file\n" +
+      "<code>/workflow_save Tên | tool-1 -> tool-2</code> — lưu pipeline dùng lại\n" +
+      "<code>/workflows</code> — xem thư viện workflow\n" +
+      "<code>/workflow_run ID</code> — chạy workflow với tệp tiếp theo\n" +
+      "<code>/workflow_delete ID</code> — xóa workflow\n" +
       "<code>/ai câu hỏi</code> — AI tự gọi web, đọc trang và các tool tích hợp\n" +
       "<code>/ai_file yêu cầu</code> — mở batch tối đa 5 tệp, AI tự lập chuỗi tool\n" +
       "<code>/ai_file_done</code> — kết thúc batch AI File\n" +
@@ -1242,6 +1362,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   }
 
   if (command === "ai_file") {
+    await clearPendingToolWorkflow(env, userId, chatId);
     if (chatId !== userId || !allowedUser(env, userId)) {
       await reply(env, chatId, "AI File chỉ dùng trong chat riêng được cấp quyền.");
       return;
@@ -1677,6 +1798,45 @@ async function handleToolUpload(env: Env, message: NonNullable<TelegramUpdate["m
     return;
   }
 
+  const explicitToolCaption = message.caption?.trim().match(/^\/tool\s+([a-z0-9-]+)$/i);
+  if (!explicitToolCaption) {
+    const pendingWorkflow = await getPendingToolWorkflow(env, userId, chatId);
+    if (pendingWorkflow) {
+      const workflow = pendingWorkflow.workflow;
+      const validation = validateToolPipeline({ mimeType: file.mimeType, fileName: file.fileName }, workflow.steps);
+      if (!validation.ok) {
+        const first = getTool(workflow.steps[0]?.toolId || "");
+        await reply(env, chatId,
+          "Tệp này không phù hợp với workflow <b>" + htmlEscape(workflow.name) + "</b>.\n" +
+          "Pipeline yêu cầu đầu vào: " + htmlEscape(first?.accepts.join(", ") || "định dạng đã lưu") + ".\n" +
+          "Workflow vẫn đang chờ; hãy gửi tệp đúng định dạng hoặc /cancel để hủy.");
+        return;
+      }
+      try {
+        const firstToolId = validation.steps[0]!.toolId;
+        const chain = validation.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
+        const job = await createToolJob(env, {
+          userId, chatId, toolId: firstToolId, fileId: file.fileId, fileName: file.fileName,
+          mimeType: file.mimeType, fileSize: file.fileSize,
+          pipeline: validation.steps, workflowId: workflow.id, workflowName: workflow.name,
+          agentPrompt: "Run the saved workflow '" + workflow.name + "' and explain the actual processor outputs.",
+          agentTask: "summary", agentToolReason: "User-selected saved workflow.",
+        });
+        await clearPendingToolWorkflow(env, userId, chatId);
+        await reply(env, chatId,
+          "⏳ <b>Đã khởi chạy workflow</b>\n" +
+          "Tên: <b>" + htmlEscape(workflow.name) + "</b> · <code>" + workflow.id + "</code>\n" +
+          "Pipeline: " + htmlEscape(chain) + "\n" +
+          "Tệp: " + htmlEscape(file.fileName) + "\n" +
+          "Job: <code>" + job.id + "</code>\n\n" +
+          "Workflow đã được kiểm tra lại theo MIME type và sẽ chạy tuần tự trên runner tạm thời.");
+      } catch (error) {
+        await reply(env, chatId, "Không thể khởi chạy workflow: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
+      }
+      return;
+    }
+  }
+
   let selected = "";
   const captionCommand = message.caption?.trim().match(/^\/tool\s+([a-z0-9-]+)$/i);
   if (captionCommand) selected = captionCommand[1]!.toLowerCase();
@@ -1736,6 +1896,7 @@ async function setToolJobResult(
   const status = job.status === "failed" ? "failed" : "completed";
   const tool = getTool(job.toolId);
   const title = (status === "completed" ? "✅ " : "❌ ") + (tool?.name || job.toolId) +
+    (job.workflowName ? " · Workflow: " + job.workflowName : "") +
     (status === "completed" ? " · Hoàn thành" : " · Thất bại");
   const content = status === "completed" ? (job.resultSummary || summary) : (job.error || errorMessage);
   const chunks: string[] = [];
