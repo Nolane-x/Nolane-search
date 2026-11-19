@@ -91,7 +91,7 @@ Telegram `/ai_file <request>` opens a rolling-idle-timeout batch for as many fil
 
 ### Saved Tool Workflows
 
-Save and replay validated processor chains from Telegram: `/workflow_save Name | tool-a -> tool-b`, `/workflows`, `/workflow_run ID` and `/workflow_delete ID`. Saved definitions have no application-level count quota or expiry; pipelines can contain any useful chain of distinct compatible processors. The next uploaded file is checked again against the first processor before GitHub Actions dispatch. This is a bounded linear workflow library, not a general-purpose DAG or shell automation system.
+Save and replay validated processor chains from Telegram: `/workflow_save Name | tool-a -> tool-b`, `/workflows`, `/workflow_run ID` and `/workflow_delete ID`. Saved definitions have no application-level count quota or expiry; pipelines can contain any useful chain of distinct compatible processors. The next uploaded file is checked again against the first processor before GitHub Actions dispatch. Linear pipelines and branching DAG workflows are both supported; uploaded shell commands or arbitrary user code are not executed.
 `/tool_retry JOB_ID` creates a new attempt from the original Telegram file and preserves the failed job. Retries rerun the complete pipeline; intermediate files are intentionally not retained between ephemeral runs.
 
 
