@@ -1925,8 +1925,8 @@ def validate_workflow_graph(job):
 def _copy_dag_input(source,destination):
     destination.parent.mkdir(parents=True,exist_ok=True)
     shutil.copyfile(source,destination)
-    if destination.stat().st_size>MAX_INPUT:
-        raise RuntimeError("DAG intermediate input exceeds the configured file size limit.")
+    if destination.stat().st_size>MAX_PIPELINE_OUTPUT:
+        raise RuntimeError("DAG intermediate input exceeds the configured 45 MB limit.")
     return destination
 
 
