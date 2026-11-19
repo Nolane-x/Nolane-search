@@ -181,3 +181,17 @@ This remains a validated linear-pipeline engine, not yet a general branching DAG
 - Successful jobs clear the Telegram file reference. Failed jobs retain that private reference so the owner can manually retry while the Telegram Bot API still makes the file available. Older failed jobs created before this change may not have a retained reference; re-upload the source file in that case.
 - Intermediate files remain on the ephemeral runner and are not persisted between attempts. This is whole-pipeline retry, not resume-from-step. Trace entries are validated against the exact stored pipeline before D1 persistence.
 - The trace contains bounded metadata and processor summaries only; it does not include file bytes, Telegram file IDs, tokens, or local filesystem paths.
+
+
+## DAG workflow engine
+
+DAG workflows are saved with `/workflow_save_dag Name | {"nodes":[...]}`; use `/workflow_dag_help` for a Telegram example. A node has a unique `id`, `toolId`, `dependsOn`, `input` and optional `when` condition. The graph is topologically validated; cycles, duplicate processors, missing parents, unsupported data edges and incompatible original-file inputs are rejected.
+
+- `input: "source"` reads a private copy of the original Telegram file. Root nodes use source. Failure/always branches may also read source.
+- `input: "parent"` consumes the single successful parent artifact; the edge must be in the explicit tool transition allowlist.
+- `input: "zip"` packages outputs from at least two successful parents in a per-node ZIP and feeds it to a processor that accepts ZIP (for example `pdf-merge`). Parent outputs are stored under node-specific ZIP paths. It does not concatenate arbitrary content.
+- `when: "all-success"` (default) runs only when every dependency completed. `any-failure` runs when at least one dependency failed. `always` runs after all dependencies become terminal. Conditional source nodes must accept the original file type.
+- Independent nodes run concurrently, with a maximum of three active processors per job. Nodes write into isolated working directories. The terminal node artifacts are returned together in a results ZIP with a manifest.
+- If any processor fails, the DAG job is marked failed even when an any-failure fallback ran successfully; the trace records completed, failed and skipped nodes. Retry starts a fresh DAG run from the original file, not from intermediate artifacts.
+
+This first DAG scheduler supports branching, status conditions, ZIP fan-in and bounded parallel execution. It does not yet merge multiple arbitrary data streams into a custom structured object, resume a partially completed job, or expose a visual graph editor.
