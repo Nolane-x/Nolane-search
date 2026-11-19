@@ -833,7 +833,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
             {"id":"source","toolId":"video-audio","dependsOn":[]},
             {"id":"transcript","toolId":"audio-transcribe","dependsOn":["source"]},
             {"id":"converted","toolId":"audio-convert","dependsOn":["source"]},
-            {"id":"descendant","toolId":"audio-info","dependsOn":["transcript"]},
+            {"id":"descendant","toolId":"text-clean","dependsOn":["transcript"]},
         ]
         lock=threading.Lock()
         active=0
@@ -860,7 +860,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
             "video-audio":succeed,
             "audio-transcribe":fail,
             "audio-convert":succeed,
-            "audio-info":succeed,
+            "text-clean":succeed,
         }):
             with self.assertRaises(runner.PipelineExecutionError) as caught:
                 runner.run_tool_dag({"toolId":"video-audio","workflowDag":dag},source,self.input_dir.resolve())
