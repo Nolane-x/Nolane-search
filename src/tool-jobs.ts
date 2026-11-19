@@ -140,7 +140,8 @@ export function validateToolDagTrace(
     return { ok: false, error: "DAG trace has an invalid number of nodes." };
   }
   if (raw.length > nodes.length) return { ok: false, error: "DAG trace has too many nodes." };
-  const byId = new Map(nodes.map((node, index) => [node.id, { node, index }]));
+  const byId = new Map<string, { node: ToolDagNode; index: number }>();
+  nodes.forEach((node, index) => byId.set(node.id, { node, index }));
   const trace: ToolStepTrace[] = [];
   const statuses = new Map<string, "completed" | "failed">();
   for (const value of raw) {
