@@ -578,6 +578,11 @@ class ToolRunnerUnitTests(unittest.TestCase):
         output=runner.run_tool_pipeline(chain,source_code,self.input_dir.resolve())
         self.assertTrue(Path(output["output_path"]).is_file())
         self.assertIn("Total lines:",Path(output["output_path"]).read_text(encoding="utf-8"))
+        stats_source=self.write("stats.txt","Nolane Search\nNolane Tools\n")
+        stats_chain={"toolId":"text-stats","pipeline":[
+            {"toolId":"text-stats"},{"toolId":"text-clean"}]}
+        stats_output=runner.run_tool_pipeline(stats_chain,stats_source,self.input_dir.resolve())
+        self.assertIn("Words:",Path(stats_output["output_path"]).read_text(encoding="utf-8"))
 
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
