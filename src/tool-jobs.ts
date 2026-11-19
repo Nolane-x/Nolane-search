@@ -1,8 +1,9 @@
 import type { Env } from "./types";
-import { getTool, validateToolPipeline } from "./tools";
-import type { ToolPipelineStep } from "./tools";
+import { getTool, validateToolDag, validateToolPipeline } from "./tools";
+import type { ToolDagNode, ToolPipelineStep } from "./tools";
 
 export interface ToolStepTrace {
+  nodeId?: string;
   step: number;
   total: number;
   toolId: string;
@@ -35,6 +36,7 @@ export interface ToolJob {
   agentTask?: string;
   agentToolReason?: string;
   pipeline?: ToolPipelineStep[];
+  workflowDag?: ToolDagNode[];
   /** Saved workflow identity, kept for per-run history and summaries. */
   workflowId?: string;
   workflowName?: string;
