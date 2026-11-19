@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TOOL_CATALOG, getTool, inferToolForUpload, isToolCompatible, validateToolPipeline, validateToolPipelineDefinition } from "../src/tools";
+import { TOOL_CATALOG, getTool, inferToolForUpload, isToolCompatible, validateToolPipeline, validateToolPipelineDefinition, validateToolWorkflowGraph, validateToolWorkflowGraphInput } from "../src/tools";
 
 describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
@@ -30,6 +30,44 @@ describe("Nolane Tools registry", () => {
     expect(inferToolForUpload({ mimeType: "application/json", fileName: "data.json" })).toBe("json-format");
     expect(inferToolForUpload({ mimeType: "application/x-ndjson", fileName: "events.jsonl" })).toBe("jsonl-format");
     expect(inferToolForUpload({ mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", fileName: "notes.docx" })).toBe("office-text");
+  });
+
+
+  it("validates DAG ordering, leaves and parallel branches", () => {
+    const graph=validateToolWorkflowGraph({nodes:[
+      {id:"extract",toolId:"video-audio",dependsOn:[]},
+      {id:"inspect",toolId:"audio-info",dependsOn:["extract"],input:"parent"},
+      {id:"transcribe",toolId:"audio-transcribe",dependsOn:["extract"],input:"parent"},
+    ]});
+    expect(graph.ok).toBe(true);
+    if(graph.ok){
+      expect(graph.roots).toEqual(["extract"]);
+      expect(graph.leaves).toEqual(["inspect","transcribe"]);
+      expect(graph.graph.nodes.map(node=>node.id)).toEqual(["extract","inspect","transcribe"]);
+    }
+    expect(validateToolWorkflowGraphInput({nodes:[
+      {id:"extract",toolId:"video-audio",dependsOn:[]},
+      {id:"inspect",toolId:"audio-info",dependsOn:["extract"],input:"parent"},
+    ]},{mimeType:"video/mp4",fileName:"clip.mp4"}).ok).toBe(true);
+    expect(validateToolWorkflowGraphInput({nodes:[
+      {id:"extract",toolId:"video-audio",dependsOn:[]},
+      {id:"inspect",toolId:"audio-info",dependsOn:["extract"],input:"parent"},
+    ]},{mimeType:"image/png",fileName:"photo.png"}).ok).toBe(false);
+  });
+
+  it("rejects cycles, duplicate processors and invalid conditional input modes", () => {
+    expect(validateToolWorkflowGraph({nodes:[
+      {id:"a",toolId:"video-audio",dependsOn:["b"],input:"parent"},
+      {id:"b",toolId:"audio-info",dependsOn:["a"],input:"parent"},
+    ]}).ok).toBe(false);
+    expect(validateToolWorkflowGraph({nodes:[
+      {id:"a",toolId:"video-audio",dependsOn:[]},
+      {id:"b",toolId:"video-audio",dependsOn:[]},
+    ]}).ok).toBe(false);
+    expect(validateToolWorkflowGraph({nodes:[
+      {id:"a",toolId:"video-audio",dependsOn:[]},
+      {id:"b",toolId:"text-stats",dependsOn:["a"],input:"source",when:"all-success"},
+    ]}).ok).toBe(false);
   });
 
   it("validates multi-step pipelines against explicit file types and data-flow edges", () => {
