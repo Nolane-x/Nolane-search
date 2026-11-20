@@ -4126,7 +4126,6 @@ TOOLS={
  "text-to-base64":text_to_base64,"base64-to-text":base64_to_text,"url-encode":url_encode_text,"url-decode":url_decode_text,
  "json-minify":json_minify,"json-sort-keys":json_sort_keys,
 }
-}
 
 
 def _runner_output_path(raw_path, root):
