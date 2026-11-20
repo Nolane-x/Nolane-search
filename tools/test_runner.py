@@ -1118,7 +1118,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertIn("1\t# TODO",comments)
         self.assertIn("3\t// BUG",comments)
 
-        self.assertEqual(Path(runner.text_sort_unique_words(self.write("words.txt","Pear apple PEAR banana"))["output_path"]).read_text(encoding="utf-8"),"apple\nPear\nbanana\n")
+        self.assertEqual(Path(runner.text_sort_unique_words(self.write("words.txt","Pear apple PEAR banana"))["output_path"]).read_text(encoding="utf-8"),"apple\nbanana\nPear\n")
         self.assertEqual(Path(runner.text_word_to_lines(self.write("tokens.txt","one  two\nthree"))["output_path"]).read_text(encoding="utf-8"),"one\ntwo\nthree\n")
         self.assertEqual(Path(runner.text_join_lines(self.write("lines.txt"," one \n\n two\t\n three"))["output_path"]).read_text(encoding="utf-8"),"one two three")
         domains=Path(runner.text_extract_domains(self.write("domains.txt","https://sub.example.com mail user@example.net and foo.org"))["output_path"]).read_text(encoding="utf-8")
