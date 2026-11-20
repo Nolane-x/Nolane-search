@@ -13,7 +13,7 @@ const TEXT_TOOL_IDS = new Set([
   "text-collapse-whitespace", "text-remove-punctuation", "text-to-ascii", "text-html-escape", "text-html-unescape", "text-extract-mentions", "text-extract-hex-colors", "text-extract-phones", "text-dedupe-lines", "text-count-report", "text-quote-lines", "text-unquote-lines", "csv-transpose", "csv-sort-rows", "csv-dedupe-rows", "csv-to-xml", "csv-to-html", "json-sort-array", "json-remove-nulls", "json-to-html-table",
   "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv",
   "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values",
-  "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values",
+  "text-sentence-case", "text-normalize-quotes", "text-normalize-dashes", "text-reverse-word-order", "text-extract-words", "text-extract-sentences", "text-dedupe-sentences", "text-remove-markdown-formatting", "text-markdown-toc", "text-markdown-code-blocks", "text-markdown-table-extract", "text-extract-numbered-lists", "text-join-hyphenated-lines", "text-strip-bom", "text-normalize-paragraph-spacing", "csv-schema-infer", "csv-duplicates-report", "csv-sample-rows", "json-array-stats", "json-canonicalize",
 ]);
 
 export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
@@ -776,6 +776,116 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
       for(const [value,count] of counts)result.push(JSON.stringify({column:name,value,count}));
     }
     return result.join("\n");
+  }
+  if (toolId === "text-sentence-case") {
+    const value=content.toLocaleLowerCase();
+    return value.replace(/(^|[.!?。！？]\s+)([\p{L}])/gu,(_match,prefix:string,letter:string)=>prefix+letter.toLocaleUpperCase());
+  }
+  if (toolId === "text-normalize-quotes") return content.replace(/[\u2018\u2019\u201a\u201b\u2032\u2035]/g,"'").replace(/[\u201c\u201d\u201e\u201f\u2033\u2036\u00ab\u00bb]/g,'"');
+  if (toolId === "text-normalize-dashes") return content.replace(/[\u2010-\u2015\u2212\ufe58\ufe63\uff0d]/g,"-");
+  if (toolId === "text-reverse-word-order") return content.split(/\r?\n/).map(line=>line.trim().split(/\s+/).filter(Boolean).reverse().join(" ")).join("\n");
+  if (toolId === "text-extract-words") {
+    const words=content.match(/[^\W_]+(?:['’][^\W_]+)?/gu)||[];const seen=new Set<string>();
+    return words.filter(word=>{const key=word.toLocaleLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).join("\n");
+  }
+  const sentenceParts=(source:string)=>source.match(/.+?(?:[.!?。！？]+(?=\s|$)|$)/gs)?.map(value=>value.trim()).filter(Boolean)||[];
+  if (toolId === "text-extract-sentences") return sentenceParts(content.replace(/\s+/g," ").trim()).join("\n");
+  if (toolId === "text-dedupe-sentences") {
+    const seen=new Set<string>();return sentenceParts(content.replace(/\s+/g," ").trim()).filter(value=>{const key=value.toLocaleLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).join(" ");
+  }
+  if (toolId === "text-remove-markdown-formatting") {
+    return content.replace(/!\[([^\]]*)\]\([^)]+\)/g,"$1").replace(/\[([^\]]+)\]\([^)]+\)/g,"$1")
+      .replace(/^\s{0,3}#{1,6}\s*/gm,"").replace(/^\s{0,3}>\s?/gm,"")
+      .replace(/^\s*[-+*]\s+/gm,"").replace(/^\s*\d+[.)]\s+/gm,"")
+      .replace(new RegExp(String.fromCharCode(96)+"([^"+String.fromCharCode(96)+"]*)"+String.fromCharCode(96),"g"),"$1")
+      .replace(/(\*\*|__|~~|(?<!\w)[*_])/g,"").replace(/^\s*([-*_]){3,}\s*$/gm,"");
+  }
+  const markdownHeadings=(source:string)=>{
+    const values:Array<{level:number;text:string;slug:string}>=[];let inFence=false;let fenceChar="";
+    const seen=new Map<string,number>();const tick=String.fromCharCode(96);
+    for(const line of source.split(/\r?\n/)){
+      const stripped=line.trimStart(),marker=stripped[0]||"",length=marker==="~"||marker===tick?stripped.length-stripped.replace(new RegExp("^"+marker+"+"),"")[0]?.length:0;
+      if((marker==="~"||marker===tick)&&length>=3){inFence=!inFence;fenceChar=marker;continue;}
+      if(inFence)continue;
+      const match=line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);if(!match)continue;
+      const title=match[2]!.replace(/\s+#+\s*$/,"").trim();
+      const base=title.normalize("NFKD").toLowerCase().replace(/đ/g,"d").replace(/\p{M}/gu,"").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")||"section";
+      const count=(seen.get(base)||0)+1;seen.set(base,count);
+      values.push({level:match[1]!.length,text:title,slug:count===1?base:base+"-"+count});
+    }
+    return values;
+  };
+  if (toolId === "text-markdown-toc") return markdownHeadings(content).map(item=>"  ".repeat(Math.max(0,item.level-1))+"- ["+item.text+"](#"+item.slug+")").join("\n");
+  if (toolId === "text-markdown-code-blocks") {
+    const lines=content.split(/\r?\n/);const records:unknown[]=[];let index=0;const tick=String.fromCharCode(96);
+    while(index<lines.length){
+      const stripped=lines[index]!.trimStart(),marker=stripped[0]||"",length=marker===tick||marker==="~"?stripped.length-stripped.replace(new RegExp("^"+marker+"+"),"")[0]?.length:0;
+      if(length<3){index++;continue;}
+      const info=stripped.slice(length).trim(),start=index+1;index++;const body:string[]=[];let closed=false;
+      while(index<lines.length){const candidate=lines[index]!.trimStart();const count=candidate.startsWith(marker)?candidate.length-candidate.replace(new RegExp("^"+marker+"+"),"")[0]?.length:0;
+        if(count>=length&&!candidate.slice(count).trim()){closed=true;index++;break;}body.push(lines[index]!);index++;}
+      records.push({index:records.length+1,language:info.split(/\s+/)[0]||"",start_line:start,closed,code:body.join("\n")});
+    }
+    return records.map(item=>JSON.stringify(item)).join("\n");
+  }
+  if (toolId === "text-markdown-table-extract") {
+    const lines=content.split(/\r?\n/);
+    const cells=(line:string)=>{let value=line.trim();if(value.startsWith("|"))value=value.slice(1);if(value.endsWith("|"))value=value.slice(0,-1);
+      const result:string[]=[];let current="",escaped=false;for(const char of value){if(escaped){current+=char;escaped=false;}else if(char==="\\"){escaped=true;}else if(char==="|"){result.push(current.trim());current="";}else current+=char;}result.push(current.trim());return result;};
+    for(let i=0;i<lines.length-1;i++){
+      if(!lines[i]!.includes("|"))continue;
+      const header=cells(lines[i]!),sep=cells(lines[i+1]!);
+      if(header.length!==sep.length||!sep.every(v=>/^:?-{3,}:?$/.test(v.replace(/\s/g,""))))continue;
+      const rows=[header];let j=i+2;
+      while(j<lines.length&&lines[j]!.includes("|")){const row=cells(lines[j]!);rows.push(row.concat(Array(Math.max(0,header.length-row.length)).fill("")).slice(0,header.length));j++;}
+      return rows.map(row=>row.map(csvEscape).join(",")).join("\n");
+    }
+    return "";
+  }
+  if (toolId === "text-extract-numbered-lists") return content.split(/\r?\n/).map(line=>line.match(/^\s{0,3}\d{1,6}[.)]\s+(.+?)\s*$/)?.[1]).filter((value):value is string=>Boolean(value)).join("\n");
+  if (toolId === "text-join-hyphenated-lines") return content.replace(/\r\n?/g,"\n").replace(/(?<=\w)-[ \t]*\n[ \t]*(?=\w)/gu,"");
+  if (toolId === "text-strip-bom") return content.replace(/^\uFEFF/,"");
+  if (toolId === "text-normalize-paragraph-spacing") return content.replace(/\r\n?/g,"\n").replace(/\n[ \t]*\n(?:[ \t]*\n)+/g,"\n\n");
+  if (toolId === "csv-schema-infer" || toolId === "csv-duplicates-report" || toolId === "csv-sample-rows") {
+    const rows=csvRows(content);if(!rows.length)throw new Error("CSV is empty.");
+    if(rows.length>10_001||Math.max(...rows.map(row=>row.length))>200)throw new Error("CSV processor limit exceeded.");
+    if(toolId==="csv-sample-rows")return rows.slice(0,21).map(row=>row.map(csvEscape).join(",")).join("\n");
+    if(toolId==="csv-duplicates-report"){
+      const counts=new Map<string,{row:string[];count:number}>();for(const row of rows.slice(1)){const key=JSON.stringify(row);const entry=counts.get(key);if(entry)entry.count++;else counts.set(key,{row,count:1});}
+      const duplicates=[...counts.values()].filter(item=>item.count>1);
+      return ["CSV duplicate report","Data rows: "+(rows.length-1),"Unique rows: "+counts.size,"Duplicated row groups: "+duplicates.length,
+        "Duplicate occurrences: "+duplicates.reduce((sum,item)=>sum+item.count-1,0),...duplicates.slice(0,500).map(item=>JSON.stringify(item))].join("\n");
+    }
+    const dates=(value:string)=>["YYYY-MM-DD","YYYY/MM/DD","DD/MM/YYYY","MM/DD/YYYY"].some(format=>{
+      const parts=value.split(/[-/]/).map(Number);let year=0,month=0,day=0;
+      if(format.startsWith("YYYY"))[year,month,day]=parts;else [day,month,year]=parts;
+      if(format==="MM/DD/YYYY")[month,day,year]=parts;
+      const date=new Date(Date.UTC(year,month-1,day));
+      return date.getUTCFullYear()===year&&date.getUTCMonth()===month-1&&date.getUTCDate()===day;
+    });
+    const lines=["CSV inferred schema","Rows: "+(rows.length-1),"Columns: "+rows[0]!.length];
+    for(let col=0;col<rows[0]!.length;col++){
+      const values=rows.slice(1).map(row=>(row[col]||"").trim()).filter(Boolean);let kind="empty";
+      if(values.length){
+        if(values.every(value=>/^(true|false|yes|no)$/i.test(value)))kind="boolean";
+        else if(values.every(value=>/^[+-]?\d+$/.test(value)))kind="integer";
+        else if(values.every(value=>/^[+-]?(?:\d+[.,]\d+|\d+[eE][+-]?\d+)$/.test(value)))kind="decimal";
+        else if(values.every(dates))kind="date";else kind="text";
+      }
+      lines.push(JSON.stringify({column:rows[0]![col],type:kind,non_empty:values.length,empty:rows.length-1-values.length,unique:new Set(values).size}));
+    }
+    return lines.join("\n")+"\n";
+  }
+  if (toolId === "json-array-stats") {
+    const value=JSON.parse(content);if(!Array.isArray(value)||value.length>100_000)throw new Error("JSON array statistics expects an array of at most 100,000 items.");
+    const counts:Record<string,number>={object:0,array:0,string:0,number:0,boolean:0,null:0};const keys=new Map<string,number>();
+    for(const item of value){if(item===null)counts.null++;else if(typeof item==="boolean")counts.boolean++;else if(typeof item==="number")counts.number++;else if(typeof item==="string")counts.string++;else if(Array.isArray(item))counts.array++;else if(typeof item==="object"){counts.object++;for(const key of Object.keys(item as object))keys.set(key,(keys.get(key)||0)+1);}}
+    return ["JSON array statistics","Items: "+value.length,...Object.entries(counts).map(([key,count])=>key+": "+count),"Object keys:",...[...keys.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([key,count])=>key+"\t"+count)].join("\n")+"\n";
+  }
+  if (toolId === "json-canonicalize") {
+    const value=JSON.parse(content);
+    const sort=(item:unknown):unknown=>{if(Array.isArray(item))return item.map(sort);if(item&&typeof item==="object"){const result:Record<string,unknown>={};for(const key of Object.keys(item).sort())result[key]=sort((item as Record<string,unknown>)[key]);return result;}return item;};
+    return JSON.stringify(sort(value));
   }
   if (toolId === "language-detect") {
     const sample=content.slice(0,20_000);
