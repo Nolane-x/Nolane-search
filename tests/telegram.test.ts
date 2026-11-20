@@ -44,7 +44,7 @@ describe("Telegram interactive workspace UI", () => {
 describe("Telegram Tool Center UI", () => {
   it("shows every active category and navigates into paginated tool listings", () => {
     const home = formatToolCenterHome(TOOL_CATALOG, true);
-    expect(home).toContain("125 processor");
+    expect(home).toContain("145 processor");
     expect(home).toContain("Lập trình &amp; văn bản");
     const keyboard = buildToolCenterKeyboard(TOOL_CATALOG);
     const callbacks = keyboard.inline_keyboard.flat().map(button => button.callback_data).filter(Boolean) as string[];
@@ -69,7 +69,7 @@ describe("Telegram Tool Center UI", () => {
 
   it("renders search results and buttons only for the bounded shortlist", () => {
     const matches = TOOL_CATALOG.filter(tool => tool.id.includes("markdown"));
-    expect(formatToolSearchResults(matches, "markdown")).toContain("2 kết quả");
+    expect(formatToolSearchResults(matches, "markdown")).toContain("3 kết quả");
     const buttons = buildToolSearchKeyboard(matches).inline_keyboard.flat();
     expect(buttons.map(button => button.callback_data)).toContain("td:markdown-links");
   });

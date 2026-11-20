@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **125 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **145 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -216,6 +216,31 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 | \`/tool url-decode\` | Giải mã percent-encoding, kiểm tra UTF-8. | Tệp văn bản |
 | \`/tool json-minify\` | Minify JSON và từ chối object key trùng. | JSON minified |
 | \`/tool json-sort-keys\` | Sắp xếp key đệ quy, giữ nguyên thứ tự array và từ chối key trùng. | JSON đã sắp xếp |
+
+### Tiện ích văn bản & dữ liệu — đợt mở rộng
+
+| Lệnh | Chức năng | Đầu ra |
+|---|---|---|
+| \`/tool text-slugify\` | Tạo slug URL-friendly theo từng dòng, xử lý dấu tiếng Việt và chữ đ. | TXT slug |
+| \`/tool text-word-frequency\` | Đếm tần suất từ Unicode, xếp hạng theo số lần xuất hiện. | Báo cáo TXT |
+| \`/tool text-extract-numbers\` | Trích số nguyên/số thập phân có dấu, khử trùng theo thứ tự đầu tiên. | TXT số |
+| \`/tool text-extract-dates\` | Trích ngày phổ biến và loại ngày lịch không hợp lệ. | TXT ngày |
+| \`/tool text-reverse-characters\` | Đảo ký tự trong từng dòng, giữ nguyên thứ tự dòng. | TXT |
+| \`/tool text-snake-case\` | Chuẩn hóa từng dòng sang snake_case. | TXT |
+| \`/tool text-kebab-case\` | Chuẩn hóa từng dòng sang kebab-case. | TXT |
+| \`/tool text-camel-case\` | Chuẩn hóa từng dòng sang camelCase. | TXT |
+| \`/tool text-swap-case\` | Đổi chữ hoa thành thường và ngược lại. | TXT |
+| \`/tool text-extract-ipv4\` | Trích IPv4 và xác minh từng octet, không giữ IP lỗi. | TXT IPv4 |
+| \`/tool text-mask-emails\` | Che một phần địa chỉ email trên bản sao, không sửa file gốc. | TXT đã che |
+| \`/tool text-mask-phones\` | Che số điện thoại theo pattern, giữ hai số cuối; heuristic có thể nhầm. | TXT đã che |
+| \`/tool json-to-jsonl\` | Chuyển JSON array thành JSON Lines, tối đa 100.000 record. | JSONL |
+| \`/tool jsonl-to-json\` | Chuyển JSONL sang JSON array, báo rõ dòng lỗi. | JSON |
+| \`/tool csv-to-tsv\` | Chuyển CSV sang TSV, giữ các trường có quote và dấu phẩy. | TSV |
+| \`/tool tsv-to-csv\` | Chuyển TSV sang CSV chuẩn. | CSV |
+| \`/tool csv-to-markdown\` | Tạo bảng Markdown từ CSV, tối đa 50 dòng dữ liệu và 20 cột. | Markdown |
+| \`/tool html-minify\` | Rút gọn HTML, xóa comment và whitespace thừa, giữ nguyên vùng pre/textarea/script/style. | HTML minified |
+| \`/tool xml-minify\` | Parse/serialize XML compact, từ chối DTD/ENTITY. | XML minified |
+| \`/tool text-remove-emoji\` | Loại phần lớn emoji/variation selector phổ biến; một số symbol Unicode có thể bị loại. | TXT |
 
 **Dịch thuật:** dùng \`/translate English | Xin chào\` để dịch trực tiếp một đoạn văn; thay English bằng Vietnamese, French, German, Spanish, Portuguese, Chinese, Japanese, Korean, Russian, Thai, Indonesian, Italian, Arabic hoặc Hindi. File TXT/Markdown có thể gửi kèm \`/ai_file dịch tài liệu này sang tiếng Anh\`. Bộ xử lý chia tệp thành đoạn tối đa khoảng 5.000 ký tự, gửi từng đoạn qua AI Router với task \`translation\`, sau đó ghép lại theo đúng thứ tự. Cấu hình AI phải có ít nhất một model hỗ trợ task \`translation\`; nếu không, job sẽ báo lỗi thay vì giả vờ đã dịch. API key chỉ nằm trong Worker; runner gọi endpoint nội bộ đã xác thực và không nhận AI key.
 
