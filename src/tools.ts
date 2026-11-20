@@ -1,4 +1,4 @@
-export type ToolCategory = "image" | "document" | "audio-video" | "data" | "utility" | "developer";
+export type ToolCategory = "image" | "document" | "audio-video" | "data" | "utility" | "developer" | "repository";
 
 export interface ToolDefinition {
   id: string;
@@ -107,6 +107,14 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "code-todos", name: "Quét TODO / FIXME", category: "developer", description: "Tìm TODO, FIXME, HACK, BUG và XXX theo dòng, nhóm theo loại ưu tiên.", accepts: [".py", ".pyw", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".css", ".html", ".go", ".rs", ".java", ".c", ".cpp", ".h", ".hpp", ".cs", ".sql", ".sh", ".bash", ".md"], output: "Báo cáo công việc TXT", ready: true },
   { id: "code-secret-scan", name: "Quét secret trong code", category: "developer", description: "Quét tĩnh một số mẫu token/credential phổ biến; báo loại và số dòng, tuyệt đối không in giá trị bí mật.", accepts: [".py", ".pyw", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".json", ".yaml", ".yml", ".toml", ".ini", ".env", ".cfg", ".sh", ".bash", ".go", ".rs", ".java", ".cs"], output: "Báo cáo secret scan TXT", ready: true },
   { id: "log-timeline", name: "Tóm tắt timeline log", category: "developer", description: "Nhận diện timestamp ISO, thống kê log theo ngày và giờ, xác định khoảng thời gian được ghi nhận.", accepts: ["text/plain", ".txt", ".log"], output: "Báo cáo timeline TXT", ready: true },
+  { id: "repo-inventory", name: "Kiểm kê repository ZIP", category: "repository", description: "Đọc cây thư mục, số file, dung lượng và phân bố phần mở rộng trong ZIP repo; không giải nén ra đĩa.", accepts: [".zip"], output: "Báo cáo repository TXT", ready: true },
+  { id: "repo-dependencies", name: "Báo cáo dependencies repo", category: "repository", description: "Đọc package.json, requirements, pyproject, Cargo, Go modules và composer manifests; chỉ liệt kê dependency, không cài đặt hay truy cập mạng.", accepts: [".zip"], output: "Báo cáo dependency TXT", ready: true },
+  { id: "repo-license-report", name: "Kiểm tra license repository", category: "repository", description: "Tìm LICENSE/COPYING/NOTICE và metadata license trong manifest; báo bằng chứng hiện diện, không đưa ra kết luận pháp lý.", accepts: [".zip"], output: "Báo cáo license TXT", ready: true },
+  { id: "repo-secret-scan", name: "Quét secret toàn repository", category: "repository", description: "Quét tĩnh file văn bản trong ZIP để tìm mẫu token/credential phổ biến; chỉ ghi đường dẫn, dòng và loại, không xuất giá trị.", accepts: [".zip"], output: "Báo cáo secret scan TXT", ready: true },
+  { id: "repo-todo-scan", name: "Quét TODO toàn repository", category: "repository", description: "Tìm TODO/FIXME/HACK/BUG/XXX trong source tree, phân nhóm theo file và dòng.", accepts: [".zip"], output: "Báo cáo TODO TXT", ready: true },
+  { id: "repo-code-stats", name: "Thống kê codebase repository", category: "repository", description: "Đếm dòng code, dòng trống, dòng nội dung và dung lượng theo ngôn ngữ/phần mở rộng; bỏ qua binary và thư mục vendor phổ biến.", accepts: [".zip"], output: "Báo cáo codebase TXT", ready: true },
+  { id: "repo-config-audit", name: "Kiểm kê cấu hình dự án", category: "repository", description: "Kiểm tra hiện diện của CI, container, package manager, test, lint, license và tài liệu; không tự sửa file.", accepts: [".zip"], output: "Báo cáo cấu hình TXT", ready: true },
+  { id: "repo-duplicates", name: "Tìm file trùng trong repository", category: "repository", description: "Tính SHA-256 cho file trong ZIP và nhóm nội dung trùng nhau mà không giải nén hay thay đổi archive.", accepts: [".zip"], output: "CSV file trùng", ready: true },
 
 ];
 
@@ -194,6 +202,14 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "code-todos": ["text-clean","text-stats","text-deduplicate"],
   "code-secret-scan": ["text-clean","text-stats"],
   "log-timeline": ["text-clean","text-stats"],
+  "repo-inventory": ["text-clean","text-stats"],
+  "repo-dependencies": ["text-clean","text-stats"],
+  "repo-license-report": ["text-clean","text-stats"],
+  "repo-secret-scan": ["text-clean","text-stats"],
+  "repo-todo-scan": ["text-clean","text-stats"],
+  "repo-code-stats": ["text-clean","text-stats"],
+  "repo-config-audit": ["text-clean","text-stats"],
+  "repo-duplicates": ["csv-profile","csv-clean","csv-to-xlsx","csv-to-json"],
 };
 
 export type ToolPipelineValidation =
@@ -397,5 +413,6 @@ export function toolCategoryLabel(category: ToolCategory): string {
     data: "Dữ liệu",
     utility: "Tiện ích",
     developer: "Lập trình & văn bản",
+    repository: "Mã nguồn & Repository",
   } satisfies Record<ToolCategory, string>)[category];
 }

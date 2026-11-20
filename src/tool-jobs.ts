@@ -15,6 +15,13 @@ export interface ToolStepTrace {
   error?: string;
 }
 
+export interface ToolJobProgress {
+  completed: number;
+  total: number;
+  currentToolIds: string[];
+  updatedAt: number;
+}
+
 export interface ToolJob {
   id: string;
   userId: number;
@@ -44,6 +51,7 @@ export interface ToolJob {
   attempt?: number;
   retryOf?: string;
   trace?: ToolStepTrace[];
+  progress?: ToolJobProgress;
 }
 
 const PREFIX = "tool-job:";
@@ -67,7 +75,7 @@ async function saveToolJob(env: Env, job: ToolJob): Promise<void> {
 export async function updateToolJob(
   env: Env,
   id: string,
-  patch: Partial<Pick<ToolJob, "status" | "updatedAt" | "finishedAt" | "resultSummary" | "error" | "fileId" | "notifiedAt" | "agentPrompt" | "agentTask" | "agentToolReason" | "trace" | "attempt" | "retryOf">>,
+  patch: Partial<Pick<ToolJob, "status" | "updatedAt" | "finishedAt" | "resultSummary" | "error" | "fileId" | "notifiedAt" | "agentPrompt" | "agentTask" | "agentToolReason" | "trace" | "attempt" | "retryOf" | "progress">>,
 ): Promise<ToolJob | null> {
   const previous = await getToolJob(env, id);
   if (!previous) return null;
@@ -88,6 +96,46 @@ export async function listToolJobs(env: Env, userId: number, limit = 20): Promis
     } catch { /* Skip malformed tool history entries. */ }
   }
   return jobs.slice(0, limit);
+}
+
+
+export function validateToolJobProgress(
+  raw: unknown,
+  job: ToolJob,
+): { ok: true; progress: ToolJobProgress } | { ok: false; error: string } {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "Tool progress payload is invalid." };
+  }
+  const value = raw as Record<string, unknown>;
+  const expectedTotal = job.workflowDag?.length || job.pipeline?.length || 1;
+  const completed = value.completed;
+  const total = value.total;
+  const current = value.currentToolIds;
+  if (!Number.isSafeInteger(completed) || Number(completed) < 0 || Number(completed) > expectedTotal ||
+      total !== expectedTotal || !Array.isArray(current) || current.length > (job.workflowDag ? 3 : 1) ||
+      current.some(id => typeof id !== "string" || !getTool(id)?.ready) ||
+      (Number(completed) >= expectedTotal && current.length > 0)) {
+    return { ok: false, error: "Tool progress does not match the stored pipeline." };
+  }
+  if (!job.workflowDag && current.length === 1) {
+    const expected = (job.pipeline || [{ toolId: job.toolId }])[Number(completed)]?.toolId;
+    if (current[0] !== expected) return { ok: false, error: "Current tool does not match the next pipeline step." };
+  }
+  if (job.workflowDag) {
+    const known = new Set(job.workflowDag.map(node => node.toolId));
+    if (current.some(id => !known.has(id as string))) {
+      return { ok: false, error: "DAG progress contains an unknown processor." };
+    }
+  }
+  return {
+    ok: true,
+    progress: {
+      completed: Number(completed),
+      total: expectedTotal,
+      currentToolIds: current as string[],
+      updatedAt: Date.now(),
+    },
+  };
 }
 
 export function validateToolStepTrace(

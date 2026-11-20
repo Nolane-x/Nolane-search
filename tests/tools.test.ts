@@ -5,7 +5,7 @@ describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
     const ids = TOOL_CATALOG.map(tool => tool.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(94);
+    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(102);
     expect(TOOL_CATALOG.every(tool => tool.ready && tool.description.length > 12 && tool.accepts.length > 0)).toBe(true);
     for (const id of ["pdf-rotate-cw","pdf-remove-blank","image-trim-border","image-pixelate","image-diff","audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean","json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join"]) expect(getTool(id)).not.toBeNull();
   });
@@ -174,6 +174,22 @@ describe("Nolane Tools registry", () => {
     expect(validateToolPipeline({mimeType:"text/plain",fileName:"source.py"}, [
       {toolId:"code-secret-scan"},{toolId:"text-stats"},
     ]).ok).toBe(true);
+  });
+
+  it("validates repository ZIP processors and their real report transitions", () => {
+    for (const id of ["repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates"]) {
+      expect(getTool(id)?.category).toBe("repository");
+      expect(isToolCompatible(getTool(id)!, "application/zip", "source.zip")).toBe(true);
+    }
+    expect(validateToolPipeline({mimeType:"application/zip",fileName:"source.zip"}, [
+      {toolId:"repo-secret-scan"},{toolId:"text-stats"},
+    ]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"application/zip",fileName:"source.zip"}, [
+      {toolId:"repo-duplicates"},{toolId:"csv-profile"},
+    ]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"application/zip",fileName:"source.zip"}, [
+      {toolId:"repo-inventory"},{toolId:"pdf-text"},
+    ]).ok).toBe(false);
   });
 
 });

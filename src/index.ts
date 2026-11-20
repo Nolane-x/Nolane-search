@@ -8,7 +8,7 @@ import { parseJsonObjectBody } from "./http";
 import { deleteIndexedContent, listIndexedPages, normalizeIndexDomain, normalizeIndexPageUrl } from "./index-management";
 import { TOOL_CATALOG, TOOL_PIPELINE_TRANSITIONS, getTool, inferToolForUpload, isToolCompatible, validateToolDag, validateToolPipeline, toolCategoryLabel } from "./tools";
 import type { ToolCategory, ToolPipelineStep } from "./tools";
-import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, validateToolDagTrace, validateToolStepTrace } from "./tool-jobs";
+import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, validateToolDagTrace, validateToolJobProgress, validateToolStepTrace } from "./tool-jobs";
 import { clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWorkflow, getPendingToolWorkflow, getPendingToolWorkflowPlan, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow, storeToolWorkflowPlan } from "./workflows";
 import { webAppResponse } from "./web-ui";
 import { completeAi, getAiRouterStatus } from "./ai-router";
@@ -22,6 +22,7 @@ import {
   buildToolCenterKeyboard, buildToolCategoryKeyboard, buildToolDetailKeyboard, buildToolSearchKeyboard,
   formatDeepReport, formatHomeMenu, formatModePrompt, formatSearchResults, SEARCH_PAGE_SIZE,
   formatToolCenterHome, formatToolCategoryPage, formatToolDetail, formatToolSearchResults,
+  formatToolJobsPage, buildToolJobsKeyboard, formatToolJobDetail, buildToolJobDetailKeyboard,
   sendSearchPage, sendTelegram, sendToArchive, telegramApi,
 } from "./telegram";
 import { crawlAndIndexSite, validateWatchUrl, checkWatchTargets } from "./watch";
@@ -292,6 +293,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
       id: job.id, toolId: job.toolId, fileName: job.fileName, status: job.status,
       createdAt: job.createdAt, updatedAt: job.updatedAt,
       resultSummary: job.resultSummary || null, error: job.error || null,
+      progress: job.progress || null, trace: job.trace || [], pipeline: job.pipeline || [],
     })) });
   }
 
@@ -731,6 +733,73 @@ async function handleUiCallback(env: Env, callback: TelegramCallbackQuery): Prom
   await reply(env, message.chat.id, "Nút này không còn được hỗ trợ. Hãy mở /menu.");
 }
 
+async function showTelegramToolJobs(
+  env: Env,
+  chatId: number,
+  userId: number,
+  page = 0,
+  messageId?: number,
+): Promise<void> {
+  const jobs = (await listToolJobs(env,userId,50)).filter(job => job.chatId === chatId);
+  const text = formatToolJobsPage(jobs,page);
+  const keyboard = buildToolJobsKeyboard(jobs,page);
+  if (messageId !== undefined) {
+    await editTelegramDashboard(env,chatId,messageId,text,keyboard);
+  } else {
+    await telegramApi(env,"sendMessage",{
+      chat_id:chatId,text,parse_mode:"HTML",disable_web_page_preview:true,reply_markup:keyboard,
+    });
+  }
+}
+
+async function handleToolJobsCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
+  const message=callback.message;
+  if (!message || !allowedUser(env,callback.from.id) || message.chat.id !== callback.from.id) {
+    if(message) await reply(env,message.chat.id,"Job Center chỉ khả dụng trong chat riêng được cấp quyền.");
+    return;
+  }
+  const data=callback.data || "";
+  const page=data.match(/^tjp:(\d{1,2})$/);
+  if(page) {
+    await showTelegramToolJobs(env,message.chat.id,callback.from.id,Number(page[1]),message.message_id);
+    return;
+  }
+  const refreshList=data.match(/^tjrlist:(\d{1,2})$/);
+  if(refreshList) {
+    await showTelegramToolJobs(env,message.chat.id,callback.from.id,Number(refreshList[1]),message.message_id);
+    return;
+  }
+  const detail=data.match(/^tjv:([a-f0-9-]{36}):(\d{1,2})$/i);
+  if(detail) {
+    const job=await getToolJob(env,detail[1]!);
+    if(!job || job.userId!==callback.from.id || job.chatId!==message.chat.id) {
+      await reply(env,message.chat.id,"Không tìm thấy job thuộc cuộc trò chuyện này.");
+      return;
+    }
+    await editTelegramDashboard(env,message.chat.id,message.message_id,
+      formatToolJobDetail(job),buildToolJobDetailKeyboard(job,Number(detail[2])));
+    return;
+  }
+  const refreshDetail=data.match(/^tjview:([a-f0-9-]{36}):(\d{1,2})$/i);
+  if(refreshDetail) {
+    const job=await getToolJob(env,refreshDetail[1]!);
+    if(!job || job.userId!==callback.from.id || job.chatId!==message.chat.id) {
+      await reply(env,message.chat.id,"Không tìm thấy job thuộc cuộc trò chuyện này.");
+      return;
+    }
+    await editTelegramDashboard(env,message.chat.id,message.message_id,
+      formatToolJobDetail(job),buildToolJobDetailKeyboard(job,Number(refreshDetail[2])));
+    return;
+  }
+  const retry=data.match(/^tjr:([a-f0-9-]{36})$/i);
+  if(retry) {
+    await handleCommand(env,message.chat.id,callback.from.id,"/tool_retry "+retry[1]);
+    await showTelegramToolJobs(env,message.chat.id,callback.from.id,0,message.message_id);
+    return;
+  }
+  await reply(env,message.chat.id,"Thao tác Job Center không hợp lệ. Hãy mở lại /tool_jobs.");
+}
+
 async function handleToolCenterCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
   const message = callback.message;
   if (!message || !allowedUser(env, callback.from.id) || message.chat.id !== callback.from.id) {
@@ -744,14 +813,14 @@ async function handleToolCenterCallback(env: Env, callback: TelegramCallbackQuer
     return;
   }
   if (data === "tc:jobs") {
-    await handleCommand(env, message.chat.id, callback.from.id, "/tool_jobs");
+    await showTelegramToolJobs(env,message.chat.id,callback.from.id,0,message.message_id);
     return;
   }
   if (data === "tc:workflows") {
     await handleCommand(env, message.chat.id, callback.from.id, "/workflows");
     return;
   }
-  const page = data.match(/^tp:(image|document|audio-video|data|developer|utility):(\d{1,2})$/);
+  const page = data.match(/^tp:(image|document|audio-video|data|developer|repository|utility):(\d{1,2})$/);
   if (page) {
     const category = page[1] as ToolCategory;
     await editTelegramDashboard(env, message.chat.id, message.message_id,
@@ -759,7 +828,7 @@ async function handleToolCenterCallback(env: Env, callback: TelegramCallbackQuer
       buildToolCategoryKeyboard(TOOL_CATALOG, category, Number(page[2])));
     return;
   }
-  const category = data.match(/^tc:(image|document|audio-video|data|developer|utility)$/);
+  const category = data.match(/^tc:(image|document|audio-video|data|developer|repository|utility)$/);
   if (category) {
     const selected = category[1] as ToolCategory;
     await editTelegramDashboard(env, message.chat.id, message.message_id,
@@ -791,6 +860,7 @@ async function handleToolCenterCallback(env: Env, callback: TelegramCallbackQuer
 
 async function handleTelegramCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
   const data = callback.data || "";
+  if (/^tj(?:v:|p:|rlist:|view:|r:)/.test(data)) return handleToolJobsCallback(env,callback);
   if (/^(?:tc:|td:|tp:|tu:)/.test(data)) return handleToolCenterCallback(env, callback);
   if (data.startsWith("ui:")) return handleUiCallback(env, callback);
   const action = data.match(/^na:(ask|deep):([0-9a-f-]{36})$/i);
@@ -1386,30 +1456,11 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   }
 
   if (command === "tool_jobs") {
-    const jobs = await listToolJobs(env, userId, 15);
-    if (!jobs.length) {
-      await reply(env, chatId, "Chưa có tool job nào. Gõ /tools để bắt đầu.");
+    if (chatId !== userId || !allowedUser(env,userId)) {
+      await reply(env,chatId,"Job Center chỉ hiển thị trong chat riêng được cấp quyền.");
       return;
     }
-    const lines = jobs.map(job => {
-      const tool = getTool(job.toolId);
-      const status = job.status === "completed" ? "✅ Hoàn thành" : job.status === "failed" ? "❌ Thất bại" : job.status === "running" ? "⚙️ Đang chạy" : "⏳ Đang chờ";
-      const workflow = job.workflowName ? " · Workflow: " + htmlEscape(job.workflowName) : "";
-      const attempt = job.attempt && job.attempt > 1 ? " · lần " + job.attempt : "";
-      const trace = job.trace?.length ? " · " + job.trace.length + "/" + (job.pipeline?.length || 1) + " bước" : "";
-      return status + " · <b>" + htmlEscape(tool?.name || job.toolId) + "</b>" + workflow + attempt + trace +
-        "\n<code>" + htmlEscape(job.id) + "</code> · " + htmlEscape(job.fileName) +
-        "\n<code>/tool_job " + htmlEscape(job.id) + "</code>" + (job.status === "failed" && job.fileId ? " · <code>/tool_retry " + htmlEscape(job.id) + "</code>" : "");
-    });
-    let message = "<b>Nolane Tools · lịch sử</b>\n\n";
-    for (const line of lines) {
-      if (message.length + line.length + 4 > 3400) {
-        await reply(env, chatId, message);
-        message = "<b>Nolane Tools · lịch sử (tiếp)</b>\n\n";
-      }
-      message += line + "\n\n";
-    }
-    await reply(env, chatId, message.trim());
+    await showTelegramToolJobs(env,chatId,userId,0);
     return;
   }
 
@@ -1430,6 +1481,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<b>Nolane Tool Job</b>",
       "ID: <code>" + htmlEscape(job.id) + "</code>",
       "Trạng thái: " + state + " · lần chạy " + (job.attempt || 1),
+      "Tiến trình: " + (job.progress?.completed ?? job.trace?.filter(step => step.status === "completed").length ?? 0) + "/" + (job.progress?.total ?? (job.workflowDag?.length || steps.length)),
+      ...(job.progress?.currentToolIds.length ? ["Đang chạy: " + job.progress.currentToolIds.map(id => getTool(id)?.name || id).join(", ")] : []),
       "Tệp: " + htmlEscape(job.fileName),
       (job.workflowDag
         ? "DAG:\n" + htmlEscape(job.workflowDag.map(node => node.id + " = " + (getTool(node.toolId)?.name || node.toolId) + " ← " + (node.dependsOn.join(",") || "input")).join("\n"))
@@ -1439,20 +1492,21 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     if (job.workflowName) lines.push("Workflow: " + htmlEscape(job.workflowName));
     if (job.trace?.length) {
       lines.push("", "<b>Execution trace</b>");
-      for (const step of job.trace) {
+      for (const step of job.trace.slice(0, 8)) {
         const stateIcon = step.status === "completed" ? "✅" : "❌";
         const outputSize = step.outputBytes === null ? "text/no file" : step.outputBytes + " bytes";
         lines.push(
           stateIcon + " " + (step.nodeId ? "Node " + htmlEscape(step.nodeId) : "Step " + step.step) + "/" + step.total + " · " + htmlEscape(step.toolId) +
           " · " + step.durationMs + " ms · input " + step.inputBytes + " bytes · output " + outputSize +
-          "\n" + htmlEscape((step.error || step.summary).slice(0, 420))
+          "\n" + htmlEscape((step.error || step.summary).slice(0, 160))
         );
       }
+      if (job.trace.length > 8) lines.push("<i>Và " + (job.trace.length - 8) + " node/bước khác chưa hiển thị.</i>");
     } else {
       lines.push("", "Runner chưa gửi trace bước (có thể tác vụ lỗi trước khi chạy processor).");
     }
-    if (job.resultSummary) lines.push("", "<b>Kết quả</b>", htmlEscape(job.resultSummary.slice(0, 1200)));
-    if (job.error) lines.push("", "<b>Lỗi</b>", htmlEscape(job.error));
+    if (job.resultSummary) lines.push("", "<b>Kết quả</b>", htmlEscape(job.resultSummary.slice(0, 600)));
+    if (job.error) lines.push("", "<b>Lỗi</b>", htmlEscape(job.error.slice(0, 350)));
     if (job.status === "failed" && job.fileId) lines.push("", "Chạy lại bằng <code>/tool_retry " + job.id + "</code>.");
     await reply(env, chatId, lines.join("\n"));
     return;
@@ -2233,6 +2287,7 @@ async function setToolJobResult(
       resultSummary: requestedStatus === "completed" ? summary.slice(0, 6000) : undefined,
       error: requestedStatus === "failed" ? errorMessage.slice(0, 1000) : undefined,
       trace,
+      progress: undefined,
     });
     if (!updated) return false;
     job = updated;
@@ -2330,13 +2385,20 @@ async function handleToolRunnerApi(request: Request, env: Env): Promise<Response
     const status = body?.status;
     const summary = typeof body?.summary === "string" ? body.summary : "";
     const error = typeof body?.error === "string" ? body.error : "";
-    if (!/^[a-f0-9-]{36}$/i.test(id) || (status !== "completed" && status !== "failed")) {
+    if (!/^[a-f0-9-]{36}$/i.test(id) || (status !== "completed" && status !== "failed" && status !== "progress")) {
       return jsonResponse({ error: "Invalid tool result payload" }, 400);
     }
     if (summary.length > 6000 || error.length > 1000) return jsonResponse({ error: "Tool result is too large" }, 413);
     try {
       const existing = await getToolJob(env, id);
       if (!existing) return jsonResponse({ error: "Tool job not found" }, 404);
+      if (existing.status === "completed" || existing.status === "failed") return jsonResponse({ error: "Tool job is already terminal" }, 409);
+      if (status === "progress") {
+        const checkedProgress = validateToolJobProgress(body?.progress, existing);
+        if (!checkedProgress.ok) return jsonResponse({ error: checkedProgress.error }, 400);
+        const saved = await updateToolJob(env, id, { status: "running", progress: checkedProgress.progress });
+        return saved ? jsonResponse({ ok: true }) : jsonResponse({ error: "Tool job not found" }, 404);
+      }
       const pipeline = existing.pipeline || [{ toolId: existing.toolId }];
       const checkedTrace = existing.workflowDag
         ? validateToolDagTrace(body?.trace, existing.workflowDag, status)

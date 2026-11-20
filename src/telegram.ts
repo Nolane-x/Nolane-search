@@ -1,8 +1,9 @@
 import { htmlEscape } from "./security";
 import { readJsonResponse } from "./http";
 import type { Env, SearchMode, SearchResult } from "./types";
-import { toolCategoryLabel } from "./tools";
+import { getTool, toolCategoryLabel } from "./tools";
 import type { ToolCategory, ToolDefinition } from "./tools";
+import type { ToolJob } from "./tool-jobs";
 
 const MAX_FORMATTED_LENGTH = 3600;
 
@@ -236,7 +237,7 @@ export function formatDeepReport(query: string, results: SearchResult[], summary
 export const TOOL_CENTER_PAGE_SIZE = 8;
 
 const TOOL_CENTER_CATEGORIES: ToolCategory[] = [
-  "image", "document", "audio-video", "data", "developer", "utility",
+  "image", "document", "audio-video", "data", "developer", "repository", "utility",
 ];
 
 function toolCategoryItems(tools: ToolDefinition[], category: ToolCategory): ToolDefinition[] {
@@ -370,5 +371,131 @@ export function buildToolSearchKeyboard(tools: ToolDefinition[]): TelegramInline
     })));
   }
   rows.push([{ text: "↩️ Tool Center", callback_data: "tc:home" }]);
+  return { inline_keyboard: rows };
+}
+
+
+export const TOOL_JOBS_PAGE_SIZE = 5;
+
+function toolJobStatus(job: ToolJob): string {
+  return job.status === "completed" ? "✅ Hoàn thành" :
+    job.status === "failed" ? "❌ Thất bại" :
+    job.status === "running" ? "⚙️ Đang chạy" : "⏳ Đang chờ";
+}
+
+function toolJobProgressLabel(job: ToolJob): string {
+  const progress = job.progress;
+  if (progress) {
+    const current = progress.currentToolIds.map(id => getToolLabel(id)).filter(Boolean);
+    return "Tiến trình: " + progress.completed + "/" + progress.total +
+      (current.length ? " · Đang chạy: " + current.join(", ") : " bước đã xong");
+  }
+  if (job.trace?.length) return "Trace: " + job.trace.length + "/" + (job.workflowDag?.length || job.pipeline?.length || 1) + " bước";
+  return job.status === "running" ? "Runner đang khởi tạo hoặc chưa gửi checkpoint." : "Chưa có checkpoint.";
+}
+
+function getToolLabel(id: string): string {
+  return getTool(id)?.name || id;
+}
+
+export function formatToolJobsPage(jobs: ToolJob[], page = 0): string {
+  const totalPages = Math.max(1, Math.ceil(jobs.length / TOOL_JOBS_PAGE_SIZE));
+  const currentPage = Math.max(0, Math.min(totalPages - 1, Math.floor(page)));
+  const start = currentPage * TOOL_JOBS_PAGE_SIZE;
+  const visible = jobs.slice(start, start + TOOL_JOBS_PAGE_SIZE);
+  return [
+    "<b>◈ NOLANE · JOB CENTER</b>",
+    "Tổng " + jobs.length + " tác vụ gần đây · Trang " + (currentPage + 1) + "/" + totalPages,
+    "",
+    ...(visible.length ? visible.map((job, index) => {
+      const title = getToolLabel(job.toolId);
+      const attempt = job.attempt && job.attempt > 1 ? " · Retry " + job.attempt : "";
+      return (start + index + 1) + ". " + toolJobStatus(job) + " · <b>" + htmlEscape(title) + "</b>" + attempt +
+        "\n<code>" + htmlEscape(job.id) + "</code> · " + htmlEscape(job.fileName.slice(0, 90)) +
+        "\n<i>" + htmlEscape(toolJobProgressLabel(job)) + "</i>";
+    }) : ["Chưa có job nào. Dùng /tools để chọn một công cụ và gửi tệp."]),
+    "",
+    "<i>Chạm vào một tác vụ để xem tiến trình, trace, kết quả và thao tác retry.</i>",
+  ].flat().join("\n");
+}
+
+export function buildToolJobsKeyboard(jobs: ToolJob[], page = 0): TelegramInlineKeyboardMarkup {
+  const totalPages = Math.max(1, Math.ceil(jobs.length / TOOL_JOBS_PAGE_SIZE));
+  const currentPage = Math.max(0, Math.min(totalPages - 1, Math.floor(page)));
+  const start = currentPage * TOOL_JOBS_PAGE_SIZE;
+  const visible = jobs.slice(start, start + TOOL_JOBS_PAGE_SIZE);
+  const rows: TelegramInlineButton[][] = visible.map(job => [{
+    text: (job.status === "completed" ? "✅ " : job.status === "failed" ? "❌ " : job.status === "running" ? "⚙️ " : "⏳ ") +
+      (job.toolId.length > 24 ? job.toolId.slice(0, 23) + "…" : job.toolId),
+    callback_data: "tjv:" + job.id + ":" + currentPage,
+  }]);
+  if (totalPages > 1) {
+    const nav: TelegramInlineButton[] = [];
+    if (currentPage > 0) nav.push({ text: "⬅️ Trước", callback_data: "tjp:" + (currentPage - 1) });
+    nav.push({ text: (currentPage + 1) + "/" + totalPages, callback_data: "tjp:" + currentPage });
+    if (currentPage < totalPages - 1) nav.push({ text: "Tiếp ➡️", callback_data: "tjp:" + (currentPage + 1) });
+    rows.push(nav);
+  }
+  rows.push([
+    { text: "↻ Làm mới", callback_data: "tjrlist:" + currentPage },
+    { text: "🧰 Tool Center", callback_data: "tc:home" },
+  ]);
+  return { inline_keyboard: rows };
+}
+
+export function formatToolJobDetail(job: ToolJob): string {
+  const state = toolJobStatus(job);
+  const total = job.workflowDag?.length || job.pipeline?.length || 1;
+  const lines = [
+    "<b>◈ TOOL JOB · " + state + "</b>",
+    "ID: <code>" + htmlEscape(job.id) + "</code>",
+    "Tệp: " + htmlEscape(job.fileName),
+    "Dung lượng: " + job.fileSize.toLocaleString("en-US") + " bytes · Lần chạy: " + (job.attempt || 1),
+    "Tiến trình: <b>" + (job.progress?.completed ?? job.trace?.filter(item => item.status === "completed").length ?? 0) + "/" + total + "</b>",
+  ];
+  if (job.progress?.currentToolIds.length) {
+    lines.push("Đang thực thi: " + htmlEscape(job.progress.currentToolIds.join(", ")));
+  }
+  if (job.workflowName) lines.push("Workflow: " + htmlEscape(job.workflowName));
+  if (job.retryOf) lines.push("Retry từ: <code>" + htmlEscape(job.retryOf) + "</code>");
+  if (job.workflowDag) {
+    lines.push("", "<b>DAG</b>");
+    lines.push(...job.workflowDag.map(node =>
+      htmlEscape(node.id + " = " + node.toolId + " ← " + (node.dependsOn.join(",") || "input"))));
+  } else {
+    lines.push("", "<b>Pipeline</b>", htmlEscape((job.pipeline || [{ toolId: job.toolId }]).map(step => step.toolId).join(" → ")));
+  }
+  if (job.trace?.length) {
+    lines.push("", "<b>Execution trace</b>");
+    const visibleTrace = job.trace.slice(0, 8);
+    lines.push(...visibleTrace.map(step =>
+      (step.status === "completed" ? "✅ " : "❌ ") +
+      htmlEscape((step.nodeId ? "Node " + step.nodeId : "Step " + step.step) + "/" + step.total + " · " + step.toolId) +
+      " · " + step.durationMs + " ms · " + step.inputBytes.toLocaleString("en-US") +
+      " → " + (step.outputBytes === null ? "text" : step.outputBytes.toLocaleString("en-US") + " bytes") +
+      "\n" + htmlEscape((step.error || step.summary).slice(0, 160))));
+    if (job.trace.length > visibleTrace.length) {
+      lines.push("<i>Và " + (job.trace.length - visibleTrace.length) + " bước/node khác. Dùng /tool_job " + htmlEscape(job.id) + " để xem chi tiết đầy đủ.</i>");
+    }
+  } else {
+    lines.push("", "<i>Runner chưa gửi trace bước nào.</i>");
+  }
+  if (job.resultSummary) lines.push("", "<b>Kết quả</b>", htmlEscape(job.resultSummary.slice(0, 900)));
+  if (job.error) lines.push("", "<b>Lỗi</b>", htmlEscape(job.error.slice(0, 500)));
+  if (job.status === "failed" && !job.fileId) lines.push("", "Tệp gốc không còn khả dụng để retry; hãy gửi lại tệp.");
+  return lines.join("\n");
+}
+
+export function buildToolJobDetailKeyboard(job: ToolJob, page = 0): TelegramInlineKeyboardMarkup {
+  const rows: TelegramInlineButton[][] = [
+    [{ text: "↻ Làm mới tiến trình", callback_data: "tjview:" + job.id + ":" + page }],
+  ];
+  if (job.status === "failed" && job.fileId) {
+    rows.push([{ text: "↻ Retry toàn pipeline", callback_data: "tjr:" + job.id }]);
+  }
+  rows.push([
+    { text: "⬅️ Danh sách job", callback_data: "tjp:" + page },
+    { text: "🧰 Tool Center", callback_data: "tc:home" },
+  ]);
   return { inline_keyboard: rows };
 }

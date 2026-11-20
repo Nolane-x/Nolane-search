@@ -64,7 +64,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}a{color:inherit}.shell{
   <div class="panel" style="padding:20px">
     <div class="summarybar"><div><span class="eyebrow">GitHub Actions · Hosted runner</span><h2 style="margin:10px 0 4px">Nolane Tools</h2><p class="muted" style="margin:0">Bộ công cụ xử lý tệp chạy trên GitHub Actions. Tệp được tải trực tiếp từ Telegram, không commit vào repository.</p></div><button id="refreshToolJobs" class="quiet" type="button">Làm mới job</button></div>
     <div class="notice">Cách dùng: mở chat riêng với bot, gửi <b>/tools</b>, chọn <b>/tool image-ocr</b> rồi gửi ảnh. Gửi ảnh bình thường cũng tự chạy OCR. PDF, audio, video, CSV, JSON và Office sẽ tự nhận diện công cụ phù hợp.</div>
-    <div class="index-tools"><input id="toolFilter" type="search" placeholder="Tìm theo tên, ID, mô tả hoặc định dạng"><select id="toolCategoryFilter" aria-label="Lọc danh mục"><option value="all">Tất cả danh mục</option><option value="image">Hình ảnh & OCR</option><option value="document">PDF & Office</option><option value="audio-video">Âm thanh & Video</option><option value="data">Dữ liệu</option><option value="developer">Lập trình & văn bản</option><option value="utility">Tiện ích</option></select></div><div id="toolCatalogMeta" class="mini" style="margin-top:8px">Đang tải catalog…</div>
+    <div class="index-tools"><input id="toolFilter" type="search" placeholder="Tìm theo tên, ID, mô tả hoặc định dạng"><select id="toolCategoryFilter" aria-label="Lọc danh mục"><option value="all">Tất cả danh mục</option><option value="image">Hình ảnh & OCR</option><option value="document">PDF & Office</option><option value="audio-video">Âm thanh & Video</option><option value="data">Dữ liệu</option><option value="developer">Lập trình & văn bản</option><option value="repository">Mã nguồn & Repository</option><option value="utility">Tiện ích</option></select></div><div id="toolCatalogMeta" class="mini" style="margin-top:8px">Đang tải catalog…</div>
     <div id="toolCatalog" class="tools-grid"><div class="loading"><span class="spinner"></span><span>Đang tải danh mục công cụ…</span></div></div>
     <h3 style="margin:26px 0 8px">Lịch sử tác vụ</h3><div id="toolJobs" class="tool-jobs"><span class="mini">Chưa tải lịch sử.</span></div>
   </div>
@@ -205,7 +205,7 @@ function renderToolCatalog(){
  var box=$('toolCatalog');box.replaceChildren();
  var query=normalizeToolSearch($('toolFilter').value.trim());
  var category=$('toolCategoryFilter').value;
- var labels={image:'Hình ảnh & OCR',document:'PDF & Office','audio-video':'Âm thanh & Video',data:'Dữ liệu',developer:'Lập trình & văn bản',utility:'Tiện ích'};
+ var labels={image:'Hình ảnh & OCR',document:'PDF & Office','audio-video':'Âm thanh & Video',data:'Dữ liệu',developer:'Lập trình & văn bản',repository:'Mã nguồn & Repository',utility:'Tiện ích'};
  var filtered=toolCatalogState.filter(function(tool){
   if(category!=='all'&&tool.category!==category)return false;
   var haystack=normalizeToolSearch([tool.id,tool.name,tool.description,tool.output,(tool.accepts||[]).join(' '),labels[tool.category]||tool.category].join(' '));
@@ -247,6 +247,17 @@ async function refreshToolJobs(){
    var title=document.createElement('strong');text(title,(job.toolId||'tool')+' · '+(job.status||'unknown').toUpperCase());card.appendChild(title);
    var file=document.createElement('span');file.className='mini';text(file,job.fileName||'');card.appendChild(file);
    var id=document.createElement('span');id.className='mini';text(id,job.id||'');card.appendChild(id);
+   if(job.progress){
+    var progress=document.createElement('span');progress.className='mini';
+    var current=(job.progress.currentToolIds||[]).join(', ');
+    text(progress,'Tiến trình: '+(job.progress.completed||0)+'/'+(job.progress.total||0)+(current?' · Đang chạy: '+current:''));
+    card.appendChild(progress);
+   }
+   if(Array.isArray(job.trace)&&job.trace.length){
+    var trace=document.createElement('span');trace.className='mini';
+    text(trace,'Trace: '+job.trace.length+'/'+((job.pipeline||[]).length||1)+' bước');
+    card.appendChild(trace);
+   }
    if(job.resultSummary){var summary=document.createElement('p');summary.textContent=job.resultSummary;card.appendChild(summary)}
    if(job.error){var error=document.createElement('p');error.className='mini';error.textContent=job.error;card.appendChild(error)}
    box.appendChild(card);

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createToolJob, retryToolJob, updateToolJob, validateToolDagTrace, validateToolStepTrace } from "../src/tool-jobs";
+import { createToolJob, retryToolJob, updateToolJob, validateToolDagTrace, validateToolJobProgress, validateToolStepTrace } from "../src/tool-jobs";
 import type { D1Database, D1Result, D1Statement, Env } from "../src/types";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -276,6 +276,31 @@ describe("GitHub Actions tool dispatch", () => {
     expect(validateToolDagTrace([{ ...trace[1], nodeId: "unknown" }], dag, "failed").ok).toBe(false);
     expect(validateToolDagTrace([trace[1], trace[0]], dag, "failed").ok).toBe(false);
     expect(validateToolDagTrace(trace, dag, "completed").ok).toBe(false);
+  });
+
+  it("validates live progress counters and current processor against the stored job", () => {
+    const pipelineJob = {
+      id: "12345678-1234-1234-1234-123456789abc",
+      userId: 42, chatId: 42, toolId: "pdf-text",
+      fileId: "telegram-file-id-123456", fileName: "doc.pdf", mimeType: "application/pdf", fileSize: 100,
+      status: "running" as const, createdAt: 1, updatedAt: 1,
+      pipeline: [{toolId:"pdf-text"},{toolId:"text-clean"},{toolId:"text-stats"}],
+    };
+    expect(validateToolJobProgress({completed:0,total:3,currentToolIds:["pdf-text"]},pipelineJob).ok).toBe(true);
+    expect(validateToolJobProgress({completed:1,total:3,currentToolIds:["text-clean"]},pipelineJob).ok).toBe(true);
+    expect(validateToolJobProgress({completed:2,total:3,currentToolIds:["pdf-text"]},pipelineJob).ok).toBe(false);
+    expect(validateToolJobProgress({completed:3,total:3,currentToolIds:[]},pipelineJob).ok).toBe(true);
+    expect(validateToolJobProgress({completed:4,total:3,currentToolIds:[]},pipelineJob).ok).toBe(false);
+    const dagJob = {
+      ...pipelineJob, workflowDag:[
+        {id:"source",toolId:"pdf-text",dependsOn:[]},
+        {id:"clean",toolId:"text-clean",dependsOn:["source"]},
+        {id:"stats",toolId:"text-stats",dependsOn:["clean"]},
+      ],
+    };
+    expect(validateToolJobProgress({completed:1,total:3,currentToolIds:["text-clean","text-stats"]},dagJob).ok).toBe(true);
+    expect(validateToolJobProgress({completed:1,total:3,currentToolIds:["unknown-tool"]},dagJob).ok).toBe(false);
+    expect(validateToolJobProgress({completed:1,total:3,currentToolIds:["a","b","c","d"]},dagJob).ok).toBe(false);
   });
 
 });

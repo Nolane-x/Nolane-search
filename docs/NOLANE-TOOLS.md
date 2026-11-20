@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **94 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **102 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -146,6 +146,21 @@ Giới hạn an toàn theo từng processor được kiểm tra ở runner: ví 
 
 Các processor văn bản này giới hạn đầu vào 5 MB và yêu cầu UTF-8. Bộ quét secret và redaction dùng pattern heuristic, có thể có false positive/false negative; không thay thế secret scanner chuyên dụng. `code-imports` và `code-todos` chỉ phân tích tĩnh, không thực thi nội dung tải lên. `text-redact` tạo bản sao đã che nhưng không thay đổi tệp gốc.
 
+### Mã nguồn & Repository Intelligence
+
+| ID | Công cụ | Chức năng | Đầu ra |
+|---|---|---|---|
+| `/tool repo-inventory` | Kiểm kê repository ZIP | Đếm file, phần mở rộng, dung lượng, thư mục cấp cao và file lớn nhất. | TXT |
+| `/tool repo-dependencies` | Báo cáo dependencies | Đọc package.json, requirements.txt, pyproject.toml, Cargo.toml, go.mod và composer.json. | TXT |
+| `/tool repo-license-report` | Kiểm tra license | Tìm LICENSE/COPYING/NOTICE và khai báo license trong manifest; chỉ báo bằng chứng, không kết luận pháp lý. | TXT |
+| `/tool repo-secret-scan` | Quét secret repository | Dò token/credential phổ biến trong source text, chỉ in đường dẫn, dòng và loại phát hiện. | TXT |
+| `/tool repo-todo-scan` | Quét TODO toàn repo | Tìm TODO/FIXME/HACK/BUG/XXX trong source tree. | TXT |
+| `/tool repo-code-stats` | Thống kê codebase | Gom số file, dòng trống, dòng nội dung và dung lượng theo phần mở rộng. | TXT |
+| `/tool repo-config-audit` | Kiểm kê cấu hình dự án | Kiểm tra hiện diện của README, license, manifest, lockfile, test, CI, container và lint config. | TXT |
+| `/tool repo-duplicates` | Tìm file trùng repository | Hash SHA-256 các member và gom nhóm file có nội dung giống nhau. | CSV |
+
+Repository tools nhận **ZIP** (không nhận Git URL trực tiếp), giới hạn 500 mục và tối đa 100 MB dữ liệu giải nén. Mỗi file text được đọc để phân tích giới hạn 2 MB; file lớn/binary được bỏ qua ở các phép phân tích văn bản. Tool không giải nén archive ra filesystem, không cài package, không truy cập mạng và không chạy code trong repository. Archive path traversal, symlink/special file, file mã hóa và compression ratio bất thường bị từ chối. Secret scan có thể có false positive/false negative và không thay thế secret scanner chuyên dụng.
+
 ### Tiện ích
 
 | ID | Công cụ | Chức năng | Đầu ra |
@@ -196,12 +211,12 @@ Các processor văn bản này giới hạn đầu vào 5 MB và yêu cầu UTF-
 
 ## Telegram Tool Center
 
-- `/tools` renders an inline-button catalog with active tool counts by category: image/OCR, PDF/Office, audio/video, data, developer/text and utilities.
+- `/tools` renders an inline-button catalog with active tool counts by category: image/OCR, PDF/Office, audio/video, data, developer/text, repository intelligence and utilities.
 - Each category is paginated (8 tools per page). A tool details screen shows its ID, description, accepted MIME types/extensions and output.
 - `Dùng tool này` creates the same owner/chat-scoped 15-minute pending selection used by `/tool ID`; the next compatible upload starts the normal validated job pipeline. No file is executed by a callback.
 - `/tool_search query` searches IDs, names, descriptions, output descriptions, categories and accepted file types. Search results open the same detail screen and use action.
-- Tool Center buttons also open recent tool jobs and the saved Workflow Library. `/tool_jobs`, `/tool_job ID`, `/tool_retry ID` and workflow commands remain available directly.
-- Every callback rechecks the allowlisted Telegram account and requires a private chat. Callback payloads contain only bounded category/tool identifiers, never user-supplied file data.
+- Tool Center buttons also open the interactive Job Center and saved Workflow Library. Job Center paginates recent tasks; each job detail displays its pipeline/DAG, live progress checkpoint, per-step trace, result/error and retry action when the source Telegram file is still available. `/tool_jobs`, `/tool_job ID`, `/tool_retry ID` and workflow commands remain available directly.
+- Every callback rechecks the allowlisted Telegram account and requires a private chat. Callback payloads contain only bounded category/tool/job identifiers, never user-supplied file data.
 
 ## Runtime
 
@@ -232,8 +247,8 @@ The runner executes DAG nodes in topological dependency layers, with a hard maxi
 
 ## Tool execution traces and retries
 
-- `/tool_jobs` lists recent jobs; `/tool_job ID` shows the validated per-step trace (processor, elapsed milliseconds, input/output bytes, summary and any failure).
+- `/tool_jobs` opens the paginated Job Center; `/tool_job ID` shows the validated per-step trace (processor, elapsed milliseconds, input/output bytes, summary and any failure). Each runner step posts a bounded progress checkpoint (`completed`, `total`, active tool IDs); the Worker verifies it against the stored pipeline/DAG before saving it in D1. DAG progress reports at most three active processors, matching runner concurrency.
 - `/tool_retry ID` creates a new job linked to the failed job with a fresh ID and incremented attempt number. The original history is kept; the original Telegram file is downloaded again and the whole pipeline is rerun.
 - Successful jobs clear the Telegram file reference. Failed jobs retain that private reference so the owner can manually retry while the Telegram Bot API still makes the file available. Older failed jobs created before this change may not have a retained reference; re-upload the source file in that case.
 - Intermediate files remain on the ephemeral runner and are not persisted between attempts. This is whole-pipeline retry, not resume-from-step. Trace entries are validated against the exact stored pipeline before D1 persistence.
-- The trace contains bounded metadata and processor summaries only; it does not include file bytes, Telegram file IDs, tokens, or local filesystem paths.
+- The progress checkpoint and trace contain bounded metadata and processor summaries only; they do not include file bytes, Telegram file IDs, tokens, or local filesystem paths. The authenticated Web Workspace Tools tab also displays live progress and trace counters from the same job record.
