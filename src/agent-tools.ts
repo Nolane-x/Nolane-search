@@ -1183,7 +1183,13 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
       table=rows;
     }
     if(!table)throw new Error("No GitHub-Flavored Markdown table was found.");
-    return table.map(row=>row.map(csvEscape).join(",")).join("\n");
+    const safeCell=(value:string)=>{
+      let safe=value;
+      const stripped=safe.trimStart();
+      if(/^[=+@]/.test(stripped)||(/^[-]/.test(stripped)&&!/^-d+(?:[.,]d+)?$/.test(stripped))) safe="'"+safe;
+      return csvEscape(safe);
+    };
+    return table.map(row=>row.map(safeCell).join(",")).join("\n");
   }
   if (toolId === "language-detect") {
     const sample=content.slice(0,20_000);
