@@ -85,6 +85,16 @@ describe("Workflow Intelligence planner", () => {
     })).toThrow("pipeline không có luồng dữ liệu hợp lệ");
   });
 
+  it("rejects duplicate node identifiers even in otherwise linear plans", () => {
+    expect(() => validateAiWorkflowPlan({
+      summary: "duplicate node ids",
+      nodes: [
+        { id: "same", toolId: "video-audio", dependsOn: [] },
+        { id: "same", toolId: "audio-convert", dependsOn: ["same"] },
+      ],
+    })).toThrow("trùng ID");
+  });
+
   it("rejects invalid multi-parent or cyclic-style dependencies", () => {
     expect(() => validateAiWorkflowPlan({
       summary: "invalid dag",
