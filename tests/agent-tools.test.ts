@@ -42,7 +42,7 @@ describe("Nolane AI callable tools", () => {
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-emails",content:"A@Example.com and a@example.com"})).toBe("A@Example.com");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"url-encode",content:"xin chào"})).toBe("xin%20ch%C3%A0o");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"url-decode",content:"xin%20ch%C3%A0o"})).toBe("xin chào");
-    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-sort-keys",content:'{"z":1,"a":{"y":2,"b":3}}'})).toBe('{"a":{"b":3,"y":2},"z":1}');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-sort-keys",content:'{"z":1,"a":{"y":2,"b":3}}'})).toBe('{\n  "a": {\n    "b": 3,\n    "y": 2\n  },\n  "z": 1\n}');
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"language-detect",content:"Xin chào, tôi là người Việt Nam"})).toContain("Vietnamese");
     const schema=AGENT_TOOL_DEFINITIONS.find(tool=>tool.function.name==="process_text_content")?.function.parameters as {properties?:Record<string,unknown>};
     expect(schema.properties?.target_language).toBeDefined();
