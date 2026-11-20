@@ -982,7 +982,10 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
       return result;
     }).join("\n");
   }
-  if (toolId === "text-escape-regex") return content.replace(/[.*+?^$\\{}()|[\]]/g,"\\  if (toolId === "language-detect") {");
+  if (toolId === "text-escape-regex") {
+    const special = ".*+?^$()|{}[]\\";
+    return [...content].map(character => special.includes(character) ? "\\" + character : character).join("");
+  }
   if (toolId === "text-unescape-regex") return content.replace(/\\([.^$*+?{}\[\]|()\\])/g,"$1");
   if (toolId === "json-merge-objects") {
     const values=JSON.parse(content);
@@ -1025,6 +1028,40 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     });
     lines.push("Total empty cells: "+total,"Total data cells: "+(body.length*width));
     return lines.join("\n")+"\n";
+  }
+  if (toolId === "language-detect") {
+    const sample=content.slice(0,20_000);
+    const scripts:Array<[RegExp,string,string]>=[
+      [/[ぁ-ヿ]/g,"Japanese","Hiragana/Katakana"],[/[가-힣]/g,"Korean","Hangul"],
+      [/[一-鿿]/g,"Chinese","Han characters (Japanese without kana may be ambiguous)"],
+      [/[А-Яа-яЁё]/g,"Russian or another Cyrillic language","Cyrillic"],
+      [/[؀-ۿ]/g,"Arabic","Arabic script"],[/[א-ת]/g,"Hebrew","Hebrew script"],
+      [/[Ͱ-Ͽ]/g,"Greek","Greek script"],[/[ก-๛]/g,"Thai","Thai script"],
+      [/[ऀ-ॿ]/g,"Hindi or another Devanagari language","Devanagari"],
+    ];
+    const matches=scripts.map(([pattern,label,evidence])=>({count:(sample.match(pattern)||[]).length,label,evidence})).filter(item=>item.count);
+    if(matches.length) {
+      const best=matches.sort((a,b)=>b.count-a.count)[0]!;
+      return "Most likely: "+best.label+"\nEvidence: "+best.evidence+" ("+best.count+" characters)\nMethod: Unicode-script heuristic, not a full classifier.";
+    }
+    if(/[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(sample)) {
+      return "Most likely: Vietnamese\nEvidence: Vietnamese-specific letters and diacritics\nMethod: heuristic.";
+    }
+    const words=new Set(sample.toLowerCase().match(/[a-zA-ZÀ-ỹ']+/g)||[]);
+    const vocabulary:Record<string,string[]>={
+      English:["the","and","that","with","this","you","for","are","was","have","from"],
+      French:["le","la","les","et","des","une","est","dans","pour","avec","que"],
+      German:["der","die","das","und","ist","mit","ein","eine","nicht","auf","für"],
+      Spanish:["el","la","los","las","y","de","que","una","es","por","para","con"],
+      Portuguese:["o","a","os","as","e","de","que","uma","é","para","com","não"],
+      Italian:["il","lo","la","gli","e","di","che","una","per","con","non"],
+      Indonesian:["yang","dan","ini","itu","untuk","dengan","dari","tidak","adalah"],
+    };
+    const ranked=Object.entries(vocabulary).map(([language,values])=>({language,score:values.filter(word=>words.has(word)).length})).sort((a,b)=>b.score-a.score);
+    const best=ranked[0];
+    return best && best.score>=2
+      ? "Most likely: "+best.language+"\nEvidence: "+best.score+" common-word matches\nMethod: lightweight heuristic; short or mixed text may be misclassified."
+      : "Most likely: Undetermined\nEvidence: insufficient distinctive characters or words\nMethod: lightweight heuristic.";
   }
   if (toolId === "language-detect") {
     const sample=content.slice(0,20_000);
