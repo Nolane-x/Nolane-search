@@ -1702,7 +1702,7 @@ def text_remove_zero_width(p):
 
 def text_extract_file_paths(p):
     raw=_read_text_source(p)
-    pattern=r"(?<![A-Za-z0-9])(?:[A-Za-z]:\\(?:[^\\/:*?""<>|\r\n]+\\)*[^\\/:*?""<>|\r\n]*|/(?:[^/\s<>:""|?*]+/)*[^/\s<>:""|?*]+)"
+    pattern=r'(?<![A-Za-z0-9])(?:[A-Za-z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]+|/(?:[^/\s<>:"|?*]+/)*[^/\s<>:"|?*]+)'
     values=_ordered_unique(re.findall(pattern,raw))
     return _write_text_artifact(p,"file-paths","\n".join(values)+("\n" if values else ""),"File-path extraction",str(len(values))+" unique candidate(s)")
 
