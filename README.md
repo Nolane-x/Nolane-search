@@ -36,7 +36,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Personal memory | /remember, /memories, /forget | Explicit owner-controlled memories shared by Telegram and Web AI chat |
 | Status | /status | Provider configuration and compact index counters |
-| Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | 225 file processors including Markdown extraction, text normalization, CSV schema analysis and JSON utilities, interactive Telegram Tool Center and ephemeral GitHub Actions runners |
+| Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | 247 file processors including Markdown and code hygiene, secret redaction, JSON array processing and CSV quality utilities, interactive Telegram Tool Center and ephemeral GitHub Actions runners |
 | Workflow Intelligence | /workflow_plan, /workflow_plan_save, /workflow_plan_discard | AI designs validated pipelines and parallel DAGs with controlled text fan-in; preview, save and execution are separate |
 | GitHub Repository Intelligence | /repo URL, /repo_compare URL base...head | Analyze a public repository directly: static module/import graph, commit/branch history, dependency and lockfile inventory, license evidence, secret-pattern scan with values withheld, TODO markers, plus static CI/CD, Docker, Kubernetes and Terraform security checks. Reports include SARIF findings and supply-chain metadata; source code and workflows are never executed. |
 
