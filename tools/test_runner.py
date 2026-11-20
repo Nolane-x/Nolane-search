@@ -835,7 +835,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         mentions=Path(runner.text_extract_mentions(refs)["output_path"]).read_text(encoding="utf-8").splitlines()
         colors=Path(runner.text_extract_hex_colors(refs)["output_path"]).read_text(encoding="utf-8").splitlines()
         self.assertEqual(mentions,["@Nolane","@user.name"])
-        self.assertEqual(colors,["#123456"])
+        self.assertEqual(colors,["#ABC","#123456"])
         phones=self.write("phones.txt","Call +84 912 345 678 or 0912345678")
         extracted=Path(runner.text_extract_phones(phones)["output_path"]).read_text(encoding="utf-8").splitlines()
         self.assertEqual(len(extracted),2)
@@ -878,7 +878,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual(json.loads(Path(cleaned["output_path"]).read_text(encoding="utf-8")),[{"b":2},{"c":3,"a":1}])
         table=Path(runner.json_to_html_table(self.write("table.json",'[{"name":"<script>","score":7},{"name":"B","score":8}]'))["output_path"]).read_text(encoding="utf-8")
         self.assertIn("&lt;script&gt;",table)
-        self.assertNotIn("<th>score",table) if False else None
+        self.assertIn("<th>score</th>",table)
         non_array=self.write("not-array.json",'{"a":1}')
         with self.assertRaisesRegex(RuntimeError,"array of objects"):
             runner.json_to_html_table(non_array)
