@@ -572,6 +572,12 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     })].join("\n")+"\n";
   }
   if (toolId === "jsonl-to-csv") {
+    const encodeCsvCell=(value:string)=>{
+      let safe=value;
+      const numericNegative=/^\s*-\d+(?:[.,]\d+)?\s*$/.test(safe);
+      if(/^[\s]*[=+@]/.test(safe)||(/^[\s]*-/.test(safe)&&!numericNegative)) safe="'"+safe;
+      return /[",\r\n]/.test(safe)?'"'+safe.replace(/"/g,'""')+'"':safe;
+    };
     const records:Record<string,unknown>[]=[];
     for(const [index,line] of content.split(/\r?\n/).entries()) {
       if(!line.trim())continue;
