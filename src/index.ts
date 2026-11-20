@@ -1559,7 +1559,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/workflows</code> — xem thư viện workflow\n" +
       "<code>/workflow_run ID</code> — chạy workflow với tệp tiếp theo\n" +
       "<code>/workflow_delete ID</code> — xóa workflow\n" +
-      "<code>/ai câu hỏi</code> — AI tự gọi web, đọc trang và các tool tích hợp\n" +      "<code>/translate English | văn bản</code> — dịch văn bản bằng AI Router\n" +
+      "<code>/ai câu hỏi</code> — AI tự gọi web, đọc trang và các tool tích hợp\n" +
+      "<code>/translate English | văn bản</code> — dịch văn bản bằng AI Router\n" +
       "<code>/ai_file yêu cầu</code> — mở batch xử lý liên tục, AI tự lập pipeline cho từng tệp\n" +
       "<code>/ai_file_done</code> — kết thúc batch AI File\n" +
       "<code>/search từ khóa</code> — tìm web nhanh, có phân trang kết quả\n" +
