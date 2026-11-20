@@ -661,7 +661,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
 
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
-        self.assertGreaterEqual(len(runner.TOOLS),94)
+        self.assertGreaterEqual(len(runner.TOOLS),102)
 
 
     def test_pdf_rotation_and_blank_page_removal(self):
@@ -1035,6 +1035,87 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertIn("2026-11-20: 2",body)
         self.assertIn("2026-11-21: 1",body)
         self.assertIn("2026-11-20 10:xx — 2 lines",body)
+
+
+    def make_repository_archive(self, name="project.zip"):
+        import json as json_module
+        import zipfile
+        path=self.input_dir/name
+        token="ghp_"+"A"*36
+        with zipfile.ZipFile(path,"w",compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("project/README.md","# Sample project\n")
+            archive.writestr("project/LICENSE","MIT License\nPermission is hereby granted, free of charge.\n")
+            archive.writestr("project/package.json",json_module.dumps({
+                "name":"sample-project","license":"MIT","dependencies":{"lodash":"^4.17.21"},
+                "devDependencies":{"vitest":"^3.0.0"}
+            }))
+            archive.writestr("project/requirements.txt","requests>=2.31\npydantic==2.9.0\n")
+            archive.writestr("project/src/app.py",f"# TODO: add validation\nTOKEN = '{token}'\npassword = 'this-is-a-long-password'\nprint('safe')\n")
+            archive.writestr("project/src/duplicate.py","print('same content')\n")
+            archive.writestr("project/docs/duplicate.py","print('same content')\n")
+            archive.writestr("project/tests/test_app.py","def test_ok():\n    assert True\n")
+            archive.writestr("project/.github/workflows/ci.yml","name: CI\non: [push]\n")
+            archive.writestr("project/Dockerfile","FROM python:3.12\n")
+            archive.writestr("project/.env.example","API_KEY=your_api_key_here\n")
+            archive.writestr("project/pyproject.toml","[project]\nname = 'sample-project'\ndependencies = ['httpx>=0.27']\n")
+        return path,token
+
+    def test_repo_inventory_dependencies_and_license_reports(self):
+        path,_=self.make_repository_archive()
+        inventory=runner.repo_inventory(path)
+        inventory_text=Path(inventory["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Files: 12",inventory_text)
+        self.assertIn(".py",inventory_text)
+        self.assertIn("README.md",inventory_text)
+        dependencies=runner.repo_dependencies(path)
+        dependency_text=Path(dependencies["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("lodash",dependency_text)
+        self.assertIn("requests",dependency_text)
+        self.assertIn("httpx",dependency_text)
+        licenses=runner.repo_license_report(path)
+        license_text=Path(licenses["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("MIT",license_text)
+        self.assertIn("package.json",license_text)
+        self.assertIn("not legal advice",licenses["summary"].lower())
+
+    def test_repo_secret_and_todo_scans_never_disclose_secret_values(self):
+        path,token=self.make_repository_archive()
+        secret=runner.repo_secret_scan(path)
+        report=Path(secret["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("GitHub token",report)
+        self.assertIn("[value withheld]",report)
+        self.assertNotIn(token,report)
+        self.assertNotIn("this-is-a-long-password",report)
+        todos=runner.repo_todo_scan(path)
+        todo_report=Path(todos["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("project/src/app.py:L1 [TODO]",todo_report)
+        self.assertIn("add validation",todo_report)
+
+    def test_repo_code_stats_config_audit_and_duplicate_hashes(self):
+        path,_=self.make_repository_archive()
+        stats=runner.repo_code_stats(path)
+        stats_text=Path(stats["output_path"]).read_text(encoding="utf-8")
+        self.assertIn(".py:",stats_text)
+        self.assertIn("Total lines:",stats_text)
+        audit=runner.repo_config_audit(path)
+        audit_text=Path(audit["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("PRESENT · Automated tests",audit_text)
+        self.assertIn("PRESENT · CI workflow",audit_text)
+        self.assertIn("PRESENT · Container build",audit_text)
+        duplicate=runner.repo_duplicates(path)
+        rows=list(__import__("csv").DictReader(Path(duplicate["output_path"]).open(encoding="utf-8-sig")))
+        duplicate_paths=[row["paths"] for row in rows]
+        self.assertTrue(any("project/src/duplicate.py" in value and "project/docs/duplicate.py" in value for value in duplicate_paths))
+
+    def test_repo_analysis_rejects_path_traversal_without_extracting(self):
+        import zipfile
+        path=self.input_dir/"unsafe-project.zip"
+        with zipfile.ZipFile(path,"w") as archive:
+            archive.writestr("../outside.txt","must not escape")
+            archive.writestr("safe/README.md","hello")
+        with self.assertRaises(RuntimeError):
+            runner.repo_inventory(path)
+        self.assertFalse((self.root/"outside.txt").exists())
 
 
 
