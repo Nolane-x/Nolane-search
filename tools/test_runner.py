@@ -827,10 +827,11 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertIn("hello world",cleaned)
         ascii_source=self.write("ascii.txt","Đặng café")
         self.assertEqual(Path(runner.text_to_ascii(ascii_source)["output_path"]).read_text(encoding="utf-8"),"Dang cafe")
-        escaped=runner.text_html_escape(ascii_source)
+        html_source=self.write("html-source.txt","<tag attr='x'>&")
+        escaped=runner.text_html_escape(html_source)
         self.assertIn("&#x27;",Path(escaped["output_path"]).read_text(encoding="utf-8"))
         unescaped=runner.text_html_unescape(Path(escaped["output_path"]))
-        self.assertEqual(Path(unescaped["output_path"]).read_text(encoding="utf-8"),"Đặng café")
+        self.assertEqual(Path(unescaped["output_path"]).read_text(encoding="utf-8"),"<tag attr='x'>&")
 
         refs=self.write("refs.txt","@Nolane @Nolane user@example.com #A1 #abc #123456 @user.name")
         mentions=Path(runner.text_extract_mentions(refs)["output_path"]).read_text(encoding="utf-8").splitlines()
