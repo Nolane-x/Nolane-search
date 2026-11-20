@@ -2635,7 +2635,7 @@ def csv_empty_cell_report(p):
 def text_sort_lines_natural(p):
     raw=_read_text_source(p)
     def key(value):
-        return [int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)",value)]
+        return [(1,int(part)) if part.isdigit() else (0,part.casefold()) for part in re.split(r"(\d+)",value)]
     lines=sorted(raw.splitlines(),key=key)
     output="\n".join(lines)+("\n" if raw.endswith(("\n","\r")) else "")
     return _write_text_artifact(p,"natural-sorted",output,"Natural line sorting",str(len(lines))+" line(s)")
@@ -2771,7 +2771,7 @@ def binary_decode_text(p):
 
 def url_query_params(p):
     raw=_read_text_source(p)
-    candidates=re.findall(r"https?://[^\s<>""']+",raw,flags=re.I)
+    candidates=re.findall(r"""https?://[^\s<>"']+""",raw,flags=re.I)
     records=[]
     seen=set()
     for candidate in candidates:
@@ -2815,15 +2815,14 @@ def json_array_flatten(p):
     except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
     if not isinstance(value,list): raise RuntimeError("JSON array flatten expects a top-level array.")
     flattened=[]
-    stack=[(value,0)]
-    while stack:
-        current,depth=stack.pop()
+    def visit(items,depth=0):
         if depth>100: raise RuntimeError("JSON array nesting exceeds the depth limit of 100.")
-        for item in reversed(current):
-            if isinstance(item,list): stack.append((item,depth+1))
-            else: flattened.append(item)
-        if len(flattened)+sum(len(items) for items,_depth in stack)>100_000:
-            raise RuntimeError("JSON array flatten exceeds 100,000 output items.")
+        for item in items:
+            if isinstance(item,list): visit(item,depth+1)
+            else:
+                flattened.append(item)
+                if len(flattened)>100_000: raise RuntimeError("JSON array flatten exceeds 100,000 output items.")
+    visit(value)
     output=json.dumps(flattened,ensure_ascii=False,indent=2)
     return _write_text_artifact(p,"flat-array",output+"\n","Nested JSON array flattening",str(len(flattened))+" item(s)")
 
