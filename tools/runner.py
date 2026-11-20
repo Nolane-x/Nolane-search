@@ -3303,6 +3303,8 @@ def repo_security_audit(p):
             "Do not bake credentials into image layers. Use the build platform's secret-mount mechanism."),
         "NOLANE-CTR-004": ("Container explicitly runs as root", "warning",
             "Use a dedicated unprivileged runtime user unless root is demonstrably required."),
+        "NOLANE-CTR-005": ("Container has no explicit runtime user", "warning",
+            "Declare a dedicated unprivileged USER in the image or set a non-root identity in the runtime configuration."),
         "NOLANE-K8S-001": ("Privileged container security context", "error",
             "Remove privileged mode and grant only the minimum Linux capabilities required."),
         "NOLANE-K8S-002": ("Privilege escalation is allowed", "warning",
@@ -3394,7 +3396,7 @@ def repo_security_audit(p):
                     immutable = bool(re.fullmatch(r"[a-f0-9]{40}", ref, re.I) or
                                      re.fullmatch(r"sha256:[a-f0-9]{64}", ref, re.I))
                     if not immutable:
-                        add("NOLANE-GHA-003", path, line_no, uses.group(1)[:160])
+                        add("NOLANE-GHA-003", path, line_no, "An action reference is mutable or not pinned to a full commit SHA.")
 
             if yaml is not None:
                 try:
@@ -3430,9 +3432,9 @@ def repo_security_audit(p):
                 if match:
                     image = match.group(1)
                     if not image.lower().endswith(":latest") and "@" not in image and ":" not in image.rsplit("/", 1)[-1]:
-                        add("NOLANE-CTR-001", path, line_no, image[:120] + " (implicit tag)")
+                        add("NOLANE-CTR-001", path, line_no, "Base image uses an implicit tag.")
                     elif image.lower().endswith(":latest"):
-                        add("NOLANE-CTR-001", path, line_no, image[:120])
+                        add("NOLANE-CTR-001", path, line_no, "Base image uses latest.")
                 if re.match(r"(?i)^ADD\s+https?://", stripped):
                     add("NOLANE-CTR-002", path, line_no, "Remote URL used by ADD.")
                 if re.match(r"(?i)^RUN\b", stripped) and re.search(
@@ -3449,7 +3451,7 @@ def repo_security_audit(p):
                     if user_match.group(1).strip().lower() in ("root", "0"):
                         add("NOLANE-CTR-004", path, line_no)
             if not has_user:
-                add("NOLANE-CTR-004", path, 1, "No USER instruction found; runtime may default to root.")
+                add("NOLANE-CTR-005", path, 1, "No USER instruction found; runtime may default to root.")
 
         if basename.endswith(".tf"):
             if (re.search(r'(?i)\bAction\s*[:=]\s*["\']\*["\']', raw) and
@@ -3517,7 +3519,7 @@ def repo_security_audit(p):
         report.append(
             f"- [{item['level'].upper()}] {item['ruleId']} · {item['path']}:L{item['line']} · "
             f"{item['title']}" + (f" · {item['detail']}" if item["detail"] else "") +
-            f"\\n  Remediation: {item['remediation']}"
+            f"\n  Remediation: {item['remediation']}"
         )
     if not findings:
         report.append("No matching patterns were detected in the scanned files.")
@@ -3600,6 +3602,8 @@ def repo_supply_chain(p):
         dep_name = str(name).strip()[:180]
         req = str(requirement or "").strip()[:180]
         classification = classify_requirement(req)
+        if classification == "remote-vcs-or-url":
+            req = "[remote URL/reference omitted]"
         item = {
             "manifest": manifest, "ecosystem": ecosystem, "name": dep_name,
             "scope": str(scope)[:80], "requirement": req,
@@ -3640,6 +3644,9 @@ def repo_supply_chain(p):
                     if not value or value.startswith(("#", "-")):
                         continue
                     value = value.split(";", 1)[0].strip()
+                    if value.lower().startswith(("https://", "http://", "git+")):
+                        add_dependency(path, ecosystem, "direct-url-dependency", "requirements", value)
+                        continue
                     match = re.match(r"([A-Za-z0-9_.-]+)(.*)", value)
                     if match:
                         add_dependency(path, ecosystem, match.group(1), "requirements", match.group(2).strip())
