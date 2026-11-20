@@ -396,5 +396,6 @@ export function toolCategoryLabel(category: ToolCategory): string {
     "audio-video": "Âm thanh & Video",
     data: "Dữ liệu",
     utility: "Tiện ích",
+    developer: "Lập trình & văn bản",
   } satisfies Record<ToolCategory, string>)[category];
 }
