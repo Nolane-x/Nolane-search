@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildBackHomeKeyboard, buildHomeKeyboard, buildModePromptKeyboard, buildSearchKeyboard, formatDeepReport, formatHomeMenu, formatModePrompt, formatSearchResults, SEARCH_PAGE_SIZE } from "../src/telegram";
+import { buildBackHomeKeyboard, buildHomeKeyboard, buildModePromptKeyboard, buildSearchKeyboard, buildToolCenterKeyboard, buildToolCategoryKeyboard, buildToolDetailKeyboard, buildToolSearchKeyboard, formatDeepReport, formatHomeMenu, formatModePrompt, formatSearchResults, formatToolCenterHome, formatToolCategoryPage, formatToolDetail, formatToolSearchResults, SEARCH_PAGE_SIZE } from "../src/telegram";
+import { TOOL_CATALOG, getTool } from "../src/tools";
 import type { SearchResult } from "../src/types";
 
 const result: SearchResult = {
@@ -26,6 +27,7 @@ describe("Telegram interactive workspace UI", () => {
     expect(buttons.some(button => button.callback_data === "ui:mode:ask")).toBe(true);
     expect(buttons.some(button => button.callback_data === "ui:mode:deep")).toBe(true);
     expect(buttons.some(button => button.callback_data === "ui:mode:local")).toBe(true);
+    expect(buttons.some(button => button.callback_data === "tc:home")).toBe(true);
     expect(buttons.some(button => button.url?.startsWith("https://"))).toBe(true);
     expect(buttons.every(button => new TextEncoder().encode(button.callback_data || "").length <= 64)).toBe(true);
   });
@@ -35,6 +37,40 @@ describe("Telegram interactive workspace UI", () => {
     expect(formatModePrompt("ask")).toContain("AI trả lời có nguồn");
     expect(buildModePromptKeyboard().inline_keyboard[0]?.map(button => button.callback_data)).toEqual(["ui:cancel", "ui:home"]);
     expect(buildBackHomeKeyboard().inline_keyboard[0]?.[0]?.callback_data).toBe("ui:home");
+  });
+});
+
+
+describe("Telegram Tool Center UI", () => {
+  it("shows every active category and navigates into paginated tool listings", () => {
+    const home = formatToolCenterHome(TOOL_CATALOG, true);
+    expect(home).toContain("94 processor");
+    expect(home).toContain("Lập trình & văn bản");
+    const keyboard = buildToolCenterKeyboard(TOOL_CATALOG);
+    const callbacks = keyboard.inline_keyboard.flat().map(button => button.callback_data).filter(Boolean) as string[];
+    expect(callbacks).toContain("tc:developer");
+    expect(callbacks).toContain("tc:jobs");
+    expect(callbacks).toContain("tc:workflows");
+    const page = formatToolCategoryPage(TOOL_CATALOG, "developer", 0);
+    expect(page).toContain("markdown-outline");
+    const pageKeyboard = buildToolCategoryKeyboard(TOOL_CATALOG, "developer", 0);
+    expect(pageKeyboard.inline_keyboard.flat().some(button => button.callback_data === "td:markdown-outline")).toBe(true);
+    expect(pageKeyboard.inline_keyboard.flat().every(button => new TextEncoder().encode(button.callback_data || "").length <= 64)).toBe(true);
+  });
+
+  it("shows tool details and use action with compact callbacks", () => {
+    const tool = getTool("code-secret-scan")!;
+    expect(formatToolDetail(tool)).toContain("giá trị bí mật");
+    const buttons = buildToolDetailKeyboard(tool).inline_keyboard.flat();
+    expect(buttons.some(button => button.callback_data === "tu:code-secret-scan")).toBe(true);
+    expect(buttons.every(button => new TextEncoder().encode(button.callback_data || "").length <= 64)).toBe(true);
+  });
+
+  it("renders search results and buttons only for the bounded shortlist", () => {
+    const matches = TOOL_CATALOG.filter(tool => tool.id.includes("markdown"));
+    expect(formatToolSearchResults(matches, "markdown")).toContain("2 kết quả");
+    const buttons = buildToolSearchKeyboard(matches).inline_keyboard.flat();
+    expect(buttons.map(button => button.callback_data)).toContain("td:markdown-links");
   });
 });
 
