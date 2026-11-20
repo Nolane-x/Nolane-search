@@ -159,12 +159,11 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "video-silence-report": ["text-clean"],
   "video-frames": ["archive-inspect","archive-safe-extract","archive-manifest"],
   "subtitle-convert": ["subtitle-text"],
-  "text-deduplicate": ["text-clean","text-stats"],
+  "text-deduplicate": ["text-clean","text-stats","text-join"],
   "text-diff": ["text-clean","text-stats"],
   "code-size-report": ["text-clean","text-stats"],
   "text-clean": ["text-stats","text-deduplicate"],
   "text-stats": ["text-clean", "text-join"],
-  "text-deduplicate": ["text-clean", "text-stats", "text-join"],
 
   "pdf-rotate-cw": ["pdf-info","pdf-text","pdf-compress","pdf-to-images","pdf-split","pdf-extract-images","pdf-metadata-clean","pdf-outline","pdf-remove-blank"],
   "pdf-remove-blank": ["pdf-info","pdf-text","pdf-compress","pdf-to-images","pdf-split","pdf-extract-images","pdf-metadata-clean","pdf-outline"],
