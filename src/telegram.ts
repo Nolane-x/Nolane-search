@@ -1,7 +1,7 @@
 import { htmlEscape } from "./security";
 import { readJsonResponse } from "./http";
 import type { Env, SearchMode, SearchResult } from "./types";
-import { toolCategoryLabel } from "./tools";
+import { getTool, toolCategoryLabel } from "./tools";
 import type { ToolCategory, ToolDefinition } from "./tools";
 import type { ToolJob } from "./tool-jobs";
 
@@ -395,7 +395,7 @@ function toolJobProgressLabel(job: ToolJob): string {
 }
 
 function getToolLabel(id: string): string {
-  return id;
+  return getTool(id)?.name || id;
 }
 
 export function formatToolJobsPage(jobs: ToolJob[], page = 0): string {
