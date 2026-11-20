@@ -742,6 +742,80 @@ class ToolRunnerUnitTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,"Worker AI Router"):
             runner.text_translate(source)
 
+    def test_text_slug_frequency_and_case_conversion_tools(self):
+        source=self.write("names.txt","Xin Chào Đặng\\nHello World\\nhello world")
+        slug=runner.text_slugify(source)
+        self.assertEqual(Path(slug["output_path"]).read_text(encoding="utf-8"),"xin-chao-dang\\nhello-world\\nhello-world")
+        frequency=runner.text_word_frequency(source)
+        report=Path(frequency["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("hello\\t2",report)
+        self.assertIn("world\\t2",report)
+        snake=runner.text_snake_case(source)
+        self.assertIn("hello_world",Path(snake["output_path"]).read_text(encoding="utf-8"))
+        kebab=runner.text_kebab_case(source)
+        self.assertIn("hello-world",Path(kebab["output_path"]).read_text(encoding="utf-8"))
+        camel_source=self.write("camel.txt","Hello world")
+        self.assertEqual(Path(runner.text_camel_case(camel_source)["output_path"]).read_text(encoding="utf-8"),"helloWorld")
+        self.assertEqual(Path(runner.text_swap_case(camel_source)["output_path"]).read_text(encoding="utf-8"),"hELLO WORLD")
+        reverse=runner.text_reverse_characters(camel_source)
+        self.assertEqual(Path(reverse["output_path"]).read_text(encoding="utf-8"),"dlrow olleH")
+
+    def test_number_date_ip_extraction_and_masking(self):
+        source=self.write("signals.txt","Numbers: -12, 3.14, 3.14 and +7; dates 2024-02-29, 31/02/2024, 01/03/2025. IPs 192.168.1.1 and 999.1.1.1. Mail user@example.com; phone +84 912 345 678.")
+        numbers=Path(runner.text_extract_numbers(source)["output_path"]).read_text(encoding="utf-8").splitlines()
+        self.assertEqual(numbers,["-12","3.14","+7"])
+        dates=Path(runner.text_extract_dates(source)["output_path"]).read_text(encoding="utf-8").splitlines()
+        self.assertEqual(dates,["2024-02-29","01/03/2025"])
+        ips=Path(runner.text_extract_ipv4(source)["output_path"]).read_text(encoding="utf-8").splitlines()
+        self.assertEqual(ips,["192.168.1.1"])
+        masked_email=Path(runner.text_mask_emails(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertNotIn("user@example.com",masked_email)
+        self.assertIn("u***@e***.com",masked_email)
+        masked_phone=Path(runner.text_mask_phones(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertNotIn("912 345 678",masked_phone)
+
+    def test_jsonl_csv_tsv_and_markdown_converters(self):
+        source=self.write("records.json",'[{"name":"An","score":7},{"name":"Bình","score":8}]')
+        jsonl=runner.json_to_jsonl(source)
+        jsonl_path=Path(jsonl["output_path"])
+        self.assertTrue(jsonl_path.name.endswith(".jsonl"))
+        self.assertEqual(jsonl_path.read_text(encoding="utf-8").splitlines(),['{"name":"An","score":7}','{"name":"Bình","score":8}'])
+        array=runner.jsonl_to_json(jsonl_path)
+        self.assertEqual(json.loads(Path(array["output_path"]).read_text(encoding="utf-8")),[{"name":"An","score":7},{"name":"Bình","score":8}])
+        bad=self.write("bad.jsonl",'{"ok":1}\\nnot-json')
+        with self.assertRaisesRegex(RuntimeError,"line 2"):
+            runner.jsonl_to_json(bad)
+
+        csv_source=self.write("table.csv",'name,note\\nAn,"hello, world"\\nBình,good')
+        tsv=runner.csv_to_tsv(csv_source)
+        tsv_path=Path(tsv["output_path"])
+        self.assertTrue(tsv_path.name.endswith(".tsv"))
+        self.assertIn("hello, world",tsv_path.read_text(encoding="utf-8"))
+        csv_back=runner.tsv_to_csv(tsv_path)
+        self.assertEqual(list(csv.reader(Path(csv_back["output_path"]).open(encoding="utf-8"))),[["name","note"],["An","hello, world"],["Bình","good"]])
+        markdown=runner.csv_to_markdown(csv_source)
+        self.assertIn("| name | note |",Path(markdown["output_path"]).read_text(encoding="utf-8"))
+        self.assertIn("hello, world",Path(markdown["output_path"]).read_text(encoding="utf-8"))
+
+    def test_html_xml_minifiers_and_emoji_removal(self):
+        html=self.write("page.html",'<!-- remove --><div> Hello   world </div><pre> keep   spaces </pre><script>const x = 1;</script>')
+        minified=Path(runner.html_minify(html)["output_path"]).read_text(encoding="utf-8")
+        self.assertNotIn("remove",minified)
+        self.assertIn("<pre> keep   spaces </pre>",minified)
+        self.assertIn("<script>const x = 1;</script>",minified)
+        xml=self.write("doc.xml",'<?xml version="1.0"?><root> <item> value </item> </root>')
+        compact=Path(runner.xml_minify(xml)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("<root>",compact)
+        self.assertNotIn("DOCTYPE",compact)
+        unsafe=self.write("unsafe.xml",'<!DOCTYPE root [<!ENTITY x "oops">]><root>&x;</root>')
+        with self.assertRaisesRegex(RuntimeError,"DTD and ENTITY"):
+            runner.xml_minify(unsafe)
+        emoji=self.write("emoji.txt","Hello 😀 world ❤️ ✓")
+        cleaned=Path(runner.text_remove_emoji(emoji)["output_path"]).read_text(encoding="utf-8")
+        self.assertNotIn("😀",cleaned)
+        self.assertNotIn("❤️",cleaned)
+        self.assertIn("Hello  world ",cleaned)
+
     def test_runner_catalog_allowlist_and_docs_stay_in_sync(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
 
