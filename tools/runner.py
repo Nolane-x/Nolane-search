@@ -4260,7 +4260,7 @@ def run_tool_dag(job,source,root):
     summary_lines=[f"Branch {node['id']} · {node['toolId']}: {summaries[node['id']]}" for node in nodes]
     summary="DAG hoàn tất: "+str(len(nodes))+" node, tối đa 3 node chạy đồng thời; "+str(len(leaves))+" nhánh đầu ra được đóng gói.\n\n"+"\n\n".join(summary_lines)
     return {"summary":summary[:6000],"output_path":str(package),"trace":trace}
-def run_tool_pipeline(job, source, root):
+def run_tool_pipeline(job, source, root, translation_callback=None):
     if job.get("workflowDag") is not None:
         return run_tool_dag(job,source,root)
     steps=validate_pipeline(job)
@@ -4274,7 +4274,10 @@ def run_tool_pipeline(job, source, root):
         started=time.perf_counter()
         try:
             input_bytes=current.stat().st_size if current.is_file() else 0
-            result=TOOLS[tool_id](current)
+            if tool_id=="text-translate":
+                result=TOOLS[tool_id](current,translation_callback)
+            else:
+                result=TOOLS[tool_id](current)
             if not isinstance(result,dict):
                 raise RuntimeError(f"Processor {tool_id} returned an invalid result.")
             summary=str(result.get("summary","")).strip()
@@ -4331,7 +4334,7 @@ def cmd_download(args):
     source=download_telegram(job["fileId"],job.get("fileName") or "upload.bin")
     Path(args.output).write_text(str(source),encoding="utf-8")
 
-def cmd_run(args):
+def _cmd_run(args, translation_callback=None):
     job=load_job(Path(args.job_file))
     source=Path(Path(args.input_path_file).read_text(encoding="utf-8").strip())
     root=(Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs").resolve()
@@ -4341,7 +4344,7 @@ def cmd_run(args):
     if resolved.parent != root or not resolved.is_file():
         raise RuntimeError("Input file is outside the private runner input directory.")
     try:
-        result=run_tool_pipeline(job,resolved,root)
+        result=run_tool_pipeline(job,resolved,root,translation_callback=translation_callback)
     except PipelineExecutionError as exc:
         Path(args.output).write_text(json.dumps({"error":_safe_trace_text(exc,root)[:1000],"trace":exc.trace},ensure_ascii=False),encoding="utf-8")
         raise
@@ -4360,6 +4363,29 @@ def cmd_run(args):
         except (OSError,UnicodeError):
             pass
     Path(args.output).write_text(json.dumps({"summary":summary[:6000],"output_path":output,"trace":result.get("trace",[])},ensure_ascii=False),encoding="utf-8")
+
+
+def cmd_run(args):
+    _cmd_run(args)
+
+
+def cmd_translate(args):
+    secret=os.environ.get("TELEGRAM_WEBHOOK_SECRET")
+    if not secret: raise RuntimeError("Missing TELEGRAM_WEBHOOK_SECRET for Worker-based translation.")
+    job=load_job(Path(args.job_file))
+    if job.get("toolId")!="text-translate" or not any(step.get("toolId")=="text-translate" for step in job.get("pipeline",[])):
+        raise RuntimeError("The selected job does not contain the text-translate processor.")
+    def translate_chunk(chunk):
+        response=api_json(
+            WORKER_URL+"/internal/tools/translate",
+            method="POST",
+            data={"job_id":job["id"],"text":chunk},
+            token=secret,
+        )
+        if not isinstance(response.get("translation"),str):
+            raise RuntimeError("Worker returned an invalid translation result.")
+        return response
+    _cmd_run(args,translation_callback=translate_chunk)
 
 def send_document(chat_id,path,caption):
     token=os.environ["TELEGRAM_BOT_TOKEN"]; boundary="----NolaneToolBoundary-31d9"
@@ -4425,6 +4451,7 @@ def main():
     p=sub.add_parser("fetch"); p.add_argument("job_id"); p.add_argument("output"); p.set_defaults(func=cmd_fetch)
     p=sub.add_parser("download"); p.add_argument("job_file"); p.add_argument("output"); p.set_defaults(func=cmd_download)
     p=sub.add_parser("run"); p.add_argument("job_file"); p.add_argument("input_path_file"); p.add_argument("output"); p.set_defaults(func=cmd_run)
+    p=sub.add_parser("translate"); p.add_argument("job_file"); p.add_argument("input_path_file"); p.add_argument("output"); p.set_defaults(func=cmd_translate)
     p=sub.add_parser("complete"); p.add_argument("job_id"); p.add_argument("result_file"); p.set_defaults(func=cmd_complete)
     p=sub.add_parser("fail"); p.add_argument("job_id"); p.add_argument("--message",default="Tool runner failed; see Actions logs."); p.add_argument("--result-file",default=""); p.set_defaults(func=cmd_fail)
     args=parser.parse_args()
