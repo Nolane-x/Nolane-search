@@ -527,7 +527,7 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
   if (toolId === "json-keys-report") {
     const value=JSON.parse(content) as unknown;const counts=new Map<string,number>();
     const walk=(item:unknown,path="$")=>{
-      if(Array.isArray(item)) item.slice(0,100_000).forEach((child,index)=>walk(child,path+"["+index+"]"));
+      if(Array.isArray(item)) item.slice(0,100_000).forEach((child,index)=>{const next=path+"["+index+"]";counts.set(next,(counts.get(next)||0)+1);walk(child,next);});
       else if(item&&typeof item==="object") for(const [key,child] of Object.entries(item as Record<string,unknown>)) {
         const next=path+"."+key;counts.set(next,(counts.get(next)||0)+1);walk(child,next);
       }
