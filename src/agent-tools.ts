@@ -417,7 +417,7 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     const stable=(item:unknown):string=>{
       if(Array.isArray(item)) return "["+item.map(stable).join(",")+"]";
       if(item&&typeof item==="object"){const obj=item as Record<string,unknown>;return "{"+Object.keys(obj).sort().map(key=>JSON.stringify(key)+":"+stable(obj[key])).join(",")+"}";}
-      return JSON.stringify(item);
+      return JSON.stringify(item) ?? "null";
     };
     return JSON.stringify([...value].sort((a,b)=>stable(a).localeCompare(stable(b))),null,2);
   }
