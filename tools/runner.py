@@ -768,7 +768,10 @@ def _ordered_unique(values):
 
 def text_extract_numbers(p):
     raw=_read_text_source(p)
-    values=_ordered_unique(re.findall(r"(?<![\w.])[+-]?\d+(?:[.,]\d+)?(?!\w)",raw))
+    filtered=re.sub(r"(?<!\d)(?:(?:19|20)\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.](?:19|20)\d{2})(?!\d)"," ",raw)
+    filtered=re.sub(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])"," ",filtered)
+    filtered=re.sub(r"(?<!\w)\+?\d[\d\s().-]{5,}\d(?!\w)"," ",filtered)
+    values=_ordered_unique(re.findall(r"(?<![\w.])[+-]?\d+(?:[.,]\d+)?(?!\w)",filtered))
     return _write_text_artifact(p,"numbers","\n".join(values)+("\n" if values else ""),"Number extraction",str(len(values))+" unique values")
 
 
