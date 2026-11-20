@@ -1992,6 +1992,31 @@ def csv_unique_values(p):
     return _write_text_artifact(p,"unique-values",output+("\n" if output else ""),"CSV unique-value report",str(len(columns))+" column/value pair(s)")
 
 
+def xml_tree_report(p):
+    import xml.etree.ElementTree as ET
+    raw=_read_text_source(p)
+    if re.search(r"<!\s*(?:DOCTYPE|ENTITY)\b",raw,re.I):
+        raise RuntimeError("XML DTD and ENTITY declarations are not supported.")
+    try: root=ET.fromstring(raw)
+    except ET.ParseError as exc: raise RuntimeError("Invalid XML: "+str(exc)) from exc
+    tags={}
+    attributes=0
+    text_nodes=0
+    max_depth=0
+    def visit(element,depth):
+        nonlocal attributes,text_nodes,max_depth
+        max_depth=max(max_depth,depth)
+        tags[element.tag]=tags.get(element.tag,0)+1
+        attributes+=len(element.attrib)
+        if (element.text or "").strip(): text_nodes+=1
+        for child in list(element): visit(child,depth+1)
+    visit(root,1)
+    lines=["XML tree report","Root: "+root.tag,"Elements: "+str(sum(tags.values())),"Attributes: "+str(attributes),
+      "Non-empty text nodes: "+str(text_nodes),"Maximum depth: "+str(max_depth),"","Element counts"]
+    lines.extend(tag+"\t"+str(count) for tag,count in sorted(tags.items()))
+    return _write_text_artifact(p,"xml-tree-report","\n".join(lines)+"\n","XML tree report")
+
+
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
     lines=[]
