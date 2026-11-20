@@ -660,6 +660,88 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertIn("[runner-path]",result["error"])
         self.assertNotIn("/home/runner/work",result["error"])
 
+    def test_everyday_text_formatting_and_extraction_processors(self):
+        source=self.write("everyday.txt","hello World  \\nsecond line\\n\\nthird line\\n")
+        upper=runner.text_uppercase(source)
+        self.assertEqual(Path(upper["output_path"]).read_text(encoding="utf-8"),"HELLO WORLD  \nSECOND LINE\n\nTHIRD LINE\n")
+        lower=runner.text_lowercase(source)
+        self.assertIn("hello world",Path(lower["output_path"]).read_text(encoding="utf-8"))
+        title=runner.text_title_case(source)
+        self.assertIn("Hello World",Path(title["output_path"]).read_text(encoding="utf-8"))
+        sorted_result=runner.text_sort_lines(source)
+        self.assertTrue(Path(sorted_result["output_path"]).read_text(encoding="utf-8").startswith("\nhello World"))
+        reversed_result=runner.text_reverse_lines(source)
+        self.assertEqual(Path(reversed_result["output_path"]).read_text(encoding="utf-8"),"third line\n\nsecond line\nhello World  \n")
+        numbered=runner.text_number_lines(source)
+        self.assertTrue(Path(numbered["output_path"]).read_text(encoding="utf-8").startswith("0001 | hello World"))
+        no_blanks=runner.text_remove_blank_lines(source)
+        self.assertEqual(Path(no_blanks["output_path"]).read_text(encoding="utf-8"),"hello World  \nsecond line\nthird line\n")
+        trimmed=runner.text_trim_lines(source)
+        self.assertEqual(Path(trimmed["output_path"]).read_text(encoding="utf-8"),"hello World\nsecond line\n\nthird line\n")
+        wrapped_source=self.write("wrap.txt","one two three four five six")
+        with patch.object(runner.textwrap,"wrap",wraps=runner.textwrap.wrap) as wrap_mock:
+            wrapped=runner.text_wrap(wrapped_source)
+        self.assertEqual(Path(wrapped["output_path"]).read_text(encoding="utf-8"),"one two three four five six")
+        self.assertGreaterEqual(wrap_mock.call_count,1)
+
+        contacts=self.write("contacts.txt","Mail: hello@example.com and HELLO@example.com\\nVisit https://example.com/path?q=1, then https://example.org. #Nolane #Nolane #CôngCụ")
+        emails=Path(runner.text_extract_emails(contacts)["output_path"]).read_text(encoding="utf-8").splitlines()
+        urls=Path(runner.text_extract_urls(contacts)["output_path"]).read_text(encoding="utf-8").splitlines()
+        tags=Path(runner.text_extract_hashtags(contacts)["output_path"]).read_text(encoding="utf-8").splitlines()
+        self.assertEqual(emails,["hello@example.com"])
+        self.assertEqual(urls,["https://example.com/path?q=1","https://example.org"])
+        self.assertEqual(tags,["#Nolane","#CôngCụ"])
+
+    def test_base64_url_and_json_text_processors_are_strict(self):
+        source=self.write("unicode.txt","Xin chào / Nolane ✓")
+        encoded=runner.text_to_base64(source)
+        decoded=runner.base64_to_text(Path(encoded["output_path"]))
+        self.assertEqual(Path(decoded["output_path"]).read_text(encoding="utf-8"),"Xin chào / Nolane ✓")
+        url=runner.url_encode_text(source)
+        self.assertEqual(Path(url["output_path"]).read_text(encoding="utf-8"),"Xin%20ch%C3%A0o%20%2F%20Nolane%20%E2%9C%93")
+        url_file=self.write("encoded.txt","Xin%20ch%C3%A0o%20%2F%20Nolane%20%E2%9C%93")
+        unescaped=runner.url_decode_text(url_file)
+        self.assertEqual(Path(unescaped["output_path"]).read_text(encoding="utf-8"),"Xin chào / Nolane ✓")
+        invalid=self.write("invalid-base64.txt","not-base64***")
+        with self.assertRaisesRegex(RuntimeError,"valid Base64"):
+            runner.base64_to_text(invalid)
+
+        json_file=self.write("unordered.json",'{"z":1,"a":{"y":2,"b":3}}')
+        minified=runner.json_minify(json_file)
+        self.assertEqual(Path(minified["output_path"]).read_text(encoding="utf-8"),'{"z":1,"a":{"y":2,"b":3}}\\n')
+        sorted_json=runner.json_sort_keys(json_file)
+        self.assertEqual(Path(sorted_json["output_path"]).read_text(encoding="utf-8"),'{\\n  "a": {\\n    "b": 3,\\n    "y": 2\\n  },\\n  "z": 1\\n}\\n')
+        duplicate=self.write("duplicate.json",'{"a":1,"a":2}')
+        with self.assertRaisesRegex(RuntimeError,"Duplicate JSON object key"):
+            runner.json_minify(duplicate)
+
+    def test_language_detection_discloses_heuristic_limits(self):
+        vietnamese=self.write("vietnamese.txt","Xin chào, tôi đang kiểm tra công cụ nhận diện ngôn ngữ.")
+        report=Path(runner.language_detect(vietnamese)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Vietnamese",report)
+        self.assertIn("heuristic",report)
+        japanese=self.write("japanese.txt","こんにちは世界")
+        report=Path(runner.language_detect(japanese)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Japanese",report)
+        unknown=self.write("unknown.txt","xyz qqq zzz")
+        report=Path(runner.language_detect(unknown)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Undetermined",report)
+
+    def test_translation_chunks_call_worker_callback_in_order(self):
+        source_text=("first line\\n"+"x"*5200+"\\nlast line")
+        source=self.write("notes.txt",source_text)
+        calls=[]
+        def translate(chunk):
+            calls.append(chunk)
+            return {"translation":chunk.upper(),"targetLanguage":"English"}
+        result=runner.text_translate(source,translate_callback=translate)
+        self.assertGreaterEqual(len(calls),2)
+        self.assertEqual("".join(calls),source_text)
+        self.assertEqual(Path(result["output_path"]).read_text(encoding="utf-8"),source_text.upper())
+        self.assertIn("chunk(s)",result["summary"])
+        with self.assertRaisesRegex(RuntimeError,"Worker AI Router"):
+            runner.text_translate(source)
+
     def test_runner_catalog_allowlist_and_docs_stay_in_sync(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
 
