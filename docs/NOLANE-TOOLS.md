@@ -1,13 +1,13 @@
 # Nolane Tools
 
-Nolane Tools hiện có **86 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **94 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
-1. Gửi `/tools` để xem danh mục trong bot riêng.
-2. Gửi `/tool <tool-id>` để chọn tool, sau đó gửi tệp cần xử lý.
-3. Với định dạng được hỗ trợ tự nhận diện, có thể gửi tệp trực tiếp.
-4. Gửi `/tool_jobs` để xem các tác vụ gần đây.
+1. Gửi `/tools` để mở Tool Center tương tác trong chat riêng.
+2. Chọn danh mục, dùng nút phân trang, chọn một tool để xem mô tả/định dạng đầu vào/đầu ra.
+3. Chạm **Dùng tool này** rồi gửi tệp trong 15 phút; `/tool <tool-id>` vẫn hoạt động như lệnh trực tiếp.
+4. Dùng `/tool_search từ khóa` để tìm tên, mô tả, ID hoặc đuôi tệp; `/tool_jobs` để xem tác vụ gần đây và `/workflows` để mở Workflow Library.
 
 Web Workspace có tab Tools để xem catalog và sao chép lệnh; thao tác gửi tệp vẫn thực hiện qua Telegram.
 
@@ -131,6 +131,21 @@ Giới hạn an toàn theo từng processor được kiểm tra ở runner: ví 
 | `/tool xlsx-to-json` | Excel sang JSON | Xuất từng sheet thành JSON với giới hạn tài nguyên. | JSON |
 | `/tool sqlite-export` | SQLite xuất CSV | Xuất các bảng thường thành CSV, mở database chỉ đọc. | ZIP CSV |
 
+### Developer & Text Intelligence
+
+| ID | Công cụ | Chức năng | Đầu ra |
+|---|---|---|---|
+| `/tool markdown-outline` | Lập mục lục Markdown | Trích heading ATX/Setext, bỏ qua fenced code và sinh anchor slug tham khảo. | TXT outline |
+| `/tool markdown-links` | Trích liên kết Markdown | Xuất inline link và ảnh Markdown, giữ dòng và nhãn. | CSV |
+| `/tool text-redact` | Che dữ liệu nhạy cảm | Che email, token/credential phổ biến và số điện thoại dạng thường gặp; xuất bản đã che riêng. | Tệp redacted |
+| `/tool text-extract` | Trích URL/email/IP | Trích URL, email, IPv4 hợp lệ; khử trùng và đếm lần xuất hiện. | CSV |
+| `/tool code-imports` | Báo cáo import code | Phân tích tĩnh import Python AST, JS/TS regex và Go import; không chạy mã. | TXT |
+| `/tool code-todos` | Quét TODO/FIXME | Liệt kê TODO, FIXME, HACK, BUG, XXX cùng vị trí dòng. | TXT |
+| `/tool code-secret-scan` | Quét secret code | Dò mẫu token/credential phổ biến, chỉ ghi loại và dòng; không in giá trị phát hiện. | TXT |
+| `/tool log-timeline` | Timeline log | Gom ISO timestamps theo ngày/giờ và thống kê khung giờ hoạt động. | TXT |
+
+Các processor văn bản này giới hạn đầu vào 5 MB và yêu cầu UTF-8. Bộ quét secret và redaction dùng pattern heuristic, có thể có false positive/false negative; không thay thế secret scanner chuyên dụng. `code-imports` và `code-todos` chỉ phân tích tĩnh, không thực thi nội dung tải lên. `text-redact` tạo bản sao đã che nhưng không thay đổi tệp gốc.
+
 ### Tiện ích
 
 | ID | Công cụ | Chức năng | Đầu ra |
@@ -178,6 +193,15 @@ Giới hạn an toàn theo từng processor được kiểm tra ở runner: ví 
 - Video contact sheet giới hạn 30 phút; nén video giới hạn 6 phút và đầu ra 44 MB. Video được mã hóa H.264/AAC.
 - Whisper dùng model small trên CPU; tác vụ dài có thể mất thời gian và tiêu tốn quota runner.
 - Các file được xử lý trong thư mục tạm của runner; không commit tệp đầu vào/đầu ra vào Git và không đưa tệp vào D1. Metadata tác vụ được giữ tối đa 30 ngày; Telegram file reference được xóa khi tác vụ kết thúc.
+
+## Telegram Tool Center
+
+- `/tools` renders an inline-button catalog with active tool counts by category: image/OCR, PDF/Office, audio/video, data, developer/text and utilities.
+- Each category is paginated (8 tools per page). A tool details screen shows its ID, description, accepted MIME types/extensions and output.
+- `Dùng tool này` creates the same owner/chat-scoped 15-minute pending selection used by `/tool ID`; the next compatible upload starts the normal validated job pipeline. No file is executed by a callback.
+- `/tool_search query` searches IDs, names, descriptions, output descriptions, categories and accepted file types. Search results open the same detail screen and use action.
+- Tool Center buttons also open recent tool jobs and the saved Workflow Library. `/tool_jobs`, `/tool_job ID`, `/tool_retry ID` and workflow commands remain available directly.
+- Every callback rechecks the allowlisted Telegram account and requires a private chat. Callback payloads contain only bounded category/tool identifiers, never user-supplied file data.
 
 ## Runtime
 

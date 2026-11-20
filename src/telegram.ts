@@ -1,6 +1,8 @@
 import { htmlEscape } from "./security";
 import { readJsonResponse } from "./http";
 import type { Env, SearchMode, SearchResult } from "./types";
+import { toolCategoryLabel } from "./tools";
+import type { ToolCategory, ToolDefinition } from "./tools";
 
 const MAX_FORMATTED_LENGTH = 3600;
 
@@ -97,6 +99,7 @@ export function buildHomeKeyboard(webAppUrl = "https://nolane-search.nolane-file
     [{ text: "🐙 GitHub", callback_data: "ui:mode:github" }, { text: "📖 Wikipedia", callback_data: "ui:mode:wiki" }],
     [{ text: "🔬 Nghiên cứu", callback_data: "ui:mode:research" }, { text: "🗂 Website riêng", callback_data: "ui:mode:local" }],
     [{ text: "🌐 Mở Web Workspace", url: webAppUrl }],
+    [{ text: "🧰 Tool Center", callback_data: "tc:home" }],
     [{ text: "📊 Trạng thái", callback_data: "ui:status" }, { text: "❔ Hướng dẫn", callback_data: "ui:help" }],
   ] };
 }
@@ -227,4 +230,145 @@ export function formatDeepReport(query: string, results: SearchResult[], summary
     output = next;
   }
   return output + "\n\n" + footer;
+}
+
+
+export const TOOL_CENTER_PAGE_SIZE = 8;
+
+const TOOL_CENTER_CATEGORIES: ToolCategory[] = [
+  "image", "document", "audio-video", "data", "developer", "utility",
+];
+
+function toolCategoryItems(tools: ToolDefinition[], category: ToolCategory): ToolDefinition[] {
+  return tools.filter(tool => tool.category === category && tool.ready);
+}
+
+export function formatToolCenterHome(tools: ToolDefinition[], configured: boolean): string {
+  const ready = tools.filter(tool => tool.ready);
+  const categories = TOOL_CENTER_CATEGORIES
+    .map(category => ({ category, count: toolCategoryItems(ready, category).length }))
+    .filter(item => item.count > 0);
+  return [
+    "<b>◈ NOLANE TOOL CENTER</b>",
+    "<i>" + ready.length + " processor đang có trong catalog · " + categories.length + " danh mục</i>",
+    "",
+    ...categories.map(item => "<b>" + htmlEscape(toolCategoryLabel(item.category)) + "</b> · " + item.count + " tool"),
+    "",
+    configured
+      ? "Runner đã được cấu hình. Chọn danh mục để duyệt, mở chi tiết rồi bấm <b>Dùng tool</b> và gửi tệp."
+      : "⚠️ Runner chưa sẵn sàng: cần cấu hình GitHub Actions token trước khi chạy tệp.",
+    "",
+    "<code>/tool_search từ khóa</code> · tìm theo tên, mô tả, định dạng",
+    "<code>/tool_jobs</code> · lịch sử và trạng thái",
+    "<code>/workflows</code> · workflow đã lưu · <code>/workflow_plan</code> · AI lập quy trình",
+  ].join("\n");
+}
+
+export function buildToolCenterKeyboard(tools: ToolDefinition[]): TelegramInlineKeyboardMarkup {
+  const rows: TelegramInlineButton[][] = [];
+  const populated = TOOL_CENTER_CATEGORIES.filter(category => toolCategoryItems(tools, category).length > 0);
+  for (let index = 0; index < populated.length; index += 2) {
+    rows.push(populated.slice(index, index + 2).map(category => ({
+      text: toolCategoryLabel(category) + " · " + toolCategoryItems(tools, category).length,
+      callback_data: "tc:" + category,
+    })));
+  }
+  rows.push([
+    { text: "🧾 Tác vụ gần đây", callback_data: "tc:jobs" },
+    { text: "🧩 Workflow", callback_data: "tc:workflows" },
+  ]);
+  rows.push([{ text: "⌂ Menu chính", callback_data: "ui:home" }]);
+  return { inline_keyboard: rows };
+}
+
+export function formatToolCategoryPage(tools: ToolDefinition[], category: ToolCategory, page = 0): string {
+  const items = toolCategoryItems(tools, category);
+  const totalPages = Math.max(1, Math.ceil(items.length / TOOL_CENTER_PAGE_SIZE));
+  const currentPage = Math.max(0, Math.min(totalPages - 1, Math.floor(page)));
+  const start = currentPage * TOOL_CENTER_PAGE_SIZE;
+  const visible = items.slice(start, start + TOOL_CENTER_PAGE_SIZE);
+  return [
+    "<b>◈ " + htmlEscape(toolCategoryLabel(category)) + "</b>",
+    "Danh mục có " + items.length + " tool · Trang " + (currentPage + 1) + "/" + totalPages,
+    "",
+    ...visible.map((tool, index) =>
+      (start + index + 1) + ". <b>" + htmlEscape(tool.name) + "</b>\n<code>" + htmlEscape(tool.id) + "</code> · " +
+      htmlEscape(tool.output) + "\n" + htmlEscape(tool.description.slice(0, 115))),
+    "",
+    "<i>Chạm vào tool để xem định dạng đầu vào, đầu ra và xác nhận chạy.</i>",
+  ].join("\n");
+}
+
+export function buildToolCategoryKeyboard(tools: ToolDefinition[], category: ToolCategory, page = 0): TelegramInlineKeyboardMarkup {
+  const items = toolCategoryItems(tools, category);
+  const totalPages = Math.max(1, Math.ceil(items.length / TOOL_CENTER_PAGE_SIZE));
+  const currentPage = Math.max(0, Math.min(totalPages - 1, Math.floor(page)));
+  const start = currentPage * TOOL_CENTER_PAGE_SIZE;
+  const visible = items.slice(start, start + TOOL_CENTER_PAGE_SIZE);
+  const rows: TelegramInlineButton[][] = [];
+  for (let index = 0; index < visible.length; index += 2) {
+    rows.push(visible.slice(index, index + 2).map(tool => ({
+      text: tool.name.length > 25 ? tool.name.slice(0, 24) + "…" : tool.name,
+      callback_data: "td:" + tool.id,
+    })));
+  }
+  if (totalPages > 1) {
+    const navigation: TelegramInlineButton[] = [];
+    if (currentPage > 0) navigation.push({ text: "⬅️ Trước", callback_data: "tp:" + category + ":" + (currentPage - 1) });
+    navigation.push({ text: (currentPage + 1) + "/" + totalPages, callback_data: "tp:" + category + ":" + currentPage });
+    if (currentPage < totalPages - 1) navigation.push({ text: "Tiếp ➡️", callback_data: "tp:" + category + ":" + (currentPage + 1) });
+    rows.push(navigation);
+  }
+  rows.push([{ text: "↩️ Tất cả danh mục", callback_data: "tc:home" }]);
+  return { inline_keyboard: rows };
+}
+
+export function formatToolDetail(tool: ToolDefinition): string {
+  return [
+    "<b>◈ " + htmlEscape(tool.name) + "</b>",
+    "<code>" + htmlEscape(tool.id) + "</code> · " + htmlEscape(toolCategoryLabel(tool.category)),
+    "",
+    htmlEscape(tool.description),
+    "",
+    "<b>Đầu vào</b>",
+    htmlEscape(tool.accepts.join(", ")),
+    "",
+    "<b>Đầu ra</b>",
+    htmlEscape(tool.output),
+    "",
+    "<i>Chọn Dùng tool để chờ tệp tiếp theo trong 15 phút. Tệp sẽ được xử lý trên GitHub-hosted runner dùng một lần.</i>",
+  ].join("\n");
+}
+
+export function buildToolDetailKeyboard(tool: ToolDefinition): TelegramInlineKeyboardMarkup {
+  return { inline_keyboard: [
+    [{ text: "▶️ Dùng tool này", callback_data: "tu:" + tool.id }],
+    [{ text: "↩️ " + toolCategoryLabel(tool.category), callback_data: "tc:" + tool.category }, { text: "⌂ Tool Center", callback_data: "tc:home" }],
+  ] };
+}
+
+export function formatToolSearchResults(tools: ToolDefinition[], query: string): string {
+  return [
+    "<b>◈ Tìm tool · " + tools.length + " kết quả</b>",
+    "<i>" + htmlEscape(query.slice(0, 100)) + "</i>",
+    "",
+    ...tools.slice(0, 12).map((tool, index) =>
+      (index + 1) + ". <b>" + htmlEscape(tool.name) + "</b> · <code>" + htmlEscape(tool.id) + "</code>\n" +
+      htmlEscape(toolCategoryLabel(tool.category)) + " · " + htmlEscape(tool.output)),
+    "",
+    "<i>Chạm vào kết quả để xem chi tiết.</i>",
+  ].join("\n");
+}
+
+export function buildToolSearchKeyboard(tools: ToolDefinition[]): TelegramInlineKeyboardMarkup {
+  const rows: TelegramInlineButton[][] = [];
+  const visible = tools.slice(0, 12);
+  for (let index = 0; index < visible.length; index += 2) {
+    rows.push(visible.slice(index, index + 2).map(tool => ({
+      text: tool.name.length > 25 ? tool.name.slice(0, 24) + "…" : tool.name,
+      callback_data: "td:" + tool.id,
+    })));
+  }
+  rows.push([{ text: "↩️ Tool Center", callback_data: "tc:home" }]);
+  return { inline_keyboard: rows };
 }

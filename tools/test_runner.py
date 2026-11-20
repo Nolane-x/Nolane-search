@@ -661,7 +661,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
 
     def test_runner_allowlist_and_handler_registry_are_identical(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
-        self.assertGreaterEqual(len(runner.TOOLS),85)
+        self.assertGreaterEqual(len(runner.TOOLS),94)
 
 
     def test_pdf_rotation_and_blank_page_removal(self):
@@ -959,6 +959,82 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual(next(item for item in trace if item["nodeId"]=="converted")["status"],"completed")
         self.assertNotIn("descendant",{item["nodeId"] for item in trace})
         self.assertLessEqual(peak,3)
+
+
+    def test_markdown_outline_and_links_ignore_fenced_code(self):
+        fence = chr(96) * 3
+        path=self.write("README.md", "# Title\n\n## Setup\n\n" + fence + "md\n# Not a heading\n[bad](https://ignored.example)\n" + fence + "\n\n[Docs](https://example.com/docs) and ![logo](./logo.png)\n")
+        outline=runner.markdown_outline(path)
+        body=Path(outline["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Title",body)
+        self.assertIn("Setup",body)
+        self.assertNotIn("Not a heading",body)
+        links=runner.markdown_links(path)
+        rows=list(__import__("csv").DictReader(Path(links["output_path"]).open(encoding="utf-8-sig")))
+        self.assertEqual(len(rows),2)
+        self.assertEqual({item["kind"] for item in rows},{"link","image"})
+        self.assertNotIn("ignored.example",str(rows))
+
+    def test_text_redact_masks_secrets_and_emails(self):
+        raw="Contact person@example.com; Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456; api_key=super-secret-key-1234"
+        path=self.write("notes.txt",raw)
+        result=runner.text_redact(path)
+        cleaned=Path(result["output_path"]).read_text(encoding="utf-8")
+        self.assertNotIn("person@example.com",cleaned)
+        self.assertNotIn("abcdefghijklmnopqrstuvwxyz123456",cleaned)
+        self.assertNotIn("super-secret-key-1234",cleaned)
+        self.assertIn("[REDACTED]",cleaned)
+        self.assertNotIn("super-secret-key-1234",result["summary"])
+
+    def test_text_extract_deduplicates_values_and_rejects_invalid_ipv4(self):
+        path=self.write("references.txt","Visit https://example.com/docs twice https://example.com/docs\nEmail a@example.com\nIP 192.168.1.1 and 999.2.3.4")
+        result=runner.text_extract(path)
+        rows=list(__import__("csv").DictReader(Path(result["output_path"]).open(encoding="utf-8-sig")))
+        values={(row["kind"],row["value"]):row["occurrences"] for row in rows}
+        self.assertEqual(values[("URL","https://example.com/docs")],"2")
+        self.assertEqual(values[("email","a@example.com")],"1")
+        self.assertIn(("IPv4","192.168.1.1"),values)
+        self.assertNotIn(("IPv4","999.2.3.4"),values)
+
+    def test_code_import_report_is_static_for_python_and_javascript(self):
+        py=self.write("module.py","import json\nfrom pathlib import Path\n")
+        report=runner.code_imports(py)
+        body=Path(report["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("json",body)
+        self.assertIn("pathlib",body)
+        js=self.write("main.ts",'import React from "react";\nconst fs = require("node:fs");\n')
+        js_report=runner.code_imports(js)
+        js_body=Path(js_report["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("react",js_body)
+        self.assertIn("node:fs",js_body)
+
+    def test_code_todo_report_includes_line_number_and_kind(self):
+        path=self.write("task.py","# TODO: add validation\n# FIXME handle empty input\n# normal comment\n")
+        result=runner.code_todos(path)
+        body=Path(result["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("L1 [TODO]",body)
+        self.assertIn("L2 [FIXME]",body)
+        self.assertIn("TODO=1",body)
+
+    def test_code_secret_scan_never_prints_detected_secret_values(self):
+        token="ghp_"+"A"*36
+        path=self.write("config.py",f'TOKEN = "{token}"\npassword = "this-is-a-long-password"\n')
+        result=runner.code_secret_scan(path)
+        body=Path(result["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("GitHub token",body)
+        self.assertIn("Credential assignment",body)
+        self.assertIn("[value withheld]",body)
+        self.assertNotIn(token,body)
+        self.assertNotIn("this-is-a-long-password",body)
+
+    def test_log_timeline_groups_iso_timestamps_by_day_and_hour(self):
+        path=self.write("service.log","2026-11-20T10:01:02Z INFO start\n2026-11-20 10:02:03 ERROR fail\n2026-11-21T11:00:00Z INFO done\n")
+        result=runner.log_timeline(path)
+        body=Path(result["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Timestamp lines: 3",body)
+        self.assertIn("2026-11-20: 2",body)
+        self.assertIn("2026-11-21: 1",body)
+        self.assertIn("2026-11-20 10:xx — 2 lines",body)
 
 
 

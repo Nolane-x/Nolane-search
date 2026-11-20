@@ -64,6 +64,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}a{color:inherit}.shell{
   <div class="panel" style="padding:20px">
     <div class="summarybar"><div><span class="eyebrow">GitHub Actions · Hosted runner</span><h2 style="margin:10px 0 4px">Nolane Tools</h2><p class="muted" style="margin:0">Bộ công cụ xử lý tệp chạy trên GitHub Actions. Tệp được tải trực tiếp từ Telegram, không commit vào repository.</p></div><button id="refreshToolJobs" class="quiet" type="button">Làm mới job</button></div>
     <div class="notice">Cách dùng: mở chat riêng với bot, gửi <b>/tools</b>, chọn <b>/tool image-ocr</b> rồi gửi ảnh. Gửi ảnh bình thường cũng tự chạy OCR. PDF, audio, video, CSV, JSON và Office sẽ tự nhận diện công cụ phù hợp.</div>
+    <div class="index-tools"><input id="toolFilter" type="search" placeholder="Tìm theo tên, ID, mô tả hoặc định dạng"><select id="toolCategoryFilter" aria-label="Lọc danh mục"><option value="all">Tất cả danh mục</option><option value="image">Hình ảnh & OCR</option><option value="document">PDF & Office</option><option value="audio-video">Âm thanh & Video</option><option value="data">Dữ liệu</option><option value="developer">Lập trình & văn bản</option><option value="utility">Tiện ích</option></select></div><div id="toolCatalogMeta" class="mini" style="margin-top:8px">Đang tải catalog…</div>
     <div id="toolCatalog" class="tools-grid"><div class="loading"><span class="spinner"></span><span>Đang tải danh mục công cụ…</span></div></div>
     <h3 style="margin:26px 0 8px">Lịch sử tác vụ</h3><div id="toolJobs" class="tool-jobs"><span class="mini">Chưa tải lịch sử.</span></div>
   </div>
@@ -89,7 +90,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}a{color:inherit}.shell{
 <script>
 (function(){
 'use strict';
-var state={mode:'web',query:'',results:[],history:[],busy:false,eventId:null,indexOffset:0,indexTotal:0,indexLoading:false,indexQuery:''};
+var state={mode:'web',query:'',results:[],history:[],busy:false,eventId:null,indexOffset:0,indexTotal:0,indexLoading:false,indexQuery:''};var toolCatalogState=[];
 var $=function(id){return document.getElementById(id)};
 var auth=$('auth'),workspace=$('workspace'),query=$('query'),results=$('results'),summary=$('resultSummary');
 function text(el,value){el.textContent=value==null?'':String(value)}
@@ -199,26 +200,44 @@ async function refreshIndex(reset){
  }catch(error){text($('indexSummary'),error.message)}
  finally{state.indexLoading=false;$('indexMore').disabled=false}
 }
+function normalizeToolSearch(value){return String(value||'').toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
+function renderToolCatalog(){
+ var box=$('toolCatalog');box.replaceChildren();
+ var query=normalizeToolSearch($('toolFilter').value.trim());
+ var category=$('toolCategoryFilter').value;
+ var labels={image:'Hình ảnh & OCR',document:'PDF & Office','audio-video':'Âm thanh & Video',data:'Dữ liệu',developer:'Lập trình & văn bản',utility:'Tiện ích'};
+ var filtered=toolCatalogState.filter(function(tool){
+  if(category!=='all'&&tool.category!==category)return false;
+  var haystack=normalizeToolSearch([tool.id,tool.name,tool.description,tool.output,(tool.accepts||[]).join(' '),labels[tool.category]||tool.category].join(' '));
+  return !query||query.split(/\s+/).every(function(term){return haystack.includes(term)});
+ });
+ text($('toolCatalogMeta'),filtered.length+' / '+toolCatalogState.length+' công cụ'+(category!=='all'?' · '+(labels[category]||category):''));
+ if(!filtered.length){var empty=document.createElement('div');empty.className='empty';var title=document.createElement('strong');text(title,'Không có công cụ phù hợp');empty.appendChild(title);empty.appendChild(document.createTextNode('Thử từ khóa khác hoặc chọn Tất cả danh mục.'));box.appendChild(empty);return}
+ filtered.forEach(function(tool){
+  var card=document.createElement('article');card.className='tool-card';
+  var title=document.createElement('h3');text(title,tool.name);card.appendChild(title);
+  var categoryBadge=document.createElement('span');categoryBadge.className='tool-badge';text(categoryBadge,labels[tool.category]||tool.category);card.appendChild(categoryBadge);
+  var badge=document.createElement('span');badge.className='mini';text(badge,tool.ready?'READY':'SETUP NEEDED');card.appendChild(badge);
+  var desc=document.createElement('p');desc.textContent=tool.description;card.appendChild(desc);
+  var input=document.createElement('span');input.className='mini';text(input,'Nhận: '+(tool.accepts||[]).join(', '));card.appendChild(input);
+  var output=document.createElement('span');output.className='mini';text(output,'Trả về: '+(tool.output||'Kết quả'));card.appendChild(output);
+  var button=document.createElement('button');button.type='button';button.className='feedback-btn';button.disabled=!tool.ready;
+  text(button,tool.ready?'Sao chép /tool '+tool.id:'Cần GITHUB_ACTIONS_TOKEN');
+  button.addEventListener('click',async function(){
+   try{await navigator.clipboard.writeText('/tool '+tool.id);text(button,'Đã sao chép')}
+   catch(e){window.prompt('Sao chép lệnh này vào Telegram','/tool '+tool.id)}
+  });
+  card.appendChild(button);box.appendChild(card);
+ });
+}
 async function loadTools(){
  try{
-  var data=await api('/api/tools/catalog');var box=$('toolCatalog');box.replaceChildren();
-  (data.tools||[]).forEach(function(tool){
-   var card=document.createElement('article');card.className='tool-card';
-   var title=document.createElement('h3');text(title,tool.name);card.appendChild(title);
-   var badge=document.createElement('span');badge.className='tool-badge';text(badge,tool.ready?'READY':'SETUP NEEDED');card.appendChild(badge);
-   var desc=document.createElement('p');desc.textContent=tool.description;card.appendChild(desc);
-   var input=document.createElement('span');input.className='mini';text(input,'Nhận: '+(tool.accepts||[]).join(', '));card.appendChild(input);
-   var output=document.createElement('span');output.className='mini';text(output,'Trả về: '+(tool.output||'Kết quả'));card.appendChild(output);
-   var button=document.createElement('button');button.type='button';button.className='feedback-btn';button.disabled=!tool.ready;
-   text(button,tool.ready?'Sao chép /tool '+tool.id:'Cần GITHUB_ACTIONS_TOKEN');
-   button.addEventListener('click',async function(){
-    try{await navigator.clipboard.writeText('/tool '+tool.id);text(button,'Đã sao chép')}
-    catch(e){window.prompt('Sao chép lệnh này vào Telegram','/tool '+tool.id)}
-   });
-   card.appendChild(button);box.appendChild(card);
-  });
- }catch(error){var box=$('toolCatalog');box.replaceChildren();var notice=document.createElement('div');notice.className='notice';text(notice,error.message);box.appendChild(notice)}
+  var data=await api('/api/tools/catalog');toolCatalogState=data.tools||[];renderToolCatalog();
+ }catch(error){var box=$('toolCatalog');box.replaceChildren();var notice=document.createElement('div');notice.className='notice';text(notice,error.message);box.appendChild(notice);text($('toolCatalogMeta'),'Không thể tải catalog')}
 }
+$('toolFilter').addEventListener('input',renderToolCatalog);
+$('toolCategoryFilter').addEventListener('change',renderToolCatalog);
+
 async function refreshToolJobs(){
  try{
   var data=await api('/api/tools/jobs');var box=$('toolJobs');box.replaceChildren();var jobs=data.jobs||[];

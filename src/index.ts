@@ -7,7 +7,7 @@ import { compactChatHistory } from "./chat-context";
 import { parseJsonObjectBody } from "./http";
 import { deleteIndexedContent, listIndexedPages, normalizeIndexDomain, normalizeIndexPageUrl } from "./index-management";
 import { TOOL_CATALOG, TOOL_PIPELINE_TRANSITIONS, getTool, inferToolForUpload, isToolCompatible, validateToolDag, validateToolPipeline, toolCategoryLabel } from "./tools";
-import type { ToolPipelineStep } from "./tools";
+import type { ToolCategory, ToolPipelineStep } from "./tools";
 import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, validateToolDagTrace, validateToolStepTrace } from "./tool-jobs";
 import { clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWorkflow, getPendingToolWorkflow, getPendingToolWorkflowPlan, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow, storeToolWorkflowPlan } from "./workflows";
 import { webAppResponse } from "./web-ui";
@@ -19,7 +19,9 @@ import { performDeepSearch, performSearch } from "./search";
 import { fetchOpenRouterSummary, fetchTinyFishPage, parseOpenRouterModels } from "./providers";
 import {
   buildBackHomeKeyboard, buildHomeKeyboard, buildModePromptKeyboard, buildSearchKeyboard,
+  buildToolCenterKeyboard, buildToolCategoryKeyboard, buildToolDetailKeyboard, buildToolSearchKeyboard,
   formatDeepReport, formatHomeMenu, formatModePrompt, formatSearchResults, SEARCH_PAGE_SIZE,
+  formatToolCenterHome, formatToolCategoryPage, formatToolDetail, formatToolSearchResults,
   sendSearchPage, sendTelegram, sendToArchive, telegramApi,
 } from "./telegram";
 import { crawlAndIndexSite, validateWatchUrl, checkWatchTargets } from "./watch";
@@ -729,8 +731,67 @@ async function handleUiCallback(env: Env, callback: TelegramCallbackQuery): Prom
   await reply(env, message.chat.id, "Nút này không còn được hỗ trợ. Hãy mở /menu.");
 }
 
+async function handleToolCenterCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
+  const message = callback.message;
+  if (!message || !allowedUser(env, callback.from.id) || message.chat.id !== callback.from.id) {
+    if (message) await reply(env, message.chat.id, "Tool Center chỉ khả dụng trong chat riêng được cấp quyền.");
+    return;
+  }
+  const data = callback.data || "";
+  if (data === "tc:home") {
+    await editTelegramDashboard(env, message.chat.id, message.message_id,
+      formatToolCenterHome(TOOL_CATALOG, Boolean(env.NOLANE_GH_ACTIONS_TOKEN)), buildToolCenterKeyboard(TOOL_CATALOG));
+    return;
+  }
+  if (data === "tc:jobs") {
+    await handleCommand(env, message.chat.id, callback.from.id, "/tool_jobs");
+    return;
+  }
+  if (data === "tc:workflows") {
+    await handleCommand(env, message.chat.id, callback.from.id, "/workflows");
+    return;
+  }
+  const page = data.match(/^tp:(image|document|audio-video|data|developer|utility):(\d{1,2})$/);
+  if (page) {
+    const category = page[1] as ToolCategory;
+    await editTelegramDashboard(env, message.chat.id, message.message_id,
+      formatToolCategoryPage(TOOL_CATALOG, category, Number(page[2])),
+      buildToolCategoryKeyboard(TOOL_CATALOG, category, Number(page[2])));
+    return;
+  }
+  const category = data.match(/^tc:(image|document|audio-video|data|developer|utility)$/);
+  if (category) {
+    const selected = category[1] as ToolCategory;
+    await editTelegramDashboard(env, message.chat.id, message.message_id,
+      formatToolCategoryPage(TOOL_CATALOG, selected, 0), buildToolCategoryKeyboard(TOOL_CATALOG, selected, 0));
+    return;
+  }
+  const detail = data.match(/^td:([a-z0-9-]+)$/);
+  if (detail) {
+    const tool = getTool(detail[1]!);
+    if (!tool?.ready) {
+      await reply(env, message.chat.id, "Tool không còn khả dụng. Hãy mở lại Tool Center.");
+      return;
+    }
+    await editTelegramDashboard(env, message.chat.id, message.message_id, formatToolDetail(tool), buildToolDetailKeyboard(tool));
+    return;
+  }
+  const use = data.match(/^tu:([a-z0-9-]+)$/);
+  if (use) {
+    const tool = getTool(use[1]!);
+    if (!tool?.ready || !env.NOLANE_GH_ACTIONS_TOKEN) {
+      await reply(env, message.chat.id, "Tool runner chưa sẵn sàng hoặc tool không còn khả dụng.");
+      return;
+    }
+    await handleCommand(env, message.chat.id, callback.from.id, "/tool " + tool.id);
+    return;
+  }
+  await reply(env, message.chat.id, "Thao tác Tool Center không hợp lệ. Hãy mở lại /tools.");
+}
+
 async function handleTelegramCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
   const data = callback.data || "";
+  if (/^(?:tc:|td:|tp:|tu:)/.test(data)) return handleToolCenterCallback(env, callback);
   if (data.startsWith("ui:")) return handleUiCallback(env, callback);
   const action = data.match(/^na:(ask|deep):([0-9a-f-]{36})$/i);
   if (action) return handleSearchActionCallback(env, callback, action[1] as "ask" | "deep", action[2]!);
@@ -990,19 +1051,44 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   }
 
   if (command === "tools") {
-    const groups = new Map<string, string[]>();
-    for (const tool of TOOL_CATALOG) {
-      const label = toolCategoryLabel(tool.category);
-      const rows = groups.get(label) || [];
-      rows.push("• <code>/tool " + tool.id + "</code> — " + htmlEscape(tool.name));
-      groups.set(label, rows);
+    await telegramApi(env, "sendMessage", {
+      chat_id: chatId,
+      text: formatToolCenterHome(TOOL_CATALOG, Boolean(env.NOLANE_GH_ACTIONS_TOKEN)),
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+      reply_markup: buildToolCenterKeyboard(TOOL_CATALOG),
+    });
+    return;
+  }
+
+  if (command === "tool_search" || command === "tool_find") {
+    const query = args.trim();
+    if (query.length < 2 || query.length > 120) {
+      await reply(env, chatId, "Cú pháp: <code>/tool_search từ khóa</code>. Tìm theo tên, mô tả, định dạng hoặc ID.");
+      return;
     }
-    const lines = [...groups.entries()].map(([label, rows]) => "<b>" + htmlEscape(label) + "</b>\n" + rows.join("\n"));
-    await reply(env, chatId,
-      "<b>Nolane Tools · " + TOOL_CATALOG.length + " công cụ</b>\n" +
-      (env.NOLANE_GH_ACTIONS_TOKEN ? "" : "⚠️ Chưa cấu hình GitHub Actions token. Hãy thêm secret NOLANE_GH_ACTIONS_TOKEN vào repository trước khi chạy công cụ.\n\n") +
-      "Gửi /tool ID để chọn công cụ, /workflow_plan để AI lập quy trình hoặc /workflows để chạy pipeline đã lưu. Ảnh sẽ tự chạy OCR nếu không chọn trước.\n\n" +
-      lines.join("\n\n") + "\n\nDùng /tool_jobs để xem lịch sử xử lý.");
+    const normalize = (value: string) => value.toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const terms = normalize(query).split(/\s+/).filter(Boolean);
+    const matches = TOOL_CATALOG.map(tool => {
+      const fields = [tool.id, tool.name, tool.description, tool.output, tool.accepts.join(" "), tool.category, toolCategoryLabel(tool.category)];
+      const haystack = normalize(fields.join(" "));
+      const score = terms.reduce((total, term) => total + (haystack.includes(term) ? (normalize(tool.id).includes(term) ? 4 : normalize(tool.name).includes(term) ? 3 : 1) : 0), 0);
+      return { tool, score };
+    }).filter(item => item.score >= terms.length)
+      .sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name, "vi"))
+      .slice(0, 12)
+      .map(item => item.tool);
+    if (!matches.length) {
+      await reply(env, chatId, "Không tìm thấy tool phù hợp. Thử từ khóa như <code>pdf</code>, <code>markdown</code>, <code>secret</code> hoặc <code>.xlsx</code>.");
+      return;
+    }
+    await telegramApi(env, "sendMessage", {
+      chat_id: chatId,
+      text: formatToolSearchResults(matches, query),
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+      reply_markup: buildToolSearchKeyboard(matches),
+    });
     return;
   }
 
