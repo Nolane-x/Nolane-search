@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **247 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **267 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -374,6 +374,33 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 | \`/tool csv-empty-cell-report\` | Báo missing cells theo cột, phần trăm và tổng số ô trống. | Báo cáo TXT |
 
 **Lưu ý bảo mật:** \`text-redact-secrets\` chỉ nhận diện các định dạng phổ biến và một số tên trường; không thay thế secret scanner chuyên dụng. Hãy kiểm tra kết quả trước khi chia sẻ dữ liệu nhạy cảm.
+
+### Tiện ích mã hóa, URL, JSON và Markdown — đợt mở rộng tiếp theo
+
+| Lệnh | Chức năng | Đầu ra |
+|---|---|---|
+| \`/tool text-sort-lines-natural\` | Sắp xếp item 1, item 2, item 10 theo số tự nhiên, không đổi nội dung dòng. | TXT |
+| \`/tool text-extract-percentages\` | Trích phần trăm số nguyên/thập phân và khử trùng. | TXT |
+| \`/tool text-extract-currencies\` | Trích số tiền theo mã/ký hiệu tiền tệ phổ biến; kết quả heuristic. | TXT |
+| \`/tool text-extract-bracketed\` | Trích nội dung không lồng nhau trong (), [] và {}. | TXT |
+| \`/tool text-character-frequency\` | Đếm tần suất ký tự Unicode, gồm cả whitespace và newline. | Báo cáo TXT |
+| \`/tool text-extract-acronyms\` | Trích chữ viết tắt in hoa như API, HTTP, JSON. | TXT |
+| \`/tool text-strip-diacritics\` | Bỏ dấu kết hợp Unicode và chuẩn hóa đ/Đ thành d/D. | TXT |
+| \`/tool text-hard-wrap\` | Ngắt cứng theo 80 cột, có thể cắt từ dài. | TXT |
+| \`/tool text-ensure-final-newline\` | Bảo đảm file có newline cuối. | TXT |
+| \`/tool text-rot13\` | Biến đổi ROT13; áp dụng hai lần khôi phục bản gốc. | TXT |
+| \`/tool base64url-encode\` | Mã hóa UTF-8 thành Base64URL, bỏ padding cuối. | TXT |
+| \`/tool base64url-decode\` | Giải mã Base64URL nghiêm ngặt về UTF-8. | TXT |
+| \`/tool hex-encode-text\` | Mã hóa byte UTF-8 thành HEX. | TXT |
+| \`/tool hex-decode-text\` | Giải mã HEX, từ chối byte không phải UTF-8. | TXT |
+| \`/tool binary-encode-text\` | Mã hóa byte UTF-8 thành nhóm 8 bit. | TXT |
+| \`/tool binary-decode-text\` | Giải mã nhóm bit 8-bit thành UTF-8. | TXT |
+| \`/tool url-query-params\` | Trích query key/value từ URL HTTP/HTTPS, giữ key trùng. | JSONL |
+| \`/tool json-deep-merge\` | Gộp mảng object JSON đệ quy; array/scalar ở object sau thay thế trước. | JSON |
+| \`/tool json-array-flatten\` | Làm phẳng array lồng nhau, giữ nguyên object và scalar. | JSON array |
+| \`/tool markdown-table-to-csv\` | Chuyển một bảng GFM sang CSV; escape pipe và chống formula injection. | CSV |
+
+**Giới hạn:** xử lý văn bản trực tiếp qua AI giới hạn 40.000 ký tự; thao tác file chạy trên runner tạm. Bộ trích xuất tiền tệ là heuristic, cần kiểm tra lại định dạng mơ hồ. JSON array flatten giới hạn độ sâu 100 và 100.000 phần tử; bảng Markdown giới hạn 10.000 dòng dữ liệu và 200 cột.
 
 ## AI Agent
 
