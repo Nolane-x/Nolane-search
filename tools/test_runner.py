@@ -661,7 +661,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertNotIn("/home/runner/work",result["error"])
 
     def test_everyday_text_formatting_and_extraction_processors(self):
-        source=self.write("everyday.txt","hello World  \\nsecond line\\n\\nthird line\\n")
+        source=self.write("everyday.txt","hello World  \nsecond line\n\nthird line\n")
         upper=runner.text_uppercase(source)
         self.assertEqual(Path(upper["output_path"]).read_text(encoding="utf-8"),"HELLO WORLD  \nSECOND LINE\n\nTHIRD LINE\n")
         lower=runner.text_lowercase(source)
@@ -684,7 +684,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual(Path(wrapped["output_path"]).read_text(encoding="utf-8"),"one two three four five six")
         self.assertGreaterEqual(wrap_mock.call_count,1)
 
-        contacts=self.write("contacts.txt","Mail: hello@example.com and HELLO@example.com\\nVisit https://example.com/path?q=1, then https://example.org. #Nolane #Nolane #CôngCụ")
+        contacts=self.write("contacts.txt","Mail: hello@example.com and HELLO@example.com\nVisit https://example.com/path?q=1, then https://example.org. #Nolane #Nolane #CôngCụ")
         emails=Path(runner.text_extract_emails(contacts)["output_path"]).read_text(encoding="utf-8").splitlines()
         urls=Path(runner.text_extract_urls(contacts)["output_path"]).read_text(encoding="utf-8").splitlines()
         tags=Path(runner.text_extract_hashtags(contacts)["output_path"]).read_text(encoding="utf-8").splitlines()
@@ -708,9 +708,9 @@ class ToolRunnerUnitTests(unittest.TestCase):
 
         json_file=self.write("unordered.json",'{"z":1,"a":{"y":2,"b":3}}')
         minified=runner.json_minify(json_file)
-        self.assertEqual(Path(minified["output_path"]).read_text(encoding="utf-8"),'{"z":1,"a":{"y":2,"b":3}}\\n')
+        self.assertEqual(Path(minified["output_path"]).read_text(encoding="utf-8"),'{"z":1,"a":{"y":2,"b":3}}\n')
         sorted_json=runner.json_sort_keys(json_file)
-        self.assertEqual(Path(sorted_json["output_path"]).read_text(encoding="utf-8"),'{\\n  "a": {\\n    "b": 3,\\n    "y": 2\\n  },\\n  "z": 1\\n}\\n')
+        self.assertEqual(Path(sorted_json["output_path"]).read_text(encoding="utf-8"),'{\n  "a": {\n    "b": 3,\n    "y": 2\n  },\n  "z": 1\n}\n')
         duplicate=self.write("duplicate.json",'{"a":1,"a":2}')
         with self.assertRaisesRegex(RuntimeError,"Duplicate JSON object key"):
             runner.json_minify(duplicate)
