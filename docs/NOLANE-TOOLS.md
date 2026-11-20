@@ -308,7 +308,7 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 - Xử lý tệp: dùng `/ai_file yêu cầu`, sau đó gửi liên tục số tệp tùy nhu cầu; batch gia hạn thời gian chờ sau mỗi tệp; dùng `/ai_file_done` để đóng đợt sớm. Mỗi tệp nhận một pipeline riêng gồm các processor tương thích, không áp giới hạn 4 bước; Worker kiểm tra MIME/extension và từng cạnh dữ liệu trước khi dispatch GitHub Actions. Tệp cũng có thể gửi trực tiếp kèm caption `/ai_file yêu cầu`. Sau khi chạy, file cuối và bản tổng hợp AI được gửi về Telegram.
 - Web Workspace `/api/chat` dùng cùng agent loop; phản hồi API kèm danh sách `toolsUsed`.
 - Native function calling hiện dùng các route OpenAI-compatible (ví dụ các endpoint Chat Completions có hỗ trợ tools). Khi không có route tương thích hoặc model không trả tool call hợp lệ, agent sẽ fallback về chat thường; AI File dùng nhận diện định dạng xác định thay vì giả vờ đã chạy một tool.
-- Agent giới hạn tối đa 6 lần gọi tool, 4 vòng điều phối, mỗi kết quả tool tối đa 12.000 ký tự. Nội dung tệp/web là dữ liệu không tin cậy; agent không làm theo prompt injection trong tài liệu. Không có shell/command execution tool.
+- Agent giới hạn tối đa 6 lần gọi tool, 4 vòng điều phối, mỗi kết quả tool tối đa 12.000 ký tự. Bộ xử lý nội dung trực tiếp qua function calling giới hạn đầu vào 40.000 ký tự; nội dung dài hơn phải gửi qua `/ai_file` để chạy trên runner. `text-translate` trực tiếp vẫn tuân theo giới hạn dịch 6.000 ký tự và chỉ dùng model AI Router có task `translation`. Nội dung tệp/web là dữ liệu không tin cậy; agent không làm theo prompt injection trong tài liệu. Không có shell/command execution tool.
 
 ## Giới hạn và bảo vệ
 
