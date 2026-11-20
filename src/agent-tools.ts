@@ -577,6 +577,105 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     const cell=(value:unknown)=>value==null?"":typeof value==="string"?value:JSON.stringify(value);
     return [headers.map(csvEscape).join(","),...records.map(record=>headers.map(key=>csvEscape(cell(record[key])).replace(/[\r\n]+/g," ")).join(","))].join("\n");
   }
+  if (toolId === "text-pascal-case" || toolId === "text-constant-case" || toolId === "text-dot-case" || toolId === "text-initials") {
+    return content.split(/\r?\n/).map(line=>{
+      const words=line.replace(/([a-z0-9])([A-Z])/g,"$1 $2").normalize("NFKD").replace(/\p{M}/gu,"")
+        .replace(/đ/gi,"d").match(/[\p{L}\p{N}]+/gu)||[];
+      if(toolId==="text-pascal-case") return words.map(word=>word[0]!.toLocaleUpperCase()+word.slice(1).toLocaleLowerCase()).join("");
+      if(toolId==="text-constant-case") return words.map(word=>word.toLocaleUpperCase()).join("_");
+      if(toolId==="text-dot-case") return words.map(word=>word.toLocaleLowerCase()).join(".");
+      return words.map(word=>word[0]!.toLocaleUpperCase()).join("");
+    }).join("\n");
+  }
+  if (toolId === "text-normalize-unicode") return content.normalize("NFC");
+  if (toolId === "text-remove-control-chars") return [...content].filter(char=>char==="\n"||char==="\r"||char==="\t"||!/[\u0000-\u001F\u007F-\u009F]/u.test(char)).join("");
+  if (toolId === "text-remove-duplicate-words") {
+    const seen=new Set<string>();
+    return content.replace(/[\p{L}\p{N}]+/gu,word=>{const key=word.toLocaleLowerCase();if(seen.has(key))return "";seen.add(key);return word;})
+      .replace(/[ \t]{2,}/g," ").replace(/ +([,.;:!?])/g,"$1");
+  }
+  if (toolId === "text-extract-markdown-links") {
+    const values:string[]=[]; const pattern=/(?<!!)\[([^\]\n]+)\]\(([^)\s]+)(?:\s+["']([^"']*)["'])?\)/g;
+    for(const match of content.matchAll(pattern)) values.push(JSON.stringify({text:match[1],url:match[2],title:match[3]||""}));
+    return [...new Set(values)].join("\n");
+  }
+  if (toolId === "text-extract-markdown-headings") {
+    const values:string[]=[]; let inFence=false; const fence=String.fromCharCode(96).repeat(3);
+    for(const line of content.split(/\r?\n/)){
+      if(line.trimStart().startsWith(fence)||/^\s{0,3}~~~/.test(line)){inFence=!inFence;continue;}
+      if(inFence) continue;
+      const match=line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
+      if(match) values.push(JSON.stringify({level:match[1]!.length,text:match[2]!.replace(/\s+#+\s*$/,"").trim()}));
+    }
+    return values.join("\n");
+  }
+  if (toolId === "text-extract-quotes") {
+    const pattern=/["]([^"\n]{1,2000})["]|[']([^'\n]{1,2000})[']|“([^”\n]{1,2000})”|‘([^’\n]{1,2000})’|«([^»\n]{1,2000})»/g;
+    const values:string[]=[];
+    for(const match of content.matchAll(pattern)){const value=match.slice(1).find(part=>part!==undefined)?.trim();if(value)values.push(value);}
+    return [...new Set(values)].join("\n");
+  }
+  if (toolId === "text-paragraph-report") {
+    const paragraphs=content.split(/\r?\n\s*\r?\n/).map(part=>part.trim()).filter(Boolean);
+    const counts=paragraphs.map(part=>(part.match(/[^\W_]+(?:['’][^\W_]+)?/gu)||[]).length);
+    const words=counts.reduce((sum,count)=>sum+count,0);
+    return ["Paragraph statistics","Paragraphs: "+paragraphs.length,"Words: "+words,
+      "Average words per paragraph: "+(counts.length?(words/counts.length).toFixed(2):"0"),
+      "Longest paragraph characters: "+Math.max(0,...paragraphs.map(part=>part.length))].join("\n")+"\n";
+  }
+  if (toolId === "json-flatten") {
+    const value=JSON.parse(content);
+    if(!value||typeof value!=="object"||Array.isArray(value)) throw new Error("JSON flatten expects a top-level object.");
+    const flattened:Record<string,unknown>={};
+    const escapePointer=(key:string)=>key.replace(/~/g,"~0").replace(/\//g,"~1");
+    const visit=(item:unknown,path:string):void=>{
+      if(item&&typeof item==="object"&&!Array.isArray(item)&&Object.keys(item as object).length){
+        for(const [key,child] of Object.entries(item as Record<string,unknown>)) visit(child,path+"/"+escapePointer(key));
+      } else flattened[path]=item;
+    };
+    visit(value,"");
+    return JSON.stringify(flattened,null,2);
+  }
+  if (toolId === "json-unflatten") {
+    const source=JSON.parse(content);
+    if(!source||typeof source!=="object"||Array.isArray(source)) throw new Error("JSON unflatten expects an object of JSON Pointer paths.");
+    const entries=Object.entries(source as Record<string,unknown>);
+    if(entries.some(([key])=>key!==""&&!key.startsWith("/"))) throw new Error("JSON unflatten expects JSON Pointer paths beginning with '/'.");
+    if(Object.prototype.hasOwnProperty.call(source,"")){
+      if(entries.length!==1) throw new Error("Root JSON Pointer cannot be combined with child paths.");
+      return JSON.stringify((source as Record<string,unknown>)[""],null,2);
+    }
+    const result:Record<string,unknown>={};
+    const unescapePointer=(key:string)=>key.replace(/~1/g,"/").replace(/~0/g,"~");
+    for(const [pointer,leaf] of entries){
+      const segments=pointer.slice(1).split("/").map(unescapePointer);
+      let current=result;
+      for(let index=0;index<segments.length;index++){
+        const key=segments[index]!;
+        if(index===segments.length-1){
+          if(Object.prototype.hasOwnProperty.call(current,key)) throw new Error("Conflicting JSON Pointer paths.");
+          current[key]=leaf;
+        } else {
+          const existing=current[key];
+          if(existing===undefined) current[key]={};
+          else if(!existing||typeof existing!=="object"||Array.isArray(existing)) throw new Error("Conflicting JSON Pointer paths.");
+          current=current[key] as Record<string,unknown>;
+        }
+      }
+    }
+    return JSON.stringify(result,null,2);
+  }
+  if (toolId === "json-keys-report") {
+    const value=JSON.parse(content); const counts=new Map<string,number>();
+    const visit=(item:unknown,path="$"):void=>{
+      if(Array.isArray(item)) item.slice(0,100_000).forEach((child,index)=>visit(child,path+"["+index+"]"));
+      else if(item&&typeof item==="object") for(const [key,child] of Object.entries(item as Record<string,unknown>)){
+        const next=path+"."+key;counts.set(next,(counts.get(next)||0)+1);visit(child,next);
+      }
+    };
+    visit(value);
+    return ["JSON key/path report","Unique paths: "+counts.size,...[...counts.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([path,count])=>path+"\t"+count)].join("\n")+"\n";
+  }
   if (toolId === "language-detect") {
     const sample=content.slice(0,20_000);
     const scripts:Array<[RegExp,string,string]>=[
