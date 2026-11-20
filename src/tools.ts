@@ -82,6 +82,7 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "video-frames", name: "Trích xuất frame video", category: "audio-video", description: "Lấy đều tối đa 60 frame theo thời lượng video, đánh số và đóng gói ảnh JPEG vào ZIP.", accepts: ["video/*",".mp4",".mov",".mkv",".webm",".avi"], output: "ZIP frame JPEG", ready: true },
   { id: "subtitle-convert", name: "Chuyển đổi SRT ↔ VTT", category: "audio-video", description: "Tự nhận định dạng đầu vào và chuyển SRT sang WebVTT hoặc WebVTT sang SRT, giữ nguyên nội dung cue.", accepts: ["application/x-subrip","text/vtt",".srt",".vtt"], output: "Tệp phụ đề đã chuyển đổi", ready: true },
   { id: "text-deduplicate", name: "Loại dòng trùng văn bản", category: "document", description: "Chuẩn hóa Unicode và loại dòng trùng, giữ nguyên thứ tự xuất hiện đầu tiên.", accepts: ["text/plain",".txt",".md",".log"], output: "Văn bản đã loại trùng", ready: true },
+  { id: "text-join", name: "Hợp nhất nhiều kết quả văn bản", category: "document", description: "Nhận 2–3 nhánh văn bản đã xử lý, ghép theo thứ tự node cha và thêm tiêu đề nguồn để giữ ngữ cảnh.", accepts: ["text/plain", ".txt", ".md", ".log"], output: "Tệp TXT hợp nhất", ready: true },
   { id: "text-diff", name: "So sánh hai tệp văn bản", category: "document", description: "Nhận ZIP gồm hai tệp văn bản và tạo unified diff để xem chính xác dòng được thêm, xóa hoặc sửa.", accepts: [".zip"], output: "Báo cáo diff TXT", ready: true },
   { id: "code-size-report", name: "Thống kê quy mô mã nguồn", category: "utility", description: "Đếm tổng dòng, dòng trống, dòng comment, dòng nội dung và dòng dài nhất mà không thực thi code.", accepts: [".py",".pyw",".js",".mjs",".cjs",".ts",".tsx",".jsx",".css",".html",".htm",".json",".yaml",".yml",".sh",".bash",".go",".rs",".java",".c",".cpp",".h",".hpp",".cs",".sql",".md"], output: "Báo cáo mã nguồn TXT", ready: true },
 
@@ -158,11 +159,11 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "video-silence-report": ["text-clean"],
   "video-frames": ["archive-inspect","archive-safe-extract","archive-manifest"],
   "subtitle-convert": ["subtitle-text"],
-  "text-deduplicate": ["text-clean","text-stats"],
+  "text-deduplicate": ["text-clean","text-stats","text-join"],
   "text-diff": ["text-clean","text-stats"],
   "code-size-report": ["text-clean","text-stats"],
   "text-clean": ["text-stats","text-deduplicate"],
-  "text-stats": ["text-clean"],
+  "text-stats": ["text-clean", "text-join"],
 
   "pdf-rotate-cw": ["pdf-info","pdf-text","pdf-compress","pdf-to-images","pdf-split","pdf-extract-images","pdf-metadata-clean","pdf-outline","pdf-remove-blank"],
   "pdf-remove-blank": ["pdf-info","pdf-text","pdf-compress","pdf-to-images","pdf-split","pdf-extract-images","pdf-metadata-clean","pdf-outline"],
@@ -200,6 +201,9 @@ export function validateToolPipelineDefinition(rawSteps: unknown): ToolPipelineV
     if (!tool?.ready) return { ok: false, error: "Tool không tồn tại hoặc chưa sẵn sàng: " + (toolId || "unknown") };
     if (seen.has(toolId)) return { ok: false, error: "Không cho phép lặp lại cùng một tool trong pipeline." };
     seen.add(toolId);
+    if (TOOL_MULTI_INPUT_DAG_TOOLS.has(toolId)) {
+      return { ok: false, error: "Processor " + toolId + " chỉ có thể hợp nhất nhiều nhánh trong DAG, không dùng trong pipeline tuần tự hoặc một tệp đơn." };
+    }
     if (index > 0) {
       const previous = steps[index - 1]!.toolId;
       const allowed = TOOL_PIPELINE_TRANSITIONS[previous] || [];
@@ -217,13 +221,16 @@ export function validateToolPipelineDefinition(rawSteps: unknown): ToolPipelineV
 export interface ToolDagNode {
   id: string;
   toolId: string;
-  /** Zero dependencies read the uploaded source; one dependency reads its parent's artifact. */
+  /** Zero dependencies read the upload; multiple dependencies require an explicitly multi-input processor. */
   dependsOn: string[];
   reason?: string;
 }
 
 export const TOOL_DAG_MAX_NODES = 12;
 export const TOOL_DAG_MAX_CONCURRENCY = 3;
+export const TOOL_DAG_MAX_PARENTS = 3;
+/** Only these explicitly reviewed processors may consume multiple DAG artifacts. */
+export const TOOL_MULTI_INPUT_DAG_TOOLS: ReadonlySet<string> = new Set(["text-join"]);
 
 export type ToolDagValidation =
   | { ok: true; nodes: ToolDagNode[]; roots: string[]; leaves: string[] }
@@ -250,25 +257,35 @@ export function validateToolDagDefinition(rawNodes: unknown): ToolDagValidation 
     const toolId = typeof item.toolId === "string" ? item.toolId : "";
     const tool = getTool(toolId);
     if (!tool?.ready) return { ok: false, error: "Tool không tồn tại hoặc chưa sẵn sàng: " + (toolId || "unknown") };
-    if (!Array.isArray(item.dependsOn) || item.dependsOn.length > 1) {
-      return { ok: false, error: "Mỗi node chỉ được nhận tệp từ một node cha; dùng nhiều nhánh độc lập để tạo kết quả hợp nhất." };
+    if (!Array.isArray(item.dependsOn)) {
+      return { ok: false, error: "Danh sách node cha của " + id + " không hợp lệ." };
+    }
+    const multiInput = TOOL_MULTI_INPUT_DAG_TOOLS.has(toolId);
+    if (item.dependsOn.length > (multiInput ? TOOL_DAG_MAX_PARENTS : 1) ||
+        (multiInput && item.dependsOn.length < 2)) {
+      return { ok: false, error: multiInput
+        ? "Processor " + toolId + " cần từ 2 đến " + TOOL_DAG_MAX_PARENTS + " node cha."
+        : "Processor " + toolId + " chỉ được nhận một node cha; chỉ text-join hỗ trợ hợp nhất nhiều nhánh." };
     }
     const dependsOn: string[] = [];
     if (item.dependsOn.length === 0) {
       roots.push(id);
     } else {
-      const parentId = item.dependsOn[0];
-      if (typeof parentId !== "string" || parentId === id) {
-        return { ok: false, error: "Phụ thuộc của node " + id + " không hợp lệ." };
+      for (const rawParentId of item.dependsOn) {
+        if (typeof rawParentId !== "string" || rawParentId === id || dependsOn.includes(rawParentId)) {
+          return { ok: false, error: "Phụ thuộc của node " + id + " không hợp lệ hoặc bị lặp." };
+        }
+        const parent = byId.get(rawParentId);
+        if (!parent) {
+          return { ok: false, error: "Node cha phải được khai báo trước node con: " + id + " ← " + String(rawParentId) };
+        }
+        const allowed = TOOL_PIPELINE_TRANSITIONS[parent.toolId] || [];
+        if (!allowed.includes(toolId)) {
+          return { ok: false, error: "Không có luồng dữ liệu được hỗ trợ từ " + parent.toolId + " sang " + toolId + " (" + parent.id + " → " + id + ")." };
+        }
+        dependsOn.push(rawParentId);
+        children.set(rawParentId, (children.get(rawParentId) || 0) + 1);
       }
-      const parent = byId.get(parentId);
-      if (!parent) return { ok: false, error: "Node cha phải được khai báo trước node con: " + id + " ← " + String(parentId) };
-      const allowed = TOOL_PIPELINE_TRANSITIONS[parent.toolId] || [];
-      if (!allowed.includes(toolId)) {
-        return { ok: false, error: "Không có luồng dữ liệu được hỗ trợ từ " + parent.toolId + " sang " + toolId + " (" + parent.id + " → " + id + ")." };
-      }
-      dependsOn.push(parentId);
-      children.set(parentId, (children.get(parentId) || 0) + 1);
     }
     const reason = typeof item.reason === "string" ? item.reason.trim().slice(0, 240) : "";
     const node: ToolDagNode = { id, toolId, dependsOn, ...(reason ? { reason } : {}) };

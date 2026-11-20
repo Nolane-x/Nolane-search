@@ -145,6 +145,22 @@ describe("Saved Nolane Tool Workflows", () => {
   });
 
 
+  it("persists a DAG whose final text-join node has multiple validated parents", async () => {
+    const { db } = fakeDb();
+    const env = envFor(db);
+    const dag = [
+      { id: "source", toolId: "pdf-text", dependsOn: [] },
+      { id: "clean", toolId: "text-clean", dependsOn: ["source"] },
+      { id: "stats", toolId: "text-stats", dependsOn: ["clean"] },
+      { id: "unique", toolId: "text-deduplicate", dependsOn: ["clean"] },
+      { id: "merged", toolId: "text-join", dependsOn: ["stats", "unique"] },
+    ];
+    const saved = await saveToolWorkflow(env, 42, 42, "PDF merged report", dag);
+    expect(saved.dag?.[4]?.dependsOn).toEqual(["stats", "unique"]);
+    expect((await getToolWorkflow(env, 42, saved.id))?.dag).toEqual(dag);
+    expect(await getToolWorkflow(env, 43, saved.id)).toBeNull();
+  });
+
   it("stores, scopes, reloads and clears an expiring AI workflow plan draft", async () => {
     const { db, rows } = fakeDb();
     const env = envFor(db);

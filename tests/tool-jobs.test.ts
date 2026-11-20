@@ -222,6 +222,26 @@ describe("GitHub Actions tool dispatch", () => {
       fileName: "photo.png", mimeType: "image/png", fileSize: 100,
     })).rejects.toThrow("NOLANE_GH_ACTIONS_TOKEN");
   });
+  it("validates a multi-parent join trace only after every dependency completes", () => {
+    const dag = [
+      { id: "source", toolId: "pdf-text", dependsOn: [] },
+      { id: "clean", toolId: "text-clean", dependsOn: ["source"] },
+      { id: "stats", toolId: "text-stats", dependsOn: ["clean"] },
+      { id: "unique", toolId: "text-deduplicate", dependsOn: ["clean"] },
+      { id: "merged", toolId: "text-join", dependsOn: ["stats", "unique"] },
+    ];
+    const trace = [
+      { nodeId: "source", step: 1, total: 5, toolId: "pdf-text", status: "completed", durationMs: 10, inputBytes: 1000, outputBytes: 900, summary: "Extracted" },
+      { nodeId: "clean", step: 2, total: 5, toolId: "text-clean", status: "completed", durationMs: 11, inputBytes: 900, outputBytes: 850, summary: "Cleaned" },
+      { nodeId: "stats", step: 3, total: 5, toolId: "text-stats", status: "completed", durationMs: 12, inputBytes: 850, outputBytes: 200, summary: "Stats" },
+      { nodeId: "unique", step: 4, total: 5, toolId: "text-deduplicate", status: "completed", durationMs: 13, inputBytes: 850, outputBytes: 400, summary: "Unique" },
+      { nodeId: "merged", step: 5, total: 5, toolId: "text-join", status: "completed", durationMs: 14, inputBytes: 600, outputBytes: 650, summary: "Merged" },
+    ];
+    expect(validateToolDagTrace(trace, dag, "completed").ok).toBe(true);
+    expect(validateToolDagTrace([trace[0], trace[1], trace[2], trace[4], trace[3]], dag, "completed").ok).toBe(false);
+    expect(validateToolDagTrace([trace[0], trace[1], trace[2], trace[4]], dag, "failed").ok).toBe(false);
+  });
+
   it("persists an owner-scoped DAG job and validates node traces independently of branch completion order", async () => {
     const { db, rows } = fakeDb();
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {

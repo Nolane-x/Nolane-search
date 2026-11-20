@@ -88,7 +88,9 @@ function validatedWorkflowPlan(raw: unknown): ToolWorkflowPlan | null {
     const depths = new Map<string, number>();
     const layers = new Map<number, number>();
     for (const node of dag) {
-      const layer = node.dependsOn.length ? (depths.get(node.dependsOn[0]!) ?? 0) + 1 : 0;
+      const layer = node.dependsOn.length
+        ? Math.max(...node.dependsOn.map(parent => depths.get(parent) ?? 0)) + 1
+        : 0;
       depths.set(node.id, layer);
       layers.set(layer, (layers.get(layer) || 0) + 1);
     }

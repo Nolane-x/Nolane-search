@@ -826,6 +826,95 @@ class ToolRunnerUnitTests(unittest.TestCase):
             self.assertEqual(manifest["maxConcurrency"],3)
             self.assertEqual(set(manifest["terminalOutputs"]),{"transcript","converted"})
 
+    def test_text_join_combines_utf8_files_in_order_and_rejects_binary_like_content(self):
+        first=self.write("statistics.txt","Words: 12")
+        second=self.write("unique.txt","Unique terms: 9")
+        result=runner.text_join([first,second])
+        output=Path(result["output_path"])
+        merged=output.read_text(encoding="utf-8")
+        self.assertIn("SOURCE 1: statistics.txt",merged)
+        self.assertIn("SOURCE 2: unique.txt",merged)
+        self.assertLess(merged.index("Words: 12"),merged.index("Unique terms: 9"))
+        self.assertIn("2 nhánh văn bản",result["summary"])
+
+        binary=self.input_dir/"binary.txt"
+        binary.write_bytes(b"text"+bytes([0])+b"payload")
+        with self.assertRaisesRegex(RuntimeError,"binary-like input"):
+            runner.text_join([first,binary])
+
+        with self.assertRaisesRegex(RuntimeError,"2 to 3"):
+            runner.text_join([first])
+
+    def test_text_join_cannot_run_as_a_single_file_pipeline(self):
+        with self.assertRaisesRegex(RuntimeError,"only merge parent artifacts"):
+            runner.validate_pipeline({"toolId":"text-join","pipeline":[{"toolId":"text-join"}]})
+
+    def test_workflow_dag_merges_two_completed_parent_branches(self):
+        import json, zipfile
+        source=self.write("report.pdf","mock pdf bytes")
+        dag=[
+            {"id":"source","toolId":"pdf-text","dependsOn":[]},
+            {"id":"clean","toolId":"text-clean","dependsOn":["source"]},
+            {"id":"stats","toolId":"text-stats","dependsOn":["clean"]},
+            {"id":"unique","toolId":"text-deduplicate","dependsOn":["clean"]},
+            {"id":"merged","toolId":"text-join","dependsOn":["stats","unique"]},
+        ]
+        def fake_processor(tool_id):
+            def process(path):
+                output=path.with_name(path.stem+"-"+tool_id+".txt")
+                output.write_text(tool_id+" output from "+path.name,encoding="utf-8")
+                return {"summary":tool_id+" completed","output_path":str(output)}
+            return process
+        with patch.dict(runner.TOOLS,{
+            "pdf-text":fake_processor("pdf-text"),
+            "text-clean":fake_processor("text-clean"),
+            "text-stats":fake_processor("text-stats"),
+            "text-deduplicate":fake_processor("text-deduplicate"),
+        }):
+            result=runner.run_tool_dag({"toolId":"pdf-text","workflowDag":dag},source,self.input_dir.resolve())
+        trace={item["nodeId"]:item for item in result["trace"]}
+        self.assertEqual(set(trace),{"source","clean","stats","unique","merged"})
+        self.assertTrue(all(item["status"]=="completed" for item in trace.values()))
+        self.assertEqual(trace["merged"]["inputBytes"],trace["stats"]["outputBytes"]+trace["unique"]["outputBytes"])
+        with zipfile.ZipFile(result["output_path"]) as archive:
+            names=set(archive.namelist())
+            self.assertIn("manifest.json",names)
+            merged_name=next(name for name in names if name.startswith("branches/merged/"))
+            merged_text=archive.read(merged_name).decode("utf-8")
+            self.assertIn("SOURCE 1:",merged_text)
+            self.assertIn("SOURCE 2:",merged_text)
+            manifest=json.loads(archive.read("manifest.json"))
+            self.assertEqual(manifest["terminalOutputs"],["merged"])
+            merged_node=next(node for node in manifest["nodes"] if node["id"]=="merged")
+            self.assertEqual(merged_node["dependsOn"],["stats","unique"])
+
+    def test_validate_dag_restricts_fanin_to_text_join_and_three_parents(self):
+        root={"id":"source","toolId":"pdf-text","dependsOn":[]}
+        clean={"id":"clean","toolId":"text-clean","dependsOn":["source"]}
+        stats={"id":"stats","toolId":"text-stats","dependsOn":["clean"]}
+        unique={"id":"unique","toolId":"text-deduplicate","dependsOn":["clean"]}
+        with self.assertRaisesRegex(RuntimeError,"only one parent"):
+            runner.validate_dag({"toolId":"pdf-text","workflowDag":[
+                root,clean,stats,unique,
+                {"id":"merged","toolId":"text-clean","dependsOn":["stats","unique"]},
+            ]})
+        with self.assertRaisesRegex(RuntimeError,"between 2 and 3"):
+            runner.validate_dag({"toolId":"pdf-text","workflowDag":[
+                root,clean,stats,unique,
+                {"id":"merged","toolId":"text-join","dependsOn":["stats"]},
+            ]})
+        four_stats=[
+            {"id":"stat1","toolId":"text-stats","dependsOn":["clean"]},
+            {"id":"stat2","toolId":"text-stats","dependsOn":["clean"]},
+            {"id":"stat3","toolId":"text-stats","dependsOn":["clean"]},
+            {"id":"stat4","toolId":"text-stats","dependsOn":["clean"]},
+        ]
+        with self.assertRaisesRegex(RuntimeError,"between 2 and 3"):
+            runner.validate_dag({"toolId":"pdf-text","workflowDag":[
+                root,clean,*four_stats,
+                {"id":"merged","toolId":"text-join","dependsOn":["stat1","stat2","stat3","stat4"]},
+            ]})
+
     def test_workflow_dag_stops_descendants_after_a_parallel_branch_failure(self):
         import threading,time
         source=self.write("clip.mp4","source-media")
