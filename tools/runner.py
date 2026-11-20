@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Private GitHub-hosted execution engine for Nolane Tools."""
 from __future__ import annotations
-import argparse, concurrent.futures, csv, hashlib, json, mimetypes, os, posixpath, re, shutil, stat, subprocess, sys, tarfile, tempfile, threading, time, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
+import argparse, base64, concurrent.futures, csv, hashlib, json, mimetypes, os, posixpath, re, shutil, stat, subprocess, sys, tarfile, tempfile, textwrap, threading, time, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
 from pathlib import Path
 from html import unescape
 from html.parser import HTMLParser
@@ -431,6 +431,260 @@ def text_clean(p):
     out=p.with_name(p.stem+"-cleaned"+(p.suffix.lower() or ".txt"))
     out.write_text(cleaned,encoding="utf-8")
     return {"summary":f"Đã làm sạch văn bản: {len(raw):,} → {len(cleaned):,} ký tự; chuẩn hóa Unicode NFC, newline, khoảng trắng và ký tự zero-width.","output_path":str(out)}
+
+def _read_text_source(p, max_chars=1_000_000):
+    raw=p.read_text(encoding="utf-8-sig",errors="replace")
+    if len(raw)>max_chars:
+        raise RuntimeError(f"Text input exceeds the {max_chars:,}-character limit.")
+    return raw
+
+
+def _write_text_artifact(p, suffix, content, title, details=""):
+    extension=p.suffix.lower() or ".txt"
+    out=p.with_name(p.stem+"-"+suffix+extension)
+    out.write_text(content,encoding="utf-8")
+    return {"summary":f"{title}: {len(content):,} characters"+(f"; {details}" if details else "")+".","output_path":str(out)}
+
+
+def text_uppercase(p):
+    raw=_read_text_source(p)
+    return _write_text_artifact(p,"uppercase",raw.upper(),"Uppercase conversion")
+
+
+def text_lowercase(p):
+    raw=_read_text_source(p)
+    return _write_text_artifact(p,"lowercase",raw.lower(),"Lowercase conversion")
+
+
+def text_title_case(p):
+    raw=_read_text_source(p)
+    titled=re.sub(r"(?u)\b\w",lambda match:match.group(0).upper(),raw.lower())
+    return _write_text_artifact(p,"title-case",titled,"Title case conversion")
+
+
+def text_sort_lines(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    ordered=sorted(lines,key=lambda value:value.casefold())
+    output="\n".join(ordered)+("\n" if raw.endswith(("\n","\r")) else "")
+    return _write_text_artifact(p,"sorted",output,"Line sorting",f"{len(lines):,} lines sorted stably")
+
+
+def text_reverse_lines(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    output="\n".join(reversed(lines))+("\n" if raw.endswith(("\n","\r")) else "")
+    return _write_text_artifact(p,"reversed-lines",output,"Line reversal",f"{len(lines):,} lines")
+
+
+def text_number_lines(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    width=max(4,len(str(len(lines))))
+    output="\n".join(f"{index:0{width}d} | {line}" for index,line in enumerate(lines,1))
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"numbered",output,"Line numbering",f"{len(lines):,} lines numbered")
+
+
+def text_remove_blank_lines(p):
+    raw=_read_text_source(p)
+    lines=[line for line in raw.splitlines() if line.strip()]
+    output="\n".join(lines)+("\n" if raw.endswith(("\n","\r")) and lines else "")
+    removed=len(raw.splitlines())-len(lines)
+    return _write_text_artifact(p,"no-blank-lines",output,"Blank-line removal",f"{removed:,} blank lines removed")
+
+
+def text_wrap(p):
+    raw=_read_text_source(p)
+    lines=[]
+    for line in raw.splitlines():
+        if not line.strip():
+            lines.append("")
+        else:
+            lines.extend(textwrap.wrap(line,width=88,break_long_words=False,break_on_hyphens=False) or [""])
+    output="\n".join(lines)+("\n" if raw.endswith(("\n","\r")) else "")
+    return _write_text_artifact(p,"wrapped",output,"Text wrapping","target width 88 columns; long words preserved")
+
+
+def text_trim_lines(p):
+    raw=_read_text_source(p)
+    output="\n".join(line.strip() for line in raw.splitlines())
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"trimmed-lines",output,"Line trimming")
+
+
+def _extract_unique_matches(raw, pattern, strip_trailing=""):
+    found=[]
+    seen=set()
+    for match in re.findall(pattern,raw,flags=re.I|re.M):
+        value=match.rstrip(strip_trailing) if strip_trailing else match
+        key=value.casefold()
+        if value and key not in seen:
+            seen.add(key); found.append(value)
+    return found
+
+
+def text_extract_emails(p):
+    raw=_read_text_source(p)
+    values=_extract_unique_matches(raw,r"(?<![\w.+-])[A-Z0-9.!#$%&'*+/=?^_{}|~-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+")
+    return _write_text_artifact(p,"emails","\n".join(values)+("\n" if values else ""),"Email extraction",f"{len(values):,} unique addresses")
+
+
+def text_extract_urls(p):
+    raw=_read_text_source(p)
+    values=_extract_unique_matches(raw,r"https?://[^\s<>""']+",").,;:!?)]}")
+    return _write_text_artifact(p,"urls","\n".join(values)+("\n" if values else ""),"URL extraction",f"{len(values):,} unique URLs")
+
+
+def text_extract_hashtags(p):
+    raw=_read_text_source(p)
+    values=_extract_unique_matches(raw,r"(?<![\w#])#[\w]+")
+    return _write_text_artifact(p,"hashtags","\n".join(values)+("\n" if values else ""),"Hashtag extraction",f"{len(values):,} unique hashtags")
+
+
+def text_to_base64(p):
+    raw=_read_text_source(p)
+    encoded=base64.b64encode(raw.encode("utf-8")).decode("ascii")
+    return _write_text_artifact(p,"base64",encoded+"\n","Base64 encoding")
+
+
+def base64_to_text(p):
+    raw=_read_text_source(p)
+    compact="".join(raw.split())
+    try:
+        decoded=base64.b64decode(compact,validate=True).decode("utf-8-sig")
+    except (ValueError,UnicodeDecodeError) as exc:
+        raise RuntimeError("Input must be valid Base64 containing UTF-8 text.") from exc
+    return _write_text_artifact(p,"decoded",decoded,"Base64 decoding")
+
+
+def url_encode_text(p):
+    raw=_read_text_source(p)
+    encoded=urllib.parse.quote(raw,safe="")
+    return _write_text_artifact(p,"url-encoded",encoded,"URL percent-encoding")
+
+
+def url_decode_text(p):
+    raw=_read_text_source(p)
+    try:
+        decoded=urllib.parse.unquote(raw,errors="strict")
+        decoded.encode("utf-8","strict")
+    except (UnicodeError,ValueError) as exc:
+        raise RuntimeError("Input contains invalid URL-encoded UTF-8.") from exc
+    return _write_text_artifact(p,"url-decoded",decoded,"URL decoding")
+
+
+def _load_json_reject_duplicates(raw):
+    def unique_object(pairs):
+        result={}
+        for key,value in pairs:
+            if key in result: raise ValueError("Duplicate JSON object key: "+str(key))
+            result[key]=value
+        return result
+    return json.loads(raw,object_pairs_hook=unique_object)
+
+
+def json_minify(p):
+    raw=_read_text_source(p)
+    try:
+        value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Invalid JSON: {exc}") from exc
+    output=json.dumps(value,ensure_ascii=False,separators=(",",":"))
+    return _write_text_artifact(p,"minified",output+"\n","JSON minification")
+
+
+def json_sort_keys(p):
+    raw=_read_text_source(p)
+    try:
+        value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Invalid JSON: {exc}") from exc
+    def sort_nested(item):
+        if isinstance(item,dict): return {key:sort_nested(item[key]) for key in sorted(item)}
+        if isinstance(item,list): return [sort_nested(value) for value in item]
+        return item
+    output=json.dumps(sort_nested(value),ensure_ascii=False,indent=2)
+    return _write_text_artifact(p,"sorted-keys",output+"\n","JSON key sorting")
+
+
+def language_detect(p):
+    raw=_read_text_source(p)
+    sample=raw[:20_000]
+    if not sample.strip(): return _write_text_artifact(p,"language","Undetermined\nMethod: empty input","Language detection")
+    scores={}
+    def script_count(pattern):
+        return len(re.findall(pattern,sample))
+    scripts=[
+        (r"[\u3040-\u30ff]","Japanese","Hiragana/Katakana script"),
+        (r"[\uac00-\ud7af]","Korean","Hangul script"),
+        (r"[\u4e00-\u9fff]","Chinese","Han characters; Japanese without kana may be ambiguous"),
+        (r"[\u0400-\u04ff]","Russian or another Cyrillic language","Cyrillic script"),
+        (r"[\u0600-\u06ff]","Arabic","Arabic script"),
+        (r"[\u0590-\u05ff]","Hebrew","Hebrew script"),
+        (r"[\u0370-\u03ff]","Greek","Greek script"),
+        (r"[\u0e00-\u0e7f]","Thai","Thai script"),
+        (r"[\u0900-\u097f]","Hindi or another Devanagari language","Devanagari script"),
+    ]
+    for pattern,label,evidence in scripts:
+        count=script_count(pattern)
+        if count: scores[label]=(count,evidence)
+    if scores:
+        label,(count,evidence)=max(scores.items(),key=lambda item:item[1][0])
+    elif any(char in "ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ" for char in sample.lower()):
+        label="Vietnamese"; evidence="Vietnamese-specific letters and diacritics"
+    else:
+        words=set(re.findall(r"[a-zA-ZÀ-ỹ']+",sample.lower()))
+        vocab={
+            "English":{"the","and","that","with","this","you","for","are","was","have","from"},
+            "French":{"le","la","les","et","des","une","est","dans","pour","avec","que"},
+            "German":{"der","die","das","und","ist","mit","ein","eine","nicht","auf","für"},
+            "Spanish":{"el","la","los","las","y","de","que","una","es","por","para","con"},
+            "Portuguese":{"o","a","os","as","e","de","que","uma","é","para","com","não"},
+            "Italian":{"il","lo","la","gli","e","di","che","una","per","con","non"},
+            "Indonesian":{"yang","dan","ini","itu","untuk","dengan","dari","tidak","adalah"},
+        }
+        ranked=sorted(((len(words & values),language) for language,values in vocab.items()),reverse=True)
+        score,label=ranked[0] if ranked else (0,"")
+        if score<2: label="Undetermined"; evidence="Latin-script text without enough distinctive words"
+        else: evidence=f"{score} common-word matches in a small vocabulary"
+    report=f"Most likely: {label}\nEvidence: {evidence}\nMethod: lightweight heuristic; short or mixed-language text may be misclassified."
+    return _write_text_artifact(p,"language",report,"Language detection")
+
+
+def split_translation_chunks(raw, limit=5_000):
+    remaining=raw
+    chunks=[]
+    while len(remaining)>limit:
+        boundary=remaining.rfind("\n",0,limit+1)
+        if boundary<limit//2: boundary=limit
+        else: boundary+=1
+        chunks.append(remaining[:boundary])
+        remaining=remaining[boundary:]
+    if remaining: chunks.append(remaining)
+    return chunks
+
+
+def text_translate(p, translate_callback=None):
+    if not callable(translate_callback):
+        raise RuntimeError("Translation requires the Worker AI Router; use the dedicated translation runner step.")
+    raw=_read_text_source(p, max_chars=60_000)
+    if not raw.strip(): raise RuntimeError("Translation input is empty.")
+    chunks=split_translation_chunks(raw)
+    translated=[]
+    target_language=""
+    for index,chunk in enumerate(chunks,1):
+        response=translate_callback(chunk)
+        value=response.get("translation") if isinstance(response,dict) else None
+        if not isinstance(value,str) or not value.strip():
+            raise RuntimeError(f"AI translation returned an empty chunk at {index}/{len(chunks)}.")
+        target_language=str(response.get("targetLanguage") or target_language)
+        translated.append(value)
+    output="".join(translated)
+    if len(output)>MAX_PIPELINE_OUTPUT: raise RuntimeError("Translated output exceeds the 45 MB output limit.")
+    details=f"{len(chunks)} chunk(s)"+(f"; target {target_language}" if target_language else "")
+    return _write_text_artifact(p,"translated",output,"AI translation",details)
+
 
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
