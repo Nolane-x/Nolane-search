@@ -136,13 +136,13 @@ describe("Nolane AI callable tools", () => {
     expect(JSON.parse(restored)).toEqual({a:{b:1,"x/y":2},items:[1,2]});
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-keys-report",content:'{"a":{"b":1},"items":[{"c":2}]}'})).toContain("$.items[0].c");
 
-    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-remove-empty-rows",content:"name,score\nAn,7\n,\nB,8"})).toBe("name,score\nAn,7\nB,8");
-    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-add-row-numbers",content:"name,score\nAn,7"})).toBe("_row_number,name,score\n1,An,7");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-remove-empty-rows",content:"name,score\nAn,7\n,\nB,8"})).toBe("name,score\nAn,7\nB,8\n");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-add-row-numbers",content:"name,score\nAn,7"})).toBe("_row_number,name,score\n1,An,7\n");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-column-stats",content:"name,score\nAn,7\nB,8"})).toContain('"numeric":2');
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-normalize-headers",content:"First Name,Score,First Name\nAn,7,B"})).toContain("first_name,score,first_name_2");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-to-jsonl",content:"name,score\nAn,7\nB,8"})).toBe('{"name":"An","score":"7"}\n{"name":"B","score":"8"}');
-    expect(await executeAgentTool(env,"process_text_content",{tool_id:"jsonl-to-csv",content:'{"name":"An","score":7}\n{"name":"B","extra":true}'})).toBe("name,score,extra\nAn,7,\nB,,true");
-    expect(await executeAgentTool(env,"process_text_content",{tool_id:"jsonl-to-csv",content:'{"amount":-7,"formula":"=1+1"}'})).toBe("amount,formula\n-7,'=1+1");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"jsonl-to-csv",content:'{"name":"An","score":7}\n{"name":"B","extra":true}'})).toBe("name,score,extra\nAn,7,\nB,,true\n");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"jsonl-to-csv",content:'{"amount":-7,"formula":"=1+1"}'})).toBe("amount,formula\n-7,'=1+1\n");
   });
 
   it("routes AI tool-call translation through the configured translation model", async () => {
