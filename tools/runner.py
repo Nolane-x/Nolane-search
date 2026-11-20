@@ -1747,7 +1747,7 @@ def html_extract_links(p):
         seen.add(key)
         results.append(json.dumps(item,ensure_ascii=False))
     output="\n".join(results)
-    return _write_text_artifact(p,"html-links",output+("\n" if output else ""),"HTML link/image extraction",str(len(results))+" item(s)")
+    return _write_text_artifact_ext(p,"html-links",".jsonl",output+("\n" if output else ""),"HTML link/image extraction",str(len(results))+" item(s)")
 
 
 def html_extract_images(p):
@@ -1770,7 +1770,7 @@ def html_extract_images(p):
         seen.add(item["src"])
         unique.append(json.dumps(item,ensure_ascii=False))
     output="\n".join(unique)
-    return _write_text_artifact(p,"html-images",output+("\n" if output else ""),"HTML image extraction",str(len(unique))+" unique image(s)")
+    return _write_text_artifact_ext(p,"html-images",".jsonl",output+("\n" if output else ""),"HTML image extraction",str(len(unique))+" unique image(s)")
 
 
 def html_extract_title(p):
@@ -1790,7 +1790,7 @@ def html_extract_title(p):
     try: parser.feed(raw); parser.close()
     except Exception as exc: raise RuntimeError("Invalid HTML: "+str(exc)) from exc
     title=re.sub(r"\s+"," "," ".join(parser.parts)).strip()
-    return _write_text_artifact(p,"html-title",title+"\n" if title else "","HTML title extraction")
+    return _write_text_artifact_ext(p,"html-title",".txt",title+"\n" if title else "","HTML title extraction")
 
 
 def html_sanitize(p):
@@ -1808,15 +1808,15 @@ def html_sanitize(p):
                 if tag not in self.void: self.skip_stack.append(tag)
                 return
             if tag in self.drop:
-                self.skip_stack.append(tag)
+                if tag not in self.void: self.skip_stack.append(tag)
                 return
             safe=[]
             for key,value in attrs:
                 key=key.lower()
-                if key.startswith("on") or key=="style": continue
-                if value is not None and key in {"href","src","xlink:href","formaction"}:
+                if key.startswith("on") or key in {"style","srcdoc","srcset"}: continue
+                if value is not None and key in {"href","src","xlink:href","formaction","action","poster"}:
                     normalized=re.sub(r"[\x00-\x20]+","",value).lower()
-                    if normalized.startswith(("javascript:","vbscript:","data:text/html")): continue
+                    if normalized.startswith(("javascript:","vbscript:","data:","blob:","file:")): continue
                 safe.append((key,value))
             self.parts.append("<"+tag)
             for key,value in safe:
@@ -1829,10 +1829,10 @@ def html_sanitize(p):
             safe=[]
             for key,value in attrs:
                 key=key.lower()
-                if key.startswith("on") or key=="style": continue
-                if value is not None and key in {"href","src","xlink:href","formaction"}:
+                if key.startswith("on") or key in {"style","srcdoc","srcset"}: continue
+                if value is not None and key in {"href","src","xlink:href","formaction","action","poster"}:
                     normalized=re.sub(r"[\x00-\x20]+","",value).lower()
-                    if normalized.startswith(("javascript:","vbscript:","data:text/html")): continue
+                    if normalized.startswith(("javascript:","vbscript:","data:","blob:","file:")): continue
                 safe.append((key,value))
             self.parts.append("<"+tag)
             for key,value in safe:
@@ -1924,7 +1924,7 @@ def json_type_report(p):
     visit(value,0)
     lines=["JSON type report","Maximum depth: "+str(max_depth)]
     lines.extend(kind+": "+str(count) for kind,count in counts.items())
-    return _write_text_artifact(p,"type-report","\n".join(lines)+"\n","JSON type report")
+    return _write_text_artifact_ext(p,"type-report",".txt","\n".join(lines)+"\n","JSON type report")
 
 
 def json_escape_string(p):
@@ -1937,7 +1937,7 @@ def json_unescape_string(p):
     try: value=json.loads(raw)
     except json.JSONDecodeError as exc: raise RuntimeError("Input must be a valid JSON string scalar.") from exc
     if not isinstance(value,str): raise RuntimeError("Input must be a JSON string, not an object, array or number.")
-    return _write_text_artifact(p,"unescaped-string",value,"JSON string decoding")
+    return _write_text_artifact_ext(p,"unescaped-string",".txt",value,"JSON string decoding")
 
 
 def csv_unique_values(p):
@@ -1960,7 +1960,7 @@ def csv_unique_values(p):
         for value in order:
             columns.append(json.dumps({"column":name,"value":value,"count":counts[value]},ensure_ascii=False))
     output="\n".join(columns)
-    return _write_text_artifact(p,"unique-values",output+("\n" if output else ""),"CSV unique-value report",str(len(columns))+" column/value pair(s)")
+    return _write_text_artifact_ext(p,"unique-values",".txt",output+("\n" if output else ""),"CSV unique-value report",str(len(columns))+" column/value pair(s)")
 
 
 def xml_tree_report(p):
@@ -1985,7 +1985,7 @@ def xml_tree_report(p):
     lines=["XML tree report","Root: "+root.tag,"Elements: "+str(sum(tags.values())),"Attributes: "+str(attributes),
       "Non-empty text nodes: "+str(text_nodes),"Maximum depth: "+str(max_depth),"","Element counts"]
     lines.extend(tag+"\t"+str(count) for tag,count in sorted(tags.items()))
-    return _write_text_artifact(p,"xml-tree-report","\n".join(lines)+"\n","XML tree report")
+    return _write_text_artifact_ext(p,"xml-tree-report",".txt","\n".join(lines)+"\n","XML tree report")
 
 
 def subtitle_text(p):
