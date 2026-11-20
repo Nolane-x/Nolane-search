@@ -1384,6 +1384,203 @@ def text_paragraph_report(p):
     return _write_text_artifact(p,"paragraph-report","\n".join(report)+"\n","Paragraph report")
 
 
+def _json_pointer_escape(value):
+    return str(value).replace("~","~0").replace("/","~1")
+
+
+def _json_pointer_unescape(value):
+    return value.replace("~1","/").replace("~0","~")
+
+
+def json_flatten(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    if not isinstance(value,dict): raise RuntimeError("JSON flatten expects a top-level object.")
+    flattened={}
+    def visit(item,path):
+        if isinstance(item,dict) and item:
+            for key,child in item.items():
+                visit(child,path+"/"+_json_pointer_escape(key))
+        else:
+            flattened[path]=item
+    visit(value,"")
+    output=json.dumps(flattened,ensure_ascii=False,indent=2)
+    return _write_text_artifact(p,"flattened",output+"\n","JSON flattening",str(len(flattened))+" leaf value(s)")
+
+
+def json_unflatten(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    if not isinstance(value,dict) or any(not isinstance(key,str) or (key and not key.startswith("/")) for key in value):
+        raise RuntimeError("JSON unflatten expects an object whose keys are JSON Pointer paths.")
+    if "" in value:
+        if len(value)!=1: raise RuntimeError("Root JSON pointer cannot be combined with child paths.")
+        result=value[""]
+    else:
+        result={}
+        for pointer,leaf in value.items():
+            segments=[_json_pointer_unescape(part) for part in pointer[1:].split("/")]
+            current=result
+            for index,segment in enumerate(segments):
+                if index==len(segments)-1:
+                    if segment in current and isinstance(current[segment],dict):
+                        raise RuntimeError("Conflicting JSON Pointer paths.")
+                    current[segment]=leaf
+                else:
+                    existing=current.get(segment)
+                    if existing is None:
+                        existing={}
+                        current[segment]=existing
+                    if not isinstance(existing,dict): raise RuntimeError("Conflicting JSON Pointer paths.")
+                    current=existing
+    output=json.dumps(result,ensure_ascii=False,indent=2)
+    return _write_text_artifact(p,"unflattened",output+"\n","JSON unflattening")
+
+
+def json_keys_report(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    counts={}
+    def visit(item,path="$"):
+        if isinstance(item,dict):
+            for key,child in item.items():
+                child_path=path+"."+key
+                counts[child_path]=counts.get(child_path,0)+1
+                visit(child,child_path)
+        elif isinstance(item,list):
+            for index,child in enumerate(item[:100_000]):
+                visit(child,path+"["+str(index)+"]")
+    visit(value)
+    lines=["JSON key/path report","Unique paths: "+str(len(counts))]
+    lines.extend(path+"\t"+str(count) for path,count in sorted(counts.items()))
+    return _write_text_artifact(p,"keys-report","\n".join(lines)+"\n","JSON key report")
+
+
+def csv_remove_empty_rows(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    kept=[rows[0]]
+    removed=0
+    for row in rows[1:]:
+        if any(value.strip() for value in row): kept.append(row)
+        else: removed+=1
+    stream=io.StringIO(newline="")
+    csv.writer(stream,lineterminator="\n").writerows(kept)
+    return _write_text_artifact_ext(p,"no-empty-rows",".csv",stream.getvalue(),"CSV empty-row removal",str(removed)+" row(s) removed")
+
+
+def csv_add_row_numbers(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    header=rows[0]
+    column="_row_number"
+    while column in header: column+="_"
+    output=[[column]+header]
+    output.extend([[str(index)]+row for index,row in enumerate(rows[1:],1)])
+    stream=io.StringIO(newline="")
+    csv.writer(stream,lineterminator="\n").writerows(output)
+    return _write_text_artifact_ext(p,"numbered",".csv",stream.getvalue(),"CSV row numbering",str(len(rows)-1)+" data row(s)")
+
+
+def csv_column_stats(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    headers=rows[0]
+    if len(headers)>200: raise RuntimeError("CSV column statistics supports at most 200 columns.")
+    body=rows[1:]
+    lines=["CSV column statistics","Rows: "+str(len(body)),"Columns: "+str(len(headers))]
+    for index,header in enumerate(headers):
+        values=[row[index].strip() for row in body if index<len(row)]
+        nonempty=[value for value in values if value]
+        numeric=sum(bool(re.fullmatch(r"[+-]?\d+(?:[.,]\d+)?",value)) for value in nonempty)
+        lines.append(json.dumps({"column":header,"non_empty":len(nonempty),"empty":len(body)-len(nonempty),"unique":len(set(nonempty)),"numeric":numeric},ensure_ascii=False))
+    return _write_text_artifact(p,"column-stats","\n".join(lines)+"\n","CSV column statistics")
+
+
+def csv_normalize_headers(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    used=set()
+    headers=[]
+    for index,value in enumerate(rows[0]):
+        words=_case_words(value.strip())
+        base="_".join(word.casefold() for word in words) or "column_"+str(index+1)
+        name=base
+        suffix=2
+        while name in used:
+            name=base+"_"+str(suffix)
+            suffix+=1
+        used.add(name)
+        headers.append(name)
+    rows[0]=headers
+    stream=io.StringIO(newline="")
+    csv.writer(stream,lineterminator="\n").writerows(rows)
+    return _write_text_artifact_ext(p,"normalized-headers",".csv",stream.getvalue(),"CSV header normalization",str(len(headers))+" header(s)")
+
+
+def csv_to_jsonl(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    headers=[]
+    used=set()
+    for index,value in enumerate(rows[0]):
+        base=value.strip() or "column_"+str(index+1)
+        name=base
+        suffix=2
+        while name in used:
+            name=base+"_"+str(suffix)
+            suffix+=1
+        used.add(name)
+        headers.append(name)
+    if len(headers)>200 or len(rows)>100_001: raise RuntimeError("CSV-to-JSONL is limited to 100,000 rows and 200 columns.")
+    records=[dict(zip(headers,row)) for row in rows[1:]]
+    output="\n".join(json.dumps(record,ensure_ascii=False,separators=(",",":")) for record in records)
+    if records: output+="\n"
+    return _write_text_artifact_ext(p,"records",".jsonl",output,"CSV to JSONL",str(len(records))+" record(s)")
+
+
+def jsonl_to_csv(p):
+    raw=_read_text_source(p)
+    records=[]
+    for line_number,line in enumerate(raw.splitlines(),1):
+        if not line.strip(): continue
+        try: value=_load_json_reject_duplicates(line)
+        except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSONL at line "+str(line_number)+": "+str(exc)) from exc
+        if not isinstance(value,dict): raise RuntimeError("JSONL to CSV requires every record to be an object.")
+        records.append(value)
+        if len(records)>100_000: raise RuntimeError("JSONL-to-CSV exceeds 100,000 records.")
+    headers=[]
+    seen=set()
+    for record in records:
+        for key in record:
+            if key not in seen: seen.add(key); headers.append(key)
+    import io
+    stream=io.StringIO(newline="")
+    writer=csv.writer(stream,lineterminator="\n")
+    writer.writerow(headers)
+    for record in records:
+        writer.writerow([json.dumps(record.get(key),ensure_ascii=False) if isinstance(record.get(key),(dict,list)) else ("" if record.get(key) is None else record.get(key)) for key in headers])
+    return _write_text_artifact_ext(p,"records",".csv",stream.getvalue(),"JSONL to CSV",str(len(records))+" record(s)")
+
+
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
     lines=[]
