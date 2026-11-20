@@ -838,7 +838,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertIn("2 nhánh văn bản",result["summary"])
 
         binary=self.input_dir/"binary.txt"
-        binary.write_bytes(b"text\\x00payload")
+        binary.write_bytes(b"text"+bytes([0])+b"payload")
         with self.assertRaisesRegex(RuntimeError,"binary-like input"):
             runner.text_join([first,binary])
 
@@ -889,7 +889,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         clean={"id":"clean","toolId":"text-clean","dependsOn":["source"]}
         stats={"id":"stats","toolId":"text-stats","dependsOn":["clean"]}
         unique={"id":"unique","toolId":"text-deduplicate","dependsOn":["clean"]}
-        with self.assertRaisesRegex(RuntimeError,"only text-join"):
+        with self.assertRaisesRegex(RuntimeError,"only one parent"):
             runner.validate_dag({"toolId":"pdf-text","workflowDag":[
                 root,clean,stats,unique,
                 {"id":"merged","toolId":"text-clean","dependsOn":["stats","unique"]},
