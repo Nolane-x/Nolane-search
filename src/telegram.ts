@@ -99,6 +99,7 @@ export function buildHomeKeyboard(webAppUrl = "https://nolane-search.nolane-file
     [{ text: "🐙 GitHub", callback_data: "ui:mode:github" }, { text: "📖 Wikipedia", callback_data: "ui:mode:wiki" }],
     [{ text: "🔬 Nghiên cứu", callback_data: "ui:mode:research" }, { text: "🗂 Website riêng", callback_data: "ui:mode:local" }],
     [{ text: "🌐 Mở Web Workspace", url: webAppUrl }],
+    [{ text: "🧰 Tool Center", callback_data: "tc:home" }],
     [{ text: "📊 Trạng thái", callback_data: "ui:status" }, { text: "❔ Hướng dẫn", callback_data: "ui:help" }],
   ] };
 }
