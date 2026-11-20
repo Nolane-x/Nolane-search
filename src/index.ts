@@ -1481,6 +1481,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<b>Nolane Tool Job</b>",
       "ID: <code>" + htmlEscape(job.id) + "</code>",
       "Trạng thái: " + state + " · lần chạy " + (job.attempt || 1),
+      "Tiến trình: " + (job.progress?.completed ?? job.trace?.filter(step => step.status === "completed").length ?? 0) + "/" + (job.progress?.total ?? (job.workflowDag?.length || steps.length)),
+      ...(job.progress?.currentToolIds.length ? ["Đang chạy: " + job.progress.currentToolIds.map(id => getTool(id)?.name || id).join(", ")] : []),
       "Tệp: " + htmlEscape(job.fileName),
       (job.workflowDag
         ? "DAG:\n" + htmlEscape(job.workflowDag.map(node => node.id + " = " + (getTool(node.toolId)?.name || node.toolId) + " ← " + (node.dependsOn.join(",") || "input")).join("\n"))
