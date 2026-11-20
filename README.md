@@ -36,7 +36,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Personal memory | /remember, /memories, /forget | Explicit owner-controlled memories shared by Telegram and Web AI chat |
 | Status | /status | Provider configuration and compact index counters |
-| Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | 94 file processors, interactive Telegram category/detail/use flow, per-step trace and failed-job retry on ephemeral GitHub Actions runners |
+| Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | 102 file processors, interactive Telegram Tool Center and live Job Center checkpoints, per-step trace and failed-job retry on ephemeral GitHub Actions runners |
 | Workflow Intelligence | /workflow_plan, /workflow_plan_save, /workflow_plan_discard | AI designs validated pipelines and parallel DAGs with controlled text fan-in; preview, save and execution are separate |
 
 
@@ -82,7 +82,7 @@ No license has been selected. Do not assume this repository grants rights to reu
 
 ### AI Agent and file workflows
 
-Telegram `/ai` and the authenticated Web Workspace chat use a bounded function-calling agent for web search, safe public-page reading, Nolane tool discovery, text/data processing and SHA-256 fingerprints. `/ai_file <request>` lets the model plan a validated chain of distinct compatible processors from the full 94-tool catalog, re-validates the selected file type in the Worker, dispatches the job to an isolated GitHub Actions runner, and asks AI to synthesize the actual processor output. See [`docs/NOLANE-TOOLS.md`](docs/NOLANE-TOOLS.md) for limits and safeguards.
+Telegram `/ai` and the authenticated Web Workspace chat use a bounded function-calling agent for web search, safe public-page reading, Nolane tool discovery, text/data processing and SHA-256 fingerprints. `/ai_file <request>` lets the model plan a validated chain of distinct compatible processors from the full 102-tool catalog, re-validates the selected file type in the Worker, dispatches the job to an isolated GitHub Actions runner, and asks AI to synthesize the actual processor output. See [`docs/NOLANE-TOOLS.md`](docs/NOLANE-TOOLS.md) for limits and safeguards.
 
 
 ### AI file orchestration
