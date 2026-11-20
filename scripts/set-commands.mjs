@@ -26,6 +26,7 @@ const commands = [
   { command: "wiki", description: "Tra cứu Wikipedia Anh/Việt" },
   { command: "web", description: "Mở giao diện tìm kiếm và chat" },
   { command: "ai", description: "Hỏi AI có thể tự gọi web và các công cụ" },
+  { command: "translate", description: "Dịch văn bản sang ngôn ngữ khác bằng AI Router" },
   { command: "ai_file", description: "Mở batch xử lý liên tục bằng AI" },
   { command: "ai_file_done", description: "Đóng batch AI File hiện tại" },
   { command: "remember", description: "Lưu trí nhớ cá nhân" },
