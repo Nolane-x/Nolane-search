@@ -129,6 +129,7 @@ describe("Nolane Tools registry", () => {
     expect(validateToolPipelineDefinition([
       { toolId: "text-stats" }, { toolId: "text-join" },
     ]).ok).toBe(false);
+    expect(validateToolPipelineDefinition([{ toolId: "text-join" }]).ok).toBe(false);
   });
 
   it("validates branching DAGs, topological dependencies and file-compatible roots", () => {
