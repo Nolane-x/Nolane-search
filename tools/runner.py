@@ -1515,10 +1515,9 @@ def json_unflatten(p):
                         raise RuntimeError("Conflicting JSON Pointer paths.")
                     current[segment]=leaf
                 else:
-                    existing=current.get(segment)
-                    if existing is None:
-                        existing={}
-                        current[segment]=existing
+                    if segment not in current:
+                        current[segment]={}
+                    existing=current[segment]
                     if not isinstance(existing,dict): raise RuntimeError("Conflicting JSON Pointer paths.")
                     current=existing
     output=json.dumps(result,ensure_ascii=False,indent=2)
