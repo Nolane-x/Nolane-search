@@ -7,7 +7,7 @@ const commands = [
   { command: "tools", description: "Mở Tool Center với danh mục và nút chọn" },
   { command: "tool_search", description: "Tìm tool theo tên, mô tả hoặc định dạng" },
   { command: "tool", description: "Chọn công cụ xử lý file gửi tiếp theo" },
-  { command: "tool_jobs", description: "Xem lịch sử công cụ đã chạy" },
+  { command: "tool_jobs", description: "Job Center: tiến trình, trace và retry" },
   { command: "tool_job", description: "Xem trace chi tiết một lần chạy" },
   { command: "tool_retry", description: "Chạy lại tool job thất bại từ file gốc" },
   { command: "workflow_save", description: "Lưu pipeline hoặc DAG Nolane Tools" },
