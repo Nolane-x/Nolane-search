@@ -2839,7 +2839,7 @@ def repo_config_audit(p):
         ("Package manifest",bool(names.intersection({"package.json","pyproject.toml","requirements.txt","cargo.toml","go.mod","composer.json"}))),
         ("Dependency lockfile",bool(names.intersection({"package-lock.json","pnpm-lock.yaml","yarn.lock","poetry.lock","uv.lock","cargo.lock","go.sum","composer.lock"}))),
         ("Automated tests",any("/test" in path or "/tests/" in path or Path(path).name.startswith(("test_","test.")) for path in paths)),
-        ("CI workflow",any(path.startswith(".github/workflows/") for path in paths)),
+        ("CI workflow",any(path.startswith(".github/workflows/") or "/.github/workflows/" in path for path in paths)),
         ("Container build",any(Path(path).name.casefold() in {"dockerfile","docker-compose.yml","compose.yaml","compose.yml"} for path in paths)),
         ("Lint / static-analysis config",bool(names.intersection({".eslintrc",".eslintrc.json","eslint.config.js","ruff.toml",".pre-commit-config.yaml","mypy.ini","tsconfig.json"}))),
         ("Environment example",any(Path(path).name.casefold() in {".env.example",".env.sample","example.env"} for path in paths)),
