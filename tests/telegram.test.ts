@@ -45,7 +45,7 @@ describe("Telegram Tool Center UI", () => {
   it("shows every active category and navigates into paginated tool listings", () => {
     const home = formatToolCenterHome(TOOL_CATALOG, true);
     expect(home).toContain("94 processor");
-    expect(home).toContain("Lập trình & văn bản");
+    expect(home).toContain("Lập trình &amp; văn bản");
     const keyboard = buildToolCenterKeyboard(TOOL_CATALOG);
     const callbacks = keyboard.inline_keyboard.flat().map(button => button.callback_data).filter(Boolean) as string[];
     expect(callbacks).toContain("tc:developer");
