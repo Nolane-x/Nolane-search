@@ -122,7 +122,7 @@ describe("Workflow Intelligence planner", () => {
         { id: "a", toolId: "video-audio", dependsOn: [] },
         { id: "b", toolId: "audio-transcribe", dependsOn: ["a", "c"] },
       ],
-    })).toThrow("tối đa một node cha");
+    })).toThrow("chỉ được nhận một node cha");
   });
 
   it("treats prompt-injection text as quoted goal data", async () => {
