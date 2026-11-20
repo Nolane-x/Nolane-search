@@ -25,8 +25,17 @@ function decodePath(value: string): string | null {
 /** Accepts only canonical public GitHub repository, branch and commit URLs. */
 export function parseGitHubRepositoryUrl(raw: string): GitHubRepositorySource | null {
   if (typeof raw !== "string" || raw.length > 600) return null;
+  const trimmed = raw.trim();
+  // Validate raw path segments before URL() normalizes encoded or literal dot segments.
+  const rawPath = trimmed.match(/^https:\/\/github\.com(?::443)?\/([^?#]*)$/i);
+  if (!rawPath) return null;
+  const rawSegments = rawPath[1]!.replace(/\/$/, "").split("/");
+  if (rawSegments.some(segment => {
+    const decoded = decodePath(segment);
+    return decoded === null || decoded === "." || decoded === ".." || decoded.includes("\\");
+  })) return null;
   let url: URL;
-  try { url = new URL(raw.trim()); } catch { return null; }
+  try { url = new URL(trimmed); } catch { return null; }
   if (url.protocol !== "https:" || url.hostname !== "github.com" ||
       url.port || url.username || url.password || url.search || url.hash) return null;
   const rawParts = url.pathname.split("/").filter(Boolean);
