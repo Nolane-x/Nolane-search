@@ -26,6 +26,8 @@ RUNNERS = {
     "json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join",
     "markdown-outline","markdown-links","text-redact","text-extract","code-imports","code-todos","code-secret-scan","log-timeline",
     "repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates","repo-intelligence","repo-security-audit","repo-supply-chain",
+    "text-translate", "language-detect", "text-uppercase", "text-lowercase", "text-title-case", "text-sort-lines", "text-reverse-lines", "text-number-lines", "text-remove-blank-lines", "text-wrap", "text-trim-lines", "text-extract-emails", "text-extract-urls", "text-extract-hashtags", "text-to-base64", "base64-to-text", "url-encode", "url-decode", "json-minify", "json-sort-keys"
+
 }
 
 PIPELINE_TRANSITIONS = {
@@ -102,6 +104,26 @@ PIPELINE_TRANSITIONS = {
     "repo-duplicates": {"csv-profile","csv-clean","csv-to-xlsx","csv-to-json"},
     "repo-security-audit": {"archive-inspect","archive-safe-extract","archive-manifest"},
     "repo-supply-chain": {"archive-inspect","archive-safe-extract","archive-manifest"},
+    "text-translate": {"text-clean","text-stats","text-deduplicate"},
+    "language-detect": {"text-clean","text-stats"},
+    "text-uppercase": {"text-clean","text-stats","text-deduplicate"},
+    "text-lowercase": {"text-clean","text-stats","text-deduplicate"},
+    "text-title-case": {"text-clean","text-stats","text-deduplicate"},
+    "text-sort-lines": {"text-clean","text-stats","text-deduplicate"},
+    "text-reverse-lines": {"text-clean","text-stats"},
+    "text-number-lines": {"text-clean","text-stats"},
+    "text-remove-blank-lines": {"text-clean","text-stats","text-deduplicate"},
+    "text-wrap": {"text-clean","text-stats"},
+    "text-trim-lines": {"text-clean","text-stats","text-deduplicate"},
+    "text-extract-emails": {"text-deduplicate","text-stats"},
+    "text-extract-urls": {"text-deduplicate","text-stats"},
+    "text-extract-hashtags": {"text-deduplicate","text-stats"},
+    "text-to-base64": {"base64-to-text"},
+    "base64-to-text": {"text-clean","text-stats"},
+    "url-encode": {"url-decode"},
+    "url-decode": {"text-clean","text-stats"},
+    "json-minify": {"json-format","json-schema","json-to-csv"},
+    "json-sort-keys": {"json-format","json-schema","json-to-csv"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
@@ -532,7 +554,7 @@ def text_extract_emails(p):
 
 def text_extract_urls(p):
     raw=_read_text_source(p)
-    values=_extract_unique_matches(raw,r"https?://[^\s<>""']+",").,;:!?)]}")
+    values=_extract_unique_matches(raw,r"https?://[^\s<>\"']+",").,;:!?)]}")
     return _write_text_artifact(p,"urls","\n".join(values)+("\n" if values else ""),"URL extraction",f"{len(values):,} unique URLs")
 
 
@@ -4095,6 +4117,15 @@ TOOLS={
  "repo-inventory":repo_inventory,"repo-dependencies":repo_dependencies,"repo-license-report":repo_license_report,"repo-secret-scan":repo_secret_scan,
  "repo-todo-scan":repo_todo_scan,"repo-code-stats":repo_code_stats,"repo-config-audit":repo_config_audit,"repo-duplicates":repo_duplicates,"repo-intelligence":repo_intelligence,
  "repo-security-audit":repo_security_audit,"repo-supply-chain":repo_supply_chain,
+
+ "text-translate":text_translate,"language-detect":language_detect,
+ "text-uppercase":text_uppercase,"text-lowercase":text_lowercase,"text-title-case":text_title_case,
+ "text-sort-lines":text_sort_lines,"text-reverse-lines":text_reverse_lines,"text-number-lines":text_number_lines,
+ "text-remove-blank-lines":text_remove_blank_lines,"text-wrap":text_wrap,"text-trim-lines":text_trim_lines,
+ "text-extract-emails":text_extract_emails,"text-extract-urls":text_extract_urls,"text-extract-hashtags":text_extract_hashtags,
+ "text-to-base64":text_to_base64,"base64-to-text":base64_to_text,"url-encode":url_encode_text,"url-decode":url_decode_text,
+ "json-minify":json_minify,"json-sort-keys":json_sort_keys,
+}
 }
 
 
