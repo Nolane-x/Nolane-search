@@ -819,7 +819,7 @@ async function handleToolCenterCallback(env: Env, callback: TelegramCallbackQuer
     await handleCommand(env, message.chat.id, callback.from.id, "/workflows");
     return;
   }
-  const page = data.match(/^tp:(image|document|audio-video|data|developer|utility):(\d{1,2})$/);
+  const page = data.match(/^tp:(image|document|audio-video|data|developer|repository|utility):(\d{1,2})$/);
   if (page) {
     const category = page[1] as ToolCategory;
     await editTelegramDashboard(env, message.chat.id, message.message_id,
