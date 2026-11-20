@@ -316,7 +316,12 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     const sourceDelimiter=toolId==="csv-to-tsv"?",":"\t";
     const targetDelimiter=toolId==="csv-to-tsv"?"\t":",";
     const rows=csvRows(content,sourceDelimiter);
-    return rows.map(row=>row.map(value=>csvEscape(value).replace(/\t/g," ")).join(targetDelimiter)).join("\n");
+    const encodeTsv=(value:string)=>{
+      let text=value.replace(/\t/g," ");
+      if(/^[\s]*[=+@-]/.test(text)) text="'"+text;
+      return /["\t\r\n]/.test(text)?'"'+text.replace(/"/g,'""')+'"':text;
+    };
+    return rows.map(row=>row.map(value=>targetDelimiter==="\t"?encodeTsv(value):csvEscape(value)).join(targetDelimiter)).join("\n");
   }
   if (toolId === "csv-to-markdown") {
     const rows=csvRows(content);
