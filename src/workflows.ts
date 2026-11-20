@@ -20,8 +20,30 @@ export interface PendingToolWorkflow {
   workflowId: string;
 }
 
+export interface ToolWorkflowPlan {
+  mode: "single" | "pipeline" | "dag";
+  summary: string;
+  confidence: number;
+  assumptions: string[];
+  warnings: string[];
+  steps: ToolPipelineStep[];
+  dag?: ToolDagNode[];
+  workload: { nodeCount: number; criticalPathLength: number; maxParallelism: number };
+}
+
+export interface PendingToolWorkflowPlan {
+  id: string;
+  userId: number;
+  chatId: number;
+  goal: string;
+  plan: ToolWorkflowPlan;
+  createdAt: number;
+  expiresAt: number;
+}
+
 const WORKFLOW_PREFIX = "tool-workflow:";
 const PENDING_PREFIX = "tool-workflow-pending:";
+const PLAN_PREFIX = "tool-workflow-plan:";
 const WORKFLOW_EXPIRES_AT = Number.MAX_SAFE_INTEGER;
 const PENDING_TTL_MS = 15 * 60 * 1000;
 
@@ -31,6 +53,10 @@ function workflowKey(userId: number, id: string): string {
 
 function pendingKey(userId: number, chatId: number): string {
   return PENDING_PREFIX + userId + ":" + chatId;
+}
+
+function planKey(userId: number, chatId: number, id: string): string {
+  return PLAN_PREFIX + userId + ":" + chatId + ":" + id;
 }
 
 function normalizeWorkflowName(value: string): string {
@@ -186,4 +212,76 @@ export async function getPendingToolWorkflow(
 export async function clearPendingToolWorkflow(env: Env, userId: number, chatId: number): Promise<void> {
   await env.DB.prepare("DELETE FROM search_cache WHERE cache_key = ?")
     .bind(pendingKey(userId, chatId)).run();
+}
+
+export async function storeToolWorkflowPlan(
+  env: Env,
+  userId: number,
+  chatId: number,
+  goal: string,
+  plan: ToolWorkflowPlan,
+): Promise<PendingToolWorkflowPlan> {
+  if (goal.trim().length < 6 || goal.length > 1_200) throw new Error("Mục tiêu workflow không hợp lệ.");
+  if (!Number.isSafeInteger(userId) || !Number.isSafeInteger(chatId) || chatId !== userId) {
+    throw new Error("Bản nháp workflow chỉ được lưu cho tài khoản Telegram cá nhân.");
+  }
+  if (plan.mode === "dag") {
+    const validation = validateToolDagDefinition(plan.dag);
+    if (!validation.ok) throw new Error(validation.error);
+  } else {
+    const validation = validateToolPipelineDefinition(plan.steps);
+    if (!validation.ok) throw new Error(validation.error);
+    if (plan.mode === "single" && validation.steps.length !== 1) throw new Error("Bản nháp single chỉ được có một processor.");
+  }
+  const now = Date.now();
+  const pending: PendingToolWorkflowPlan = {
+    id: crypto.randomUUID().replace(/-/g, "").slice(0, 8),
+    userId, chatId, goal: goal.trim().slice(0, 1_200), plan,
+    createdAt: now, expiresAt: now + PENDING_TTL_MS,
+  };
+  await env.DB.prepare(
+    "INSERT INTO search_cache (cache_key, payload, expires_at, created_at) VALUES (?, ?, ?, ?)",
+  ).bind(planKey(userId, chatId, pending.id), JSON.stringify(pending), pending.expiresAt, now).run();
+  return pending;
+}
+
+export async function getPendingToolWorkflowPlan(
+  env: Env,
+  userId: number,
+  chatId: number,
+  id: string,
+): Promise<PendingToolWorkflowPlan | null> {
+  if (!/^[a-f0-9]{8}$/i.test(id)) return null;
+  const row = await env.DB.prepare(
+    "SELECT payload FROM search_cache WHERE cache_key = ? AND expires_at > ?",
+  ).bind(planKey(userId, chatId, id), Date.now()).first<{ payload: string }>();
+  if (!row?.payload) return null;
+  try {
+    const value = JSON.parse(row.payload) as Partial<PendingToolWorkflowPlan>;
+    if (value.id !== id || value.userId !== userId || value.chatId !== chatId ||
+        typeof value.goal !== "string" || typeof value.createdAt !== "number" ||
+        typeof value.expiresAt !== "number" || value.expiresAt <= Date.now() ||
+        !value.plan || typeof value.plan !== "object") return null;
+    const plan = value.plan;
+    if (!["single", "pipeline", "dag"].includes(plan.mode) ||
+        typeof plan.summary !== "string" || typeof plan.confidence !== "number" ||
+        !Array.isArray(plan.assumptions) || !Array.isArray(plan.warnings) ||
+        !Array.isArray(plan.steps) || !plan.workload || typeof plan.workload !== "object") return null;
+    if (plan.mode === "dag") {
+      if (!validateToolDagDefinition(plan.dag).ok) return null;
+    } else if (!validateToolPipelineDefinition(plan.steps).ok ||
+        (plan.mode === "single" && plan.steps.length !== 1)) return null;
+    return value as PendingToolWorkflowPlan;
+  } catch { return null; }
+}
+
+export async function deletePendingToolWorkflowPlan(
+  env: Env,
+  userId: number,
+  chatId: number,
+  id: string,
+): Promise<void> {
+  if (!/^[a-f0-9]{8}$/i.test(id)) return;
+  await env.DB.prepare("DELETE FROM search_cache WHERE cache_key = ?")
+    .bind(planKey(userId, chatId, id)).run();
 }
