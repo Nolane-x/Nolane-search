@@ -1601,7 +1601,20 @@ def jsonl_to_csv(p):
     writer=csv.writer(stream,lineterminator="\n")
     writer.writerow(headers)
     for record in records:
-        writer.writerow([json.dumps(record.get(key),ensure_ascii=False) if isinstance(record.get(key),(dict,list)) else ("" if record.get(key) is None else record.get(key)) for key in headers])
+        cells=[]
+        for key in headers:
+            value=record.get(key)
+            if isinstance(value,(dict,list)):
+                cell=json.dumps(value,ensure_ascii=False)
+            elif value is None:
+                cell=""
+            else:
+                cell=str(value)
+                numeric_negative=bool(re.fullmatch(r"\s*-\d+(?:[.,]\d+)?\s*",cell))
+                if re.match(r"^\s*[=+@]",cell) or (re.match(r"^\s*-",cell) and not numeric_negative):
+                    cell="'"+cell
+            cells.append(cell)
+        writer.writerow(cells)
     return _write_text_artifact_ext(p,"records",".csv",stream.getvalue(),"JSONL to CSV",str(len(records))+" record(s)")
 
 
