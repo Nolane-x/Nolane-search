@@ -3390,9 +3390,12 @@ def repo_security_audit(p):
                     ("Workflow checks out contributor-controlled head code." if checks_out_head else ""))
 
             for line_no, line in enumerate(raw.splitlines(), 1):
-                uses = re.match(r"^\s*uses\s*:\s*([^\s#]+)", line)
+                uses = re.match(r"^\s*(?:-\s*)?uses\s*:\s*([^\s#]+)", line)
                 if uses:
-                    ref = uses.group(1).rsplit("@", 1)[-1] if "@" in uses.group(1) else ""
+                    action_ref = uses.group(1)
+                    if action_ref.startswith("./"):
+                        continue
+                    ref = action_ref.rsplit("@", 1)[-1] if "@" in action_ref else ""
                     immutable = bool(re.fullmatch(r"[a-f0-9]{40}", ref, re.I) or
                                      re.fullmatch(r"sha256:[a-f0-9]{64}", ref, re.I))
                     if not immutable:
