@@ -2511,7 +2511,7 @@ def text_redact_secrets(p):
 def text_extract_comment_lines(p):
     raw=_read_text_source(p)
     results=[]
-    patterns=(r"//",r"/\*",r"\*",r"\*/",r"--",r"#(?!\s)")
+    patterns=(r"//",r"/\*",r"\*",r"\*/",r"--",r"#")
     for line_number,line in enumerate(raw.splitlines(),1):
         stripped=line.lstrip()
         if any(re.match(r"^\s*"+pattern,line) for pattern in patterns):
