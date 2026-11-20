@@ -32,7 +32,8 @@ RUNNERS = {
     "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv",
     "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "html-sanitize", "xml-tree-report", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values",
     "text-sentence-case", "text-normalize-quotes", "text-normalize-dashes", "text-reverse-word-order", "text-extract-words", "text-extract-sentences", "text-dedupe-sentences", "text-remove-markdown-formatting", "text-markdown-toc", "text-markdown-code-blocks", "text-markdown-table-extract", "text-extract-numbered-lists", "text-join-hyphenated-lines", "text-strip-bom", "text-normalize-paragraph-spacing", "csv-schema-infer", "csv-duplicates-report", "csv-sample-rows", "json-array-stats", "json-canonicalize",
-    "text-extract-todo-comments", "text-extract-markdown-images", "text-strip-markdown-frontmatter", "text-markdown-to-plain", "text-sort-unique-words", "text-word-to-lines", "text-join-lines", "text-extract-domains", "text-extract-uuids", "text-extract-semver", "text-extract-ipv6", "text-redact-secrets", "text-extract-comment-lines", "text-tabs-to-spaces", "text-escape-regex", "text-unescape-regex", "json-merge-objects", "json-array-dedupe", "json-array-to-lines", "csv-trim-cells", "csv-remove-empty-columns", "csv-empty-cell-report"
+    "text-extract-todo-comments", "text-extract-markdown-images", "text-strip-markdown-frontmatter", "text-markdown-to-plain", "text-sort-unique-words", "text-word-to-lines", "text-join-lines", "text-extract-domains", "text-extract-uuids", "text-extract-semver", "text-extract-ipv6", "text-redact-secrets", "text-extract-comment-lines", "text-tabs-to-spaces", "text-escape-regex", "text-unescape-regex", "json-merge-objects", "json-array-dedupe", "json-array-to-lines", "csv-trim-cells", "csv-remove-empty-columns", "csv-empty-cell-report",
+    "text-sort-lines-natural", "text-extract-percentages", "text-extract-currencies", "text-extract-bracketed", "text-character-frequency", "text-extract-acronyms", "text-strip-diacritics", "text-hard-wrap", "text-ensure-final-newline", "text-rot13", "base64url-encode", "base64url-decode", "hex-encode-text", "hex-decode-text", "binary-encode-text", "binary-decode-text", "url-query-params", "json-deep-merge", "json-array-flatten", "markdown-table-to-csv"
 }
 
 PIPELINE_TRANSITIONS = {
@@ -251,6 +252,26 @@ PIPELINE_TRANSITIONS = {
     "csv-trim-cells": {"csv-profile","csv-clean","csv-schema-infer"},
     "csv-remove-empty-columns": {"csv-profile","csv-schema-infer","csv-clean"},
     "csv-empty-cell-report": {"csv-profile","csv-schema-infer"},
+    "text-sort-lines-natural": {"text-sort-lines","text-dedupe-lines","text-stats"},
+    "text-extract-percentages": {"text-deduplicate","text-stats"},
+    "text-extract-currencies": {"text-deduplicate","text-stats"},
+    "text-extract-bracketed": {"text-deduplicate","text-stats"},
+    "text-character-frequency": {"text-clean","text-stats"},
+    "text-extract-acronyms": {"text-deduplicate","text-stats"},
+    "text-strip-diacritics": {"text-clean","text-stats","text-slugify"},
+    "text-hard-wrap": {"text-clean","text-stats"},
+    "text-ensure-final-newline": {"text-clean","text-stats"},
+    "text-rot13": {"text-clean","text-stats"},
+    "base64url-encode": {"base64url-decode"},
+    "base64url-decode": {"text-clean","text-stats"},
+    "hex-encode-text": {"hex-decode-text"},
+    "hex-decode-text": {"text-clean","text-stats"},
+    "binary-encode-text": {"binary-decode-text"},
+    "binary-decode-text": {"text-clean","text-stats"},
+    "url-query-params": {"text-deduplicate","text-stats"},
+    "json-deep-merge": {"json-format","json-canonicalize","json-schema"},
+    "json-array-flatten": {"json-format","json-array-stats","json-array-dedupe"},
+    "markdown-table-to-csv": {"csv-profile","csv-clean","csv-to-jsonl","csv-to-xlsx"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
@@ -6344,6 +6365,14 @@ TOOLS={
  "text-tabs-to-spaces":text_tabs_to_spaces,"text-escape-regex":text_escape_regex,"text-unescape-regex":text_unescape_regex,
  "json-merge-objects":json_merge_objects,"json-array-dedupe":json_array_dedupe,"json-array-to-lines":json_array_to_lines,
  "csv-trim-cells":csv_trim_cells,"csv-remove-empty-columns":csv_remove_empty_columns,"csv-empty-cell-report":csv_empty_cell_report,
+ "text-sort-lines-natural":text_sort_lines_natural,"text-extract-percentages":text_extract_percentages,
+ "text-extract-currencies":text_extract_currencies,"text-extract-bracketed":text_extract_bracketed,
+ "text-character-frequency":text_character_frequency,"text-extract-acronyms":text_extract_acronyms,
+ "text-strip-diacritics":text_strip_diacritics,"text-hard-wrap":text_hard_wrap,"text-ensure-final-newline":text_ensure_final_newline,
+ "text-rot13":text_rot13,"base64url-encode":base64url_encode_text,"base64url-decode":base64url_decode_text,
+ "hex-encode-text":hex_encode_text,"hex-decode-text":hex_decode_text,"binary-encode-text":binary_encode_text,"binary-decode-text":binary_decode_text,
+ "url-query-params":url_query_params,"json-deep-merge":json_deep_merge,"json-array-flatten":json_array_flatten,
+ "markdown-table-to-csv":markdown_table_to_csv,
 }
 
 
