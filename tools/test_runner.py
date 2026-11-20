@@ -1118,6 +1118,25 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertFalse((self.root/"outside.txt").exists())
 
 
+    def test_pipeline_reports_bounded_live_progress_checkpoints(self):
+        source=self.write("notes.txt","A sample text file with enough content.\n")
+        job={
+            "id":"12345678-1234-1234-1234-123456789abc",
+            "toolId":"text-clean",
+            "pipeline":[{"toolId":"text-clean"},{"toolId":"text-stats"}],
+        }
+        with patch.object(runner,"callback") as callback:
+            runner.run_tool_pipeline(job,source,self.input_dir.resolve())
+        payloads=[call.args[1] for call in callback.call_args_list]
+        self.assertEqual([item["status"] for item in payloads],["progress"]*4)
+        self.assertEqual(payloads[0]["progress"],{"completed":0,"total":2,"currentToolIds":["text-clean"]})
+        self.assertEqual(payloads[1]["progress"]["completed"],1)
+        self.assertEqual(payloads[2]["progress"]["currentToolIds"],["text-stats"])
+        self.assertEqual(payloads[3]["progress"]["completed"],2)
+        self.assertEqual(payloads[3]["progress"]["currentToolIds"],[])
+
+
+
 
 if __name__ == "__main__":
     unittest.main()
