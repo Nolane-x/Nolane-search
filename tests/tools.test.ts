@@ -230,7 +230,7 @@ describe("Nolane Tools registry", () => {
     expect(isToolCompatible(getTool("html-extract-links")!,"text/html","page.html")).toBe(true);
     expect(validateToolPipeline({mimeType:"application/xml",fileName:"tree.xml"},[{toolId:"xml-tree-report"}]).ok).toBe(true);
     expect(isToolCompatible(getTool("xml-to-json")!,"application/xml","tree.xml")).toBe(true);
-    expect(validateToolPipeline({mimeType:"application/json",fileName:"value.json"},[{toolId:"json-escape-string"},{toolId:"json-unescape-string"}]).ok).toBe(true);
+    expect(validateToolPipeline(textFile,[{toolId:"json-escape-string"},{toolId:"json-unescape-string"}]).ok).toBe(true);
     expect(isToolCompatible(getTool("csv-unique-values")!,"text/csv","values.csv")).toBe(true);
 
   });
