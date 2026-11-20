@@ -2470,7 +2470,7 @@ def text_extract_semver(p):
 def text_extract_ipv6(p):
     import ipaddress
     raw=_read_text_source(p)
-    candidates=re.findall(r"(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![0-9A-Fa-f:])",raw)
+    candidates=re.findall(r"(?<![A-Za-z0-9:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![A-Za-z0-9:])",raw)
     values=[]
     for value in candidates:
         try:
