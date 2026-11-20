@@ -1118,6 +1118,94 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertFalse((self.root/"outside.txt").exists())
 
 
+    def test_github_source_ref_validation_and_archive_redirect_allowlist(self):
+        self.assertTrue(runner._github_ref("main"))
+        self.assertTrue(runner._github_ref("feature/new-ui"))
+        self.assertFalse(runner._github_ref("../private"))
+        self.assertFalse(runner._github_ref("feature\\escape"))
+        self.assertFalse(runner._github_ref("branch name"))
+        self.assertEqual(runner._github_identity("acme", "project"), "https://api.github.com/repos/acme/project")
+        with self.assertRaises(RuntimeError):
+            runner._github_identity("bad/owner", "project")
+
+        redirect = runner._GitHubArchiveRedirect()
+        with self.assertRaises(RuntimeError):
+            redirect.redirect_request(None, None, 302, "Found", {}, "https://evil.example/archive.zip")
+        with self.assertRaises(RuntimeError):
+            redirect.redirect_request(None, None, 302, "Found", {}, "http://codeload.github.com/acme/project/zip/main")
+        with self.assertRaises(RuntimeError):
+            redirect.redirect_request(None, None, 302, "Found", {}, "https://codeload.github.com:8443/acme/project/zip/main")
+
+    def test_repo_intelligence_packages_static_reports_and_module_graph(self):
+        import json as json_module
+        import zipfile
+
+        path = self.input_dir / "intelligence-project.zip"
+        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("project/README.md", "# Sample project\n")
+            archive.writestr("project/package.json", '{"name":"sample","dependencies":{"vitest":"^3.0.0"}}')
+            archive.writestr("project/src/main.py", "from src import helper\n")
+            archive.writestr("project/src/helper.py", "def run():\n    return 1\n")
+            archive.writestr("project/src/index.ts", 'import { run } from "./lib/run";\n')
+            archive.writestr("project/src/lib/run.ts", "export function run() { return 1; }\n")
+            archive.writestr("project/.github/workflows/ci.yml", "name: CI\n")
+            archive.writestr("project/.env.example", "TOKEN=your_token_here\n")
+
+        metadata_dir = self.root / "nolane-inputs"
+        metadata_dir.mkdir(exist_ok=True)
+        (metadata_dir / "github-source-metadata.json").write_text(json_module.dumps({
+            "repository": {
+                "full_name": "acme/project",
+                "html_url": "https://github.com/acme/project",
+                "default_branch": "main",
+                "analyzed_ref": "feature/demo",
+                "stars": 10,
+                "forks": 2,
+                "open_issues": 1,
+                "language": "Python",
+                "pushed_at": "2026-11-20T00:00:00Z",
+            },
+            "commits": [{
+                "sha": "0123456789abcdef",
+                "date": "2026-11-19T12:00:00Z",
+                "author": "Nolane",
+                "message": "Fix import graph",
+                "url": "https://github.com/acme/project/commit/0123456",
+            }],
+            "compare": {
+                "base": "main",
+                "head": "feature/demo",
+                "status": "ahead",
+                "ahead_by": 2,
+                "behind_by": 0,
+                "total_commits": 2,
+                "files": [{
+                    "filename": "src/main.py", "status": "modified",
+                    "additions": 5, "deletions": 1, "changes": 6,
+                }],
+            },
+        }, ensure_ascii=False), encoding="utf-8")
+
+        result = runner.repo_intelligence(path)
+        self.assertTrue(Path(result["output_path"]).is_file())
+        self.assertIn("2 local import edges", result["summary"])
+        with zipfile.ZipFile(result["output_path"]) as archive:
+            names = set(archive.namelist())
+            self.assertIn("report/repository-intelligence.md", names)
+            self.assertIn("architecture/module-graph.json", names)
+            self.assertIn("github/github-metadata.json", names)
+            self.assertIn("reports/secret-scan.txt", names)
+            self.assertIn("reports/dependencies.txt", names)
+            report = archive.read("report/repository-intelligence.md").decode("utf-8")
+            graph = json_module.loads(archive.read("architecture/module-graph.json"))
+            self.assertIn("acme/project", report)
+            self.assertIn("main → feature/demo", report)
+            self.assertIn("Fix import graph", report)
+            self.assertEqual(len(graph["edges"]), 2)
+            edge_pairs = {(edge["from"], edge["to"]) for edge in graph["edges"]}
+            self.assertIn(("project/src/main.py", "project/src/helper.py"), edge_pairs)
+            self.assertIn(("project/src/index.ts", "project/src/lib/run.ts"), edge_pairs)
+
     def test_pipeline_reports_bounded_live_progress_checkpoints(self):
         source=self.write("notes.txt","A sample text file with enough content.\n")
         job={
