@@ -743,13 +743,13 @@ class ToolRunnerUnitTests(unittest.TestCase):
             runner.text_translate(source)
 
     def test_text_slug_frequency_and_case_conversion_tools(self):
-        source=self.write("names.txt","Xin Chào Đặng\\nHello World\\nhello world")
+        source=self.write("names.txt","Xin Chào Đặng\nHello World\nhello world")
         slug=runner.text_slugify(source)
-        self.assertEqual(Path(slug["output_path"]).read_text(encoding="utf-8"),"xin-chao-dang\\nhello-world\\nhello-world")
+        self.assertEqual(Path(slug["output_path"]).read_text(encoding="utf-8"),"xin-chao-dang\nhello-world\nhello-world")
         frequency=runner.text_word_frequency(source)
         report=Path(frequency["output_path"]).read_text(encoding="utf-8")
-        self.assertIn("hello\\t2",report)
-        self.assertIn("world\\t2",report)
+        self.assertIn("hello\t2",report)
+        self.assertIn("world\t2",report)
         snake=runner.text_snake_case(source)
         self.assertIn("hello_world",Path(snake["output_path"]).read_text(encoding="utf-8"))
         kebab=runner.text_kebab_case(source)
@@ -782,11 +782,11 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual(jsonl_path.read_text(encoding="utf-8").splitlines(),['{"name":"An","score":7}','{"name":"Bình","score":8}'])
         array=runner.jsonl_to_json(jsonl_path)
         self.assertEqual(json.loads(Path(array["output_path"]).read_text(encoding="utf-8")),[{"name":"An","score":7},{"name":"Bình","score":8}])
-        bad=self.write("bad.jsonl",'{"ok":1}\\nnot-json')
+        bad=self.write("bad.jsonl",'{"ok":1}\nnot-json')
         with self.assertRaisesRegex(RuntimeError,"line 2"):
             runner.jsonl_to_json(bad)
 
-        csv_source=self.write("table.csv",'name,note\\nAn,"hello, world"\\nBình,good')
+        csv_source=self.write("table.csv",'name,note\nAn,"hello, world"\nBình,good')
         tsv=runner.csv_to_tsv(csv_source)
         tsv_path=Path(tsv["output_path"])
         self.assertTrue(tsv_path.name.endswith(".tsv"))
