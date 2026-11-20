@@ -1144,7 +1144,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("project/README.md", "# Sample project\n")
             archive.writestr("project/package.json", '{"name":"sample","dependencies":{"vitest":"^3.0.0"}}')
-            archive.writestr("project/src/main.py", "from src import helper\n")
+            archive.writestr("project/src/main.py", "from src.helper import run\n")
             archive.writestr("project/src/helper.py", "def run():\n    return 1\n")
             archive.writestr("project/src/index.ts", 'import { run } from "./lib/run";\n')
             archive.writestr("project/src/lib/run.ts", "export function run() { return 1; }\n")
