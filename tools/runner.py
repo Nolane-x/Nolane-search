@@ -1276,6 +1276,114 @@ def json_to_html_table(p):
     return _write_text_artifact_ext(p,"table",".html","".join(parts),"JSON to HTML table",str(len(value))+" row(s)")
 
 
+def text_pascal_case(p):
+    raw=_read_text_source(p)
+    output="\n".join("".join(word[:1].upper()+word[1:].lower() for word in _case_words(line)) for line in raw.splitlines())
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"pascal-case",output,"PascalCase conversion")
+
+
+def text_constant_case(p):
+    raw=_read_text_source(p)
+    output="\n".join("_".join(word.upper() for word in _case_words(line)) for line in raw.splitlines())
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"constant-case",output,"CONSTANT_CASE conversion")
+
+
+def text_dot_case(p):
+    raw=_read_text_source(p)
+    output="\n".join(".".join(word.lower() for word in _case_words(line)) for line in raw.splitlines())
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"dot-case",output,"dot.case conversion")
+
+
+def text_initials(p):
+    raw=_read_text_source(p)
+    output="\n".join("".join(word[0].upper() for word in _case_words(line)) for line in raw.splitlines())
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"initials",output,"Initials extraction")
+
+
+def text_normalize_unicode(p):
+    raw=_read_text_source(p)
+    output=unicodedata.normalize("NFC",raw)
+    return _write_text_artifact(p,"unicode-nfc",output,"Unicode NFC normalization")
+
+
+def text_remove_control_chars(p):
+    raw=_read_text_source(p)
+    output="".join(char for char in raw if char in "\n\r\t" or unicodedata.category(char)!="Cc")
+    return _write_text_artifact(p,"no-control-chars",output,"Control-character removal")
+
+
+def text_remove_duplicate_words(p):
+    raw=_read_text_source(p)
+    seen=set()
+    def remove(match):
+        word=match.group(0)
+        key=word.casefold()
+        if key in seen: return ""
+        seen.add(key)
+        return word
+    output=re.sub(r"\b[^\W_]+\b",remove,raw,flags=re.UNICODE)
+    output=re.sub(r"[ \t]{2,}"," ",output)
+    return _write_text_artifact(p,"unique-words",output,"Duplicate-word removal",str(len(seen))+" unique words retained")
+
+
+def text_extract_markdown_links(p):
+    raw=_read_text_source(p)
+    values=[]
+    for match in re.finditer(r"(?<!!)\[([^\]\n]+)\]\(([^)\s]+)(?:\s+[\x22\x27]([^\x22\x27]*)[\x22\x27])?\)",raw):
+        label,url,title=match.groups()
+        values.append(json.dumps({"text":label,"url":url,"title":title or ""},ensure_ascii=False))
+    output="\n".join(_ordered_unique(values))
+    return _write_text_artifact(p,"markdown-links",output+("\n" if output else ""),"Markdown link extraction",str(len(values))+" link(s)")
+
+
+def text_extract_markdown_headings(p):
+    raw=_read_text_source(p)
+    values=[]
+    in_fence=False
+    fence=chr(96)*3
+    for line in raw.splitlines():
+        if line.lstrip().startswith((fence,"~~~")):
+            in_fence=not in_fence
+            continue
+        if in_fence: continue
+        match=re.match(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$",line)
+        if match:
+            level=len(match.group(1))
+            title=re.sub(r"\s+#+\s*$","",match.group(2)).strip()
+            values.append(json.dumps({"level":level,"text":title},ensure_ascii=False))
+    output="\n".join(values)
+    return _write_text_artifact(p,"markdown-headings",output+("\n" if output else ""),"Markdown heading extraction",str(len(values))+" heading(s)")
+
+
+def text_extract_quotes(p):
+    raw=_read_text_source(p)
+    pattern=r"[\x22]([^\x22\n]{1,2000})[\x22]|[\x27]([^\x27\n]{1,2000})[\x27]|“([^”\n]{1,2000})”|‘([^’\n]{1,2000})’|«([^»\n]{1,2000})»"
+    values=[]
+    for match in re.finditer(pattern,raw):
+        value=next((group for group in match.groups() if group is not None),"").strip()
+        if value: values.append(value)
+    output="\n".join(_ordered_unique(values))
+    return _write_text_artifact(p,"quoted-text",output+("\n" if output else ""),"Quoted-text extraction",str(len(values))+" quote(s)")
+
+
+def text_paragraph_report(p):
+    raw=_read_text_source(p)
+    paragraphs=[part.strip() for part in re.split(r"\n\s*\n",raw) if part.strip()]
+    words=[len(re.findall(r"[^\W_]+(?:['\u2019][^\W_]+)?",part,flags=re.UNICODE)) for part in paragraphs]
+    report=[
+        "Paragraph statistics",
+        "Paragraphs: "+str(len(paragraphs)),
+        "Words: "+str(sum(words)),
+        "Average words per paragraph: "+(f"{sum(words)/len(words):.2f}" if words else "0"),
+        "Longest paragraph characters: "+str(max((len(part) for part in paragraphs),default=0)),
+    ]
+    return _write_text_artifact(p,"paragraph-report","\n".join(report)+"\n","Paragraph report")
+
+
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
     lines=[]
