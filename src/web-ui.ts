@@ -247,6 +247,17 @@ async function refreshToolJobs(){
    var title=document.createElement('strong');text(title,(job.toolId||'tool')+' · '+(job.status||'unknown').toUpperCase());card.appendChild(title);
    var file=document.createElement('span');file.className='mini';text(file,job.fileName||'');card.appendChild(file);
    var id=document.createElement('span');id.className='mini';text(id,job.id||'');card.appendChild(id);
+   if(job.progress){
+    var progress=document.createElement('span');progress.className='mini';
+    var current=(job.progress.currentToolIds||[]).join(', ');
+    text(progress,'Tiến trình: '+(job.progress.completed||0)+'/'+(job.progress.total||0)+(current?' · Đang chạy: '+current:''));
+    card.appendChild(progress);
+   }
+   if(Array.isArray(job.trace)&&job.trace.length){
+    var trace=document.createElement('span');trace.className='mini';
+    text(trace,'Trace: '+job.trace.length+'/'+((job.pipeline||[]).length||1)+' bước');
+    card.appendChild(trace);
+   }
    if(job.resultSummary){var summary=document.createElement('p');summary.textContent=job.resultSummary;card.appendChild(summary)}
    if(job.error){var error=document.createElement('p');error.className='mini';error.textContent=job.error;card.appendChild(error)}
    box.appendChild(card);
