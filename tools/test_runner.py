@@ -676,7 +676,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual(set(catalog_ids),set(runner.TOOLS),"A catalog tool is missing a Python handler.")
 
         tool_docs=(repository_root/"docs"/"NOLANE-TOOLS.md").read_text(encoding="utf-8")
-        documented_ids=re.findall(r'`/tool ([a-z][a-z0-9-]*)`',tool_docs)
+        documented_ids=re.findall(r'/tool\s+([a-z][a-z0-9-]*)',tool_docs)
         self.assertEqual(set(catalog_ids),set(documented_ids),"Tool documentation and executable catalog differ.")
 
 
