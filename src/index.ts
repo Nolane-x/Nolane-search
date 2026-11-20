@@ -293,6 +293,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
       id: job.id, toolId: job.toolId, fileName: job.fileName, status: job.status,
       createdAt: job.createdAt, updatedAt: job.updatedAt,
       resultSummary: job.resultSummary || null, error: job.error || null,
+      progress: job.progress || null, trace: job.trace || [], pipeline: job.pipeline || [],
     })) });
   }
 
