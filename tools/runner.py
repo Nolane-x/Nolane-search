@@ -3454,8 +3454,8 @@ def repo_security_audit(p):
                 add("NOLANE-CTR-005", path, 1, "No USER instruction found; runtime may default to root.")
 
         if basename.endswith(".tf"):
-            if (re.search(r'(?i)\bAction\s*[:=]\s*["\']\*["\']', raw) and
-                    re.search(r'(?i)\bResource\s*[:=]\s*["\']\*["\']', raw)):
+            if (re.search(r'(?i)\bactions?\s*[:=]\s*(?:\[[^\]]*["\']\*["\'][^\]]*\]|["\']\*["\'])', raw) and
+                    re.search(r'(?i)\bresources?\s*[:=]\s*(?:\[[^\]]*["\']\*["\'][^\]]*\]|["\']\*["\'])', raw)):
                 add("NOLANE-IAC-001", path, line_for(raw, "*"))
             if re.search(r'(?i)\b(?:cidr_blocks|source_ranges)\s*=\s*\[[^\]]*["\']0\.0\.0\.0/0["\']', raw, re.S) and re.search(
                 r"(?is)(?:from_port|to_port|port)\s*=\s*(?:22|3389)", raw
