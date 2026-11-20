@@ -25,7 +25,7 @@ RUNNERS = {
     "audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean",
     "json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join",
     "markdown-outline","markdown-links","text-redact","text-extract","code-imports","code-todos","code-secret-scan","log-timeline",
-    "repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates",
+    "repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates","repo-intelligence",
 }
 
 PIPELINE_TRANSITIONS = {
@@ -2870,6 +2870,400 @@ def repo_duplicates(p):
     return {"summary":f"Đã hash {files} file ({total:,} bytes); tìm thấy {len(duplicate_groups)} nhóm trùng với {duplicate_files} file.","output_path":str(out)}
 
 
+def _github_identity(owner, repo):
+    if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", str(owner or "")):
+        raise RuntimeError("GitHub owner is invalid.")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", str(repo or "")):
+        raise RuntimeError("GitHub repository name is invalid.")
+    return "https://api.github.com/repos/" + owner + "/" + repo
+
+
+def _github_ref(value):
+    return (isinstance(value, str) and 1 <= len(value) <= 255 and
+            not value.startswith(("-", "/")) and not value.endswith("/") and
+            ".." not in value and "\\" not in value and
+            not re.search(r"[\x00-\x20\x7f~^:?*\[\]]", value) and
+            all(part not in ("", ".", "..") for part in value.split("/")))
+
+
+class _GitHubArchiveRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        parsed = urllib.parse.urlparse(newurl)
+        if parsed.scheme != "https" or parsed.hostname != "codeload.github.com" or parsed.port:
+            raise RuntimeError("GitHub archive redirect left the trusted codeload.github.com host.")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def download_github_source(job, output_path_file):
+    source = job.get("githubSource")
+    if not isinstance(source, dict):
+        raise RuntimeError("Missing GitHub repository source.")
+    owner = source.get("owner")
+    repo = source.get("repo")
+    requested_ref = source.get("ref", "")
+    api_root = _github_identity(owner, repo)
+    if requested_ref and not _github_ref(requested_ref):
+        raise RuntimeError("GitHub ref is invalid.")
+    has_base = "compareBase" in source
+    has_head = "compareHead" in source
+    if has_base != has_head or (has_base and (
+        not _github_ref(source.get("compareBase")) or
+        not _github_ref(source.get("compareHead")) or
+        source.get("compareBase") == source.get("compareHead")
+    )):
+        raise RuntimeError("GitHub compare refs are invalid.")
+
+    repository = api_json(api_root)
+    if not isinstance(repository, dict) or repository.get("private") is True:
+        raise RuntimeError("Chỉ hỗ trợ repository GitHub công khai.")
+    ref = requested_ref or repository.get("default_branch")
+    if not _github_ref(ref):
+        raise RuntimeError("Không xác định được default branch hoặc ref hợp lệ.")
+
+    archive_url = api_root + "/zipball/" + urllib.parse.quote(ref, safe="")
+    request = urllib.request.Request(archive_url, headers={
+        "accept": "application/vnd.github+json",
+        "user-agent": "Nolane-Repository-Intelligence/1.0",
+        "x-github-api-version": "2022-11-28",
+    })
+    root = Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "nolane-inputs"
+    root.mkdir(parents=True, exist_ok=True)
+    archive_path = root / "github-repository-source.zip"
+    opener = urllib.request.build_opener(_GitHubArchiveRedirect())
+    try:
+        with opener.open(request, timeout=90) as response:
+            final = urllib.parse.urlparse(response.geturl())
+            if final.scheme != "https" or final.hostname != "codeload.github.com" or final.port:
+                raise RuntimeError("GitHub archive download resolved to an untrusted host.")
+            declared = response.headers.get("Content-Length")
+            if declared and int(declared) > 100 * 1024 * 1024:
+                raise RuntimeError("GitHub repository archive exceeds the 100 MB download limit.")
+            written = 0
+            with archive_path.open("wb") as output:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    written += len(chunk)
+                    if written > 100 * 1024 * 1024:
+                        raise RuntimeError("GitHub repository archive exceeded the 100 MB download limit.")
+                    output.write(chunk)
+    except urllib.error.HTTPError as exc:
+        detail = exc.read(1000).decode("utf-8", "replace")
+        if exc.code == 404:
+            raise RuntimeError("Không tìm thấy repository/ref công khai; repository private hoặc ref không tồn tại cũng có thể trả về 404.") from exc
+        raise RuntimeError(f"GitHub archive HTTP {exc.code}: {detail}") from exc
+    if written <= 0 or not zipfile.is_zipfile(archive_path):
+        archive_path.unlink(missing_ok=True)
+        raise RuntimeError("GitHub không trả về một ZIP snapshot hợp lệ.")
+
+    try:
+        commits = api_json(api_root + "/commits?per_page=20&sha=" + urllib.parse.quote(ref, safe=""))
+        if not isinstance(commits, list):
+            commits = []
+    except Exception as exc:
+        commits = []
+        commits_error = str(exc)[:180]
+    else:
+        commits_error = ""
+
+    metadata = {
+        "repository": {
+            "full_name": repository.get("full_name") or owner + "/" + repo,
+            "html_url": repository.get("html_url") or "https://github.com/" + owner + "/" + repo,
+            "description": (repository.get("description") or "")[:500],
+            "default_branch": repository.get("default_branch") or "",
+            "analyzed_ref": ref,
+            "created_at": repository.get("created_at"),
+            "updated_at": repository.get("updated_at"),
+            "pushed_at": repository.get("pushed_at"),
+            "stars": repository.get("stargazers_count"),
+            "forks": repository.get("forks_count"),
+            "open_issues": repository.get("open_issues_count"),
+            "language": repository.get("language"),
+            "license": (repository.get("license") or {}).get("spdx_id") if isinstance(repository.get("license"), dict) else None,
+            "archived": repository.get("archived"),
+            "size_kb": repository.get("size"),
+        },
+        "commits": [],
+        "commits_error": commits_error,
+        "compare": None,
+        "archive_bytes": written,
+    }
+    for item in commits[:20]:
+        if not isinstance(item, dict):
+            continue
+        details = item.get("commit") or {}
+        author = details.get("author") or {}
+        metadata["commits"].append({
+            "sha": str(item.get("sha") or "")[:40],
+            "date": author.get("date"),
+            "author": str(author.get("name") or "")[:80],
+            "message": str(details.get("message") or "").splitlines()[0][:220],
+            "url": str(item.get("html_url") or "")[:300],
+        })
+
+    if has_base:
+        base = source["compareBase"]
+        head = source["compareHead"]
+        compare_url = api_root + "/compare/" + urllib.parse.quote(base, safe="") + "..." + urllib.parse.quote(head, safe="")
+        try:
+            compared = api_json(compare_url)
+            files = []
+            for item in (compared.get("files") or [])[:100]:
+                if not isinstance(item, dict):
+                    continue
+                files.append({
+                    "filename": str(item.get("filename") or "")[:300],
+                    "status": str(item.get("status") or "")[:30],
+                    "additions": int(item.get("additions") or 0),
+                    "deletions": int(item.get("deletions") or 0),
+                    "changes": int(item.get("changes") or 0),
+                })
+            metadata["compare"] = {
+                "base": base, "head": head, "status": compared.get("status"),
+                "ahead_by": compared.get("ahead_by"), "behind_by": compared.get("behind_by"),
+                "total_commits": compared.get("total_commits"), "files": files,
+                "files_truncated": len(compared.get("files") or []) > 100, "error": None,
+            }
+        except Exception as exc:
+            metadata["compare"] = {"base": base, "head": head, "error": str(exc)[:250], "files": []}
+
+    (root / "github-source-metadata.json").write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    Path(output_path_file).write_text(str(archive_path), encoding="utf-8")
+    print(f"Downloaded public GitHub snapshot: {owner}/{repo}@{ref} ({written:,} bytes)")
+
+
+def _repo_architecture_graph(p):
+    import ast
+    paths = set()
+    text_files = {}
+    for item in _repo_text_candidates(p):
+        path = item["path"]
+        if item.get("data") is not None and Path(path).suffix.lower() in _REPO_SOURCE_EXTENSIONS:
+            paths.add(path)
+            text_files[path] = item["data"]
+    edges = set()
+    parse_failures = 0
+    js_pattern = re.compile(r"""(?:\bfrom\s*|\bimport\s*|\brequire\s*\(\s*|\bimport\s*\(\s*)["']([^"']+)["']""")
+
+    def resolve_js(source, specifier):
+        if not specifier.startswith(("./", "../")):
+            return None
+        target = posixpath.normpath(posixpath.join(posixpath.dirname(source), specifier))
+        if target.startswith("../") or target in ("..", ".") or target.startswith("/"):
+            return None
+        candidates = [
+            target, target + ".js", target + ".jsx", target + ".ts", target + ".tsx",
+            target + ".mjs", target + ".cjs", target + ".vue", target + ".svelte",
+            target + ".py", target + "/index.js", target + "/index.ts",
+            target + "/index.tsx", target + "/__init__.py",
+        ]
+        return next((candidate for candidate in candidates if candidate in paths), None)
+
+    for source, raw in text_files.items():
+        suffix = Path(source).suffix.lower()
+        if suffix in (".py", ".pyw"):
+            try:
+                tree = ast.parse(raw[:2 * 1024 * 1024], filename=source)
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            module = alias.name.replace(".", "/")
+                            match = next((candidate for candidate in (module + ".py", module + "/__init__.py") if candidate in paths), None)
+                            if match:
+                                edges.add((source, match))
+                    elif isinstance(node, ast.ImportFrom):
+                        if node.level:
+                            parent = posixpath.dirname(source)
+                            base = posixpath.normpath(posixpath.join(parent, *([".."] * (node.level - 1)), (node.module or "").replace(".", "/")))
+                        else:
+                            base = (node.module or "").replace(".", "/")
+                        match = next((candidate for candidate in (base + ".py", base + "/__init__.py") if candidate in paths), None)
+                        if match:
+                            edges.add((source, match))
+            except (SyntaxError, ValueError, RecursionError):
+                parse_failures += 1
+        elif suffix in (".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".vue", ".svelte"):
+            for match in js_pattern.finditer(raw[:2 * 1024 * 1024]):
+                target = resolve_js(source, match.group(1))
+                if target:
+                    edges.add((source, target))
+
+    indegree = {path: 0 for path in paths}
+    outdegree = {path: 0 for path in paths}
+    for source, target in edges:
+        outdegree[source] = outdegree.get(source, 0) + 1
+        indegree[target] = indegree.get(target, 0) + 1
+    nodes = [
+        {"path": path, "imports": outdegree.get(path, 0), "imported_by": indegree.get(path, 0)}
+        for path in sorted(paths, key=lambda value: (-indegree.get(value, 0), -outdegree.get(value, 0), value))[:500]
+    ]
+    return {
+        "schema_version": 1,
+        "method": "Static import extraction; local imports only; no code execution.",
+        "source_files_considered": len(text_files),
+        "python_parse_failures": parse_failures,
+        "nodes": nodes,
+        "edges": [{"from": source, "to": target} for source, target in sorted(edges)[:5000]],
+        "edges_truncated": len(edges) > 5000,
+    }
+
+
+def repo_intelligence(p):
+    import collections
+    import zipfile
+    members = list(_repo_members(p))
+    source_items = list(_repo_text_candidates(p))
+    source_files = [
+        item for item in source_items
+        if item.get("data") is not None and Path(item["path"]).suffix.lower() in _REPO_SOURCE_EXTENSIONS
+    ]
+    graph = _repo_architecture_graph(p)
+    output_artifacts = []
+    processors = [
+        ("inventory", repo_inventory),
+        ("dependencies", repo_dependencies),
+        ("license", repo_license_report),
+        ("secret-scan", repo_secret_scan),
+        ("todo-scan", repo_todo_scan),
+        ("code-stats", repo_code_stats),
+        ("config-audit", repo_config_audit),
+        ("duplicates", repo_duplicates),
+    ]
+    summaries = {}
+    for name, processor in processors:
+        result = processor(p)
+        summaries[name] = str(result.get("summary", ""))[:500]
+        raw_output = result.get("output_path")
+        if raw_output:
+            artifact = Path(raw_output)
+            if artifact.is_file() and artifact.stat().st_size <= 8 * 1024 * 1024:
+                output_artifacts.append((name, artifact))
+
+    metadata_path = Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "nolane-inputs" / "github-source-metadata.json"
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
+    except Exception:
+        metadata = {}
+    repository = metadata.get("repository") if isinstance(metadata, dict) else {}
+    repository = repository if isinstance(repository, dict) else {}
+    commits = metadata.get("commits", []) if isinstance(metadata, dict) else []
+    commits = commits if isinstance(commits, list) else []
+    bug_terms = re.compile(r"\b(fix(?:es|ed)?|bug|hotfix|regression|crash|patch)\b", re.I)
+    bug_marked = [item for item in commits if isinstance(item, dict) and bug_terms.search(str(item.get("message") or ""))]
+
+    manifest_names = {"package.json", "pyproject.toml", "requirements.txt", "cargo.toml", "go.mod", "composer.json", "gemfile", "pom.xml", "build.gradle"}
+    lock_names = {"package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lockb", "bun.lock", "poetry.lock", "uv.lock", "cargo.lock", "go.sum", "composer.lock", "gemfile.lock", "gradle.lockfile"}
+    names = {Path(item["path"]).name.casefold() for item in members}
+    manifests = sorted(name for name in manifest_names if name in names)
+    lockfiles = sorted(name for name in lock_names if name in names)
+    directories = collections.Counter(item["path"].split("/", 1)[0] if "/" in item["path"] else "[root]" for item in members)
+    report = [
+        "# GitHub Repository Intelligence", "",
+        f"- Repository: {repository.get('full_name') or p.stem}",
+        f"- Source snapshot: {repository.get('html_url') or 'Uploaded ZIP archive'}",
+        f"- Analyzed ref: {repository.get('analyzed_ref') or 'ZIP snapshot'}",
+        f"- Downloaded archive: {p.stat().st_size:,} bytes",
+        f"- Safe archive entries: {len(members):,}",
+        f"- UTF-8 source/text files analyzed: {len(source_files):,}", "",
+        "## Repository profile",
+        f"- Description: {repository.get('description') or 'Not available'}",
+        f"- Default branch: {repository.get('default_branch') or 'Not available'}",
+        f"- Primary language reported by GitHub: {repository.get('language') or 'Not available'}",
+        f"- Stars / forks: {repository.get('stars', 'n/a')} / {repository.get('forks', 'n/a')}",
+        f"- Open issue count reported by GitHub: {repository.get('open_issues', 'n/a')}",
+        f"- Last pushed: {repository.get('pushed_at') or 'Not available'}",
+        f"- Declared SPDX license: {repository.get('license') or 'Not declared in repository metadata'}", "",
+        "## Architecture and module map",
+        f"- Source files considered: {graph['source_files_considered']:,}",
+        f"- Local import edges identified: {len(graph['edges']):,}",
+        f"- Python files that could not be parsed: {graph['python_parse_failures']:,}",
+        "- module-graph.json contains up to 500 source nodes and 5,000 local import edges.",
+        "- Static and heuristic extraction: Python AST plus relative JS/TS imports. Aliases, dynamic loading and cross-language calls may be missed.", "",
+        "## Dependency and supply-chain signals",
+        "- Manifest files detected: " + (", ".join(manifests) if manifests else "none detected"),
+        "- Lockfiles detected: " + (", ".join(lockfiles) if lockfiles else "none detected"),
+        "- Lockfiles indicate install reproducibility only. This runner does not install dependencies or query CVE/advisory databases.", "",
+        "## Static audit results",
+    ]
+    for name in ("inventory", "dependencies", "license", "secret-scan", "todo-scan", "code-stats", "config-audit", "duplicates"):
+        report.append("- " + name + ": " + summaries.get(name, "not available"))
+    report.extend([
+        "", "## Git history and change signals",
+        f"- Recent commits retrieved: {len(commits):,} (up to 20 on the analyzed ref)",
+        f"- Commit messages containing fix/bug/hotfix/regression/crash/patch markers: {len(bug_marked):,}",
+        "- Marker counts are search heuristics, not verified bug counts or defect rates.",
+    ])
+    for item in commits[:20]:
+        if not isinstance(item, dict):
+            continue
+        report.append(
+            "- " + str(item.get("sha") or "")[:8] + " · " +
+            str(item.get("date") or "unknown date")[:30] + " · " +
+            str(item.get("message") or "")[:180]
+        )
+    if metadata.get("commits_error"):
+        report.append("- Commit history unavailable: " + str(metadata["commits_error"])[:180])
+
+    compare = metadata.get("compare") if isinstance(metadata, dict) else None
+    if isinstance(compare, dict):
+        report.extend([
+            "", "## Branch and version comparison",
+            f"- Comparison: {compare.get('base', '?')} → {compare.get('head', '?')}",
+            f"- Status: {compare.get('status') or 'unavailable'} · ahead {compare.get('ahead_by', '?')} · behind {compare.get('behind_by', '?')}",
+            f"- Commits: {compare.get('total_commits', '?')} · changed files returned: {len(compare.get('files') or []):,}",
+        ])
+        for item in (compare.get("files") or [])[:80]:
+            report.append(
+                "- " + str(item.get("status", "?")) + " " + str(item.get("filename", "?"))[:240] +
+                " · +" + str(item.get("additions", 0)) + " / -" + str(item.get("deletions", 0))
+            )
+        if compare.get("files_truncated"):
+            report.append("- File list truncated to the first 100 entries.")
+        if compare.get("error"):
+            report.append("- Compare API error: " + str(compare["error"])[:180])
+
+    report.extend([
+        "", "## Maintenance signals",
+        "- Top-level roots: " + ", ".join(f"{name} ({count})" for name, count in directories.most_common(12)),
+        "- Review test coverage, CI behavior, permissions, secret handling and deployment configuration manually.",
+        "", "## Safety and interpretation",
+        "- Public GitHub archive only. Repository source is inspected as data; scripts, workflows and package installation hooks are never executed.",
+        "- Secret scan reports file path, line and finding type only. Secret values are withheld.",
+        "- TODO/FIXME and commit-message markers can contain false positives.",
+        "- This is static repository intelligence, not a penetration test, legal opinion, complete dependency vulnerability audit or correctness guarantee.",
+    ])
+    report_path = p.with_name(p.stem + "-intelligence-report.md")
+    report_path.write_text("\n".join(report) + "\n", encoding="utf-8")
+    graph_path = p.with_name(p.stem + "-module-graph.json")
+    graph_path.write_text(json.dumps(graph, ensure_ascii=False, indent=2), encoding="utf-8")
+    metadata_output = p.with_name(p.stem + "-github-metadata.json")
+    metadata_output.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    package = p.with_name(p.stem + "-intelligence.zip")
+    with zipfile.ZipFile(package, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=4) as archive:
+        archive.write(report_path, "report/repository-intelligence.md")
+        archive.write(graph_path, "architecture/module-graph.json")
+        archive.write(metadata_output, "github/github-metadata.json")
+        for name, path in output_artifacts:
+            archive.write(path, "reports/" + name + path.suffix.lower())
+    if package.stat().st_size > 45 * 1024 * 1024:
+        package.unlink(missing_ok=True)
+        raise RuntimeError("Repository Intelligence report package exceeds the 45 MB output limit.")
+    return {
+        "summary": (
+            f"GitHub Intelligence: {repository.get('full_name') or p.stem} · {len(members):,} files · "
+            f"{len(source_files):,} source/text files · {len(graph['edges']):,} local import edges · "
+            f"{len(commits):,} recent commits · {len(output_artifacts)} audit artifacts."
+        ),
+        "output_path": str(package),
+    }
+
+
+
+
 
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
@@ -2896,7 +3290,7 @@ TOOLS={
  "markdown-outline":markdown_outline,"markdown-links":markdown_links,"text-redact":text_redact,"text-extract":text_extract,
  "code-imports":code_imports,"code-todos":code_todos,"code-secret-scan":code_secret_scan,"log-timeline":log_timeline,
  "repo-inventory":repo_inventory,"repo-dependencies":repo_dependencies,"repo-license-report":repo_license_report,"repo-secret-scan":repo_secret_scan,
- "repo-todo-scan":repo_todo_scan,"repo-code-stats":repo_code_stats,"repo-config-audit":repo_config_audit,"repo-duplicates":repo_duplicates,
+ "repo-todo-scan":repo_todo_scan,"repo-code-stats":repo_code_stats,"repo-config-audit":repo_config_audit,"repo-duplicates":repo_duplicates,"repo-intelligence":repo_intelligence,
 }
 
 
@@ -3094,6 +3488,11 @@ def cmd_fetch(args):
 
 def cmd_download(args):
     job=load_job(Path(args.job_file))
+    if job.get("githubSource"):
+        if job.get("toolId")!="repo-intelligence":
+            raise RuntimeError("GitHub source is only allowed for repo-intelligence jobs.")
+        download_github_source(job,args.output)
+        return
     source=download_telegram(job["fileId"],job.get("fileName") or "upload.bin")
     Path(args.output).write_text(str(source),encoding="utf-8")
 
