@@ -2069,7 +2069,7 @@ def text_dedupe_sentences(p):
     seen=set()
     kept=[]
     for value in values:
-        key=value.casefold()
+        key=re.sub(r"[.!?。！？]+$","",value).strip().casefold()
         if key in seen: continue
         seen.add(key)
         kept.append(value)
@@ -2229,6 +2229,16 @@ def text_normalize_paragraph_spacing(p):
     return _write_text_artifact(p,"paragraph-spacing",output,"Paragraph spacing normalization")
 
 
+def self_valid_date(value,formats,datetime_module):
+    for fmt in formats:
+        try:
+            datetime_module.strptime(value,fmt)
+            return True
+        except ValueError:
+            pass
+    return False
+
+
 def csv_schema_infer(p):
     import io
     from datetime import datetime
@@ -2248,7 +2258,7 @@ def csv_schema_infer(p):
             if all(value.lower() in ("true","false","yes","no") for value in values): kind="boolean"
             elif all(re.fullmatch(r"[+-]?\d+",value) for value in values): kind="integer"
             elif all(re.fullmatch(r"[+-]?(?:\d+[.,]\d+|\d+[eE][+-]?\d+)",value) for value in values): kind="decimal"
-            elif all(any(_valid_date(value,fmt,datetime) for fmt in date_formats) for value in values): kind="date"
+            elif all(self_valid_date(value,date_formats,datetime) for value in values): kind="date"
             elif all(value.lower() in ("0","1") for value in values): kind="boolean"
             else: kind="text"
         lines.append(json.dumps({"column":header,"type":kind,"non_empty":len(values),"empty":len(body)-len(values),"unique":len(set(values))},ensure_ascii=False))
