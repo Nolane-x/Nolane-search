@@ -675,6 +675,23 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual(set(catalog_ids),runner.RUNNERS,"TypeScript catalog and Python runner allowlist differ.")
         self.assertEqual(set(catalog_ids),set(runner.TOOLS),"A catalog tool is missing a Python handler.")
 
+        transition_marker="export const TOOL_PIPELINE_TRANSITIONS"
+        self.assertIn(transition_marker,tools_source)
+        transition_block=tools_source.split(transition_marker,1)[1].split("\n};",1)[0]
+        ts_transitions={
+            previous:set(re.findall(r'"([a-z][a-z0-9-]*)"',targets))
+            for previous,targets in re.findall(r'"([a-z][a-z0-9-]*)":\s*\[([^\]]*)\]',transition_block)
+        }
+        self.assertEqual(ts_transitions,runner.PIPELINE_TRANSITIONS,"Worker and runner pipeline transition graphs differ.")
+        self.assertTrue(set(ts_transitions).issubset(runner.RUNNERS))
+        self.assertTrue(all(target in runner.RUNNERS for targets in ts_transitions.values() for target in targets))
+
+        multi_input_marker="export const TOOL_MULTI_INPUT_DAG_TOOLS"
+        self.assertIn(multi_input_marker,tools_source)
+        multi_input_block=tools_source.split(multi_input_marker,1)[1].split(";",1)[0]
+        ts_multi_input=set(re.findall(r'"([a-z][a-z0-9-]*)"',multi_input_block))
+        self.assertEqual(ts_multi_input,runner.MULTI_INPUT_TOOLS,"Worker and runner multi-input tool allowlists differ.")
+
         tool_docs=(repository_root/"docs"/"NOLANE-TOOLS.md").read_text(encoding="utf-8")
         documented_ids=re.findall(r'/tool\s+([a-z][a-z0-9-]*)',tool_docs)
         self.assertEqual(set(catalog_ids),set(documented_ids),"Tool documentation and executable catalog differ.")
