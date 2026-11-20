@@ -708,6 +708,254 @@ def text_translate(p, translate_callback=None):
     return _write_text_artifact(p,"translated",output,"AI translation",details)
 
 
+def text_slugify(p):
+    raw=_read_text_source(p)
+    lines=[]
+    for line in raw.splitlines():
+        normalized=unicodedata.normalize("NFKD",line.lower().replace("đ","d"))
+        ascii_text=normalized.encode("ascii","ignore").decode("ascii")
+        lines.append(re.sub(r"[^a-z0-9]+","-",ascii_text).strip("-"))
+    output="\n".join(lines)+("\n" if raw.endswith(("\n","\r")) else "")
+    return _write_text_artifact(p,"slugified",output,"Slug generation",str(len(lines))+" line(s)")
+
+
+def text_word_frequency(p):
+    from collections import Counter
+    raw=_read_text_source(p)
+    words=re.findall(r"[^\W_]+(?:['’][^\W_]+)?",raw.casefold(),flags=re.UNICODE)
+    counts=Counter(words)
+    lines=["Word frequency | "+str(len(words))+" total tokens | "+str(len(counts))+" unique words",""]
+    lines.extend(word+"\t"+str(count) for word,count in sorted(counts.items(),key=lambda item:(-item[1],item[0]))[:500])
+    return _write_text_artifact(p,"word-frequency","\n".join(lines)+"\n","Word frequency report",str(len(counts))+" unique words")
+
+
+def _ordered_unique(values):
+    result=[]
+    seen=set()
+    for value in values:
+        key=value.casefold()
+        if key not in seen:
+            seen.add(key)
+            result.append(value)
+    return result
+
+
+def text_extract_numbers(p):
+    raw=_read_text_source(p)
+    values=_ordered_unique(re.findall(r"(?<![\w.])[+-]?\d+(?:[.,]\d+)?(?!\w)",raw))
+    return _write_text_artifact(p,"numbers","\n".join(values)+("\n" if values else ""),"Number extraction",str(len(values))+" unique values")
+
+
+def text_extract_dates(p):
+    from datetime import datetime
+    raw=_read_text_source(p)
+    candidates=re.findall(r"(?<!\d)(?:(?:19|20)\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.](?:19|20)\d{2})(?!\d)",raw)
+    formats=("%Y-%m-%d","%Y/%m/%d","%Y.%m.%d","%d/%m/%Y","%d-%m-%Y","%d.%m.%Y","%m/%d/%Y")
+    valid=[]
+    for value in candidates:
+        for fmt in formats:
+            try:
+                datetime.strptime(value,fmt)
+                valid.append(value)
+                break
+            except ValueError:
+                continue
+    values=_ordered_unique(valid)
+    return _write_text_artifact(p,"dates","\n".join(values)+("\n" if values else ""),"Date extraction",str(len(values))+" unique valid calendar dates")
+
+
+def text_reverse_characters(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    output="\n".join(line[::-1] for line in lines)+("\n" if raw.endswith(("\n","\r")) else "")
+    return _write_text_artifact(p,"reversed-characters",output,"Character reversal",str(len(lines))+" line(s)")
+
+
+def _case_words(value):
+    return re.findall(r"[A-Za-z0-9À-ỹ]+",value,flags=re.UNICODE)
+
+
+def text_snake_case(p):
+    raw=_read_text_source(p)
+    output="\n".join("_".join(word.casefold() for word in _case_words(line)) for line in raw.splitlines())
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"snake-case",output,"Snake case conversion")
+
+
+def text_kebab_case(p):
+    raw=_read_text_source(p)
+    output="\n".join("-".join(word.casefold() for word in _case_words(line)) for line in raw.splitlines())
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"kebab-case",output,"Kebab case conversion")
+
+
+def text_camel_case(p):
+    raw=_read_text_source(p)
+    converted=[]
+    for line in raw.splitlines():
+        words=_case_words(line)
+        converted.append(words[0].casefold()+"".join(word[:1].upper()+word[1:].casefold() for word in words[1:]) if words else "")
+    output="\n".join(converted)+("\n" if raw.endswith(("\n","\r")) else "")
+    return _write_text_artifact(p,"camel-case",output,"Camel case conversion")
+
+
+def text_swap_case(p):
+    raw=_read_text_source(p)
+    return _write_text_artifact(p,"swap-case",raw.swapcase(),"Swap case conversion")
+
+
+def text_extract_ipv4(p):
+    import ipaddress
+    raw=_read_text_source(p)
+    candidates=re.findall(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])",raw)
+    valid=[]
+    for value in candidates:
+        try:
+            if ipaddress.ip_address(value).version==4: valid.append(value)
+        except ValueError:
+            continue
+    values=_ordered_unique(valid)
+    return _write_text_artifact(p,"ipv4","\n".join(values)+("\n" if values else ""),"IPv4 extraction",str(len(values))+" unique valid addresses")
+
+
+def text_mask_emails(p):
+    raw=_read_text_source(p)
+    pattern=r"(?<![\w.+-])([A-Z0-9.!#$%&'*+/=?^_{}|~-]+)@([A-Z0-9-]+)((?:\.[A-Z0-9-]+)+)"
+    def mask(match):
+        local,domain,suffix=match.groups()
+        return (local[:1] or "*")+"***@"+(domain[:1] or "*")+"***"+suffix
+    output=re.sub(pattern,mask,raw,flags=re.I)
+    return _write_text_artifact(p,"masked-emails",output,"Email masking","heuristic partial masking")
+
+
+def text_mask_phones(p):
+    raw=_read_text_source(p)
+    pattern=r"(?<!\w)(?:\+?\d[\d\s().-]{5,}\d)(?!\w)"
+    def mask(match):
+        digits=re.sub(r"\D","",match.group(0))
+        if len(digits)<7: return match.group(0)
+        return "*"*max(4,len(digits)-2)+digits[-2:]
+    output=re.sub(pattern,mask,raw)
+    return _write_text_artifact(p,"masked-phones",output,"Phone masking","heuristic; final two digits retained")
+
+
+def json_to_jsonl(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    if not isinstance(value,list): raise RuntimeError("JSON-to-JSONL expects a top-level array.")
+    if len(value)>100_000: raise RuntimeError("JSON array exceeds the 100,000-record limit.")
+    output="\n".join(json.dumps(item,ensure_ascii=False,separators=(",",":")) for item in value)
+    if value: output+="\n"
+    return _write_text_artifact(p,"jsonl",output,"JSON Lines conversion",str(len(value))+" record(s)")
+
+
+def jsonl_to_json(p):
+    raw=_read_text_source(p)
+    records=[]
+    for line_number,line in enumerate(raw.splitlines(),1):
+        if not line.strip(): continue
+        try: records.append(_load_json_reject_duplicates(line))
+        except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSONL at line "+str(line_number)+": "+str(exc)) from exc
+        if len(records)>100_000: raise RuntimeError("JSONL exceeds the 100,000-record limit.")
+    output=json.dumps(records,ensure_ascii=False,indent=2)
+    return _write_text_artifact(p,"array-json",output+"\n","JSON Lines to JSON",str(len(records))+" record(s)")
+
+
+def _convert_delimited_file(p,source_delimiter,target_delimiter,suffix,title):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline=""),delimiter=source_delimiter))
+    except csv.Error as exc: raise RuntimeError("Invalid delimited text: "+str(exc)) from exc
+    if len(rows)>100_001 or any(len(row)>200 for row in rows):
+        raise RuntimeError("Delimited input exceeds 100,000 rows or 200 columns.")
+    stream=io.StringIO(newline="")
+    writer=csv.writer(stream,delimiter=target_delimiter,lineterminator="\n",quoting=csv.QUOTE_MINIMAL)
+    writer.writerows(rows)
+    return _write_text_artifact(p,suffix,stream.getvalue(),title,str(len(rows))+" row(s)")
+
+
+def csv_to_tsv(p):
+    return _convert_delimited_file(p,",","\t","tsv","CSV to TSV conversion")
+
+
+def tsv_to_csv(p):
+    return _convert_delimited_file(p,"\t",",","csv","TSV to CSV conversion")
+
+
+def csv_to_markdown(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: return _write_text_artifact(p,"table.md","No rows.\n","CSV Markdown preview")
+    if len(rows)>51 or max((len(row) for row in rows),default=0)>20:
+        raise RuntimeError("CSV-to-Markdown is limited to 50 data rows and 20 columns.")
+    columns=max(len(row) for row in rows)
+    def cell(value):
+        return value.replace("|","\\|").replace("\r"," ").replace("\n","<br>").strip()
+    header=[cell(value) for value in rows[0]]+[""]*(columns-len(rows[0]))
+    lines=["| "+" | ".join(header)+" |","| "+" | ".join(["---"]*columns)+" |"]
+    for row in rows[1:]:
+        padded=row+[""]*(columns-len(row))
+        lines.append("| "+" | ".join(cell(value) for value in padded)+" |")
+    return _write_text_artifact(p,"table.md","\n".join(lines)+"\n","CSV to Markdown",str(len(rows)-1)+" data row(s)")
+
+
+def html_minify(p):
+    raw=_read_text_source(p)
+    class Minifier(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=False)
+            self.parts=[]
+            self.stack=[]
+            self.preserve={"pre","textarea","script","style"}
+        def handle_starttag(self,tag,attrs):
+            self.parts.append("<"+tag)
+            for key,value in attrs:
+                self.parts.append(" "+key if value is None else " "+key+'="'+escape(value,quote=True)+'"')
+            self.parts.append(">")
+            if tag not in {"area","base","br","col","embed","hr","img","input","link","meta","param","source","track","wbr"}:
+                self.stack.append(tag)
+        def handle_startendtag(self,tag,attrs):
+            self.parts.append("<"+tag)
+            for key,value in attrs:
+                self.parts.append(" "+key if value is None else " "+key+'="'+escape(value,quote=True)+'"')
+            self.parts.append("/>")
+        def handle_endtag(self,tag):
+            self.parts.append("</"+tag+">")
+            if tag in self.stack:
+                index=len(self.stack)-1-self.stack[::-1].index(tag)
+                self.stack=self.stack[:index]
+        def handle_data(self,data):
+            self.parts.append(data if any(tag in self.preserve for tag in self.stack) else re.sub(r"\s+"," ",data))
+        def handle_entityref(self,name): self.parts.append("&"+name+";")
+        def handle_charref(self,name): self.parts.append("&#"+name+";")
+        def handle_comment(self,data): pass
+        def handle_decl(self,decl): self.parts.append("<!"+decl+">")
+    parser=Minifier()
+    try: parser.feed(raw); parser.close()
+    except Exception as exc: raise RuntimeError("Invalid HTML: "+str(exc)) from exc
+    return _write_text_artifact(p,"minified.html","".join(parser.parts).strip(),"HTML minification")
+
+
+def xml_minify(p):
+    import xml.etree.ElementTree as ET
+    raw=_read_text_source(p)
+    if re.search(r"<!\s*(?:DOCTYPE|ENTITY)\b",raw,re.I):
+        raise RuntimeError("XML DTD and ENTITY declarations are not supported.")
+    try: output=ET.tostring(ET.fromstring(raw),encoding="unicode",short_empty_elements=True)
+    except ET.ParseError as exc: raise RuntimeError("Invalid XML: "+str(exc)) from exc
+    return _write_text_artifact(p,"minified.xml",output,"XML minification")
+
+
+def text_remove_emoji(p):
+    raw=_read_text_source(p)
+    pattern=r"[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]"
+    output=re.sub(pattern,"",raw)
+    return _write_text_artifact(p,"no-emoji",output,"Emoji removal")
+
+
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
     lines=[]
