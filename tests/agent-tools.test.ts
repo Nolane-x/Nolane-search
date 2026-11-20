@@ -48,6 +48,27 @@ describe("Nolane AI callable tools", () => {
     expect(schema.properties?.target_language).toBeDefined();
   });
 
+  it("runs the second wave of slug, data extraction, casing, masking and JSONL processors", async () => {
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-slugify",content:"Xin Chào Đặng\nHello World"})).toBe("xin-chao-dang\nhello-world");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-snake-case",content:"Hello World\nXML Parser"})).toBe("hello_world\nxml_parser");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-kebab-case",content:"Hello World"})).toBe("hello-world");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-camel-case",content:"Hello World"})).toBe("helloWorld");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-reverse-characters",content:"abc\nxin"})).toBe("cba\nnix");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-word-frequency",content:"One two one"})).toContain("one\t2");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-numbers",content:"x=-12, 3.14 and 3.14"})).toBe("-12\n3.14");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-dates",content:"2024-02-29 and 31/02/2024"})).toBe("2024-02-29");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-ipv4",content:"192.168.1.1 and 999.1.1.1"})).toBe("192.168.1.1");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-mask-emails",content:"Contact user@example.com"})).not.toContain("user@example.com");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-mask-phones",content:"Call 0912345678"})).not.toContain("0912345678");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-swap-case",content:"HeLLo"})).toBe("hEllO");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-remove-emoji",content:"Hello 😀 world"})).toBe("Hello  world");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-to-jsonl",content:'[{"a":1},{"b":2}]'})).toBe('{"a":1}\n{"b":2}');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"jsonl-to-json",content:'{"a":1}\n{"b":2}'})).toBe('[\n  {\n    "a": 1\n  },\n  {\n    "b": 2\n  }\n]');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-to-tsv",content:'name,note\nAn,"hello, world"'})).toBe("name\tnote\nAn\thello, world");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"tsv-to-csv",content:"name\tnote\nAn\tworld"})).toBe("name,note\nAn,world");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-to-markdown",content:"name,score\nAn,7"})).toContain("| An | 7 |");
+  });
+
   it("routes AI tool-call translation through the configured translation model", async () => {
     const fetchMock=vi.fn(async (_input:RequestInfo|URL,init?:RequestInit)=>{
       const body=JSON.parse(String(init?.body)) as {messages:Array<{role:string;content:string}>};
