@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **205 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **225 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -320,6 +320,31 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 | \`/tool json-escape-string\` | Escape toàn bộ văn bản thành JSON string scalar. | JSON |
 | \`/tool json-unescape-string\` | Giải mã JSON string scalar, từ chối object/array/number. | TXT |
 | \`/tool csv-unique-values\` | Liệt kê giá trị unique theo cột và tần suất. | Báo cáo TXT |
+
+### Tiện ích văn bản, Markdown, CSV và JSON — đợt thứ năm
+
+| Lệnh | Chức năng | Đầu ra |
+|---|---|---|
+| \`/tool text-sentence-case\` | Chuẩn hóa câu sang sentence case; cách viết tắt có thể cần chỉnh tay. | TXT |
+| \`/tool text-normalize-quotes\` | Đổi smart quotes/guillemets thành dấu nháy thẳng. | TXT |
+| \`/tool text-normalize-dashes\` | Chuẩn hóa dash/minus Unicode về dấu gạch ngang. | TXT |
+| \`/tool text-reverse-word-order\` | Đảo thứ tự từ trong từng dòng. | TXT |
+| \`/tool text-extract-words\` | Trích token Unicode duy nhất, giữ lần xuất hiện đầu. | TXT |
+| \`/tool text-extract-sentences\` | Tách câu theo dấu câu phổ biến; heuristic. | TXT |
+| \`/tool text-dedupe-sentences\` | Loại câu trùng không phân biệt hoa thường. | TXT |
+| \`/tool text-remove-markdown-formatting\` | Bỏ marker Markdown và giữ text/link labels. | TXT |
+| \`/tool text-markdown-toc\` | Sinh mục lục từ heading, bỏ qua fenced code block. | Markdown |
+| \`/tool text-markdown-code-blocks\` | Trích fenced code thành JSONL kèm language và line start. | JSONL |
+| \`/tool text-markdown-table-extract\` | Trích bảng Markdown đầu tiên thành CSV. | CSV |
+| \`/tool text-extract-numbered-lists\` | Trích item trong ordered list Markdown. | TXT |
+| \`/tool text-join-hyphenated-lines\` | Nối từ bị ngắt bởi hyphen ở cuối dòng. | TXT |
+| \`/tool text-strip-bom\` | Xóa BOM ở đầu tệp. | TXT |
+| \`/tool text-normalize-paragraph-spacing\` | Chuẩn hóa LF và gộp nhiều dòng trống. | TXT |
+| \`/tool csv-schema-infer\` | Ước lượng boolean/integer/decimal/date/text theo cột. | Báo cáo TXT |
+| \`/tool csv-duplicates-report\` | Báo cáo nhóm hàng trùng và số lần xuất hiện. | Báo cáo TXT |
+| \`/tool csv-sample-rows\` | Lấy header và 20 hàng dữ liệu đầu. | CSV |
+| \`/tool json-array-stats\` | Thống kê kiểu phần tử và tần suất key trong JSON array. | Báo cáo TXT |
+| \`/tool json-canonicalize\` | Sắp xếp key đệ quy, serialize JSON compact ổn định. | JSON |
 
 ## AI Agent
 

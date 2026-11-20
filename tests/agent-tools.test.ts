@@ -169,6 +169,32 @@ describe("Nolane AI callable tools", () => {
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-unique-values",content:"Name,Team\nAn,A\nAn,B\nBình,A"})).toContain('"count":2');
   });
 
+  it("runs fifth-wave text, Markdown, CSV and JSON convenience tools through AI", async () => {
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-sentence-case",content:"hello world. HELLO AGAIN!"})).toBe("Hello world. Hello again!");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-normalize-quotes",content:"“hello” ‘world’"})).toBe('"hello" \'world\'');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-normalize-dashes",content:"a–b — c"})).toBe("a-b - c");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-reverse-word-order",content:"one two three"})).toBe("three two one");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-words",content:"One one TWO"})).toBe("One\nTWO");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-sentences",content:"One. Two! Three?"})).toBe("One.\nTwo!\nThree?");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-dedupe-sentences",content:"One. two! ONE."})).toBe("One. two!");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-remove-markdown-formatting",content:"# Heading\n- **bold** and [link](https://example.com)"})).toContain("Heading\nbold and link");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-markdown-toc",content:"# First\n## Second"})).toBe("- [First](#first)\n  - [Second](#second)");
+    const fence=String.fromCharCode(96).repeat(3);
+    const blocks=String(await executeAgentTool(env,"process_text_content",{tool_id:"text-markdown-code-blocks",content:fence+"python\nprint(1)\n"+fence}));
+    expect(blocks).toContain('"language":"python"');
+    expect(blocks).toContain("print(1)");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-markdown-table-extract",content:"| Name | Score |\n| --- | --- |\n| An | 7 |"})).toBe("Name,Score\nAn,7");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-numbered-lists",content:"1. First\n2) Second\n- third"})).toBe("First\nSecond");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-join-hyphenated-lines",content:"inter-\nnational"})).toBe("international");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-strip-bom",content:"\uFEFFHello"})).toBe("Hello");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-normalize-paragraph-spacing",content:"one\n\n\n two"})).toBe("one\n\n two");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-schema-infer",content:"Age,Active\n17,true\n18,false"})).toContain('"type":"integer"');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-duplicates-report",content:"a,b\n1,x\n2,y\n1,x\n1,x"})).toContain("Duplicate occurrences: 2");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-sample-rows",content:"a,b\n1,2\n3,4"})).toBe("a,b\n1,2\n3,4");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-array-stats",content:'[{"a":1},null,"x",true]'})).toContain("object: 1");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-canonicalize",content:'{"z":1,"a":{"d":2,"b":3}}'})).toBe('{"a":{"b":3,"d":2},"z":1}');
+  });
+
   it("routes AI tool-call translation through the configured translation model", async () => {
     const fetchMock=vi.fn(async (_input:RequestInfo|URL,init?:RequestInit)=>{
       const body=JSON.parse(String(init?.body)) as {messages:Array<{role:string;content:string}>};
