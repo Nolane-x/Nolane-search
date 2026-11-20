@@ -13,6 +13,7 @@ const TEXT_TOOL_IDS = new Set([
   "text-collapse-whitespace", "text-remove-punctuation", "text-to-ascii", "text-html-escape", "text-html-unescape", "text-extract-mentions", "text-extract-hex-colors", "text-extract-phones", "text-dedupe-lines", "text-count-report", "text-quote-lines", "text-unquote-lines", "csv-transpose", "csv-sort-rows", "csv-dedupe-rows", "csv-to-xml", "csv-to-html", "json-sort-array", "json-remove-nulls", "json-to-html-table",
   "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv",
   "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values",
+  "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values",
 ]);
 
 export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
@@ -672,6 +673,99 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     const result:string[]=[];
     for(let column=0;column<rows[0]!.length;column++){
       const name=rows[0]![column]||("column_"+(column+1));const counts=new Map<string,number>();
+      for(const row of rows.slice(1)){const value=(row[column]||"").trim();if(value)counts.set(value,(counts.get(value)||0)+1);}
+      for(const [value,count] of counts)result.push(JSON.stringify({column:name,value,count}));
+    }
+    return result.join("\n");
+  }
+  if (toolId === "text-indent-lines") return content.split(/\r?\n/).map(line=>line.trim()?"    "+line:"").join("\n");
+  if (toolId === "text-unindent-lines") {
+    const lines=content.split(/\r?\n/);const indents=lines.filter(line=>line.trim()).map(line=>line.match(/^[ \t]*/)?.[0].length||0);
+    const amount=indents.length?Math.min(...indents):0;return lines.map(line=>line.trim()?line.slice(amount):"").join("\n");
+  }
+  if (toolId === "text-dedupe-paragraphs") {
+    const seen=new Set<string>();return content.split(/\n\s*\n/).map(value=>value.trim()).filter(value=>{
+      if(!value)return false;const key=value.replace(/\s+/g," ").toLocaleLowerCase();if(seen.has(key))return false;seen.add(key);return true;
+    }).join("\n\n");
+  }
+  if (toolId === "text-tokenize-words") return (content.match(/[^\W_]+(?:['’][^\W_]+)?/gu)||[]).join("\n");
+  if (toolId === "text-sentence-report") {
+    const sentences=content.split(/(?<=[.!?。！？])\s+/).map(value=>value.trim()).filter(Boolean);
+    const words=content.match(/[^\W_]+(?:['’][^\W_]+)?/gu)||[];const counts=sentences.map(value=>(value.match(/[^\W_]+(?:['’][^\W_]+)?/gu)||[]).length);
+    return ["Sentence statistics","Sentences (heuristic): "+sentences.length,"Words: "+words.length,
+      "Average words per sentence: "+(sentences.length?(words.length/sentences.length).toFixed(2):"0"),
+      "Longest sentence words: "+Math.max(0,...counts),"Note: punctuation-based estimate; abbreviations may affect accuracy."].join("\n")+"\n";
+  }
+  if (toolId === "text-line-length-report") {
+    const lines=content.split(/\r?\n/);const ranked=lines.map((line,index)=>({index:index+1,length:line.length})).sort((a,b)=>b.length-a.length||a.index-b.index).slice(0,100);
+    return ["Line length report","Total lines: "+lines.length,"Longest line: "+Math.max(0,...lines.map(line=>line.length)),"","Rank | Line | Characters",...ranked.map((item,index)=>(index+1)+" | "+item.index+" | "+item.length)].join("\n")+"\n";
+  }
+  if (toolId === "text-normalize-newlines") return content.replace(/\r\n?/g,"\n");
+  if (toolId === "text-remove-zero-width") return content.replace(/[\u200b\u200c\u200d\u2060\ufeff\u00ad]/g,"");
+  if (toolId === "text-extract-file-paths") {
+    const pattern=/(?:[A-Za-z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]+|\/(?:[^/\s<>:"|?*]+\/)*[^/\s<>:"|?*]+)/g;
+    return [...new Set(content.match(pattern)||[])].join("\n");
+  }
+  if (toolId === "text-sort-words") {
+    const words=content.match(/[^\W_]+(?:['’][^\W_]+)?/gu)||[];
+    return words.sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"})).join("\n");
+  }
+  if (toolId === "html-extract-links") {
+    const result:string[]=[];
+    for(const match of content.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi)){
+      const attrs=match[1]||"",href=attrs.match(/href\s*=\s*(?:"([^"]*)"|'([^']*)')/i);if(!href)continue;
+      const title=attrs.match(/title\s*=\s*(?:"([^"]*)"|'([^']*)')/i);
+      result.push(JSON.stringify({url:decodeHtml(href[1]||href[2]||""),text:decodeHtml((match[2]||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim()),title:decodeHtml(title?.[1]||title?.[2]||"")}));
+    }
+    return [...new Set(result)].join("\n");
+  }
+  if (toolId === "html-extract-images") {
+    const result:string[]=[];
+    for(const match of content.matchAll(/<img\b([^>]*)>/gi)){
+      const attrs=match[1]||"",attr=(name:string)=>{const found=attrs.match(new RegExp(name+"\\s*=\\s*(?:\\\"([^\\\"]*)\\\"|'([^']*)')","i"));return decodeHtml(found?.[1]||found?.[2]||"");};
+      const src=attr("src");if(src)result.push(JSON.stringify({src,alt:attr("alt"),title:attr("title")}));
+    }
+    return [...new Set(result)].join("\n");
+  }
+  if (toolId === "html-extract-title") {
+    const match=content.match(/<title\b[^>]*>([\s\S]*?)<\/title\s*>/i);
+    return match?decodeHtml(match[1]!.replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim())+"\n":"";
+  }
+  if (toolId === "json-to-xml") {
+    const value=JSON.parse(content);if(!value||typeof value!=="object"||Array.isArray(value))throw new Error("JSON-to-XML expects a top-level object.");
+    const tag=(key:string)=>{let name=key.replace(/[^A-Za-z0-9_.-]/g,"_")||"item";if(!/^[A-Za-z_]/.test(name))name="item_"+name;return name;};
+    const esc=(input:string)=>input.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");
+    const build=(name:string,item:unknown):string=>{
+      if(Array.isArray(item))return item.map(child=>build(name,child)).join("");
+      if(item&&typeof item==="object"){
+        const obj=item as Record<string,unknown>;const attrs=Object.entries(obj).filter(([key])=>key.startsWith("@")).map(([key,val])=>" "+tag(key.slice(1))+"=\""+esc(val==null?"":String(val))+"\"").join("");
+        const text=Object.prototype.hasOwnProperty.call(obj,"#text")?esc(String(obj["#text"]??"")):"";
+        const children=Object.entries(obj).filter(([key])=>!key.startsWith("@")&&key!=="#text").map(([key,val])=>build(key,val)).join("");
+        return "<"+tag(name)+attrs+">"+text+children+"</"+tag(name)+">";
+      }
+      return "<"+tag(name)+">"+esc(item==null?"":typeof item==="boolean"?String(item):String(item))+"</"+tag(name)+">";
+    };
+    const attrs=Object.entries(value as Record<string,unknown>).filter(([key])=>key.startsWith("@")).map(([key,val])=>" "+tag(key.slice(1))+"=\""+esc(val==null?"":String(val))+"\"").join("");
+    const text=Object.entries(value as Record<string,unknown>).filter(([key])=>key==="#text").map(([,val])=>esc(String(val??""))).join("");
+    const children=Object.entries(value as Record<string,unknown>).filter(([key])=>!key.startsWith("@")&&key!=="#text").map(([key,val])=>build(key,val)).join("");
+    return "<root"+attrs+">"+text+children+"</root>";
+  }
+  if (toolId === "json-type-report") {
+    const value=JSON.parse(content);const counts:Record<string,number>={object:0,array:0,string:0,number:0,boolean:0,null:0};let maxDepth=0;
+    const walk=(item:unknown,depth:number)=>{maxDepth=Math.max(maxDepth,depth);
+      if(item===null)counts.null++;else if(typeof item==="boolean")counts.boolean++;else if(typeof item==="number")counts.number++;else if(typeof item==="string")counts.string++;
+      else if(Array.isArray(item)){counts.array++;for(const child of item)walk(child,depth+1);}
+      else if(item&&typeof item==="object"){counts.object++;for(const child of Object.values(item as Record<string,unknown>))walk(child,depth+1);}
+    };walk(value,0);
+    return ["JSON type report","Maximum depth: "+maxDepth,...Object.entries(counts).map(([key,count])=>key+": "+count)].join("\n")+"\n";
+  }
+  if (toolId === "json-escape-string") return JSON.stringify(content);
+  if (toolId === "json-unescape-string") {
+    const value=JSON.parse(content);if(typeof value!=="string")throw new Error("Input must be a JSON string scalar.");return value;
+  }
+  if (toolId === "csv-unique-values") {
+    const rows=csvRows(content);if(!rows.length)throw new Error("CSV is empty.");const result:string[]=[];
+    for(let column=0;column<rows[0]!.length;column++){const name=rows[0]![column]||("column_"+(column+1)),counts=new Map<string,number>();
       for(const row of rows.slice(1)){const value=(row[column]||"").trim();if(value)counts.set(value,(counts.get(value)||0)+1);}
       for(const [value,count] of counts)result.push(JSON.stringify({column:name,value,count}));
     }
