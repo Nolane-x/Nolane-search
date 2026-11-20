@@ -1997,6 +1997,217 @@ def xml_tree_report(p):
     return _write_text_artifact_ext(p,"xml-tree-report",".txt","\n".join(lines)+"\n","XML tree report")
 
 
+def text_sentence_case(p):
+    raw=_read_text_source(p)
+    value=raw.lower()
+    return _write_text_artifact(p,"sentence-case",re.sub(r"(^|[.!?。！？]\s+)([^\W\d_])",lambda match:match.group(1)+match.group(2).upper(),value,flags=re.UNICODE),"Sentence case conversion")
+
+
+def text_normalize_quotes(p):
+    raw=_read_text_source(p)
+    table=str.maketrans({
+        "\u2018":"'","\u2019":"'","\u201a":"'","\u201b":"'","\u2032":"'","\u2035":"'","\u201c":'"',
+        "\u201d":'"',"\u201e":'"',"\u201f":'"',"\u2033":'"',"\u2036":'"',"\u00ab":'"',"\u00bb":'"',
+        "\u2039":"'","\u203a":"'",
+    })
+    return _write_text_artifact(p,"straight-quotes",raw.translate(table),"Quote normalization")
+
+
+def text_normalize_dashes(p):
+    raw=_read_text_source(p)
+    return _write_text_artifact(p,"hyphen-dashes",re.sub(r"[\u2010-\u2015\u2212\ufe58\ufe63\uff0d]","-",raw),"Dash normalization")
+
+
+def text_reverse_word_order(p):
+    raw=_read_text_source(p)
+    output="\n".join(" ".join(reversed(line.split())) for line in raw.splitlines())
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"reversed-words",output,"Word-order reversal")
+
+
+def text_extract_words(p):
+    raw=_read_text_source(p)
+    words=re.findall(r"[^\W_]+(?:['’][^\W_]+)?",raw,flags=re.UNICODE)
+    values=_ordered_unique(words)
+    return _write_text_artifact(p,"unique-words","\n".join(values)+("\n" if values else ""),"Unique word extraction",str(len(values))+" unique word(s)")
+
+
+def _sentence_parts(raw):
+    return [match.group(0).strip() for match in re.finditer(r".+?(?:[.!?。！？]+(?=\s|$)|$)",raw,re.S) if match.group(0).strip()]
+
+
+def text_extract_sentences(p):
+    raw=_read_text_source(p)
+    values=_sentence_parts(re.sub(r"\s+"," ",raw.strip()))
+    return _write_text_artifact(p,"sentences","\n".join(values)+("\n" if values else ""),"Sentence extraction",str(len(values))+" sentence(s); punctuation heuristic")
+
+
+def text_dedupe_sentences(p):
+    raw=_read_text_source(p)
+    values=_sentence_parts(re.sub(r"\s+"," ",raw.strip()))
+    seen=set()
+    kept=[]
+    for value in values:
+        key=value.casefold()
+        if key in seen: continue
+        seen.add(key)
+        kept.append(value)
+    return _write_text_artifact(p,"unique-sentences"," ".join(kept)+("\n" if kept else ""),"Duplicate sentence removal",str(len(values)-len(kept))+" duplicate sentence(s) removed")
+
+
+def text_remove_markdown_formatting(p):
+    raw=_read_text_source(p)
+    value=re.sub(r"!\[([^\]]*)\]\([^)]+\)",r"\1",raw)
+    value=re.sub(r"\[([^\]]+)\]\([^)]+\)",r"\1",value)
+    value=re.sub(r"(?m)^\s{0,3}#{1,6}\s*","",value)
+    value=re.sub(r"(?m)^\s{0,3}>\s?","",value)
+    value=re.sub(r"(?m)^\s*[-+*]\s+","",value)
+    value=re.sub(r"(?m)^\s*\d+[.)]\s+","",value)
+    value=re.sub(r"\x60([^\x60]*)\x60",r"\1",value)
+    value=re.sub(r"(\*\*|__|~~|(?<!\w)[*_])","",value)
+    value=re.sub(r"(?m)^\s*([-*_]){3,}\s*$","",value)
+    return _write_text_artifact(p,"plain-markdown",value,"Markdown formatting removal")
+
+
+def _markdown_slug(value):
+    normalized=unicodedata.normalize("NFKD",value.lower().replace("đ","d"))
+    ascii_text=normalized.encode("ascii","ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+","-",ascii_text).strip("-")
+
+
+def _markdown_heading_rows(raw):
+    values=[]
+    in_fence=False
+    fence_char=None
+    fence_len=0
+    for line in raw.splitlines():
+        stripped=line.lstrip()
+        marker=stripped[:1]
+        length=len(stripped)-len(stripped.lstrip(marker)) if marker in (chr(96),"~") else 0
+        if length>=3:
+            if not in_fence:
+                in_fence=True;fence_char=marker;fence_len=length
+            elif marker==fence_char and length>=fence_len:
+                in_fence=False;fence_char=None;fence_len=0
+            continue
+        if in_fence: continue
+        match=re.match(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$",line)
+        if match:
+            title=re.sub(r"\s+#+\s*$","",match.group(2)).strip()
+            values.append((len(match.group(1)),title))
+    return values
+
+
+def text_markdown_toc(p):
+    raw=_read_text_source(p)
+    headings=_markdown_heading_rows(raw)
+    used={}
+    lines=[]
+    for level,title in headings:
+        base=_markdown_slug(re.sub(r"[*_\x60\[\]]","",title)) or "section"
+        count=used.get(base,0)+1;used[base]=count
+        slug=base if count==1 else base+"-"+str(count)
+        lines.append("  "*max(0,level-1)+"- ["+title+"]( #"+slug+")".replace("( #","(#"))
+    return _write_text_artifact(p,"table-of-contents","\n".join(lines)+("\n" if lines else ""),"Markdown table of contents",str(len(lines))+" heading(s)")
+
+
+def text_markdown_code_blocks(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    records=[]
+    index=0
+    while index<len(lines):
+        stripped=lines[index].lstrip()
+        marker=stripped[:1]
+        fence_len=len(stripped)-len(stripped.lstrip(marker)) if marker in (chr(96),"~") else 0
+        if fence_len<3:
+            index+=1;continue
+        info=stripped[fence_len:].strip()
+        start=index+1;index+=1;body=[]
+        closed=False
+        while index<len(lines):
+            candidate=lines[index].lstrip()
+            count=len(candidate)-len(candidate.lstrip(marker)) if candidate.startswith(marker) else 0
+            if count>=fence_len and not candidate[count:].strip():
+                closed=True;index+=1;break
+            body.append(lines[index]);index+=1
+        records.append(json.dumps({"index":len(records)+1,"language":info.split()[0] if info else "","start_line":start,"closed":closed,"code":"\n".join(body)},ensure_ascii=False))
+    output="\n".join(records)
+    return _write_text_artifact_ext(p,"code-blocks",".jsonl",output+("\n" if output else ""),"Markdown code block extraction",str(len(records))+" block(s)")
+
+
+def _markdown_table_cells(line):
+    value=line.strip()
+    if value.startswith("|"): value=value[1:]
+    if value.endswith("|"): value=value[:-1]
+    cells=[];current=[];escaped=False
+    for char in value:
+        if escaped:
+            current.append(char);escaped=False
+        elif char=="\\":
+            escaped=True
+        elif char=="|":
+            cells.append("".join(current).strip());current=[]
+        else:
+            current.append(char)
+    if escaped: current.append("\\")
+    cells.append("".join(current).strip())
+    return cells
+
+
+def text_markdown_table_extract(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    for index in range(len(lines)-1):
+        header=lines[index].strip()
+        separator=lines[index+1].strip()
+        if "|" not in header or not re.fullmatch(r"\|?[\s:|-]+\|?",separator):
+            continue
+        headers=_markdown_table_cells(header)
+        marks=_markdown_table_cells(separator)
+        if len(headers)!=len(marks) or not all(re.fullmatch(r":?-{3,}:?",item.replace(" ","")) for item in marks):
+            continue
+        rows=[headers]
+        cursor=index+2
+        while cursor<len(lines) and "|" in lines[cursor]:
+            row=_markdown_table_cells(lines[cursor])
+            if len(row)<len(headers): row+=[""]*(len(headers)-len(row))
+            rows.append(row[:len(headers)])
+            cursor+=1
+        import io
+        stream=io.StringIO(newline="")
+        csv.writer(stream,lineterminator="\n").writerows(rows)
+        return _write_text_artifact_ext(p,"markdown-table",".csv",stream.getvalue(),"Markdown table extraction",str(len(rows)-1)+" row(s)")
+    return _write_text_artifact_ext(p,"markdown-table",".csv","","Markdown table extraction","no Markdown table found")
+
+
+def text_extract_numbered_lists(p):
+    raw=_read_text_source(p)
+    values=[]
+    for line in raw.splitlines():
+        match=re.match(r"^\s{0,3}\d{1,6}[.)]\s+(.+?)\s*$",line)
+        if match: values.append(match.group(1))
+    return _write_text_artifact(p,"numbered-items","\n".join(values)+("\n" if values else ""),"Numbered-list extraction",str(len(values))+" item(s)")
+
+
+def text_join_hyphenated_lines(p):
+    raw=_read_text_source(p).replace("\r\n","\n").replace("\r","\n")
+    output=re.sub(r"(?<=\w)-[ \t]*\n[ \t]*(?=\w)","",raw,flags=re.UNICODE)
+    return _write_text_artifact(p,"joined-hyphenated",output,"Hyphenated-line joining")
+
+
+def text_strip_bom(p):
+    raw=_read_text_source(p)
+    output=raw[1:] if raw.startswith("\ufeff") else raw
+    return _write_text_artifact(p,"no-bom",output,"BOM removal")
+
+
+def text_normalize_paragraph_spacing(p):
+    raw=_read_text_source(p).replace("\r\n","\n").replace("\r","\n")
+    output=re.sub(r"\n[ \t]*\n(?:[ \t]*\n)+","\n\n",raw)
+    return _write_text_artifact(p,"paragraph-spacing",output,"Paragraph spacing normalization")
+
+
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
     lines=[]
