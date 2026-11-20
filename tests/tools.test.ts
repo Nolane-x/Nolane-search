@@ -5,8 +5,9 @@ describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
     const ids = TOOL_CATALOG.map(tool => tool.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(102);
+    expect(TOOL_CATALOG).toHaveLength(125);
     expect(TOOL_CATALOG.every(tool => tool.ready && tool.description.length > 12 && tool.accepts.length > 0)).toBe(true);
+    for (const id of ["text-translate","language-detect","text-uppercase","text-lowercase","text-title-case","text-sort-lines","text-reverse-lines","text-number-lines","text-remove-blank-lines","text-wrap","text-trim-lines","text-extract-emails","text-extract-urls","text-extract-hashtags","text-to-base64","base64-to-text","url-encode","url-decode","json-minify","json-sort-keys"]) expect(getTool(id)?.ready).toBe(true);
     for (const id of ["pdf-rotate-cw","pdf-remove-blank","image-trim-border","image-pixelate","image-diff","audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean","json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join"]) expect(getTool(id)).not.toBeNull();
   });
 
@@ -199,6 +200,16 @@ describe("Nolane Tools registry", () => {
     expect(validateToolPipeline({mimeType:"application/zip",fileName:"source.zip"}, [
       {toolId:"repo-inventory"},{toolId:"pdf-text"},
     ]).ok).toBe(false);
+  });
+
+
+  it("accepts the new translation and everyday text pipelines", () => {
+    const textFile={mimeType:"text/plain",fileName:"notes.txt"};
+    expect(isToolCompatible(getTool("text-translate")!,textFile.mimeType,textFile.fileName)).toBe(true);
+    expect(validateToolPipeline(textFile,[{toolId:"text-translate"},{toolId:"text-clean"},{toolId:"text-stats"}]).ok).toBe(true);
+    expect(validateToolPipeline(textFile,[{toolId:"text-extract-emails"},{toolId:"text-deduplicate"}]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"application/json",fileName:"data.json"},[{toolId:"json-minify"},{toolId:"json-format"}]).ok).toBe(true);
+    expect(isToolCompatible(getTool("language-detect")!,"text/plain","notes.log")).toBe(true);
   });
 
 });
