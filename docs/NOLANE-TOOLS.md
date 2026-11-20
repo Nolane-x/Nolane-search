@@ -171,7 +171,7 @@ Các processor văn bản này giới hạn đầu vào 5 MB và yêu cầu UTF-
 | `/tool repo-code-stats` | Thống kê codebase | Gom số file, dòng trống, dòng nội dung và dung lượng theo phần mở rộng. | TXT |
 | `/tool repo-config-audit` | Kiểm kê cấu hình dự án | Kiểm tra hiện diện của README, license, manifest, lockfile, test, CI, container và lint config. | TXT |
 | `/tool repo-duplicates` | Tìm file trùng repository | Hash SHA-256 các member và gom nhóm file có nội dung giống nhau. | CSV |
-| `/repo URL` / `/repo_compare URL base...head` | GitHub Repository Intelligence | Tải snapshot repository GitHub công khai, phân tích import graph, metadata, tối đa 20 commit gần nhất và thông tin files changed của hai ref; đóng gói 8 audit report. | ZIP gồm Markdown, JSON và báo cáo audit |
+| `/repo URL` / `/repo_compare URL base...head` | GitHub Repository Intelligence | Tải snapshot repository GitHub công khai, phân tích import graph, metadata, tối đa 20 commit gần nhất và thông tin files changed của hai ref; đóng gói 10 báo cáo kiểm toán. | ZIP gồm Markdown, JSON và báo cáo audit |
 | `/tool repo-security-audit` | Kiểm toán bảo mật repository | Quét tĩnh GitHub Actions, Dockerfile/Containerfile, Kubernetes YAML và Terraform; phát hiện shell injection trong workflow, action chưa pin SHA, cấu hình container đặc quyền, host namespace/hostPath, wildcard IAM và ingress SSH/RDP công khai. | ZIP gồm Markdown, JSON findings và SARIF 2.1.0 |
 | `/tool repo-supply-chain` | Kiểm toán dependency & supply chain | Kiểm kê package manifest/lockfile, đối chiếu lockfile gần nhất, phân loại version range/floating, nguồn Git/URL và npm lifecycle hooks; không resolve hay cài package. | ZIP gồm Markdown và JSON inventory |
 
