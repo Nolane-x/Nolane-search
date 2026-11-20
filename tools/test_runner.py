@@ -932,7 +932,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertIn("$.a.b",report)
         self.assertIn("$.array[1]",report)
         conflict=self.write("conflict.json",'{"":1,"/a":2}')
-        with self.assertRaisesRegex(RuntimeError,"Root JSON Pointer"):
+        with self.assertRaisesRegex(RuntimeError,"Root JSON pointer"):
             runner.json_unflatten(conflict)
 
     def test_fourth_wave_csv_cleanup_stats_headers_and_jsonl_roundtrip(self):
