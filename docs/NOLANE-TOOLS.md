@@ -271,31 +271,6 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 | \`/tool json-remove-nulls\` | Xóa thuộc tính null và phần tử null trong array theo đệ quy. | JSON |
 | \`/tool json-to-html-table\` | Chuyển mảng object thành HTML table, escape mọi ô; tối đa 10.000 record/200 cột. | HTML |
 
-### Tiện ích làm sạch và chuyển đổi — đợt mở rộng tiếp theo
-
-| Lệnh | Chức năng | Đầu ra |
-|---|---|---|
-| \`/tool text-collapse-whitespace\` | Gộp khoảng trắng ngang thành một dấu cách, giữ nguyên dòng. | TXT |
-| \`/tool text-remove-punctuation\` | Thay dấu câu Unicode bằng khoảng trắng để không dính từ. | TXT |
-| \`/tool text-to-ascii\` | Bỏ dấu kết hợp, xử lý đ/Đ và tạo ASCII gần đúng. | TXT |
-| \`/tool text-html-escape\` | Escape ký tự HTML đặc biệt, gồm &, dấu nháy và ngoặc nhọn. | TXT |
-| \`/tool text-html-unescape\` | Giải mã HTML named/numeric entities. | TXT |
-| \`/tool text-extract-mentions\` | Trích @username, tránh phần email và khử trùng. | TXT |
-| \`/tool text-extract-hex-colors\` | Trích #RGB/#RRGGBB, chuẩn hóa chữ hoa. | TXT |
-| \`/tool text-extract-phones\` | Trích chuỗi giống điện thoại 7–15 số; heuristic cần xác minh. | TXT |
-| \`/tool text-dedupe-lines\` | Giữ dòng đầu tiên, so sánh không phân biệt hoa thường và trim viền. | TXT |
-| \`/tool text-count-report\` | Thống kê dòng, từ, ký tự, byte UTF-8 và non-ASCII. | Báo cáo TXT |
-| \`/tool text-quote-lines\` | Đóng gói từng dòng thành JSON string riêng. | TXT |
-| \`/tool text-unquote-lines\` | Giải mã mỗi dòng như JSON string, chỉ rõ dòng lỗi. | TXT |
-| \`/tool csv-transpose\` | Chuyển hàng thành cột, pad ô thiếu; tối đa 10.000 hàng/200 cột. | CSV |
-| \`/tool csv-sort-rows\` | Giữ header và sắp xếp theo cột đầu tiên. | CSV |
-| \`/tool csv-dedupe-rows\` | Xóa hàng trùng toàn bộ, giữ hàng đầu tiên. | CSV |
-| \`/tool csv-to-xml\` | Chuyển hàng thành XML, chuẩn hóa tên tag và escape nội dung. | XML |
-| \`/tool csv-to-html\` | Tạo HTML table UTF-8, escape ô; tối đa 10.000 hàng/200 cột. | HTML |
-| \`/tool json-sort-array\` | Sắp xếp array theo biểu diễn JSON ổn định, không giả định schema. | JSON |
-| \`/tool json-remove-nulls\` | Xóa thuộc tính null và phần tử null trong array theo đệ quy. | JSON |
-| \`/tool json-to-html-table\` | Chuyển mảng object thành HTML table, escape ô; tối đa 10.000 record/200 cột. | HTML |
-
 ### Công cụ Markdown, JSON và CSV — đợt mở rộng thứ tư
 
 | Lệnh | Chức năng | Đầu ra |
