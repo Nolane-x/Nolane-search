@@ -536,11 +536,17 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     return ["JSON key/path report","Unique paths: "+counts.size,...[...counts.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([path,count])=>path+"\t"+count)].join("\n")+"\n";
   }
   if (toolId === "csv-remove-empty-rows" || toolId === "csv-add-row-numbers" || toolId === "csv-normalize-headers" || toolId === "csv-to-jsonl" || toolId === "csv-column-stats") {
+    const encodeCsvCell=(value:string)=>{
+      let safe=value;
+      const numericNegative=/^\s*-\d+(?:[.,]\d+)?\s*$/.test(safe);
+      if(/^[\s]*[=+@]/.test(safe)||(/^[\s]*-/.test(safe)&&!numericNegative)) safe="'"+safe;
+      return /[",\r\n]/.test(safe)?'"'+safe.replace(/"/g,'""')+'"':safe;
+    };
     const rows=csvRows(content);if(!rows.length) throw new Error("CSV is empty.");
-    if(toolId==="csv-remove-empty-rows") return [rows[0]!,...rows.slice(1).filter(row=>row.some(value=>value.trim()))].map(row=>row.map(csvEscape).join(",")).join("\n");
+    if(toolId==="csv-remove-empty-rows") return [rows[0]!,...rows.slice(1).filter(row=>row.some(value=>value.trim()))].map(row=>row.map(encodeCsvCell).join(",")).join("\n");
     if(toolId==="csv-add-row-numbers") {
       const header=rows[0]!.slice();let col="_row_number";while(header.includes(col))col+="_";
-      return [[col,...header],...rows.slice(1).map((row,index)=>[String(index+1),...row])].map(row=>row.map(csvEscape).join(",")).join("\n");
+      return [[col,...header],...rows.slice(1).map((row,index)=>[String(index+1),...row])].map(row=>row.map(encodeCsvCell).join(",")).join("\n");
     }
     if(toolId==="csv-normalize-headers") {
       const used=new Set<string>();
@@ -550,7 +556,7 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
         while(used.has(name))name=base+"_"+n++;
         used.add(name);return name;
       });
-      return [header,...rows.slice(1)].map(row=>row.map(csvEscape).join(",")).join("\n");
+      return [header,...rows.slice(1)].map(row=>row.map(encodeCsvCell).join(",")).join("\n");
     }
     if(toolId==="csv-to-jsonl") {
       const used=new Set<string>();
@@ -575,7 +581,7 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     }
     const headers=[...new Set(records.flatMap(record=>Object.keys(record)))];
     const cell=(value:unknown)=>value==null?"":typeof value==="string"?value:JSON.stringify(value);
-    return [headers.map(csvEscape).join(","),...records.map(record=>headers.map(key=>csvEscape(cell(record[key])).replace(/[\r\n]+/g," ")).join(","))].join("\n");
+    return [headers.map(encodeCsvCell).join(","),...records.map(record=>headers.map(key=>encodeCsvCell(cell(record[key])).replace(/[\r\n]+/g," ")).join(","))].join("\n");
   }
   if (toolId === "text-pascal-case" || toolId === "text-constant-case" || toolId === "text-dot-case" || toolId === "text-initials") {
     return content.split(/\r?\n/).map(line=>{
