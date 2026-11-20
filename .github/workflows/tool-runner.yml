@@ -90,8 +90,14 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "22"
-      - name: Execute tool
+      - name: Execute local processors
+        if: ${{ !contains(steps.job.outputs.tool_ids, 'text-translate') }}
         run: python tools/runner.py run "$RUNNER_TEMP/nolane-job.json" "$RUNNER_TEMP/nolane-input-path.txt" "$RUNNER_TEMP/nolane-result.json"
+      - name: Translate text through the configured Worker AI Router
+        if: contains(steps.job.outputs.tool_ids, 'text-translate')
+        env:
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+        run: python tools/runner.py translate "$RUNNER_TEMP/nolane-job.json" "$RUNNER_TEMP/nolane-input-path.txt" "$RUNNER_TEMP/nolane-result.json"
       - name: Deliver output and update job (secrets are reintroduced after processing)
         if: success()
         env:
