@@ -297,21 +297,20 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     return [headers.map(csvEscape).join(","), ...value.map(item => headers.map(key => csvEscape((item as Record<string, unknown>)[key])).join(","))].join("\n");
   }
   if (toolId === "html-text") {
-    const visible = content.replace(/<!--[\\s\\S]*?-->/g, "")
-      .replace(/<(script|style|noscript|svg|canvas|iframe|template)\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>/gi, " ")
-      .replace(/<(br|\\/p|\\/div|\\/h[1-6]|\\/li|\\/tr|\\/section|\\/article)\\b[^>]*>/gi, "\\n")
+    const visible = content.replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/<(script|style|noscript|svg|canvas|iframe|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ")
+      .replace(/<(br|\/p|\/div|\/h[1-6]|\/li|\/tr|\/section|\/article)\b[^>]*>/gi, "\n")
       .replace(/<[^>]*>/g, " ");
-    return decodeHtml(visible).replace(/[ \\t\\f\\v]+/g, " ").replace(/ *\\n */g, "\\n").replace(/\\n{3,}/g, "\\n\\n").trim();
+    return decodeHtml(visible).replace(/[ \t\f\v]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   }
-  const lines = content.replace(/^\\uFEFF/, "").split(/\\r?\\n/).filter(line => {
+  const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter(line => {
     const value = line.trim();
-    return value && !/^WEBVTT$/i.test(value) && !/^\\d+$/.test(value) &&
-      !/^\\d{1,2}:\\d{2}(?::\\d{2})?[.,]\\d{3}\\s*-->/.test(value) &&
-      !/^NOTE\\b/i.test(value);
+    return value && !/^WEBVTT$/i.test(value) && !/^\d+$/.test(value) &&
+      !/^\d{1,2}:\d{2}(?::\d{2})?[.,]\d{3}\s*-->/.test(value) &&
+      !/^NOTE\b/i.test(value);
   }).map(line => decodeHtml(line.replace(/<[^>]+>/g, "")).trim()).filter(Boolean);
-  return lines.join("\\n");
+  return lines.join("\n");
 }
-
 export async function executeAgentTool(env: Env, name: string, rawArgs: unknown): Promise<string> {
   if (!rawArgs || typeof rawArgs !== "object" || Array.isArray(rawArgs)) throw new Error("Tool arguments must be a JSON object.");
   const args = rawArgs as ToolArgs;
