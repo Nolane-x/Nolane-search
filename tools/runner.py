@@ -2930,6 +2930,16 @@ class PipelineExecutionError(RuntimeError):
         self.trace=trace
 
 
+def report_job_progress(job,completed,total,current_tool_ids=None):
+    job_id=job.get("id") if isinstance(job,dict) else None
+    if not isinstance(job_id,str) or not re.fullmatch(r"[a-f0-9-]{36}",job_id,re.I):
+        return
+    try:
+        callback(job_id,{"status":"progress","progress":{"completed":int(completed),"total":int(total),"currentToolIds":list(current_tool_ids or [])}})
+    except Exception as exc:
+        print(f"Unable to report progress: {exc}",file=sys.stderr)
+
+
 def run_tool_dag(job,source,root):
     nodes=validate_dag(job)
     by_id={node["id"]:node for node in nodes}
@@ -2942,6 +2952,7 @@ def run_tool_dag(job,source,root):
     while pending:
         ready=[node for node in pending if all(parent_id in outputs for parent_id in node["dependsOn"])]
         if not ready: raise RuntimeError("DAG scheduler found a cycle or unresolved dependency.")
+        report_job_progress(job,len(traces),len(nodes),[node["toolId"] for node in ready])
         def execute_node(node):
             node_id=node["id"]; tool_id=node["toolId"]; started=time.perf_counter()
             parent_ids=node["dependsOn"]
@@ -2992,6 +3003,7 @@ def run_tool_dag(job,source,root):
                 outputs[node_id]=output
                 summaries[node_id]=summary
             pending=[node for node in pending if node["id"]!=node_id]
+        report_job_progress(job,len([item for item in traces.values() if item["status"]=="completed"]),len(nodes),[])
         if failures:
             ordered=[traces[node["id"]] for node in nodes if node["id"] in traces]
             message="; ".join(node_id+": "+error for node_id,error in failures)
@@ -3029,6 +3041,7 @@ def run_tool_pipeline(job, source, root):
     result={}
     for index,step in enumerate(steps):
         tool_id=step["toolId"]
+        report_job_progress(job,index,len(steps),[tool_id])
         started=time.perf_counter()
         try:
             input_bytes=current.stat().st_size if current.is_file() else 0
@@ -3057,6 +3070,7 @@ def run_tool_pipeline(job, source, root):
                 "summary":_safe_trace_text(summary,root)[:180],
             })
             summaries.append(f"Step {index+1}/{len(steps)} · {tool_id}: {summary or 'completed'}")
+            report_job_progress(job,index+1,len(steps),[])
         except Exception as exc:
             duration_ms=max(0,int((time.perf_counter()-started)*1000))
             try: input_bytes=current.stat().st_size if current.is_file() else 0
