@@ -68,7 +68,8 @@ PIPELINE_TRANSITIONS = {
     "text-diff": {"text-clean","text-stats"},
     "code-size-report": {"text-clean","text-stats"},
     "text-clean": {"text-stats","text-deduplicate"},
-    "text-stats": {"text-clean"},
+    "text-stats": {"text-clean", "text-join"},
+    "text-deduplicate": {"text-clean", "text-stats", "text-join"},
     "pdf-rotate-cw": {"pdf-info","pdf-text","pdf-compress","pdf-to-images","pdf-split","pdf-extract-images","pdf-metadata-clean","pdf-outline","pdf-remove-blank"},
     "pdf-remove-blank": {"pdf-info","pdf-text","pdf-compress","pdf-to-images","pdf-split","pdf-extract-images","pdf-metadata-clean","pdf-outline"},
     "image-trim-border": {"image-info","image-compress","image-resize","image-png","image-webp","image-palette","image-ocr","qr-read","image-to-pdf","image-pixelate"},
@@ -84,6 +85,8 @@ PIPELINE_TRANSITIONS = {
     "json-diff": {"text-clean","text-stats","text-deduplicate"},
 }
 
+MULTI_INPUT_TOOLS = {"text-join"}
+MAX_DAG_PARENTS = 3
 TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
@@ -140,18 +143,25 @@ def validate_dag(job):
         if tool_id not in RUNNERS:
             raise RuntimeError("Unknown DAG processor: "+str(tool_id))
         dependencies=item.get("dependsOn")
-        if not isinstance(dependencies,list) or len(dependencies)>1:
-            raise RuntimeError("Each DAG node must have zero or one parent dependency.")
+        if not isinstance(dependencies,list):
+            raise RuntimeError("DAG dependencies must be a list.")
+        multi_input=tool_id in MULTI_INPUT_TOOLS
+        if len(dependencies)>(MAX_DAG_PARENTS if multi_input else 1) or (multi_input and len(dependencies)<2):
+            if multi_input:
+                raise RuntimeError(f"{tool_id} must receive between 2 and {MAX_DAG_PARENTS} parent artifacts.")
+            raise RuntimeError(f"{tool_id} accepts only one parent; text-join is the only multi-input DAG processor.")
         if not dependencies:
             roots.append(node_id)
         else:
-            parent_id=dependencies[0]
-            if not isinstance(parent_id,str) or parent_id not in by_id or parent_id==node_id:
-                raise RuntimeError("DAG dependencies must reference an earlier node.")
-            parent=by_id[parent_id]
-            if tool_id not in PIPELINE_TRANSITIONS.get(parent["toolId"],set()):
-                raise RuntimeError(f"Unsupported DAG transition: {parent['toolId']} -> {tool_id}.")
-            children[parent_id]=children.get(parent_id,0)+1
+            seen_parents=set()
+            for parent_id in dependencies:
+                if not isinstance(parent_id,str) or parent_id not in by_id or parent_id==node_id or parent_id in seen_parents:
+                    raise RuntimeError("DAG dependencies must reference distinct earlier nodes.")
+                seen_parents.add(parent_id)
+                parent=by_id[parent_id]
+                if tool_id not in PIPELINE_TRANSITIONS.get(parent["toolId"],set()):
+                    raise RuntimeError(f"Unsupported DAG transition: {parent['toolId']} -> {tool_id}.")
+                children[parent_id]=children.get(parent_id,0)+1
         node={"id":node_id,"toolId":tool_id,"dependsOn":list(dependencies),"reason":str(item.get("reason") or "")[:240]}
         by_id[node_id]=node; clean.append(node)
     if not roots:
@@ -161,8 +171,8 @@ def validate_dag(job):
     if clean[0]["toolId"]!=job.get("toolId"):
         raise RuntimeError("The first DAG node must match the selected tool.")
     leaves=[node["id"] for node in clean if children.get(node["id"],0)==0]
-    if len(leaves)<2:
-        raise RuntimeError("DAG must retain at least two terminal branch outputs.")
+    if not leaves:
+        raise RuntimeError("DAG must retain at least one terminal output.")
     return clean
 def load_job(path):
     job = json.loads(Path(path).read_text(encoding="utf-8")).get("job", {})
@@ -1741,6 +1751,34 @@ def subtitle_convert(p):
     return {"summary":"Đã chuyển định dạng phụ đề "+("WebVTT → SRT" if is_vtt else "SRT → WebVTT")+"; nội dung cue được giữ nguyên.","output_path":str(out)}
 
 
+def text_join(inputs):
+    paths=inputs if isinstance(inputs,list) else [inputs]
+    if not 2<=len(paths)<=MAX_DAG_PARENTS:
+        raise RuntimeError(f"Text join requires 2 to {MAX_DAG_PARENTS} input artifacts.")
+    sections=[]
+    total=0
+    for index,path in enumerate(paths,1):
+        path=Path(path)
+        if not path.is_file() or path.is_symlink():
+            raise RuntimeError("Text join accepts only regular text files.")
+        size=path.stat().st_size
+        total+=size
+        if total>MAX_PIPELINE_OUTPUT:
+            raise RuntimeError("Combined text join inputs exceed the 45 MB limit.")
+        try:
+            content=path.read_text(encoding="utf-8-sig")
+        except UnicodeError as exc:
+            raise RuntimeError("Text join input is not valid UTF-8: "+path.name) from exc
+        if "\\x00" in content:
+            raise RuntimeError("Text join refuses binary-like input: "+path.name)
+        label=path.name.replace("\\r"," ").replace("\\n"," ").replace("[","(").replace("]",")")[:120]
+        sections.append(f"===== SOURCE {index}: {label} =====\\n{content.strip()}\\n")
+    out=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"/"text-join-result.txt"
+    out.parent.mkdir(parents=True,exist_ok=True)
+    out.write_text("\\n".join(sections).rstrip()+"\\n",encoding="utf-8")
+    return {"summary":f"Đã hợp nhất {len(paths)} nhánh văn bản theo thứ tự phụ thuộc, tổng {total:,} bytes đầu vào.","output_path":str(out)}
+
+
 def text_deduplicate(p):
     raw=p.read_text(encoding="utf-8-sig"); seen=set(); kept=[]; removed=0
     for line in raw.splitlines():
@@ -2297,17 +2335,25 @@ def run_tool_dag(job,source,root):
         for parent_id in node["dependsOn"]: children[parent_id]+=1
     pending=list(nodes)
     while pending:
-        ready=[node for node in pending if not node["dependsOn"] or node["dependsOn"][0] in outputs]
+        ready=[node for node in pending if all(parent_id in outputs for parent_id in node["dependsOn"])]
         if not ready: raise RuntimeError("DAG scheduler found a cycle or unresolved dependency.")
         def execute_node(node):
             node_id=node["id"]; tool_id=node["toolId"]; started=time.perf_counter()
-            parent_id=node["dependsOn"][0] if node["dependsOn"] else None
-            incoming=outputs[parent_id] if parent_id else source
-            isolated=root/f"dag-input-{node_id}-{incoming.name}"
+            parent_ids=node["dependsOn"]
+            incoming_files=[outputs[parent_id] for parent_id in parent_ids] if parent_ids else [source]
+            isolated_files=[]
             try:
-                shutil.copy2(incoming,isolated)
-                input_bytes=isolated.stat().st_size
-                result=TOOLS[tool_id](isolated)
+                for input_index,incoming in enumerate(incoming_files,1):
+                    isolated=root/f"dag-input-{node_id}-{input_index}-{incoming.name}"
+                    shutil.copy2(incoming,isolated)
+                    isolated_files.append(isolated)
+                input_bytes=sum(path.stat().st_size for path in isolated_files)
+                if input_bytes>MAX_PIPELINE_OUTPUT:
+                    raise RuntimeError("Combined DAG inputs exceed the 45 MB per-node input limit.")
+                if len(isolated_files)>1 and tool_id not in MULTI_INPUT_TOOLS:
+                    raise RuntimeError(f"Processor {tool_id} does not support multiple input artifacts.")
+                processor_input=isolated_files if len(isolated_files)>1 else isolated_files[0]
+                result=TOOLS[tool_id](processor_input)
                 if not isinstance(result,dict):
                     raise RuntimeError(f"Processor {tool_id} returned an invalid result.")
                 summary=str(result.get("summary","")).strip()
@@ -2321,7 +2367,7 @@ def run_tool_dag(job,source,root):
                     "inputBytes":input_bytes,"outputBytes":output_bytes,"summary":_safe_trace_text(summary,root)[:180]}
                 return node_id,output,summary,trace,None
             except Exception as exc:
-                try: input_bytes=isolated.stat().st_size if isolated.is_file() else 0
+                try: input_bytes=sum(path.stat().st_size for path in isolated_files if path.is_file())
                 except OSError: input_bytes=0
                 message=str(exc).strip() or type(exc).__name__
                 trace={"nodeId":node_id,"step":order[node_id]+1,"total":len(nodes),"toolId":tool_id,
