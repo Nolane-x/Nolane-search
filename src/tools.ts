@@ -209,7 +209,7 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "repo-dependencies": ["text-clean","text-stats"],
   "repo-license-report": ["text-clean","text-stats"],
   "repo-secret-scan": ["text-clean","text-stats"],
-  "repo-todo-scan": ["text-clean","text-stats"],
+  "repo-todo-scan": ["text-clean","text-deduplicate","text-stats"],
   "repo-code-stats": ["text-clean","text-stats"],
   "repo-config-audit": ["text-clean","text-stats"],
   "repo-duplicates": ["csv-profile","csv-clean","csv-to-xlsx","csv-to-json"],

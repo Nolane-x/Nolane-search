@@ -194,6 +194,9 @@ describe("Nolane Tools registry", () => {
       {toolId:"repo-duplicates"},{toolId:"csv-profile"},
     ]).ok).toBe(true);
     expect(validateToolPipeline({mimeType:"application/zip",fileName:"source.zip"}, [
+      {toolId:"repo-todo-scan"},{toolId:"text-deduplicate"},
+    ]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"application/zip",fileName:"source.zip"}, [
       {toolId:"repo-inventory"},{toolId:"pdf-text"},
     ]).ok).toBe(false);
   });
