@@ -31,7 +31,8 @@ RUNNERS = {
     "text-collapse-whitespace", "text-remove-punctuation", "text-to-ascii", "text-html-escape", "text-html-unescape", "text-extract-mentions", "text-extract-hex-colors", "text-extract-phones", "text-dedupe-lines", "text-count-report", "text-quote-lines", "text-unquote-lines", "csv-transpose", "csv-sort-rows", "csv-dedupe-rows", "csv-to-xml", "csv-to-html", "json-sort-array", "json-remove-nulls", "json-to-html-table",
     "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv",
     "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "html-sanitize", "xml-tree-report", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values",
-    "text-sentence-case", "text-normalize-quotes", "text-normalize-dashes", "text-reverse-word-order", "text-extract-words", "text-extract-sentences", "text-dedupe-sentences", "text-remove-markdown-formatting", "text-markdown-toc", "text-markdown-code-blocks", "text-markdown-table-extract", "text-extract-numbered-lists", "text-join-hyphenated-lines", "text-strip-bom", "text-normalize-paragraph-spacing", "csv-schema-infer", "csv-duplicates-report", "csv-sample-rows", "json-array-stats", "json-canonicalize"
+    "text-sentence-case", "text-normalize-quotes", "text-normalize-dashes", "text-reverse-word-order", "text-extract-words", "text-extract-sentences", "text-dedupe-sentences", "text-remove-markdown-formatting", "text-markdown-toc", "text-markdown-code-blocks", "text-markdown-table-extract", "text-extract-numbered-lists", "text-join-hyphenated-lines", "text-strip-bom", "text-normalize-paragraph-spacing", "csv-schema-infer", "csv-duplicates-report", "csv-sample-rows", "json-array-stats", "json-canonicalize",
+    "text-extract-todo-comments", "text-extract-markdown-images", "text-strip-markdown-frontmatter", "text-markdown-to-plain", "text-sort-unique-words", "text-word-to-lines", "text-join-lines", "text-extract-domains", "text-extract-uuids", "text-extract-semver", "text-extract-ipv6", "text-redact-secrets", "text-extract-comment-lines", "text-tabs-to-spaces", "text-escape-regex", "text-unescape-regex", "json-merge-objects", "json-array-dedupe", "json-array-to-lines", "csv-trim-cells", "csv-remove-empty-columns", "csv-empty-cell-report"
 }
 
 PIPELINE_TRANSITIONS = {
@@ -228,6 +229,28 @@ PIPELINE_TRANSITIONS = {
     "csv-sample-rows": {"csv-profile","csv-clean","csv-column-stats"},
     "json-array-stats": {"json-format","json-keys-report","json-schema"},
     "json-canonicalize": {"json-format","json-minify","json-sort-keys"},
+    "text-extract-todo-comments": {"code-todos","text-clean","text-stats"},
+    "text-extract-markdown-images": {"html-extract-images","text-clean","text-stats"},
+    "text-strip-markdown-frontmatter": {"text-markdown-to-plain","markdown-outline","text-clean"},
+    "text-markdown-to-plain": {"text-clean","text-stats","text-dedupe-lines"},
+    "text-sort-unique-words": {"text-word-frequency","text-stats"},
+    "text-word-to-lines": {"text-sort-lines","text-dedupe-lines","text-stats"},
+    "text-join-lines": {"text-clean","text-stats","text-wrap"},
+    "text-extract-domains": {"text-deduplicate","text-stats"},
+    "text-extract-uuids": {"text-deduplicate","text-stats"},
+    "text-extract-semver": {"text-deduplicate","text-stats"},
+    "text-extract-ipv6": {"text-deduplicate","text-stats"},
+    "text-redact-secrets": {"text-clean","text-stats"},
+    "text-extract-comment-lines": {"code-todos","text-deduplicate","text-stats"},
+    "text-tabs-to-spaces": {"text-clean","text-stats"},
+    "text-escape-regex": {"text-clean","text-stats"},
+    "text-unescape-regex": {"text-clean","text-stats"},
+    "json-merge-objects": {"json-canonicalize","json-format","json-schema"},
+    "json-array-dedupe": {"json-sort-array","json-canonicalize","json-format"},
+    "json-array-to-lines": {"text-clean","text-stats"},
+    "csv-trim-cells": {"csv-profile","csv-clean","csv-schema-infer"},
+    "csv-remove-empty-columns": {"csv-profile","csv-schema-infer","csv-clean"},
+    "csv-empty-cell-report": {"csv-profile","csv-schema-infer"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
@@ -2319,6 +2342,295 @@ def json_canonicalize(p):
     except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
     output=json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(",",":"),allow_nan=False)
     return _write_text_artifact_ext(p,"canonical",".json",output,"Canonical JSON serialization")
+
+
+def _ordered_unique_casefold(values):
+    result=[]
+    seen=set()
+    for value in values:
+        key=value.casefold()
+        if key not in seen:
+            seen.add(key)
+            result.append(value)
+    return result
+
+
+def text_extract_todo_comments(p):
+    raw=_read_text_source(p)
+    results=[]
+    for line_number,line in enumerate(raw.splitlines(),1):
+        match=re.search(r"\b(TODO|FIXME|BUG|HACK|XXX|NOTE)\b\s*[:\-]?\s*(.*)",line,re.I)
+        if match:
+            results.append(f"{line_number}\t{match.group(1).upper()}\t{match.group(2).strip()}")
+    output="\n".join(results)
+    return _write_text_artifact(p,"todo-comments",output+("\n" if output else ""),"TODO/FIXME extraction",str(len(results))+" item(s)")
+
+
+def text_extract_markdown_images(p):
+    raw=_read_text_source(p)
+    values=[]
+    pattern=r"!\[([^\]\n]*)\]\(([^)\s]+)(?:\s+[\x22\x27]([^\x22\x27]*)[\x22\x27])?\)"
+    for match in re.finditer(pattern,raw):
+        alt,url,title=match.groups()
+        values.append(json.dumps({"alt":alt,"url":url,"title":title or ""},ensure_ascii=False))
+    output="\n".join(_ordered_unique_casefold(values))
+    return _write_text_artifact(p,"markdown-images",output+("\n" if output else ""),"Markdown image extraction",str(len(values))+" image(s)")
+
+
+def text_strip_markdown_frontmatter(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines(keepends=True)
+    if not lines or lines[0].strip()!="---":
+        return _write_text_artifact(p,"no-frontmatter",raw,"Markdown frontmatter removal","no frontmatter detected")
+    closing=None
+    for index in range(1,len(lines)):
+        if lines[index].strip() in {"---","..."}:
+            closing=index
+            break
+    if closing is None:
+        raise RuntimeError("Markdown frontmatter starts with --- but has no closing --- or ... delimiter.")
+    output="".join(lines[closing+1:])
+    return _write_text_artifact(p,"no-frontmatter",output,"Markdown frontmatter removal","frontmatter removed")
+
+
+def text_markdown_to_plain(p):
+    raw=_read_text_source(p)
+    lines=[]
+    fence=chr(96)*3
+    in_fence=False
+    for line in raw.splitlines():
+        stripped=line.lstrip()
+        if stripped.startswith((fence,"~~~")):
+            in_fence=not in_fence
+            continue
+        if in_fence:
+            lines.append(line)
+            continue
+        value=line
+        value=re.sub(r"!\[([^\]]*)\]\([^)]+\)",r"\1",value)
+        value=re.sub(r"(?<!!)\[([^\]]+)\]\([^)]+\)",r"\1",value)
+        value=re.sub(r"<(https?://[^>]+)>",r"\1",value)
+        value=re.sub(r"^\s{0,3}#{1,6}\s*","",value)
+        value=re.sub(r"^\s{0,3}(?:[-*+]|\d+[.)])\s+","",value)
+        value=re.sub(r"^\s{0,3}>\s?","",value)
+        value=re.sub(r"^\s{0,3}[-*_]{3,}\s*$","",value)
+        value=re.sub(r"(\*\*|__|\*|_|~~|"+re.escape(chr(96))+r"+)","",value)
+        value=re.sub(r"<[^>]+>","",value)
+        lines.append(value)
+    output="\n".join(lines)
+    output=re.sub(r"\n{3,}","\n\n",output).strip()
+    return _write_text_artifact(p,"markdown-plain",output,"Markdown to plain text")
+
+
+def text_sort_unique_words(p):
+    raw=_read_text_source(p)
+    words=re.findall(r"[^\W_]+(?:['’][^\W_]+)?",raw,flags=re.UNICODE)
+    unique=_ordered_unique_casefold(words)
+    unique.sort(key=lambda value:(value.casefold(),value))
+    output="\n".join(unique)
+    return _write_text_artifact(p,"sorted-words",output+("\n" if output else ""),"Unique word sorting",str(len(unique))+" word(s)")
+
+
+def text_word_to_lines(p):
+    raw=_read_text_source(p)
+    words=re.findall(r"\S+",raw,flags=re.UNICODE)
+    output="\n".join(words)
+    return _write_text_artifact(p,"one-word-per-line",output+("\n" if output else ""),"Word to lines conversion",str(len(words))+" token(s)")
+
+
+def text_join_lines(p):
+    raw=_read_text_source(p)
+    values=[line.strip() for line in raw.splitlines() if line.strip()]
+    output=" ".join(values)
+    return _write_text_artifact(p,"joined-lines",output,"Line joining",str(len(values))+" non-empty line(s)")
+
+
+def text_extract_domains(p):
+    raw=_read_text_source(p)
+    pattern=r"(?<![@\w.-])(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,63}(?![\w-])"
+    values=[value.rstrip(".").lower() for value in re.findall(pattern,raw,re.I)]
+    values=_ordered_unique_casefold(values)
+    return _write_text_artifact(p,"domains","\n".join(values)+("\n" if values else ""),"Domain extraction",str(len(values))+" domain(s)")
+
+
+def text_extract_uuids(p):
+    raw=_read_text_source(p)
+    pattern=r"(?<![0-9A-Fa-f])[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1-5][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}(?![0-9A-Fa-f])"
+    values=_ordered_unique_casefold(re.findall(pattern,raw))
+    return _write_text_artifact(p,"uuids","\n".join(values)+("\n" if values else ""),"UUID extraction",str(len(values))+" UUID(s)")
+
+
+def text_extract_semver(p):
+    raw=_read_text_source(p)
+    pattern=r"(?<![A-Za-z0-9])v?(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?![A-Za-z0-9])"
+    values=_ordered_unique_casefold(re.findall(pattern,raw))
+    return _write_text_artifact(p,"semver","\n".join(values)+("\n" if values else ""),"Semantic version extraction",str(len(values))+" version(s)")
+
+
+def text_extract_ipv6(p):
+    import ipaddress
+    raw=_read_text_source(p)
+    candidates=re.findall(r"(?<![A-Za-z0-9:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![A-Za-z0-9:])",raw)
+    values=[]
+    for value in candidates:
+        try:
+            parsed=ipaddress.ip_address(value)
+            if parsed.version==6:
+                canonical=parsed.compressed
+                if canonical not in values: values.append(canonical)
+        except ValueError:
+            continue
+    return _write_text_artifact(p,"ipv6","\n".join(values)+("\n" if values else ""),"IPv6 extraction",str(len(values))+" valid address(es)")
+
+
+def text_redact_secrets(p):
+    raw=_read_text_source(p)
+    patterns=[
+        (r"\bgithub_pat_[A-Za-z0-9_]{20,}\b","GitHub token"),
+        (r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b","GitHub token"),
+        (r"\bsk-[A-Za-z0-9_-]{20,}\b","API key"),
+        (r"\bAIza[0-9A-Za-z_-]{35}\b","Google API key"),
+        (r"\bAKIA[0-9A-Z]{16}\b","AWS access key"),
+        (r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b","Slack token"),
+        (r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b","JWT"),
+    ]
+    output=raw
+    total=0
+    for pattern,label in patterns:
+        output,count=re.subn(pattern,"[REDACTED:"+label+"]",output)
+        total+=count
+    assignment=r"(?i)\b(api[_-]?key|access[_-]?token|secret|password|client[_-]?secret)\b(\s*[:=]\s*)([\x22\x27]?)([^\s,;\x22\x27]+)"
+    def replace_assignment(match):
+        nonlocal total
+        total+=1
+        return match.group(1)+match.group(2)+match.group(3)+"[REDACTED]"
+    output=re.sub(assignment,replace_assignment,output)
+    return _write_text_artifact(p,"redacted-secrets",output,"Secret redaction",str(total)+" candidate(s) redacted")
+
+
+def text_extract_comment_lines(p):
+    raw=_read_text_source(p)
+    results=[]
+    patterns=(r"//",r"/\*",r"\*",r"\*/",r"--",r"#")
+    for line_number,line in enumerate(raw.splitlines(),1):
+        stripped=line.lstrip()
+        if any(re.match(r"^\s*"+pattern,line) for pattern in patterns):
+            results.append(f"{line_number}\t{stripped}")
+    output="\n".join(results)
+    return _write_text_artifact(p,"comment-lines",output+("\n" if output else ""),"Comment-line extraction",str(len(results))+" line(s)")
+
+
+def text_tabs_to_spaces(p):
+    raw=_read_text_source(p)
+    output=raw.expandtabs(4)
+    return _write_text_artifact(p,"spaces",output,"Tabs to four spaces")
+
+
+def text_escape_regex(p):
+    raw=_read_text_source(p)
+    output=re.escape(raw)
+    return _write_text_artifact(p,"regex-escaped",output,"Regex escaping")
+
+
+def text_unescape_regex(p):
+    raw=_read_text_source(p)
+    output=re.sub(r"\\([.^$*+?{}\[\]|()\\])",r"\1",raw)
+    return _write_text_artifact(p,"regex-unescaped",output,"Regex unescaping")
+
+
+def json_merge_objects(p):
+    raw=_read_text_source(p)
+    try: values=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    if not isinstance(values,list) or any(not isinstance(value,dict) for value in values):
+        raise RuntimeError("JSON merge expects an array of objects.")
+    if len(values)>10_000: raise RuntimeError("JSON merge is limited to 10,000 objects.")
+    merged={}
+    for value in values:
+        merged.update(value)
+    output=json.dumps(merged,ensure_ascii=False,indent=2,allow_nan=False)
+    return _write_text_artifact(p,"merged-object",output+"\n","JSON object merge",str(len(values))+" object(s)")
+
+
+def json_array_dedupe(p):
+    raw=_read_text_source(p)
+    try: values=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    if not isinstance(values,list): raise RuntimeError("JSON array deduplication expects a top-level array.")
+    seen=set()
+    unique=[]
+    for value in values:
+        try: key=json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(",",":"),allow_nan=False)
+        except ValueError as exc: raise RuntimeError("JSON contains a non-finite numeric value.") from exc
+        if key not in seen:
+            seen.add(key)
+            unique.append(value)
+        if len(unique)>100_000: raise RuntimeError("JSON array deduplication exceeds 100,000 unique items.")
+    output=json.dumps(unique,ensure_ascii=False,indent=2,allow_nan=False)
+    return _write_text_artifact(p,"unique-array",output+"\n","JSON array deduplication",str(len(values)-len(unique))+" duplicate item(s) removed")
+
+
+def json_array_to_lines(p):
+    raw=_read_text_source(p)
+    try: values=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    if not isinstance(values,list): raise RuntimeError("JSON array to lines expects a top-level array.")
+    if len(values)>100_000: raise RuntimeError("JSON array to lines is limited to 100,000 items.")
+    if any(not isinstance(value,str) for value in values):
+        raise RuntimeError("JSON array to lines requires every item to be a string.")
+    output="\n".join(values)
+    return _write_text_artifact(p,"array-lines",output+("\n" if output else ""),"JSON string array to lines",str(len(values))+" line(s)")
+
+
+def csv_trim_cells(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    stream=io.StringIO(newline="")
+    csv.writer(stream,lineterminator="\n").writerows([[cell.strip() for cell in row] for row in rows])
+    return _write_text_artifact_ext(p,"trimmed",".csv",stream.getvalue(),"CSV cell trimming")
+
+
+def csv_remove_empty_columns(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    width=max((len(row) for row in rows),default=0)
+    if width>200 or len(rows)>100_001: raise RuntimeError("CSV empty-column removal is limited to 100,000 rows and 200 columns.")
+    padded=[row+[""]*(width-len(row)) for row in rows]
+    if len(padded)==1:
+        keep=list(range(width))
+    else:
+        keep=[index for index in range(width) if any(row[index].strip() for row in padded[1:])]
+    stream=io.StringIO(newline="")
+    csv.writer(stream,lineterminator="\n").writerows([[row[index] for index in keep] for row in padded])
+    return _write_text_artifact_ext(p,"no-empty-columns",".csv",stream.getvalue(),"CSV empty-column removal",str(width-len(keep))+" column(s) removed")
+
+
+def csv_empty_cell_report(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    headers=rows[0]
+    if len(headers)>200 or len(rows)>100_001: raise RuntimeError("CSV empty-cell report is limited to 100,000 rows and 200 columns.")
+    body=rows[1:]
+    width=len(headers)
+    total=len(body)*width
+    empty_total=0
+    lines=["CSV empty-cell report","Rows: "+str(len(body)),"Columns: "+str(width)]
+    for index,header in enumerate(headers):
+        missing=sum(1 for row in body if index>=len(row) or not row[index].strip())
+        empty_total+=missing
+        percent=(missing*100/len(body)) if body else 0
+        lines.append(json.dumps({"column":header,"empty":missing,"non_empty":len(body)-missing,"empty_percent":round(percent,2)},ensure_ascii=False))
+    lines.append("Total empty cells: "+str(empty_total))
+    lines.append("Total data cells: "+str(total))
+    return _write_text_artifact(p,"empty-cell-report","\n".join(lines)+"\n","CSV empty-cell report")
 
 
 def subtitle_text(p):
@@ -5775,6 +6087,14 @@ TOOLS={
  "text-join-hyphenated-lines":text_join_hyphenated_lines,"text-strip-bom":text_strip_bom,"text-normalize-paragraph-spacing":text_normalize_paragraph_spacing,
  "csv-schema-infer":csv_schema_infer,"csv-duplicates-report":csv_duplicates_report,"csv-sample-rows":csv_sample_rows,
  "json-array-stats":json_array_stats,"json-canonicalize":json_canonicalize,
+ "text-extract-todo-comments":text_extract_todo_comments,"text-extract-markdown-images":text_extract_markdown_images,
+ "text-strip-markdown-frontmatter":text_strip_markdown_frontmatter,"text-markdown-to-plain":text_markdown_to_plain,
+ "text-sort-unique-words":text_sort_unique_words,"text-word-to-lines":text_word_to_lines,"text-join-lines":text_join_lines,
+ "text-extract-domains":text_extract_domains,"text-extract-uuids":text_extract_uuids,"text-extract-semver":text_extract_semver,
+ "text-extract-ipv6":text_extract_ipv6,"text-redact-secrets":text_redact_secrets,"text-extract-comment-lines":text_extract_comment_lines,
+ "text-tabs-to-spaces":text_tabs_to_spaces,"text-escape-regex":text_escape_regex,"text-unescape-regex":text_unescape_regex,
+ "json-merge-objects":json_merge_objects,"json-array-dedupe":json_array_dedupe,"json-array-to-lines":json_array_to_lines,
+ "csv-trim-cells":csv_trim_cells,"csv-remove-empty-columns":csv_remove_empty_columns,"csv-empty-cell-report":csv_empty_cell_report,
 }
 
 

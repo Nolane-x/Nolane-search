@@ -14,6 +14,7 @@ const TEXT_TOOL_IDS = new Set([
   "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv",
   "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values",
   "text-sentence-case", "text-normalize-quotes", "text-normalize-dashes", "text-reverse-word-order", "text-extract-words", "text-extract-sentences", "text-dedupe-sentences", "text-remove-markdown-formatting", "text-markdown-toc", "text-markdown-code-blocks", "text-markdown-table-extract", "text-extract-numbered-lists", "text-join-hyphenated-lines", "text-strip-bom", "text-normalize-paragraph-spacing", "csv-schema-infer", "csv-duplicates-report", "csv-sample-rows", "json-array-stats", "json-canonicalize",
+  "text-extract-todo-comments", "text-extract-markdown-images", "text-strip-markdown-frontmatter", "text-markdown-to-plain", "text-sort-unique-words", "text-word-to-lines", "text-join-lines", "text-extract-domains", "text-extract-uuids", "text-extract-semver", "text-extract-ipv6", "text-redact-secrets", "text-extract-comment-lines", "text-tabs-to-spaces", "text-escape-regex", "text-unescape-regex", "json-merge-objects", "json-array-dedupe", "json-array-to-lines", "csv-trim-cells", "csv-remove-empty-columns", "csv-empty-cell-report",
 ]);
 
 export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
@@ -886,6 +887,182 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     const value=JSON.parse(content);
     const sort=(item:unknown):unknown=>{if(Array.isArray(item))return item.map(sort);if(item&&typeof item==="object"){const result:Record<string,unknown>={};for(const key of Object.keys(item).sort())result[key]=sort((item as Record<string,unknown>)[key]);return result;}return item;};
     return JSON.stringify(sort(value));
+  }
+  if (toolId === "text-extract-todo-comments") {
+    return content.split(/\r?\n/).flatMap((line,index)=>{
+      const match=line.match(/\b(TODO|FIXME|BUG|HACK|XXX|NOTE)\b\s*[:\-]?\s*(.*)/i);
+      return match?[(index+1)+"\t"+match[1]!.toUpperCase()+"\t"+match[2]!.trim()]:[];
+    }).join("\n");
+  }
+  if (toolId === "text-extract-markdown-images") {
+    const values:string[]=[];const pattern=/!\[([^\]\n]*)\]\(([^)\s]+)(?:\s+["']([^"']*)["'])?\)/g;
+    for(const match of content.matchAll(pattern)) values.push(JSON.stringify({alt:match[1],url:match[2],title:match[3]||""}));
+    return [...new Set(values)].join("\n");
+  }
+  if (toolId === "text-strip-markdown-frontmatter") {
+    const lines=content.split(/\r?\n/);
+    if(lines[0]?.trim()!=="---") return content;
+    const end=lines.findIndex((line,index)=>index>0&&["---","..."].includes(line.trim()));
+    if(end<0) throw new Error("Markdown frontmatter has no closing delimiter.");
+    return lines.slice(end+1).join("\n");
+  }
+  if (toolId === "text-markdown-to-plain") {
+    const fence=String.fromCharCode(96).repeat(3);let inFence=false;
+    const lines:string[]=[];
+    for(const line of content.split(/\r?\n/)){
+      const trimmed=line.trimStart();
+      if(trimmed.startsWith(fence)||/^\s{0,3}~~~/.test(line)){inFence=!inFence;continue;}
+      if(inFence){lines.push(line);continue;}
+      let value=line;
+      value=value.replace(/!\[([^\]]*)\]\([^)]+\)/g,"$1").replace(/(?<!!)\[([^\]]+)\]\([^)]+\)/g,"$1");
+      value=value.replace(/<(https?:\/\/[^>]+)>/g,"$1").replace(/^\s{0,3}#{1,6}\s*/,"");
+      value=value.replace(/^\s{0,3}(?:[-*+]|\d+[.)])\s+/,"").replace(/^\s{0,3}>\s?/,"");
+      value=value.replace(/^\s{0,3}[-*_]{3,}\s*$/,"").replace(/<[^>]+>/g,"");
+      value=value.replace(/(\*\*|__|\*|_|~~)/g,"").replace(new RegExp(fence+"+","g"),"");
+      lines.push(value);
+    }
+    return lines.join("\n").replace(/\n{3,}/g,"\n\n").trim();
+  }
+  if (toolId === "text-sort-unique-words") {
+    const words=content.match(/[^\W_]+(?:['’][^\W_]+)?/gu)||[];
+    const seen=new Set<string>();
+    const unique=words.filter(word=>{const key=word.toLocaleLowerCase();if(seen.has(key))return false;seen.add(key);return true;});
+    return unique.sort((a,b)=>a.toLocaleLowerCase().localeCompare(b.toLocaleLowerCase())||a.localeCompare(b)).join("\n");
+  }
+  if (toolId === "text-word-to-lines") return (content.match(/\S+/gu)||[]).join("\n");
+  if (toolId === "text-join-lines") return content.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).join(" ");
+  if (toolId === "text-extract-domains") {
+    const values=content.match(/(?<![@\w.-])(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,63}(?![\w-])/gi)||[];
+    const seen=new Set<string>();
+    return values.map(value=>value.replace(/\.$/,"").toLowerCase()).filter(value=>{if(seen.has(value))return false;seen.add(value);return true;}).join("\n");
+  }
+  if (toolId === "text-extract-uuids") {
+    const values=content.match(/(?<![0-9A-Fa-f])[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1-5][0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}(?![0-9A-Fa-f])/g)||[];
+    const seen=new Set<string>();
+    return values.filter(value=>{const key=value.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).join("\n");
+  }
+  if (toolId === "text-extract-semver") {
+    const values=content.match(/(?<![A-Za-z0-9])v?(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?![A-Za-z0-9])/g)||[];
+    const seen=new Set<string>();
+    return values.filter(value=>{const key=value.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).join("\n");
+  }
+  if (toolId === "text-extract-ipv6") {
+    const candidates=content.match(/(?<![A-Za-z0-9:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![A-Za-z0-9:])/g)||[];
+    const valid=candidates.filter(value=>{
+      if(value.split("::").length>2) return false;
+      const compressed=value.includes("::");
+      const parts=value.split(":").filter(Boolean);
+      if(parts.some(part=>part.length>4||!/^[0-9A-Fa-f]+$/.test(part))) return false;
+      return compressed?parts.length<8:parts.length===8;
+    });
+    return [...new Set(valid.map(value=>value.toLowerCase()))].join("\n");
+  }
+  if (toolId === "text-redact-secrets") {
+    let output=content;
+    const patterns=[
+      [/\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,"GitHub token"],
+      [/\bgh[pousr]_[A-Za-z0-9_]{20,}\b/g,"GitHub token"],
+      [/\bsk-[A-Za-z0-9_-]{20,}\b/g,"API key"],
+      [/\bAIza[0-9A-Za-z_-]{35}\b/g,"Google API key"],
+      [/\bAKIA[0-9A-Z]{16}\b/g,"AWS access key"],
+      [/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,"Slack token"],
+      [/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g,"JWT"],
+    ] as Array<[RegExp,string]>;
+    for(const [pattern,label] of patterns) output=output.replace(pattern,"[REDACTED:"+label+"]");
+    output=output.replace(/\b(api[_-]?key|access[_-]?token|secret|password|client[_-]?secret)\b(\s*[:=]\s*)(["']?)([^\s,;"']+)/gi,(_match,key:string,separator:string,quote:string)=>key+separator+quote+"[REDACTED]");
+    return output;
+  }
+  if (toolId === "text-extract-comment-lines") {
+    const patterns=[/^\/\//,/^\/\*/,/^\*/,/^\*\//,/^--/,/^#/];
+    return content.split(/\r?\n/).flatMap((line,index)=>patterns.some(pattern=>pattern.test(line.trimStart()))?[(index+1)+"\t"+line.trim()]:[]).join("\n");
+  }
+  if (toolId === "text-tabs-to-spaces") {
+    return content.split(/\r?\n/).map(line=>{
+      let column=0,result="";
+      for(const char of line){if(char==="\t"){const spaces=4-(column%4);result+=" ".repeat(spaces);column+=spaces;}else{result+=char;column+=1;}}
+      return result;
+    }).join("\n");
+  }
+  if (toolId === "text-escape-regex") {
+    const special = ".*+?^$()|{}[]\\";
+    return [...content].map(character => special.includes(character) ? "\\" + character : character).join("");
+  }
+  if (toolId === "text-unescape-regex") return content.replace(/\\([.^$*+?{}\[\]|()\\])/g,"$1");
+  if (toolId === "json-merge-objects") {
+    const values=JSON.parse(content);
+    if(!Array.isArray(values)||values.some(value=>!value||typeof value!=="object"||Array.isArray(value))) throw new Error("JSON merge expects an array of objects.");
+    if(values.length>10_000) throw new Error("JSON merge is limited to 10,000 objects.");
+    return JSON.stringify(Object.assign({},...values),null,2);
+  }
+  if (toolId === "json-array-dedupe") {
+    const values=JSON.parse(content);if(!Array.isArray(values)) throw new Error("JSON array deduplication expects a top-level array.");
+    const canonical=(value:unknown):string=>{
+      if(Array.isArray(value))return "["+value.map(canonical).join(",")+"]";
+      if(value&&typeof value==="object"){const object=value as Record<string,unknown>;return "{"+Object.keys(object).sort().map(key=>JSON.stringify(key)+":"+canonical(object[key])).join(",")+"}";}
+      return JSON.stringify(value)??"null";
+    };
+    const seen=new Set<string>();const output:unknown[]=[];
+    for(const value of values){const key=canonical(value);if(!seen.has(key)){seen.add(key);output.push(value);}if(output.length>100_000)throw new Error("JSON array deduplication exceeds 100,000 unique items.");}
+    return JSON.stringify(output,null,2);
+  }
+  if (toolId === "json-array-to-lines") {
+    const values=JSON.parse(content);
+    if(!Array.isArray(values)||values.some(value=>typeof value!=="string")) throw new Error("JSON array to lines requires a string array.");
+    if(values.length>100_000) throw new Error("JSON array to lines is limited to 100,000 items.");
+    return values.join("\n");
+  }
+  if (toolId === "csv-trim-cells" || toolId === "csv-remove-empty-columns" || toolId === "csv-empty-cell-report") {
+    const rows=csvRows(content);if(!rows.length)throw new Error("CSV is empty.");
+    const width=Math.max(0,...rows.map(row=>row.length));
+    if(rows.length>100_001||width>200)throw new Error("CSV processing is limited to 100,000 data rows and 200 columns.");
+    if(toolId==="csv-trim-cells") return rows.map(row=>row.map(value=>csvEscape(value.trim())).join(",")).join("\n");
+    const header=rows[0]!.concat(Array(width-rows[0]!.length).fill(""));
+    const body=rows.slice(1).map(row=>row.concat(Array(width-row.length).fill("")));
+    if(toolId==="csv-remove-empty-columns"){
+      const keep=body.length?Array.from({length:width},(_v,index)=>index).filter(index=>body.some(row=>row[index]!.trim())):Array.from({length:width},(_v,index)=>index);
+      return [header.filter((_value,index)=>keep.includes(index)),...body.map(row=>row.filter((_value,index)=>keep.includes(index)))].map(row=>row.map(csvEscape).join(",")).join("\n");
+    }
+    const lines=["CSV empty-cell report","Rows: "+body.length,"Columns: "+width];let total=0;
+    header.forEach((name,index)=>{
+      const empty=body.filter(row=>!row[index]!.trim()).length;total+=empty;
+      lines.push(JSON.stringify({column:name,empty,non_empty:body.length-empty,empty_percent:body.length?Number((empty*100/body.length).toFixed(2)):0}));
+    });
+    lines.push("Total empty cells: "+total,"Total data cells: "+(body.length*width));
+    return lines.join("\n")+"\n";
+  }
+  if (toolId === "language-detect") {
+    const sample=content.slice(0,20_000);
+    const scripts:Array<[RegExp,string,string]>=[
+      [/[ぁ-ヿ]/g,"Japanese","Hiragana/Katakana"],[/[가-힣]/g,"Korean","Hangul"],
+      [/[一-鿿]/g,"Chinese","Han characters (Japanese without kana may be ambiguous)"],
+      [/[А-Яа-яЁё]/g,"Russian or another Cyrillic language","Cyrillic"],
+      [/[؀-ۿ]/g,"Arabic","Arabic script"],[/[א-ת]/g,"Hebrew","Hebrew script"],
+      [/[Ͱ-Ͽ]/g,"Greek","Greek script"],[/[ก-๛]/g,"Thai","Thai script"],
+      [/[ऀ-ॿ]/g,"Hindi or another Devanagari language","Devanagari"],
+    ];
+    const matches=scripts.map(([pattern,label,evidence])=>({count:(sample.match(pattern)||[]).length,label,evidence})).filter(item=>item.count);
+    if(matches.length) {
+      const best=matches.sort((a,b)=>b.count-a.count)[0]!;
+      return "Most likely: "+best.label+"\nEvidence: "+best.evidence+" ("+best.count+" characters)\nMethod: Unicode-script heuristic, not a full classifier.";
+    }
+    if(/[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(sample)) {
+      return "Most likely: Vietnamese\nEvidence: Vietnamese-specific letters and diacritics\nMethod: heuristic.";
+    }
+    const words=new Set(sample.toLowerCase().match(/[a-zA-ZÀ-ỹ']+/g)||[]);
+    const vocabulary:Record<string,string[]>={
+      English:["the","and","that","with","this","you","for","are","was","have","from"],
+      French:["le","la","les","et","des","une","est","dans","pour","avec","que"],
+      German:["der","die","das","und","ist","mit","ein","eine","nicht","auf","für"],
+      Spanish:["el","la","los","las","y","de","que","una","es","por","para","con"],
+      Portuguese:["o","a","os","as","e","de","que","uma","é","para","com","não"],
+      Italian:["il","lo","la","gli","e","di","che","una","per","con","non"],
+      Indonesian:["yang","dan","ini","itu","untuk","dengan","dari","tidak","adalah"],
+    };
+    const ranked=Object.entries(vocabulary).map(([language,values])=>({language,score:values.filter(word=>words.has(word)).length})).sort((a,b)=>b.score-a.score);
+    const best=ranked[0];
+    return best && best.score>=2
+      ? "Most likely: "+best.language+"\nEvidence: "+best.score+" common-word matches\nMethod: lightweight heuristic; short or mixed text may be misclassified."
+      : "Most likely: Undetermined\nEvidence: insufficient distinctive characters or words\nMethod: lightweight heuristic.";
   }
   if (toolId === "language-detect") {
     const sample=content.slice(0,20_000);
