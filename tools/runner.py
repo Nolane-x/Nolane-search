@@ -24,6 +24,7 @@ RUNNERS = {
     "pdf-rotate-cw","pdf-remove-blank","image-trim-border","image-pixelate","image-diff",
     "audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean",
     "json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join",
+    "markdown-outline","markdown-links","text-redact","text-extract","code-imports","code-todos","code-secret-scan","log-timeline",
 }
 
 PIPELINE_TRANSITIONS = {
@@ -82,11 +83,19 @@ PIPELINE_TRANSITIONS = {
     "csv-to-sqlite": {"sqlite-inspect","sqlite-integrity","sqlite-export"},
     "log-insights": {"text-clean","text-stats","text-deduplicate"},
     "json-diff": {"text-clean","text-stats","text-deduplicate"},
+    "markdown-outline": {"text-clean","text-stats"},
+    "markdown-links": {"csv-profile","csv-clean","csv-to-xlsx","csv-to-json"},
+    "text-redact": {"text-clean","text-stats","text-deduplicate"},
+    "text-extract": {"csv-profile","csv-clean","csv-to-xlsx"},
+    "code-imports": {"text-clean","text-stats"},
+    "code-todos": {"text-clean","text-stats","text-deduplicate"},
+    "code-secret-scan": {"text-clean","text-stats"},
+    "log-timeline": {"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -2273,6 +2282,246 @@ def json_diff(p):
 
 
 
+def _read_small_text(p, limit=5*1024*1024):
+    if p.stat().st_size > limit:
+        raise RuntimeError(f"Text analysis is limited to {limit // (1024*1024)} MB per file.")
+    try:
+        return p.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise RuntimeError("Tệp phải là văn bản UTF-8 hợp lệ.") from exc
+
+
+def markdown_outline(p):
+    raw=_read_small_text(p)
+    lines=raw.splitlines()
+    headings=[]
+    in_fence=False
+    fence_char=None
+    index=0
+    while index < len(lines):
+        line=lines[index]
+        fence=re.match(r"^\s{0,3}(\x60{3,}|~{3,})",line)
+        if fence:
+            marker=fence.group(1)[0]
+            if not in_fence:
+                in_fence=True; fence_char=marker
+            elif marker==fence_char:
+                in_fence=False; fence_char=None
+            index+=1; continue
+        if in_fence:
+            index+=1; continue
+        match=re.match(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$",line)
+        level=0; title=""
+        if match:
+            level=len(match.group(1)); title=match.group(2).strip()
+        elif index+1<len(lines) and line.strip() and re.match(r"^\s{0,3}(=+|-+)\s*$",lines[index+1]):
+            level=1 if lines[index+1].strip().startswith("=") else 2
+            title=line.strip()
+            index+=1
+        if level and title:
+            slug=unicodedata.normalize("NFKD",title).encode("ascii","ignore").decode().lower()
+            slug=re.sub(r"[^a-z0-9\s-]","",slug)
+            slug=re.sub(r"[\s-]+","-",slug).strip("-") or "section"
+            headings.append((level,title,slug,index+1))
+        index+=1
+    report=[f"File: {p.name}",f"Headings: {len(headings):,}",""]
+    report.extend(("  "*(level-1)+f"- {title}  (#{slug})" for level,title,slug,_ in headings))
+    if not headings: report.append("Không tìm thấy heading Markdown ngoài code fence.")
+    report.extend(["","Anchor được chuẩn hóa dạng GitHub-style đơn giản; kiểm tra lại với renderer nếu tài liệu dùng custom slug."])
+    out=p.with_name(p.stem+"-outline.txt")
+    out.write_text("\n".join(report)+"\n",encoding="utf-8")
+    return {"summary":f"Đã trích {len(headings)} heading Markdown từ {p.name}.","output_path":str(out)}
+
+
+def markdown_links(p):
+    raw=_read_small_text(p)
+    rows=[]
+    in_fence=False
+    for line_no,line in enumerate(raw.splitlines(),1):
+        if re.match(r"^\s{0,3}(\x60{3,}|~{3,})",line):
+            in_fence=not in_fence
+            continue
+        if in_fence: continue
+        for match in re.finditer(r"(!?)\[([^\]]{1,300})\]\((<[^>]+>|[^)\s]+)(?:\s+['\"][^)]*['\"])?\)",line):
+            target=unescape(match.group(3).strip("<>"))
+            if target:
+                rows.append((line_no,"image" if match.group(1) else "link",match.group(2),target))
+            if len(rows)>=10000: break
+        if len(rows)>=10000: break
+    out=p.with_name(p.stem+"-links.csv")
+    with out.open("w",encoding="utf-8-sig",newline="") as handle:
+        writer=csv.writer(handle,lineterminator="\n")
+        writer.writerow(["line","kind","label","url"])
+        writer.writerows(rows)
+    return {"summary":f"Đã trích {len(rows):,} liên kết Markdown (giới hạn 10.000).","output_path":str(out)}
+
+
+def text_redact(p):
+    raw=_read_small_text(p)
+    patterns=[
+        ("email",re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",re.I)),
+        ("GitHub token",re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b")),
+        ("AWS access key",re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+        ("OpenAI-style token",re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")),
+        ("Bearer token",re.compile(r"(?i)(\bBearer\s+)[A-Za-z0-9._~+/-]{16,}")),
+        ("credential assignment",re.compile(r"(?i)(\b(?:api[_-]?key|access[_-]?token|client[_-]?secret|password|passwd)\b\s*[:=]\s*['\"]?)([A-Za-z0-9_./+=-]{8,})")),
+        ("phone-like number",re.compile(r"(?<!\w)(?:\+?\d{1,3}[-. ]?)?(?:\(?\d{2,4}\)?[-. ]?)\d{3,4}[-. ]?\d{3,4}(?!\w)")),
+    ]
+    counts={}
+    result=raw
+    for label,pattern in patterns:
+        if label=="credential assignment":
+            result,n=pattern.subn(lambda match: match.group(1)+"[REDACTED]",result)
+        elif label=="Bearer token":
+            result,n=pattern.subn(lambda match: match.group(1)+"[REDACTED]",result)
+        else:
+            result,n=pattern.subn("[REDACTED]",result)
+        counts[label]=n
+    out=p.with_name(p.stem+"-redacted"+(p.suffix if p.suffix else ".txt"))
+    out.write_text(result,encoding="utf-8")
+    total=sum(counts.values())
+    detail=", ".join(f"{name}: {count}" for name,count in counts.items() if count) or "Không phát hiện mẫu phù hợp."
+    return {"summary":f"Đã tạo bản redacted của {p.name}; tổng {total} vùng được thay thế. {detail} Giá trị gốc không được đưa vào báo cáo.","output_path":str(out)}
+
+
+def text_extract(p):
+    import ipaddress
+    raw=_read_small_text(p)
+    found={}
+    patterns=[
+        ("URL",re.compile(r"https?://[^\s<>()\[\]{}\"']+",re.I)),
+        ("email",re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",re.I)),
+        ("IPv4",re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")),
+    ]
+    for kind,pattern in patterns:
+        for match in pattern.finditer(raw):
+            value=match.group(0).rstrip(".,;:!?)]}")
+            if kind=="IPv4":
+                try: ipaddress.IPv4Address(value)
+                except ipaddress.AddressValueError: continue
+            if kind=="URL" and value.endswith("."): value=value[:-1]
+            if not value: continue
+            key=(kind,value)
+            item=found.setdefault(key,{"count":0,"line":raw.count("\n",0,match.start())+1})
+            item["count"]+=1
+            if len(found)>=20000: break
+    out=p.with_name(p.stem+"-entities.csv")
+    with out.open("w",encoding="utf-8-sig",newline="") as handle:
+        writer=csv.writer(handle,lineterminator="\n")
+        writer.writerow(["kind","value","occurrences","first_line"])
+        for (kind,value),item in sorted(found.items(),key=lambda pair:(pair[0][0],pair[0][1].casefold())):
+            writer.writerow([kind,value,item["count"],item["line"]])
+    return {"summary":f"Đã tìm thấy {len(found):,} giá trị URL/email/IPv4 duy nhất; kết quả kèm số lần và dòng đầu tiên.","output_path":str(out)}
+
+
+def code_imports(p):
+    raw=_read_small_text(p)
+    suffix=p.suffix.lower()
+    imports=[]
+    if suffix in {".py",".pyw"}:
+        import ast
+        try: tree=ast.parse(raw,filename=p.name)
+        except SyntaxError as exc: raise RuntimeError(f"Python syntax error at line {exc.lineno}: {exc.msg}") from exc
+        for node in ast.walk(tree):
+            if isinstance(node,ast.Import):
+                imports.extend((node.lineno,alias.name,"import") for alias in node.names)
+            elif isinstance(node,ast.ImportFrom):
+                imports.append((node.lineno,("."*node.level)+(node.module or ""), "from"))
+    elif suffix==".go":
+        imports.extend((i,m.group(1),"import") for i,line in enumerate(raw.splitlines(),1) for m in re.finditer(r'^\s*(?:import\s+)?["\x60]([^"\x60]+)["\x60]',line))
+    else:
+        patterns=[
+            re.compile(r'(?m)^\s*import\s+(?:[^;\n]*?\s+from\s+)?["\']([^"\']+)["\']'),
+            re.compile(r'\b(?:require|import)\s*\(\s*["\']([^"\']+)["\']\s*\)'),
+        ]
+        for pattern in patterns:
+            imports.extend((raw.count("\n",0,m.start())+1,m.group(1),"module") for m in pattern.finditer(raw))
+    unique=sorted(set(imports),key=lambda item:(item[0],item[1]))
+    report=[f"File: {p.name}",f"Static import declarations: {len(unique):,}",""]
+    report.extend(f"L{line}: {kind} {name}" for line,name,kind in unique)
+    if not unique: report.append("Không nhận diện được import/require.")
+    report.extend(["","Phân tích cú pháp/regex tĩnh; không import, tải package hoặc thực thi mã."])
+    out=p.with_name(p.stem+"-imports.txt")
+    out.write_text("\n".join(report)+"\n",encoding="utf-8")
+    return {"summary":f"Đã tìm thấy {len(unique)} khai báo import tĩnh trong {p.name}.","output_path":str(out)}
+
+
+def code_todos(p):
+    raw=_read_small_text(p)
+    pattern=re.compile(r"\b(TODO|FIXME|HACK|BUG|XXX)\b(?:\s*[:\-]?\s*(.*))?",re.I)
+    rows=[]
+    counts={}
+    for line_no,line in enumerate(raw.splitlines(),1):
+        match=pattern.search(line)
+        if match:
+            kind=match.group(1).upper()
+            counts[kind]=counts.get(kind,0)+1
+            rows.append((line_no,kind,match.group(2) or line.strip()))
+    report=[f"File: {p.name}",f"Markers: {len(rows):,}",""]
+    report.extend(f"L{line_no} [{kind}] {message[:240]}" for line_no,kind,message in rows[:2000])
+    if not rows: report.append("Không phát hiện TODO/FIXME/HACK/BUG/XXX.")
+    report.extend(["","Counts: "+(", ".join(f"{key}={value}" for key,value in sorted(counts.items())) if counts else "none")])
+    out=p.with_name(p.stem+"-todos.txt")
+    out.write_text("\n".join(report)+"\n",encoding="utf-8")
+    return {"summary":f"Đã quét {len(raw.splitlines()):,} dòng và tìm {len(rows):,} marker công việc.","output_path":str(out)}
+
+
+def code_secret_scan(p):
+    raw=_read_small_text(p)
+    patterns=[
+        ("GitHub token",re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b")),
+        ("AWS access key",re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+        ("OpenAI-style token",re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")),
+        ("Bearer token",re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]{16,}")),
+        ("Credential assignment",re.compile(r"(?i)\b(?:api[_-]?key|access[_-]?token|client[_-]?secret|password|passwd)\b\s*[:=]\s*['\"]?([A-Za-z0-9_./+=-]{8,})")),
+        ("Private key header",re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----")),
+    ]
+    findings=[]
+    placeholders=("changeme","example","your_","replace_me","placeholder","dummy","testtoken")
+    for line_no,line in enumerate(raw.splitlines(),1):
+        for label,pattern in patterns:
+            for match in pattern.finditer(line):
+                sample=match.group(1) if label=="Credential assignment" and match.lastindex else match.group(0)
+                if sample.casefold().startswith(placeholders): continue
+                findings.append((line_no,label))
+    findings=list(dict.fromkeys(findings))
+    report=[f"File: {p.name}",f"Potential findings: {len(findings):,}",""]
+    report.extend(f"L{line_no}: {label} [value withheld]" for line_no,label in findings[:1000])
+    if not findings: report.append("Không phát hiện mẫu credential phổ biến.")
+    report.extend(["","Static pattern scan only; may include false positives and is not a complete security audit. Secret values are never printed."])
+    out=p.with_name(p.stem+"-secret-scan.txt")
+    out.write_text("\n".join(report)+"\n",encoding="utf-8")
+    return {"summary":f"Quét tĩnh hoàn tất: {len(findings)} kết quả tiềm năng; giá trị secret không được xuất ra.","output_path":str(out)}
+
+
+def log_timeline(p):
+    raw=_read_small_text(p)
+    pattern=re.compile(r"\b(20\d{2}-\d{2}-\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?\b")
+    days={}; hours={}; parsed=[]
+    for line_no,line in enumerate(raw.splitlines(),1):
+        match=pattern.search(line)
+        if not match: continue
+        date=match.group(1); hour=match.group(2)
+        days[date]=days.get(date,0)+1
+        hours[(date,hour)]=hours.get((date,hour),0)+1
+        parsed.append((date,hour,line_no))
+    report=[f"File: {p.name}",f"Timestamp lines: {len(parsed):,}",""]
+    if parsed:
+        report.extend([f"First: {parsed[0][0]} {parsed[0][1]}:xx (line {parsed[0][2]})",
+                       f"Last: {parsed[-1][0]} {parsed[-1][1]}:xx (line {parsed[-1][2]})","",
+                       "By day:"])
+        report.extend(f"{date}: {count:,}" for date,count in sorted(days.items()))
+        report.extend(["","Busiest hours:"])
+        report.extend(f"{date} {hour}:xx — {count:,} lines" for (date,hour),count in sorted(hours.items(),key=lambda item:(-item[1],item[0]))[:24])
+    else:
+        report.append("Không tìm thấy timestamp ISO 8601 dạng YYYY-MM-DD HH:MM:SS.")
+    report.extend(["","Parser nhận diện ISO date-time cơ bản; không chuẩn hóa timezone giữa các dòng."])
+    out=p.with_name(p.stem+"-timeline.txt")
+    out.write_text("\n".join(report)+"\n",encoding="utf-8")
+    return {"summary":f"Đã phân tích {len(parsed):,} dòng có timestamp ISO và gom theo ngày/giờ.","output_path":str(out)}
+
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -2295,6 +2544,8 @@ TOOLS={
  "audio-stereo-split":audio_stereo_split,"audio-metadata-clean":audio_metadata_clean,
  "video-scene-frames":video_scene_frames,"video-metadata-clean":video_metadata_clean,
  "json-flatten-csv":json_flatten_csv,"csv-to-sqlite":csv_to_sqlite,"log-insights":log_insights,"json-diff":json_diff,"text-join":text_join,
+ "markdown-outline":markdown_outline,"markdown-links":markdown_links,"text-redact":text_redact,"text-extract":text_extract,
+ "code-imports":code_imports,"code-todos":code_todos,"code-secret-scan":code_secret_scan,"log-timeline":log_timeline,
 }
 
 
