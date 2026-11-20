@@ -1034,7 +1034,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       await reply(env, chatId,
         "Cú pháp: <code>/workflow_save Tên quy trình | tool-1 -> tool-2</code>\n" +
         "Ví dụ tuyến tính: <code>/workflow_save Video transcript | video-audio -> audio-transcribe</code>\n" +
-        "Ví dụ DAG: <code>/workflow_save Video branches | source=video-audio@input; transcript=audio-transcribe@source; converted=audio-convert@source</code>");
+        "Ví dụ DAG: <code>/workflow_save PDF summary | source=pdf-text@input; clean=text-clean@source; stats=text-stats@clean; unique=text-deduplicate@clean; merged=text-join@stats,unique</code>");
       return;
     }
     const name = args.slice(0, separator).trim();
@@ -1043,13 +1043,14 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     let definition: unknown[];
     if (dagMode) {
       const nodes = rawIds.split(";").map(part => part.trim()).filter(Boolean).map(part => {
-        const match = part.match(/^([a-z][a-z0-9_-]{0,19})\s*=\s*([a-z0-9-]+)\s*@\s*(input|[a-z][a-z0-9_-]{0,19})$/i);
+        const match = part.match(/^([a-z][a-z0-9_-]{0,19})\s*=\s*([a-z0-9-]+)\s*@\s*(input|[a-z][a-z0-9_-]{0,19}(?:,[a-z][a-z0-9_-]{0,19}){0,2})$/i);
         if (!match) return null;
+        const dependencyToken = match[3]!.toLowerCase();
         return { id: match[1]!.toLowerCase(), toolId: match[2]!.toLowerCase(),
-          dependsOn: match[3]!.toLowerCase() === "input" ? [] : [match[3]!.toLowerCase()] };
+          dependsOn: dependencyToken === "input" ? [] : dependencyToken.split(",") };
       });
       if (nodes.length < 2 || nodes.length > 12 || nodes.some(node => !node)) {
-        await reply(env, chatId, "DAG không đúng cú pháp. Dùng <code>a=tool-id@input; b=tool-id@a; c=tool-id@a</code> với 2–12 node.");
+        await reply(env, chatId, "DAG không đúng cú pháp. Dùng <code>a=tool-id@input; b=tool-id@a; c=tool-id@a; merged=text-join@b,c</code>; chỉ text-join nhận 2–3 node cha.");
         return;
       }
       definition = nodes;
@@ -1064,7 +1065,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     try {
       const workflow = await saveToolWorkflow(env, userId, chatId, name, definition);
       const chain = workflow.dag
-        ? workflow.dag.map(node => node.id + "=" + node.toolId + "@" + (node.dependsOn[0] || "input")).join("\n")
+        ? workflow.dag.map(node => node.id + "=" + node.toolId + "@" + (node.dependsOn.join(",") || "input")).join("\n")
         : workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
       await reply(env, chatId,
         "<b>Đã lưu workflow</b>\n" +
@@ -1101,7 +1102,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
             const tool = getTool(node.toolId);
             return "<code>" + htmlEscape(node.id) + "</code> = <b>" + htmlEscape(tool?.name || node.toolId) +
               "</b> <code>" + htmlEscape(node.toolId) + "</code> ← " +
-              htmlEscape(node.dependsOn[0] || "input") +
+              htmlEscape(node.dependsOn.join(",") || "input") +
               (node.reason ? "\n   " + htmlEscape(node.reason.slice(0, 65)) : "");
           })
         : plan.steps.map((step, index) => {
@@ -1225,7 +1226,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       }
       const lines = workflows.map((workflow, index) => {
         const chain = workflow.dag
-          ? workflow.dag.map(node => node.id + " = " + node.toolId + " ← " + (node.dependsOn[0] || "input")).join("\n")
+          ? workflow.dag.map(node => node.id + " = " + node.toolId + " ← " + (node.dependsOn.join(",") || "input")).join("\n")
           : workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
         return (index + 1) + ". <b>" + htmlEscape(workflow.name) + "</b> · <code>" + workflow.id + "</code>\n" +
           (workflow.dag ? "<i>DAG · song song tối đa 3 nhánh</i>\n" : "") + htmlEscape(chain) + "\n" +
@@ -1264,7 +1265,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
         "ai-file-pending:" + userId + ":" + chatId,
       ).run();
       const chain = workflow.dag
-        ? workflow.dag.map(node => node.id + "=" + node.toolId + "@" + (node.dependsOn[0] || "input")).join("\n")
+        ? workflow.dag.map(node => node.id + "=" + node.toolId + "@" + (node.dependsOn.join(",") || "input")).join("\n")
         : workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
       await reply(env, chatId,
         "<b>Workflow đã sẵn sàng</b>\n" +
@@ -1345,7 +1346,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "Trạng thái: " + state + " · lần chạy " + (job.attempt || 1),
       "Tệp: " + htmlEscape(job.fileName),
       (job.workflowDag
-        ? "DAG:\n" + htmlEscape(job.workflowDag.map(node => node.id + " = " + (getTool(node.toolId)?.name || node.toolId) + " ← " + (node.dependsOn[0] || "input")).join("\n"))
+        ? "DAG:\n" + htmlEscape(job.workflowDag.map(node => node.id + " = " + (getTool(node.toolId)?.name || node.toolId) + " ← " + (node.dependsOn.join(",") || "input")).join("\n"))
         : "Pipeline: " + htmlEscape(steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → "))),
     ];
     if (job.retryOf) lines.push("Retry từ: <code>" + htmlEscape(job.retryOf) + "</code>");
@@ -2070,7 +2071,7 @@ async function handleToolUpload(env: Env, message: NonNullable<TelegramUpdate["m
       try {
         const firstToolId = steps[0]!.toolId;
         const chain = workflow.dag
-          ? workflow.dag.map(node => node.id + "=" + node.toolId + "@" + (node.dependsOn[0] || "input")).join("\n")
+          ? workflow.dag.map(node => node.id + "=" + node.toolId + "@" + (node.dependsOn.join(",") || "input")).join("\n")
           : steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ");
         const job = await createToolJob(env, {
           userId, chatId, toolId: firstToolId, fileId: file.fileId, fileName: file.fileName,
