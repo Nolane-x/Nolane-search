@@ -1273,7 +1273,7 @@ def json_to_html_table(p):
             parts.append("<td>"+escape(content)+"</td>")
         parts.append("</tr>")
     parts.append("</tbody></table></body></html>")
-    return _write_text_artifact_ext(p,"table",".html","JSON to HTML table",str(len(value))+" row(s)")
+    return _write_text_artifact_ext(p,"table",".html","".join(parts),"JSON to HTML table",str(len(value))+" row(s)")
 
 
 def subtitle_text(p):
