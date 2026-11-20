@@ -383,4 +383,37 @@ describe("Nolane AI callable tools", () => {
     expect(csv).toContain("hello | world");
     expect(csv).toContain("'=1+1");
   });
+
+  it("runs fifth-wave natural sorting, extraction, encodings, URL and JSON tools through AI", async () => {
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-sort-lines-natural",content:"item 10\nitem 2\nitem 1"})).toBe("item 1\nitem 2\nitem 10");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-percentages",content:"12%, -3.5 %, and 12%"})).toBe("12%\n-3.5 %");
+    const currencies=await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-currencies",content:"$1,250.50, EUR 20 and 50000 ₫"});
+    expect(currencies).toContain("EUR 20");
+    expect(currencies).toContain("50000 ₫");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-bracketed",content:"(note) [tag] {key}"})).toBe("note\ntag\nkey");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-acronyms",content:"Use API HTTP2 JSON"})).toBe("API\nHTTP2\nJSON");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-strip-diacritics",content:"Đặng Thị Ánh"})).toBe("Dang Thi Anh");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-hard-wrap",content:"x".repeat(90)})).toBe("x".repeat(80)+"\n"+"x".repeat(10));
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-ensure-final-newline",content:"hello"})).toBe("hello\n");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-rot13",content:"Hello"})).toBe("Uryyb");
+
+    const original="Xin chào ✓";
+    const b64=await executeAgentTool(env,"process_text_content",{tool_id:"base64url-encode",content:original});
+    expect(b64).not.toContain("=");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"base64url-decode",content:b64})).toBe(original);
+    const hex=await executeAgentTool(env,"process_text_content",{tool_id:"hex-encode-text",content:original});
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"hex-decode-text",content:hex})).toBe(original);
+    const binary=await executeAgentTool(env,"process_text_content",{tool_id:"binary-encode-text",content:original});
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"binary-decode-text",content:binary})).toBe(original);
+
+    const query=await executeAgentTool(env,"process_text_content",{tool_id:"url-query-params",content:"https://example.com/?a=1&a=2&empty="});
+    const parsed=JSON.parse(query) as {url:string;params:Array<{key:string;value:string}>};
+    expect(parsed.params).toEqual([{key:"a",value:"1"},{key:"a",value:"2"},{key:"empty",value:""}]);
+    expect(JSON.parse(await executeAgentTool(env,"process_text_content",{tool_id:"json-deep-merge",content:'[{"profile":{"name":"An","skills":["Python"]},"score":1},{"profile":{"city":"Hanoi"},"score":2}]'}))).toEqual({profile:{name:"An",skills:["Python"],city:"Hanoi"},score:2});
+    expect(JSON.parse(await executeAgentTool(env,"process_text_content",{tool_id:"json-array-flatten",content:"[1,[2,[3,4]],[],5]"}))).toEqual([1,2,3,4,5]);
+    const csv=await executeAgentTool(env,"process_text_content",{tool_id:"markdown-table-to-csv",content:'| Name | Note | Formula |\n| --- | --- | --- |\n| An | hello \\| world | =1+1 |'});
+    expect(csv).toContain("hello | world");
+    expect(csv).toContain("'=1+1");
+  });
+
 });
