@@ -20,7 +20,7 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
         type: "object",
         properties: {
           query: { type: "string", description: "Optional search phrase to filter tool names and descriptions." },
-          category: { type: "string", enum: ["image", "document", "audio-video", "data", "utility"], description: "Optional category filter." },
+          category: { type: "string", enum: ["image", "document", "audio-video", "data", "utility", "developer", "repository"], description: "Optional category filter." },
         },
         additionalProperties: false,
       },
@@ -215,7 +215,7 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown)
   if (name === "list_nolane_tools") {
     const query = typeof args.query === "string" ? args.query.toLowerCase().slice(0, 120) : "";
     const category = typeof args.category === "string" ? args.category as ToolCategory : "";
-    if (category && !["image", "document", "audio-video", "data", "utility"].includes(category)) throw new Error("Invalid tool category.");
+    if (category && !["image", "document", "audio-video", "data", "utility", "developer", "repository"].includes(category)) throw new Error("Invalid tool category.");
     const matches = TOOL_CATALOG.filter(tool => (!category || tool.category === category) &&
       (!query || (tool.id + " " + tool.name + " " + tool.description + " " + tool.accepts.join(" ")).toLowerCase().includes(query)));
     return JSON.stringify(matches.map(tool => ({
