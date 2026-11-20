@@ -21,6 +21,8 @@ const commands = [
   { command: "search", description: "Tìm kiếm web nhanh" },
   { command: "tech", description: "Tìm kiếm công nghệ và GitHub" },
   { command: "github", description: "Tìm repositories" },
+  { command: "repo", description: "Phân tích repository GitHub công khai" },
+  { command: "repo_compare", description: "So sánh hai branch GitHub" },
   { command: "wiki", description: "Tra cứu Wikipedia Anh/Việt" },
   { command: "web", description: "Mở giao diện tìm kiếm và chat" },
   { command: "ai", description: "Hỏi AI có thể tự gọi web và các công cụ" },
