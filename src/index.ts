@@ -22,6 +22,7 @@ import {
   buildToolCenterKeyboard, buildToolCategoryKeyboard, buildToolDetailKeyboard, buildToolSearchKeyboard,
   formatDeepReport, formatHomeMenu, formatModePrompt, formatSearchResults, SEARCH_PAGE_SIZE,
   formatToolCenterHome, formatToolCategoryPage, formatToolDetail, formatToolSearchResults,
+  formatToolJobsPage, buildToolJobsKeyboard, formatToolJobDetail, buildToolJobDetailKeyboard,
   sendSearchPage, sendTelegram, sendToArchive, telegramApi,
 } from "./telegram";
 import { crawlAndIndexSite, validateWatchUrl, checkWatchTargets } from "./watch";
@@ -731,6 +732,73 @@ async function handleUiCallback(env: Env, callback: TelegramCallbackQuery): Prom
   await reply(env, message.chat.id, "Nút này không còn được hỗ trợ. Hãy mở /menu.");
 }
 
+async function showTelegramToolJobs(
+  env: Env,
+  chatId: number,
+  userId: number,
+  page = 0,
+  messageId?: number,
+): Promise<void> {
+  const jobs = (await listToolJobs(env,userId,50)).filter(job => job.chatId === chatId);
+  const text = formatToolJobsPage(jobs,page);
+  const keyboard = buildToolJobsKeyboard(jobs,page);
+  if (messageId !== undefined) {
+    await editTelegramDashboard(env,chatId,messageId,text,keyboard);
+  } else {
+    await telegramApi(env,"sendMessage",{
+      chat_id:chatId,text,parse_mode:"HTML",disable_web_page_preview:true,reply_markup:keyboard,
+    });
+  }
+}
+
+async function handleToolJobsCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
+  const message=callback.message;
+  if (!message || !allowedUser(env,callback.from.id) || message.chat.id !== callback.from.id) {
+    if(message) await reply(env,message.chat.id,"Job Center chỉ khả dụng trong chat riêng được cấp quyền.");
+    return;
+  }
+  const data=callback.data || "";
+  const page=data.match(/^tjp:(\d{1,2})$/);
+  if(page) {
+    await showTelegramToolJobs(env,message.chat.id,callback.from.id,Number(page[1]),message.message_id);
+    return;
+  }
+  const refreshList=data.match(/^tjrlist:(\d{1,2})$/);
+  if(refreshList) {
+    await showTelegramToolJobs(env,message.chat.id,callback.from.id,Number(refreshList[1]),message.message_id);
+    return;
+  }
+  const detail=data.match(/^tjv:([a-f0-9-]{36}):(\d{1,2})$/i);
+  if(detail) {
+    const job=await getToolJob(env,detail[1]!);
+    if(!job || job.userId!==callback.from.id || job.chatId!==message.chat.id) {
+      await reply(env,message.chat.id,"Không tìm thấy job thuộc cuộc trò chuyện này.");
+      return;
+    }
+    await editTelegramDashboard(env,message.chat.id,message.message_id,
+      formatToolJobDetail(job),buildToolJobDetailKeyboard(job,Number(detail[2])));
+    return;
+  }
+  const refreshDetail=data.match(/^tjview:([a-f0-9-]{36}):(\d{1,2})$/i);
+  if(refreshDetail) {
+    const job=await getToolJob(env,refreshDetail[1]!);
+    if(!job || job.userId!==callback.from.id || job.chatId!==message.chat.id) {
+      await reply(env,message.chat.id,"Không tìm thấy job thuộc cuộc trò chuyện này.");
+      return;
+    }
+    await editTelegramDashboard(env,message.chat.id,message.message_id,
+      formatToolJobDetail(job),buildToolJobDetailKeyboard(job,Number(refreshDetail[2])));
+    return;
+  }
+  const retry=data.match(/^tjr:([a-f0-9-]{36})$/i);
+  if(retry) {
+    await handleCommand(env,message.chat.id,callback.from.id,"/tool_retry "+retry[1]);
+    await showTelegramToolJobs(env,message.chat.id,callback.from.id,0,message.message_id);
+    return;
+  }
+  await reply(env,message.chat.id,"Thao tác Job Center không hợp lệ. Hãy mở lại /tool_jobs.");
+}
+
 async function handleToolCenterCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
   const message = callback.message;
   if (!message || !allowedUser(env, callback.from.id) || message.chat.id !== callback.from.id) {
@@ -744,7 +812,7 @@ async function handleToolCenterCallback(env: Env, callback: TelegramCallbackQuer
     return;
   }
   if (data === "tc:jobs") {
-    await handleCommand(env, message.chat.id, callback.from.id, "/tool_jobs");
+    await showTelegramToolJobs(env,message.chat.id,callback.from.id,0,message.message_id);
     return;
   }
   if (data === "tc:workflows") {
@@ -759,7 +827,7 @@ async function handleToolCenterCallback(env: Env, callback: TelegramCallbackQuer
       buildToolCategoryKeyboard(TOOL_CATALOG, category, Number(page[2])));
     return;
   }
-  const category = data.match(/^tc:(image|document|audio-video|data|developer|utility)$/);
+  const category = data.match(/^tc:(image|document|audio-video|data|developer|repository|utility)$/);
   if (category) {
     const selected = category[1] as ToolCategory;
     await editTelegramDashboard(env, message.chat.id, message.message_id,
@@ -791,6 +859,7 @@ async function handleToolCenterCallback(env: Env, callback: TelegramCallbackQuer
 
 async function handleTelegramCallback(env: Env, callback: TelegramCallbackQuery): Promise<void> {
   const data = callback.data || "";
+  if (/^tj(?:v:|p:|rlist:|view:|r:)/.test(data)) return handleToolJobsCallback(env,callback);
   if (/^(?:tc:|td:|tp:|tu:)/.test(data)) return handleToolCenterCallback(env, callback);
   if (data.startsWith("ui:")) return handleUiCallback(env, callback);
   const action = data.match(/^na:(ask|deep):([0-9a-f-]{36})$/i);
@@ -1386,30 +1455,11 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   }
 
   if (command === "tool_jobs") {
-    const jobs = await listToolJobs(env, userId, 15);
-    if (!jobs.length) {
-      await reply(env, chatId, "Chưa có tool job nào. Gõ /tools để bắt đầu.");
+    if (chatId !== userId || !allowedUser(env,userId)) {
+      await reply(env,chatId,"Job Center chỉ hiển thị trong chat riêng được cấp quyền.");
       return;
     }
-    const lines = jobs.map(job => {
-      const tool = getTool(job.toolId);
-      const status = job.status === "completed" ? "✅ Hoàn thành" : job.status === "failed" ? "❌ Thất bại" : job.status === "running" ? "⚙️ Đang chạy" : "⏳ Đang chờ";
-      const workflow = job.workflowName ? " · Workflow: " + htmlEscape(job.workflowName) : "";
-      const attempt = job.attempt && job.attempt > 1 ? " · lần " + job.attempt : "";
-      const trace = job.trace?.length ? " · " + job.trace.length + "/" + (job.pipeline?.length || 1) + " bước" : "";
-      return status + " · <b>" + htmlEscape(tool?.name || job.toolId) + "</b>" + workflow + attempt + trace +
-        "\n<code>" + htmlEscape(job.id) + "</code> · " + htmlEscape(job.fileName) +
-        "\n<code>/tool_job " + htmlEscape(job.id) + "</code>" + (job.status === "failed" && job.fileId ? " · <code>/tool_retry " + htmlEscape(job.id) + "</code>" : "");
-    });
-    let message = "<b>Nolane Tools · lịch sử</b>\n\n";
-    for (const line of lines) {
-      if (message.length + line.length + 4 > 3400) {
-        await reply(env, chatId, message);
-        message = "<b>Nolane Tools · lịch sử (tiếp)</b>\n\n";
-      }
-      message += line + "\n\n";
-    }
-    await reply(env, chatId, message.trim());
+    await showTelegramToolJobs(env,chatId,userId,0);
     return;
   }
 
