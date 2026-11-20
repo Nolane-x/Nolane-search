@@ -2633,6 +2633,108 @@ def csv_empty_cell_report(p):
     return _write_text_artifact(p,"empty-cell-report","\n".join(lines)+"\n","CSV empty-cell report")
 
 
+def text_strip_ansi_escapes(p):
+    raw=_read_text_source(p)
+    pattern=r"\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\)|[PX^_].*?\x1B\\)"
+    output=re.sub(pattern,"",raw)
+    return _write_text_artifact(p,"no-ansi",output,"ANSI escape removal")
+
+
+def text_extract_stack_traces(p):
+    raw=_read_text_source(p)
+    blocks=[]
+    current=[]
+    for index,line in enumerate(raw.splitlines(),1):
+        stripped=line.strip()
+        start=(bool(re.search(r"\bTraceback \(most recent call last\):",line)) or
+               bool(re.match(r"^(?:Caused by:|Suppressed:)\s",stripped)) or
+               bool(re.match(r"^(?:[\w.$<>]+\.)+[\w.$<>]+\(",stripped)) or
+               bool(re.match(r"^File [\"']",stripped)) or
+               bool(re.match(r"^[\w.$]+(?:Error|Exception|Throwable)(?::|$)",stripped)))
+        continuation=bool(re.match(r"^(?:at\s|File [\"']|\.\.\.|Caused by:|Suppressed:)",stripped))
+        if start or (current and continuation):
+            current.append(str(index)+"\t"+line)
+        elif current:
+            blocks.append("\n".join(current))
+            current=[]
+    if current: blocks.append("\n".join(current))
+    output="\n\n".join(blocks)
+    return _write_text_artifact(p,"stack-traces",output+("\n" if output else ""),"Stack trace extraction",str(len(blocks))+" block(s)")
+
+
+def text_extract_log_levels(p):
+    raw=_read_text_source(p)
+    pattern=re.compile(r"(?i)(?<![A-Z0-9])(?:TRACE|DEBUG|INFO|NOTICE|WARN(?:ING)?|ERROR|FATAL|CRITICAL)(?![A-Z0-9])")
+    output=[]
+    for index,line in enumerate(raw.splitlines(),1):
+        match=pattern.search(line)
+        if match:
+            level=match.group(0).upper()
+            if level=="WARNING": level="WARN"
+            output.append(str(index)+"\t"+level+"\t"+line.strip())
+    text="\n".join(output)
+    return _write_text_artifact(p,"log-levels",text+("\n" if text else ""),"Log level extraction",str(len(output))+" line(s)")
+
+
+def text_extract_task_checkboxes(p):
+    raw=_read_text_source(p)
+    results=[]
+    for index,line in enumerate(raw.splitlines(),1):
+        match=re.match(r"^\s*[-*+]\s+\[([ xX])\]\s+(.*)$",line)
+        if match:
+            status="done" if match.group(1).lower()=="x" else "open"
+            results.append(json.dumps({"line":index,"status":status,"text":match.group(2).strip()},ensure_ascii=False))
+    output="\n".join(results)
+    return _write_text_artifact(p,"task-checkboxes",output+("\n" if output else ""),"Markdown task extraction",str(len(results))+" task(s)")
+
+
+def text_extract_markdown_reference_links(p):
+    raw=_read_text_source(p)
+    results=[]
+    seen=set()
+    pattern=re.compile(r"^\s{0,3}\[([^\]]+)\]:\s*(\S+)(?:\s+[\"'](.*?)[\"'])?\s*$")
+    for index,line in enumerate(raw.splitlines(),1):
+        match=pattern.match(line)
+        if match:
+            label,url,title=match.groups()
+            key=label.casefold()
+            if key in seen: continue
+            seen.add(key)
+            results.append(json.dumps({"line":index,"label":label,"url":url,"title":title or ""},ensure_ascii=False))
+    output="\n".join(results)
+    return _write_text_artifact(p,"markdown-reference-links",output+("\n" if output else ""),"Markdown reference-link extraction",str(len(results))+" link(s)")
+
+
+def text_extract_code_fence_languages(p):
+    raw=_read_text_source(p)
+    results=[]
+    in_fence=False
+    fence_char=""
+    fence_len=0
+    tick=chr(96)*3
+    for index,line in enumerate(raw.splitlines(),1):
+        stripped=line.lstrip()
+        if not in_fence:
+            if stripped.startswith(tick):
+                marker=tick
+            elif stripped.startswith("~~~"):
+                marker="~~~"
+            else:
+                continue
+            in_fence=True
+            rest=stripped[len(marker):].strip()
+            language=(rest.split()[0] if rest else "plain")
+            fence_char=marker[0]
+            fence_len=len(marker)
+            results.append((index,language))
+        elif stripped.startswith(fence_char*fence_len) and not stripped.strip(fence_char+" "):
+            in_fence=False
+            fence_char=""
+            fence_len=0
+    lines=[str(line)+"\t"+language for line,language in results]
+    return _write_text_artifact(p,"code-fence-languages","\n".join(lines)+("\n" if lines else ""),"Code-fence language extraction",str(len(lines))+" block(s)")
+
+
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
     lines=[]
