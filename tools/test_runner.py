@@ -1107,6 +1107,127 @@ class ToolRunnerUnitTests(unittest.TestCase):
         duplicate_paths=[row["paths"] for row in rows]
         self.assertTrue(any("project/src/duplicate.py" in value and "project/docs/duplicate.py" in value for value in duplicate_paths))
 
+    def test_repo_security_audit_detects_ci_container_kubernetes_and_iac_risks(self):
+        import json as json_module
+        import zipfile
+
+        path = self.input_dir / "security-project.zip"
+        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("project/.github/workflows/ci.yml", """name: unsafe
+on:
+  pull_request_target:
+    types: [opened]
+jobs:
+  test:
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          echo "${{ github.event.pull_request.title }}"
+""")
+            archive.writestr("project/Dockerfile", """FROM node:latest
+ARG API_KEY=never-print-this-secret
+RUN curl -fsSL https://example.invalid/install.sh | bash
+USER root
+""")
+            archive.writestr("project/deploy/pod.yaml", """apiVersion: v1
+kind: Pod
+metadata:
+  name: risky
+spec:
+  hostNetwork: true
+  containers:
+    - name: app
+      image: example.invalid/app:1
+      securityContext:
+        privileged: true
+        allowPrivilegeEscalation: true
+        runAsUser: 0
+        capabilities:
+          add:
+            - SYS_ADMIN
+  volumes:
+    - name: host
+      hostPath:
+        path: /host
+""")
+            archive.writestr("project/infra/main.tf", """data "aws_iam_policy_document" "wide" {
+  statement {
+    actions = ["*"]
+    resources = ["*"]
+  }
+}
+resource "aws_security_group_rule" "ssh" {
+  from_port = 22
+  to_port = 22
+  cidr_blocks = ["0.0.0.0/0"]
+}
+resource "aws_s3_bucket_acl" "public" {
+  acl = "public-read"
+}
+""")
+
+        result = runner.repo_security_audit(path)
+        self.assertTrue(Path(result["output_path"]).is_file())
+        with zipfile.ZipFile(result["output_path"]) as package:
+            names = set(package.namelist())
+            self.assertEqual(names, {"security-audit.md", "security.sarif", "security-findings.json"})
+            report = package.read("security-audit.md").decode("utf-8")
+            sarif = json_module.loads(package.read("security.sarif"))
+            findings = json_module.loads(package.read("security-findings.json"))
+        rule_ids = {item["ruleId"] for item in findings["findings"]}
+        expected_rules = {
+            "NOLANE-GHA-001", "NOLANE-GHA-002", "NOLANE-GHA-003",
+            "NOLANE-CTR-001", "NOLANE-CTR-002", "NOLANE-CTR-003",
+            "NOLANE-CTR-004", "NOLANE-K8S-001", "NOLANE-K8S-002",
+            "NOLANE-K8S-003", "NOLANE-K8S-004", "NOLANE-K8S-005",
+            "NOLANE-K8S-006", "NOLANE-IAC-001", "NOLANE-IAC-002",
+            "NOLANE-IAC-003",
+        }
+        self.assertFalse(expected_rules - rule_ids, f"Missing rules: {sorted(expected_rules - rule_ids)}; actual: {sorted(rule_ids)}")
+        self.assertEqual(sarif["version"], "2.1.0")
+        self.assertEqual(len(sarif["runs"][0]["results"]), len(findings["findings"]))
+        self.assertNotIn("never-print-this-secret", report)
+        self.assertNotIn("never-print-this-secret", json_module.dumps(findings))
+
+    def test_repo_supply_chain_inventory_pairs_lockfiles_and_redacts_urls(self):
+        import json as json_module
+        import zipfile
+
+        path = self.input_dir / "supply-chain-project.zip"
+        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("project/frontend/package.json", json_module.dumps({
+                "name": "frontend",
+                "dependencies": {
+                    "lodash": "^4.0.0",
+                    "private-lib": "https://user:private-password@example.invalid/lib.tgz",
+                },
+                "scripts": {"preinstall": "node install.js"},
+            }))
+            archive.writestr("project/frontend/package-lock.json", "{}")
+            archive.writestr("project/service/pyproject.toml", """[project]
+name = "service"
+dependencies = ["requests>=2.0", "httpx"]
+""")
+            archive.writestr("project/service/requirements.txt", "requests==2.31.0\nhttps://user:private-password@example.invalid/pkg.whl\n")
+
+        result = runner.repo_supply_chain(path)
+        with zipfile.ZipFile(result["output_path"]) as package:
+            data = json_module.loads(package.read("supply-chain.json"))
+            report = package.read("supply-chain.md").decode("utf-8")
+        self.assertEqual(data["counts"]["manifests"], 3)
+        self.assertGreaterEqual(data["counts"]["lockfiles"], 1)
+        self.assertEqual(data["counts"]["lifecycle_hooks"], 1)
+        self.assertGreaterEqual(data["counts"]["remote_sources"], 2)
+        self.assertGreaterEqual(data["counts"]["manifests_without_nearby_lockfile"], 2)
+        self.assertTrue(any(item["lockfile_status"] == "paired" for item in data["manifests"]))
+        self.assertTrue(any(item["name"] == "private-lib" and item["requirement"] == "[remote URL/reference omitted]" for item in data["dependencies"]))
+        combined = report + json_module.dumps(data, ensure_ascii=False)
+        self.assertNotIn("private-password", combined)
+        self.assertNotIn("user:private", combined)
+        self.assertIn("lockfile", report.lower())
+
     def test_repo_analysis_rejects_path_traversal_without_extracting(self):
         import zipfile
         path=self.input_dir/"unsafe-project.zip"
@@ -1196,6 +1317,8 @@ class ToolRunnerUnitTests(unittest.TestCase):
             self.assertIn("github/github-metadata.json", names)
             self.assertIn("reports/secret-scan.txt", names)
             self.assertIn("reports/dependencies.txt", names)
+            self.assertIn("reports/security-audit.zip", names)
+            self.assertIn("reports/supply-chain.zip", names)
             report = archive.read("report/repository-intelligence.md").decode("utf-8")
             graph = json_module.loads(archive.read("architecture/module-graph.json"))
             self.assertIn("acme/project", report)

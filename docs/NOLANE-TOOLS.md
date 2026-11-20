@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **103 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **105 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -171,7 +171,11 @@ Các processor văn bản này giới hạn đầu vào 5 MB và yêu cầu UTF-
 | `/tool repo-code-stats` | Thống kê codebase | Gom số file, dòng trống, dòng nội dung và dung lượng theo phần mở rộng. | TXT |
 | `/tool repo-config-audit` | Kiểm kê cấu hình dự án | Kiểm tra hiện diện của README, license, manifest, lockfile, test, CI, container và lint config. | TXT |
 | `/tool repo-duplicates` | Tìm file trùng repository | Hash SHA-256 các member và gom nhóm file có nội dung giống nhau. | CSV |
-| `/repo URL` / `/repo_compare URL base...head` | GitHub Repository Intelligence | Tải snapshot repository GitHub công khai, phân tích import graph, metadata, tối đa 20 commit gần nhất và thông tin files changed của hai ref; đóng gói 8 audit report. | ZIP gồm Markdown, JSON và báo cáo audit |
+| `/repo URL` / `/repo_compare URL base...head` | GitHub Repository Intelligence | Tải snapshot repository GitHub công khai, phân tích import graph, metadata, tối đa 20 commit gần nhất và thông tin files changed của hai ref; đóng gói 10 báo cáo kiểm toán. | ZIP gồm Markdown, JSON và báo cáo audit |
+| `/tool repo-security-audit` | Kiểm toán bảo mật repository | Quét tĩnh GitHub Actions, Dockerfile/Containerfile, Kubernetes YAML và Terraform; phát hiện shell injection trong workflow, action chưa pin SHA, cấu hình container đặc quyền, host namespace/hostPath, wildcard IAM và ingress SSH/RDP công khai. | ZIP gồm Markdown, JSON findings và SARIF 2.1.0 |
+| `/tool repo-supply-chain` | Kiểm toán dependency & supply chain | Kiểm kê package manifest/lockfile, đối chiếu lockfile gần nhất, phân loại version range/floating, nguồn Git/URL và npm lifecycle hooks; không resolve hay cài package. | ZIP gồm Markdown và JSON inventory |
+
+`repo-security-audit` phát hành findings theo rule ID, mức độ, file/dòng và hướng khắc phục, kèm SARIF 2.1.0. `repo-supply-chain` xuất danh mục dependency và bằng chứng lockfile ở JSON; URL nguồn có thể chứa user/password được lược bỏ khỏi output. `/repo` và `/repo_compare` tự chạy cả hai audit này và đưa report vào ZIP tổng hợp. Đây là phân tích tĩnh heuristic, có thể false positive/false negative; không thực thi workflow, Docker build, Terraform hay package code, không cài dependency và không truy vấn CVE/advisory. Việc ghép manifest-lockfile chỉ là heuristic theo đường dẫn, không phải dependency resolver hoặc SBOM đầy đủ.
 
 Các processor ZIP trong nhóm Repository nhận **ZIP tải lên**; lệnh `/repo` và `/repo_compare` nhận **GitHub URL công khai** và tự tải snapshot riêng. Cả hai đường xử lý đều giới hạn 500 mục và tối đa 100 MB dữ liệu giải nén. Mỗi file text được đọc để phân tích giới hạn 2 MB; file lớn/binary được bỏ qua ở các phép phân tích văn bản. Tool không giải nén archive ra filesystem, không cài package, không truy cập mạng và không chạy code trong repository. Archive path traversal, symlink/special file, file mã hóa và compression ratio bất thường bị từ chối. Secret scan có thể có false positive/false negative và không thay thế secret scanner chuyên dụng.
 

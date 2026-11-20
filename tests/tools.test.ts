@@ -129,6 +129,12 @@ describe("Nolane Tools registry", () => {
     expect(validateToolPipelineDefinition([
       { toolId: "text-stats" }, { toolId: "text-join" },
     ]).ok).toBe(false);
+    expect(validateToolPipelineDefinition([
+      { toolId: "repo-security-audit" }, { toolId: "archive-inspect" },
+    ]).ok).toBe(true);
+    expect(validateToolPipelineDefinition([
+      { toolId: "repo-supply-chain" }, { toolId: "archive-manifest" },
+    ]).ok).toBe(true);
     expect(validateToolPipelineDefinition([{ toolId: "text-join" }]).ok).toBe(false);
   });
 
@@ -177,7 +183,7 @@ describe("Nolane Tools registry", () => {
   });
 
   it("validates repository ZIP processors and their real report transitions", () => {
-    for (const id of ["repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates","repo-intelligence"]) {
+    for (const id of ["repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates","repo-intelligence","repo-security-audit","repo-supply-chain"]) {
       expect(getTool(id)?.category).toBe("repository");
       expect(isToolCompatible(getTool(id)!, "application/zip", "source.zip")).toBe(true);
     }

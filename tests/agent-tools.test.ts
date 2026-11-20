@@ -18,6 +18,17 @@ describe("Nolane AI callable tools", () => {
     expect(result.some(tool => tool.id === "video-compress")).toBe(true);
   });
 
+  it("exposes Developer and Repository categories to the AI tool-discovery interface", async () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(tool => tool.function.name === "list_nolane_tools");
+    const schema = definition?.function.parameters as { properties?: { category?: { enum?: string[] } } };
+    expect(schema.properties?.category?.enum).toEqual(expect.arrayContaining(["developer", "repository"]));
+    const repository = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "repository" })) as Array<{id:string}>;
+    expect(repository.some(tool => tool.id === "repo-security-audit")).toBe(true);
+    expect(repository.some(tool => tool.id === "repo-supply-chain")).toBe(true);
+    const developer = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "developer" })) as Array<{id:string}>;
+    expect(developer.some(tool => tool.id === "code-imports")).toBe(true);
+  });
+
   it("formats JSON and cleans text through bounded processor calls", async () => {
     const formatted = await executeAgentTool(env, "process_text_content", {tool_id:"json-format",content:'{"b":2,"a":1}'});
     expect(formatted).toBe("{\n  \"b\": 2,\n  \"a\": 1\n}");
