@@ -1895,5 +1895,101 @@ dependencies = ["requests>=2.0", "httpx"]
 
 
 
+    def test_wave_four_text_naming_unicode_and_markdown(self):
+        source=self.write("names.txt","Hello World\nXML Parser\nXin Chào")
+        self.assertEqual(Path(runner.text_pascal_case(source)["output_path"]).read_text(encoding="utf-8"),"HelloWorld\nXmlParser\nXinChào")
+        self.assertEqual(Path(runner.text_constant_case(source)["output_path"]).read_text(encoding="utf-8"),"HELLO_WORLD\nXML_PARSER\nXIN_CHÀO")
+        self.assertEqual(Path(runner.text_dot_case(source)["output_path"]).read_text(encoding="utf-8"),"hello.world\nxml.parser\nxin.chào")
+        self.assertEqual(Path(runner.text_initials(source)["output_path"]).read_text(encoding="utf-8"),"HW\nXP\nXC")
+
+        decomposed=self.write("unicode.txt","Cafe\u0301")
+        self.assertEqual(Path(runner.text_normalize_unicode(decomposed)["output_path"]).read_text(encoding="utf-8"),"Café")
+        controls=self.write("controls.txt","A\x00B\x01C\nD\tE")
+        self.assertEqual(Path(runner.text_remove_control_chars(controls)["output_path"]).read_text(encoding="utf-8"),"ABC\nD\tE")
+        duplicates=self.write("words.txt","Hello hello world WORLD again")
+        self.assertEqual(Path(runner.text_remove_duplicate_words(duplicates)["output_path"]).read_text(encoding="utf-8").strip(),"Hello world again")
+
+        fence=chr(96)*3
+        markdown=self.write("readme.md",'# Title\n\n## Second ##\n\n'+fence+'md\n# hidden\n'+fence+'\n\n[Site](https://example.com "Example") and [Docs](https://docs.example.org)\n')
+        headings=Path(runner.text_extract_markdown_headings(markdown)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn('"level": 1',headings)
+        self.assertIn('"text": "Second"',headings)
+        self.assertNotIn("hidden",headings)
+        links=Path(runner.text_extract_markdown_links(markdown)["output_path"]).read_text(encoding="utf-8")
+        parsed_links=[json.loads(line) for line in links.splitlines()]
+        self.assertEqual(parsed_links[0],{"text":"Site","url":"https://example.com","title":"Example"})
+        self.assertEqual(parsed_links[1]["text"],"Docs")
+        quotes=self.write("quotes.txt",'He said "hello" and “good morning”; she said \'bye\'.')
+        extracted=Path(runner.text_extract_quotes(quotes)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("hello",extracted)
+        self.assertIn("good morning",extracted)
+        self.assertIn("bye",extracted)
+        paragraphs=self.write("paragraphs.txt","One two three.\n\nFour five.")
+        report=Path(runner.text_paragraph_report(paragraphs)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Paragraphs: 2",report)
+        self.assertIn("Words: 5",report)
+
+    def test_wave_four_json_flatten_unflatten_and_pointer_conflicts(self):
+        source=self.write("nested.json",'{"a":{"b":1,"x/y":2,"til~de":3},"array":[1,2],"empty":{}}')
+        flattened=Path(runner.json_flatten(source)["output_path"])
+        values=json.loads(flattened.read_text(encoding="utf-8"))
+        self.assertEqual(values["/a/b"],1)
+        self.assertEqual(values["/a/x~1y"],2)
+        self.assertEqual(values["/a/til~0de"],3)
+        self.assertEqual(values["/array"],[1,2])
+        self.assertEqual(values["/empty"],{})
+        restored=Path(runner.json_unflatten(flattened)["output_path"])
+        self.assertEqual(json.loads(restored.read_text(encoding="utf-8")),json.loads(Path(source).read_text(encoding="utf-8")))
+        report=Path(runner.json_keys_report(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("$.a.b",report)
+        self.assertIn("$.array[1]",report)
+
+        conflicts=[
+            ('{"/a":null,"/a/b":2}',"null leaf"),
+            ('{"/a":1,"/a/b":2}',"scalar leaf"),
+            ('{"/a/b":2,"/a":null}',"reverse insertion order"),
+        ]
+        for index,(payload,label) in enumerate(conflicts):
+            with self.subTest(label=label):
+                path=self.write("conflict-"+str(index)+".json",payload)
+                with self.assertRaisesRegex(RuntimeError,"Conflicting JSON Pointer paths"):
+                    runner.json_unflatten(path)
+        root_conflict=self.write("root-conflict.json",'{"":1,"/a":2}')
+        with self.assertRaisesRegex(RuntimeError,"Root JSON pointer"):
+            runner.json_unflatten(root_conflict)
+
+    def test_wave_four_csv_clean_stats_headers_and_jsonl_roundtrip(self):
+        source=self.write("rows.csv",'Full Name,Score,Score\nAn,10,first\n,,\nBình,8,second\n')
+        cleaned=Path(runner.csv_remove_empty_rows(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertNotIn("\n,,\n",cleaned)
+        numbered=Path(runner.csv_add_row_numbers(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertTrue(numbered.startswith("_row_number,Full Name,Score,Score\n"))
+        self.assertIn("1,An,10,first",numbered)
+        stats=Path(runner.csv_column_stats(source)["output_path"]).read_text(encoding="utf-8")
+        parsed_stats=[json.loads(line) for line in stats.splitlines() if line.startswith("{")]
+        self.assertEqual(parsed_stats[1]["column"],"Score")
+        self.assertEqual(parsed_stats[1]["numeric"],2)
+        normalized=Path(runner.csv_normalize_headers(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertTrue(normalized.startswith("full_name,score,score_2\n"))
+
+        records_source=self.write("records.csv",'Full Name,Score,Score\nAn,10,first\nBình,8,second\n')
+        jsonl_path=Path(runner.csv_to_jsonl(records_source)["output_path"])
+        self.assertTrue(jsonl_path.name.endswith(".jsonl"))
+        records=[json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(records[0],{"Full Name":"An","Score":"10","Score_2":"first"})
+        back=Path(runner.jsonl_to_csv(jsonl_path)["output_path"])
+        back_rows=list(csv.reader(back.open(encoding="utf-8")))
+        self.assertEqual(back_rows[0],["Full Name","Score","Score_2"])
+        self.assertEqual(back_rows[1],["An","10","first"])
+
+        formula_source=self.write("formula.jsonl",'{"amount":-7,"formula":"=1+1","plus":"+cmd","note":"-not numeric"}')
+        formula_csv=Path(runner.jsonl_to_csv(formula_source)["output_path"]).read_text(encoding="utf-8")
+        self.assertEqual(list(csv.reader(formula_csv.splitlines()))[1],["-7","'=1+1","'+cmd","'-not numeric"])
+        malformed=self.write("malformed.jsonl",'{"ok":1}\nnot-json')
+        with self.assertRaisesRegex(RuntimeError,"line 2"):
+            runner.jsonl_to_csv(malformed)
+
+
+
 if __name__ == "__main__":
     unittest.main()

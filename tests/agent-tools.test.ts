@@ -320,4 +320,37 @@ describe("Nolane AI callable tools", () => {
     await expect(executeAgentTool(env,"process_text_content",{tool_id:"code-check",content:"print(1)"})).rejects.toThrow("not enabled");
     await expect(executeAgentTool(env,"process_text_content",{tool_id:"json-format",content:"x".repeat(40_001)})).rejects.toThrow();
   });
+
+  it("executes fourth-wave naming, Markdown, JSON Pointer and CSV/JSONL utilities directly", async () => {
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-pascal-case",content:"hello world\nXML parser"})).toBe("HelloWorld\nXmlParser");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-constant-case",content:"hello world"})).toBe("HELLO_WORLD");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-initials",content:"Open AI\nNolane Search"})).toBe("OA\nNS");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-normalize-unicode",content:"Cafe\u0301"})).toBe("Café");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-remove-control-chars",content:"A\u0000B\nC"})).toBe("AB\nC");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-remove-duplicate-words",content:"One one two TWO three"})).toBe("One two three");
+    const markdownLinks=await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-markdown-links",content:'[Site](https://example.com "Example")'});
+    expect(JSON.parse(markdownLinks.split("\n")[0]||"{}")).toEqual({text:"Site",url:"https://example.com",title:"Example"});
+    const fence=String.fromCharCode(96).repeat(3);
+    const headings=await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-markdown-headings",content:"# Title\n"+fence+"\n# Hidden\n"+fence+"\n## Sub"});
+    expect(headings).not.toContain("Hidden");
+    expect(headings).toContain('"text":"Sub"');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-quotes",content:'Say "hello" and “world”'})).toBe("hello\nworld");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-paragraph-report",content:"one two\n\nthree"})).toContain("Paragraphs: 2");
+
+    const flat=await executeAgentTool(env,"process_text_content",{tool_id:"json-flatten",content:'{"a":{"b":1,"x/y":2},"items":[1,2],"empty":{}}'});
+    expect(JSON.parse(flat)).toEqual({"/a/b":1,"/a/x~1y":2,"/items":[1,2],"/empty":{}});
+    const restored=await executeAgentTool(env,"process_text_content",{tool_id:"json-unflatten",content:flat});
+    expect(JSON.parse(restored)).toEqual({a:{b:1,"x/y":2},items:[1,2],empty:{}});
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-keys-report",content:'{"a":{"b":1},"items":[{"c":2}]}'})).toContain("$.items[0].c");
+    await expect(executeAgentTool(env,"process_text_content",{tool_id:"json-unflatten",content:'{"/a":null,"/a/b":2}'})).rejects.toThrow("Conflicting JSON Pointer paths");
+
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-remove-empty-rows",content:"name,score\nAn,7\n,\nB,8"})).toBe("name,score\nAn,7\nB,8");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-add-row-numbers",content:"name,score\nAn,7"})).toBe("_row_number,name,score\n1,An,7");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-column-stats",content:"name,score\nAn,7\nB,8"})).toContain('"numeric":2');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-normalize-headers",content:"First Name,Score,First Name\nAn,7,B"})).toContain("first_name,score,first_name_2");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-to-jsonl",content:"name,score\nAn,7\nB,8"})).toBe('{"name":"An","score":"7"}\n{"name":"B","score":"8"}');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"jsonl-to-csv",content:'{"name":"An","score":7}\n{"name":"B","extra":true}'})).toBe("name,score,extra\nAn,7,\nB,,true");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"jsonl-to-csv",content:'{"amount":-7,"formula":"=1+1"}'})).toBe("amount,formula\n-7,'=1+1");
+  });
+
 });
