@@ -554,7 +554,7 @@ def text_extract_emails(p):
 
 def text_extract_urls(p):
     raw=_read_text_source(p)
-    values=_extract_unique_matches(raw,r"https?://[^\s<>\"']+",").,;:!?)]}")
+    values=_extract_unique_matches(raw, r"""https?://[^\s<>"']+""", ").,;:!?)]}")
     return _write_text_artifact(p,"urls","\n".join(values)+("\n" if values else ""),"URL extraction",f"{len(values):,} unique URLs")
 
 
@@ -4373,7 +4373,7 @@ def cmd_translate(args):
     secret=os.environ.get("TELEGRAM_WEBHOOK_SECRET")
     if not secret: raise RuntimeError("Missing TELEGRAM_WEBHOOK_SECRET for Worker-based translation.")
     job=load_job(Path(args.job_file))
-    if job.get("toolId")!="text-translate" or not any(step.get("toolId")=="text-translate" for step in job.get("pipeline",[])):
+    if not any(step.get("toolId")=="text-translate" for step in job.get("pipeline",[])):
         raise RuntimeError("The selected job does not contain the text-translate processor.")
     def translate_chunk(chunk):
         response=api_json(
