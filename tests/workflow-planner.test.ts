@@ -71,6 +71,26 @@ describe("Workflow Intelligence planner", () => {
     expect(result.plan.workload).toEqual({ nodeCount: 3, criticalPathLength: 2, maxParallelism: 2 });
   });
 
+  it("plans a safe fan-out and multi-parent text-join DAG", async () => {
+    const nodes = [
+      { id: "source", toolId: "pdf-text", dependsOn: [] },
+      { id: "clean", toolId: "text-clean", dependsOn: ["source"] },
+      { id: "stats", toolId: "text-stats", dependsOn: ["clean"] },
+      { id: "unique", toolId: "text-deduplicate", dependsOn: ["clean"] },
+      { id: "merged", toolId: "text-join", dependsOn: ["stats", "unique"] },
+    ];
+    vi.stubGlobal("fetch", vi.fn(async () => mockPlanResponse(nodes)));
+    const result = await planToolWorkflow(
+      plannerEnv("https://planner-join.example.ai/v1"),
+      "Trích xuất nội dung PDF, làm sạch, phân tích và hợp nhất báo cáo."
+    );
+    expect(result.plan.mode).toBe("dag");
+    expect(result.plan.dag?.[4]?.dependsOn).toEqual(["stats", "unique"]);
+    expect(result.plan.workload).toEqual({
+      nodeCount: 5, criticalPathLength: 4, maxParallelism: 2,
+    });
+  });
+
   it("rejects unknown processors and unsupported graph edges", () => {
     expect(() => validateAiWorkflowPlan({
       summary: "invalid processor",
