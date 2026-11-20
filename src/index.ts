@@ -8,7 +8,7 @@ import { parseJsonObjectBody } from "./http";
 import { deleteIndexedContent, listIndexedPages, normalizeIndexDomain, normalizeIndexPageUrl } from "./index-management";
 import { TOOL_CATALOG, TOOL_PIPELINE_TRANSITIONS, getTool, inferToolForUpload, isToolCompatible, validateToolDag, validateToolPipeline, toolCategoryLabel } from "./tools";
 import type { ToolCategory, ToolPipelineStep } from "./tools";
-import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, validateToolDagTrace, validateToolStepTrace } from "./tool-jobs";
+import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, validateToolDagTrace, validateToolJobProgress, validateToolStepTrace } from "./tool-jobs";
 import { clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWorkflow, getPendingToolWorkflow, getPendingToolWorkflowPlan, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow, storeToolWorkflowPlan } from "./workflows";
 import { webAppResponse } from "./web-ui";
 import { completeAi, getAiRouterStatus } from "./ai-router";
@@ -2233,6 +2233,7 @@ async function setToolJobResult(
       resultSummary: requestedStatus === "completed" ? summary.slice(0, 6000) : undefined,
       error: requestedStatus === "failed" ? errorMessage.slice(0, 1000) : undefined,
       trace,
+      progress: undefined,
     });
     if (!updated) return false;
     job = updated;
@@ -2330,13 +2331,20 @@ async function handleToolRunnerApi(request: Request, env: Env): Promise<Response
     const status = body?.status;
     const summary = typeof body?.summary === "string" ? body.summary : "";
     const error = typeof body?.error === "string" ? body.error : "";
-    if (!/^[a-f0-9-]{36}$/i.test(id) || (status !== "completed" && status !== "failed")) {
+    if (!/^[a-f0-9-]{36}$/i.test(id) || (status !== "completed" && status !== "failed" && status !== "progress")) {
       return jsonResponse({ error: "Invalid tool result payload" }, 400);
     }
     if (summary.length > 6000 || error.length > 1000) return jsonResponse({ error: "Tool result is too large" }, 413);
     try {
       const existing = await getToolJob(env, id);
       if (!existing) return jsonResponse({ error: "Tool job not found" }, 404);
+      if (existing.status === "completed" || existing.status === "failed") return jsonResponse({ error: "Tool job is already terminal" }, 409);
+      if (status === "progress") {
+        const checkedProgress = validateToolJobProgress(body?.progress, existing);
+        if (!checkedProgress.ok) return jsonResponse({ error: checkedProgress.error }, 400);
+        const saved = await updateToolJob(env, id, { status: "running", progress: checkedProgress.progress });
+        return saved ? jsonResponse({ ok: true }) : jsonResponse({ error: "Tool job not found" }, 404);
+      }
       const pipeline = existing.pipeline || [{ toolId: existing.toolId }];
       const checkedTrace = existing.workflowDag
         ? validateToolDagTrace(body?.trace, existing.workflowDag, status)
