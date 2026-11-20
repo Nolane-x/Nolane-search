@@ -25,7 +25,7 @@ RUNNERS = {
     "audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean",
     "json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join",
     "markdown-outline","markdown-links","text-redact","text-extract","code-imports","code-todos","code-secret-scan","log-timeline",
-    "repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates","repo-intelligence","repo-security-audit","repo-supply-chain","repo-security-audit","repo-supply-chain",
+    "repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates","repo-intelligence","repo-security-audit","repo-supply-chain",
 }
 
 PIPELINE_TRANSITIONS = {
