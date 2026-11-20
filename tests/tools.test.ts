@@ -226,8 +226,10 @@ describe("Nolane Tools registry", () => {
     expect(validateToolPipeline({mimeType:"text/csv",fileName:"rows.csv"},[{toolId:"csv-normalize-headers"},{toolId:"csv-to-jsonl"},{toolId:"jsonl-to-csv"}]).ok).toBe(true);
     expect(isToolCompatible(getTool("jsonl-to-csv")!,"application/x-ndjson","records.jsonl")).toBe(true);
     expect(validateToolPipeline(textFile,[{toolId:"text-indent-lines"},{toolId:"text-unindent-lines"}]).ok).toBe(true);
-    expect(validateToolPipeline({mimeType:"text/html",fileName:"page.html"},[{toolId:"html-extract-title"},{toolId:"html-extract-links"}]).ok).toBe(true);
-    expect(validateToolPipeline({mimeType:"application/xml",fileName:"tree.xml"},[{toolId:"xml-tree-report"},{toolId:"xml-to-json"}]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"text/html",fileName:"page.html"},[{toolId:"html-extract-title"}]).ok).toBe(true);
+    expect(isToolCompatible(getTool("html-extract-links")!,"text/html","page.html")).toBe(true);
+    expect(validateToolPipeline({mimeType:"application/xml",fileName:"tree.xml"},[{toolId:"xml-tree-report"}]).ok).toBe(true);
+    expect(isToolCompatible(getTool("xml-to-json")!,"application/xml","tree.xml")).toBe(true);
     expect(validateToolPipeline({mimeType:"application/json",fileName:"value.json"},[{toolId:"json-escape-string"},{toolId:"json-unescape-string"}]).ok).toBe(true);
     expect(isToolCompatible(getTool("csv-unique-values")!,"text/csv","values.csv")).toBe(true);
 
