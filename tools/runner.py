@@ -31,7 +31,8 @@ RUNNERS = {
     "text-collapse-whitespace", "text-remove-punctuation", "text-to-ascii", "text-html-escape", "text-html-unescape", "text-extract-mentions", "text-extract-hex-colors", "text-extract-phones", "text-dedupe-lines", "text-count-report", "text-quote-lines", "text-unquote-lines", "csv-transpose", "csv-sort-rows", "csv-dedupe-rows", "csv-to-xml", "csv-to-html", "json-sort-array", "json-remove-nulls", "json-to-html-table",
     "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv",
     "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "html-sanitize", "xml-tree-report", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values",
-    "text-sentence-case", "text-normalize-quotes", "text-normalize-dashes", "text-reverse-word-order", "text-extract-words", "text-extract-sentences", "text-dedupe-sentences", "text-remove-markdown-formatting", "text-markdown-toc", "text-markdown-code-blocks", "text-markdown-table-extract", "text-extract-numbered-lists", "text-join-hyphenated-lines", "text-strip-bom", "text-normalize-paragraph-spacing", "csv-schema-infer", "csv-duplicates-report", "csv-sample-rows", "json-array-stats", "json-canonicalize"
+    "text-sentence-case", "text-normalize-quotes", "text-normalize-dashes", "text-reverse-word-order", "text-extract-words", "text-extract-sentences", "text-dedupe-sentences", "text-remove-markdown-formatting", "text-markdown-toc", "text-markdown-code-blocks", "text-markdown-table-extract", "text-extract-numbered-lists", "text-join-hyphenated-lines", "text-strip-bom", "text-normalize-paragraph-spacing", "csv-schema-infer", "csv-duplicates-report", "csv-sample-rows", "json-array-stats", "json-canonicalize",
+    "text-extract-todo-comments", "text-extract-markdown-images", "text-strip-markdown-frontmatter", "text-markdown-to-plain", "text-sort-unique-words", "text-word-to-lines", "text-join-lines", "text-extract-domains", "text-extract-uuids", "text-extract-semver", "text-extract-ipv6", "text-redact-secrets", "text-extract-comment-lines", "text-tabs-to-spaces", "text-escape-regex", "text-unescape-regex", "json-merge-objects", "json-array-dedupe", "json-array-to-lines", "csv-trim-cells", "csv-remove-empty-columns", "csv-empty-cell-report"
 }
 
 PIPELINE_TRANSITIONS = {
@@ -228,6 +229,28 @@ PIPELINE_TRANSITIONS = {
     "csv-sample-rows": {"csv-profile","csv-clean","csv-column-stats"},
     "json-array-stats": {"json-format","json-keys-report","json-schema"},
     "json-canonicalize": {"json-format","json-minify","json-sort-keys"},
+    "text-extract-todo-comments": {"code-todos","text-clean","text-stats"},
+    "text-extract-markdown-images": {"html-extract-images","text-clean","text-stats"},
+    "text-strip-markdown-frontmatter": {"text-markdown-to-plain","markdown-outline","text-clean"},
+    "text-markdown-to-plain": {"text-clean","text-stats","text-dedupe-lines"},
+    "text-sort-unique-words": {"text-word-frequency","text-stats"},
+    "text-word-to-lines": {"text-sort-lines","text-dedupe-lines","text-stats"},
+    "text-join-lines": {"text-clean","text-stats","text-wrap"},
+    "text-extract-domains": {"text-deduplicate","text-stats"},
+    "text-extract-uuids": {"text-deduplicate","text-stats"},
+    "text-extract-semver": {"text-deduplicate","text-stats"},
+    "text-extract-ipv6": {"text-deduplicate","text-stats"},
+    "text-redact-secrets": {"text-clean","text-stats"},
+    "text-extract-comment-lines": {"code-todos","text-deduplicate","text-stats"},
+    "text-tabs-to-spaces": {"text-clean","text-stats"},
+    "text-escape-regex": {"text-clean","text-stats"},
+    "text-unescape-regex": {"text-clean","text-stats"},
+    "json-merge-objects": {"json-canonicalize","json-format","json-schema"},
+    "json-array-dedupe": {"json-sort-array","json-canonicalize","json-format"},
+    "json-array-to-lines": {"text-clean","text-stats"},
+    "csv-trim-cells": {"csv-profile","csv-clean","csv-schema-infer"},
+    "csv-remove-empty-columns": {"csv-profile","csv-schema-infer","csv-clean"},
+    "csv-empty-cell-report": {"csv-profile","csv-schema-infer"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
@@ -6064,6 +6087,14 @@ TOOLS={
  "text-join-hyphenated-lines":text_join_hyphenated_lines,"text-strip-bom":text_strip_bom,"text-normalize-paragraph-spacing":text_normalize_paragraph_spacing,
  "csv-schema-infer":csv_schema_infer,"csv-duplicates-report":csv_duplicates_report,"csv-sample-rows":csv_sample_rows,
  "json-array-stats":json_array_stats,"json-canonicalize":json_canonicalize,
+ "text-extract-todo-comments":text_extract_todo_comments,"text-extract-markdown-images":text_extract_markdown_images,
+ "text-strip-markdown-frontmatter":text_strip_markdown_frontmatter,"text-markdown-to-plain":text_markdown_to_plain,
+ "text-sort-unique-words":text_sort_unique_words,"text-word-to-lines":text_word_to_lines,"text-join-lines":text_join_lines,
+ "text-extract-domains":text_extract_domains,"text-extract-uuids":text_extract_uuids,"text-extract-semver":text_extract_semver,
+ "text-extract-ipv6":text_extract_ipv6,"text-redact-secrets":text_redact_secrets,"text-extract-comment-lines":text_extract_comment_lines,
+ "text-tabs-to-spaces":text_tabs_to_spaces,"text-escape-regex":text_escape_regex,"text-unescape-regex":text_unescape_regex,
+ "json-merge-objects":json_merge_objects,"json-array-dedupe":json_array_dedupe,"json-array-to-lines":json_array_to_lines,
+ "csv-trim-cells":csv_trim_cells,"csv-remove-empty-columns":csv_remove_empty_columns,"csv-empty-cell-report":csv_empty_cell_report,
 }
 
 
