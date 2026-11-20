@@ -668,7 +668,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         catalog_marker="export const TOOL_CATALOG: ToolDefinition[] = ["
         self.assertIn(catalog_marker,tools_source)
         catalog_block=tools_source.split(catalog_marker,1)[1].split("\n];",1)[0]
-        catalog_ids=re.findall(r'\\bid:\\s*"([a-z][a-z0-9-]*)"',catalog_block)
+        catalog_ids=re.findall(r'\bid:\s*"([a-z][a-z0-9-]*)"',catalog_block)
 
         self.assertGreaterEqual(len(catalog_ids),100)
         self.assertEqual(len(catalog_ids),len(set(catalog_ids)),"TypeScript catalog contains duplicate tool IDs.")
