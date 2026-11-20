@@ -3,7 +3,7 @@
 from __future__ import annotations
 import argparse, base64, concurrent.futures, csv, hashlib, json, mimetypes, os, posixpath, re, shutil, stat, subprocess, sys, tarfile, tempfile, textwrap, threading, time, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
 from pathlib import Path
-from html import unescape
+from html import escape, unescape
 from html.parser import HTMLParser
 from typing import Any
 
@@ -26,8 +26,8 @@ RUNNERS = {
     "json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join",
     "markdown-outline","markdown-links","text-redact","text-extract","code-imports","code-todos","code-secret-scan","log-timeline",
     "repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates","repo-intelligence","repo-security-audit","repo-supply-chain",
-    "text-translate", "language-detect", "text-uppercase", "text-lowercase", "text-title-case", "text-sort-lines", "text-reverse-lines", "text-number-lines", "text-remove-blank-lines", "text-wrap", "text-trim-lines", "text-extract-emails", "text-extract-urls", "text-extract-hashtags", "text-to-base64", "base64-to-text", "url-encode", "url-decode", "json-minify", "json-sort-keys"
-
+    "text-translate", "language-detect", "text-uppercase", "text-lowercase", "text-title-case", "text-sort-lines", "text-reverse-lines", "text-number-lines", "text-remove-blank-lines", "text-wrap", "text-trim-lines", "text-extract-emails", "text-extract-urls", "text-extract-hashtags", "text-to-base64", "base64-to-text", "url-encode", "url-decode", "json-minify", "json-sort-keys",
+    "text-slugify", "text-word-frequency", "text-extract-numbers", "text-extract-dates", "text-reverse-characters", "text-snake-case", "text-kebab-case", "text-camel-case", "text-swap-case", "text-extract-ipv4", "text-mask-emails", "text-mask-phones", "json-to-jsonl", "jsonl-to-json", "csv-to-tsv", "tsv-to-csv", "csv-to-markdown", "html-minify", "xml-minify", "text-remove-emoji"
 }
 
 PIPELINE_TRANSITIONS = {
@@ -124,6 +124,26 @@ PIPELINE_TRANSITIONS = {
     "url-decode": {"text-clean","text-stats"},
     "json-minify": {"json-format","json-schema","json-to-csv"},
     "json-sort-keys": {"json-format","json-schema","json-to-csv"},
+    "text-slugify": {"text-clean","text-stats","text-deduplicate"},
+    "text-word-frequency": {"text-clean","text-stats"},
+    "text-extract-numbers": {"text-deduplicate","text-stats"},
+    "text-extract-dates": {"text-deduplicate","text-stats"},
+    "text-reverse-characters": {"text-clean","text-stats"},
+    "text-snake-case": {"text-clean","text-stats","text-deduplicate"},
+    "text-kebab-case": {"text-clean","text-stats","text-deduplicate"},
+    "text-camel-case": {"text-clean","text-stats","text-deduplicate"},
+    "text-swap-case": {"text-clean","text-stats"},
+    "text-extract-ipv4": {"text-deduplicate","text-stats"},
+    "text-mask-emails": {"text-clean","text-stats"},
+    "text-mask-phones": {"text-clean","text-stats"},
+    "json-to-jsonl": {"jsonl-format"},
+    "jsonl-to-json": {"json-format","json-minify","json-sort-keys","json-to-csv"},
+    "csv-to-tsv": {"tsv-to-csv"},
+    "tsv-to-csv": {"csv-profile","csv-clean","csv-to-json"},
+    "csv-to-markdown": {"text-clean","text-stats"},
+    "html-minify": {"html-text","text-clean"},
+    "xml-minify": {"xml-format","xml-to-json"},
+    "text-remove-emoji": {"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
@@ -708,6 +728,12 @@ def text_translate(p, translate_callback=None):
     return _write_text_artifact(p,"translated",output,"AI translation",details)
 
 
+def _write_text_artifact_ext(p, suffix, extension, content, title, details=""):
+    out=p.with_name(p.stem+"-"+suffix+extension)
+    out.write_text(content,encoding="utf-8")
+    return {"summary":f"{title}: {len(content):,} characters"+(f"; {details}" if details else "")+".","output_path":str(out)}
+
+
 def text_slugify(p):
     raw=_read_text_source(p)
     lines=[]
@@ -847,7 +873,7 @@ def json_to_jsonl(p):
     if len(value)>100_000: raise RuntimeError("JSON array exceeds the 100,000-record limit.")
     output="\n".join(json.dumps(item,ensure_ascii=False,separators=(",",":")) for item in value)
     if value: output+="\n"
-    return _write_text_artifact(p,"jsonl",output,"JSON Lines conversion",str(len(value))+" record(s)")
+    return _write_text_artifact_ext(p,"jsonl",".jsonl",output,"JSON Lines conversion",str(len(value))+" record(s)")
 
 
 def jsonl_to_json(p):
@@ -859,7 +885,7 @@ def jsonl_to_json(p):
         except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSONL at line "+str(line_number)+": "+str(exc)) from exc
         if len(records)>100_000: raise RuntimeError("JSONL exceeds the 100,000-record limit.")
     output=json.dumps(records,ensure_ascii=False,indent=2)
-    return _write_text_artifact(p,"array-json",output+"\n","JSON Lines to JSON",str(len(records))+" record(s)")
+    return _write_text_artifact_ext(p,"array",".json",output+"\n","JSON Lines to JSON",str(len(records))+" record(s)")
 
 
 def _convert_delimited_file(p,source_delimiter,target_delimiter,suffix,title):
@@ -872,7 +898,7 @@ def _convert_delimited_file(p,source_delimiter,target_delimiter,suffix,title):
     stream=io.StringIO(newline="")
     writer=csv.writer(stream,delimiter=target_delimiter,lineterminator="\n",quoting=csv.QUOTE_MINIMAL)
     writer.writerows(rows)
-    return _write_text_artifact(p,suffix,stream.getvalue(),title,str(len(rows))+" row(s)")
+    return _write_text_artifact_ext(p,suffix,".tsv" if target_delimiter=="\t" else ".csv",stream.getvalue(),title,str(len(rows))+" row(s)")
 
 
 def csv_to_tsv(p):
@@ -888,7 +914,7 @@ def csv_to_markdown(p):
     raw=_read_text_source(p)
     try: rows=list(csv.reader(io.StringIO(raw,newline="")))
     except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
-    if not rows: return _write_text_artifact(p,"table.md","No rows.\n","CSV Markdown preview")
+    if not rows: return _write_text_artifact_ext(p,"table",".md","No rows.\n","CSV Markdown preview")
     if len(rows)>51 or max((len(row) for row in rows),default=0)>20:
         raise RuntimeError("CSV-to-Markdown is limited to 50 data rows and 20 columns.")
     columns=max(len(row) for row in rows)
@@ -899,7 +925,7 @@ def csv_to_markdown(p):
     for row in rows[1:]:
         padded=row+[""]*(columns-len(row))
         lines.append("| "+" | ".join(cell(value) for value in padded)+" |")
-    return _write_text_artifact(p,"table.md","\n".join(lines)+"\n","CSV to Markdown",str(len(rows)-1)+" data row(s)")
+    return _write_text_artifact_ext(p,"table",".md","\n".join(lines)+"\n","CSV to Markdown",str(len(rows)-1)+" data row(s)")
 
 
 def html_minify(p):
@@ -936,7 +962,7 @@ def html_minify(p):
     parser=Minifier()
     try: parser.feed(raw); parser.close()
     except Exception as exc: raise RuntimeError("Invalid HTML: "+str(exc)) from exc
-    return _write_text_artifact(p,"minified.html","".join(parser.parts).strip(),"HTML minification")
+    return _write_text_artifact_ext(p,"minified",".html","".join(parser.parts).strip(),"HTML minification")
 
 
 def xml_minify(p):
@@ -946,7 +972,7 @@ def xml_minify(p):
         raise RuntimeError("XML DTD and ENTITY declarations are not supported.")
     try: output=ET.tostring(ET.fromstring(raw),encoding="unicode",short_empty_elements=True)
     except ET.ParseError as exc: raise RuntimeError("Invalid XML: "+str(exc)) from exc
-    return _write_text_artifact(p,"minified.xml",output,"XML minification")
+    return _write_text_artifact_ext(p,"minified",".xml",output,"XML minification")
 
 
 def text_remove_emoji(p):
@@ -4373,6 +4399,12 @@ TOOLS={
  "text-extract-emails":text_extract_emails,"text-extract-urls":text_extract_urls,"text-extract-hashtags":text_extract_hashtags,
  "text-to-base64":text_to_base64,"base64-to-text":base64_to_text,"url-encode":url_encode_text,"url-decode":url_decode_text,
  "json-minify":json_minify,"json-sort-keys":json_sort_keys,
+ "text-slugify":text_slugify,"text-word-frequency":text_word_frequency,
+ "text-extract-numbers":text_extract_numbers,"text-extract-dates":text_extract_dates,"text-reverse-characters":text_reverse_characters,
+ "text-snake-case":text_snake_case,"text-kebab-case":text_kebab_case,"text-camel-case":text_camel_case,"text-swap-case":text_swap_case,
+ "text-extract-ipv4":text_extract_ipv4,"text-mask-emails":text_mask_emails,"text-mask-phones":text_mask_phones,
+ "json-to-jsonl":json_to_jsonl,"jsonl-to-json":jsonl_to_json,"csv-to-tsv":csv_to_tsv,"tsv-to-csv":tsv_to_csv,
+ "csv-to-markdown":csv_to_markdown,"html-minify":html_minify,"xml-minify":xml_minify,"text-remove-emoji":text_remove_emoji,
 }
 
 
