@@ -2899,7 +2899,13 @@ def markdown_table_to_csv(p):
     if not tables: raise RuntimeError("No GitHub-Flavored Markdown table was found.")
     if len(tables)>1: raise RuntimeError("Multiple Markdown tables found; convert one table per file.")
     stream=__import__("io").StringIO(newline="")
-    csv.writer(stream,lineterminator="\n").writerows(tables[0])
+    def spreadsheet_safe(value):
+        stripped=value.lstrip()
+        if stripped.startswith(("=","+","@")): return "'"+value
+        if stripped.startswith("-") and not re.fullmatch(r"-\d+(?:[.,]\d+)?",stripped): return "'"+value
+        return value
+    safe_rows=[[spreadsheet_safe(value) for value in row] for row in tables[0]]
+    csv.writer(stream,lineterminator="\n").writerows(safe_rows)
     return _write_text_artifact_ext(p,"table",".csv",stream.getvalue(),"Markdown table to CSV",str(len(tables[0])-1)+" data row(s)")
 
 
