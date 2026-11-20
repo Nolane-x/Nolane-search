@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Private GitHub-hosted execution engine for Nolane Tools."""
 from __future__ import annotations
-import argparse, concurrent.futures, csv, hashlib, json, mimetypes, os, posixpath, re, shutil, stat, subprocess, sys, tarfile, tempfile, threading, time, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
+import argparse, base64, concurrent.futures, csv, hashlib, json, mimetypes, os, posixpath, re, shutil, stat, subprocess, sys, tarfile, tempfile, textwrap, threading, time, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
 from pathlib import Path
 from html import unescape
 from html.parser import HTMLParser
@@ -26,6 +26,8 @@ RUNNERS = {
     "json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join",
     "markdown-outline","markdown-links","text-redact","text-extract","code-imports","code-todos","code-secret-scan","log-timeline",
     "repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates","repo-intelligence","repo-security-audit","repo-supply-chain",
+    "text-translate", "language-detect", "text-uppercase", "text-lowercase", "text-title-case", "text-sort-lines", "text-reverse-lines", "text-number-lines", "text-remove-blank-lines", "text-wrap", "text-trim-lines", "text-extract-emails", "text-extract-urls", "text-extract-hashtags", "text-to-base64", "base64-to-text", "url-encode", "url-decode", "json-minify", "json-sort-keys"
+
 }
 
 PIPELINE_TRANSITIONS = {
@@ -102,6 +104,26 @@ PIPELINE_TRANSITIONS = {
     "repo-duplicates": {"csv-profile","csv-clean","csv-to-xlsx","csv-to-json"},
     "repo-security-audit": {"archive-inspect","archive-safe-extract","archive-manifest"},
     "repo-supply-chain": {"archive-inspect","archive-safe-extract","archive-manifest"},
+    "text-translate": {"text-clean","text-stats","text-deduplicate"},
+    "language-detect": {"text-clean","text-stats"},
+    "text-uppercase": {"text-clean","text-stats","text-deduplicate"},
+    "text-lowercase": {"text-clean","text-stats","text-deduplicate"},
+    "text-title-case": {"text-clean","text-stats","text-deduplicate"},
+    "text-sort-lines": {"text-clean","text-stats","text-deduplicate"},
+    "text-reverse-lines": {"text-clean","text-stats"},
+    "text-number-lines": {"text-clean","text-stats"},
+    "text-remove-blank-lines": {"text-clean","text-stats","text-deduplicate"},
+    "text-wrap": {"text-clean","text-stats"},
+    "text-trim-lines": {"text-clean","text-stats","text-deduplicate"},
+    "text-extract-emails": {"text-deduplicate","text-stats"},
+    "text-extract-urls": {"text-deduplicate","text-stats"},
+    "text-extract-hashtags": {"text-deduplicate","text-stats"},
+    "text-to-base64": {"base64-to-text"},
+    "base64-to-text": {"text-clean","text-stats"},
+    "url-encode": {"url-decode"},
+    "url-decode": {"text-clean","text-stats"},
+    "json-minify": {"json-format","json-schema","json-to-csv"},
+    "json-sort-keys": {"json-format","json-schema","json-to-csv"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
@@ -431,6 +453,260 @@ def text_clean(p):
     out=p.with_name(p.stem+"-cleaned"+(p.suffix.lower() or ".txt"))
     out.write_text(cleaned,encoding="utf-8")
     return {"summary":f"Đã làm sạch văn bản: {len(raw):,} → {len(cleaned):,} ký tự; chuẩn hóa Unicode NFC, newline, khoảng trắng và ký tự zero-width.","output_path":str(out)}
+
+def _read_text_source(p, max_chars=1_000_000):
+    raw=p.read_text(encoding="utf-8-sig",errors="replace")
+    if len(raw)>max_chars:
+        raise RuntimeError(f"Text input exceeds the {max_chars:,}-character limit.")
+    return raw
+
+
+def _write_text_artifact(p, suffix, content, title, details=""):
+    extension=p.suffix.lower() or ".txt"
+    out=p.with_name(p.stem+"-"+suffix+extension)
+    out.write_text(content,encoding="utf-8")
+    return {"summary":f"{title}: {len(content):,} characters"+(f"; {details}" if details else "")+".","output_path":str(out)}
+
+
+def text_uppercase(p):
+    raw=_read_text_source(p)
+    return _write_text_artifact(p,"uppercase",raw.upper(),"Uppercase conversion")
+
+
+def text_lowercase(p):
+    raw=_read_text_source(p)
+    return _write_text_artifact(p,"lowercase",raw.lower(),"Lowercase conversion")
+
+
+def text_title_case(p):
+    raw=_read_text_source(p)
+    titled=re.sub(r"(?u)\b\w",lambda match:match.group(0).upper(),raw.lower())
+    return _write_text_artifact(p,"title-case",titled,"Title case conversion")
+
+
+def text_sort_lines(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    ordered=sorted(lines,key=lambda value:value.casefold())
+    output="\n".join(ordered)+("\n" if raw.endswith(("\n","\r")) else "")
+    return _write_text_artifact(p,"sorted",output,"Line sorting",f"{len(lines):,} lines sorted stably")
+
+
+def text_reverse_lines(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    output="\n".join(reversed(lines))+("\n" if raw.endswith(("\n","\r")) else "")
+    return _write_text_artifact(p,"reversed-lines",output,"Line reversal",f"{len(lines):,} lines")
+
+
+def text_number_lines(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    width=max(4,len(str(len(lines))))
+    output="\n".join(f"{index:0{width}d} | {line}" for index,line in enumerate(lines,1))
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"numbered",output,"Line numbering",f"{len(lines):,} lines numbered")
+
+
+def text_remove_blank_lines(p):
+    raw=_read_text_source(p)
+    lines=[line for line in raw.splitlines() if line.strip()]
+    output="\n".join(lines)+("\n" if raw.endswith(("\n","\r")) and lines else "")
+    removed=len(raw.splitlines())-len(lines)
+    return _write_text_artifact(p,"no-blank-lines",output,"Blank-line removal",f"{removed:,} blank lines removed")
+
+
+def text_wrap(p):
+    raw=_read_text_source(p)
+    lines=[]
+    for line in raw.splitlines():
+        if not line.strip():
+            lines.append("")
+        else:
+            lines.extend(textwrap.wrap(line,width=88,break_long_words=False,break_on_hyphens=False) or [""])
+    output="\n".join(lines)+("\n" if raw.endswith(("\n","\r")) else "")
+    return _write_text_artifact(p,"wrapped",output,"Text wrapping","target width 88 columns; long words preserved")
+
+
+def text_trim_lines(p):
+    raw=_read_text_source(p)
+    output="\n".join(line.strip() for line in raw.splitlines())
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"trimmed-lines",output,"Line trimming")
+
+
+def _extract_unique_matches(raw, pattern, strip_trailing=""):
+    found=[]
+    seen=set()
+    for match in re.findall(pattern,raw,flags=re.I|re.M):
+        value=match.rstrip(strip_trailing) if strip_trailing else match
+        key=value.casefold()
+        if value and key not in seen:
+            seen.add(key); found.append(value)
+    return found
+
+
+def text_extract_emails(p):
+    raw=_read_text_source(p)
+    values=_extract_unique_matches(raw,r"(?<![\w.+-])[A-Z0-9.!#$%&'*+/=?^_{}|~-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+")
+    return _write_text_artifact(p,"emails","\n".join(values)+("\n" if values else ""),"Email extraction",f"{len(values):,} unique addresses")
+
+
+def text_extract_urls(p):
+    raw=_read_text_source(p)
+    values=_extract_unique_matches(raw, r"""https?://[^\s<>"']+""", ").,;:!?)]}")
+    return _write_text_artifact(p,"urls","\n".join(values)+("\n" if values else ""),"URL extraction",f"{len(values):,} unique URLs")
+
+
+def text_extract_hashtags(p):
+    raw=_read_text_source(p)
+    values=_extract_unique_matches(raw,r"(?<![\w#])#[\w]+")
+    return _write_text_artifact(p,"hashtags","\n".join(values)+("\n" if values else ""),"Hashtag extraction",f"{len(values):,} unique hashtags")
+
+
+def text_to_base64(p):
+    raw=_read_text_source(p)
+    encoded=base64.b64encode(raw.encode("utf-8")).decode("ascii")
+    return _write_text_artifact(p,"base64",encoded+"\n","Base64 encoding")
+
+
+def base64_to_text(p):
+    raw=_read_text_source(p)
+    compact="".join(raw.split())
+    try:
+        decoded=base64.b64decode(compact,validate=True).decode("utf-8-sig")
+    except (ValueError,UnicodeDecodeError) as exc:
+        raise RuntimeError("Input must be valid Base64 containing UTF-8 text.") from exc
+    return _write_text_artifact(p,"decoded",decoded,"Base64 decoding")
+
+
+def url_encode_text(p):
+    raw=_read_text_source(p)
+    encoded=urllib.parse.quote(raw,safe="")
+    return _write_text_artifact(p,"url-encoded",encoded,"URL percent-encoding")
+
+
+def url_decode_text(p):
+    raw=_read_text_source(p)
+    try:
+        decoded=urllib.parse.unquote(raw,errors="strict")
+        decoded.encode("utf-8","strict")
+    except (UnicodeError,ValueError) as exc:
+        raise RuntimeError("Input contains invalid URL-encoded UTF-8.") from exc
+    return _write_text_artifact(p,"url-decoded",decoded,"URL decoding")
+
+
+def _load_json_reject_duplicates(raw):
+    def unique_object(pairs):
+        result={}
+        for key,value in pairs:
+            if key in result: raise ValueError("Duplicate JSON object key: "+str(key))
+            result[key]=value
+        return result
+    return json.loads(raw,object_pairs_hook=unique_object)
+
+
+def json_minify(p):
+    raw=_read_text_source(p)
+    try:
+        value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Invalid JSON: {exc}") from exc
+    output=json.dumps(value,ensure_ascii=False,separators=(",",":"))
+    return _write_text_artifact(p,"minified",output+"\n","JSON minification")
+
+
+def json_sort_keys(p):
+    raw=_read_text_source(p)
+    try:
+        value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Invalid JSON: {exc}") from exc
+    def sort_nested(item):
+        if isinstance(item,dict): return {key:sort_nested(item[key]) for key in sorted(item)}
+        if isinstance(item,list): return [sort_nested(value) for value in item]
+        return item
+    output=json.dumps(sort_nested(value),ensure_ascii=False,indent=2)
+    return _write_text_artifact(p,"sorted-keys",output+"\n","JSON key sorting")
+
+
+def language_detect(p):
+    raw=_read_text_source(p)
+    sample=raw[:20_000]
+    if not sample.strip(): return _write_text_artifact(p,"language","Undetermined\nMethod: empty input","Language detection")
+    scores={}
+    def script_count(pattern):
+        return len(re.findall(pattern,sample))
+    scripts=[
+        (r"[\u3040-\u30ff]","Japanese","Hiragana/Katakana script"),
+        (r"[\uac00-\ud7af]","Korean","Hangul script"),
+        (r"[\u4e00-\u9fff]","Chinese","Han characters; Japanese without kana may be ambiguous"),
+        (r"[\u0400-\u04ff]","Russian or another Cyrillic language","Cyrillic script"),
+        (r"[\u0600-\u06ff]","Arabic","Arabic script"),
+        (r"[\u0590-\u05ff]","Hebrew","Hebrew script"),
+        (r"[\u0370-\u03ff]","Greek","Greek script"),
+        (r"[\u0e00-\u0e7f]","Thai","Thai script"),
+        (r"[\u0900-\u097f]","Hindi or another Devanagari language","Devanagari script"),
+    ]
+    for pattern,label,evidence in scripts:
+        count=script_count(pattern)
+        if count: scores[label]=(count,evidence)
+    if scores:
+        label,(count,evidence)=max(scores.items(),key=lambda item:item[1][0])
+    elif any(char in "ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ" for char in sample.lower()):
+        label="Vietnamese"; evidence="Vietnamese-specific letters and diacritics"
+    else:
+        words=set(re.findall(r"[a-zA-ZÀ-ỹ']+",sample.lower()))
+        vocab={
+            "English":{"the","and","that","with","this","you","for","are","was","have","from"},
+            "French":{"le","la","les","et","des","une","est","dans","pour","avec","que"},
+            "German":{"der","die","das","und","ist","mit","ein","eine","nicht","auf","für"},
+            "Spanish":{"el","la","los","las","y","de","que","una","es","por","para","con"},
+            "Portuguese":{"o","a","os","as","e","de","que","uma","é","para","com","não"},
+            "Italian":{"il","lo","la","gli","e","di","che","una","per","con","non"},
+            "Indonesian":{"yang","dan","ini","itu","untuk","dengan","dari","tidak","adalah"},
+        }
+        ranked=sorted(((len(words & values),language) for language,values in vocab.items()),reverse=True)
+        score,label=ranked[0] if ranked else (0,"")
+        if score<2: label="Undetermined"; evidence="Latin-script text without enough distinctive words"
+        else: evidence=f"{score} common-word matches in a small vocabulary"
+    report=f"Most likely: {label}\nEvidence: {evidence}\nMethod: lightweight heuristic; short or mixed-language text may be misclassified."
+    return _write_text_artifact(p,"language",report,"Language detection")
+
+
+def split_translation_chunks(raw, limit=5_000):
+    remaining=raw
+    chunks=[]
+    while len(remaining)>limit:
+        boundary=remaining.rfind("\n",0,limit+1)
+        if boundary<limit//2: boundary=limit
+        else: boundary+=1
+        chunks.append(remaining[:boundary])
+        remaining=remaining[boundary:]
+    if remaining: chunks.append(remaining)
+    return chunks
+
+
+def text_translate(p, translate_callback=None):
+    if not callable(translate_callback):
+        raise RuntimeError("Translation requires the Worker AI Router; use the dedicated translation runner step.")
+    raw=_read_text_source(p, max_chars=60_000)
+    if not raw.strip(): raise RuntimeError("Translation input is empty.")
+    chunks=split_translation_chunks(raw)
+    translated=[]
+    target_language=""
+    for index,chunk in enumerate(chunks,1):
+        response=translate_callback(chunk)
+        value=response.get("translation") if isinstance(response,dict) else None
+        if not isinstance(value,str) or not value.strip():
+            raise RuntimeError(f"AI translation returned an empty chunk at {index}/{len(chunks)}.")
+        target_language=str(response.get("targetLanguage") or target_language)
+        translated.append(value)
+    output="".join(translated)
+    if len(output)>MAX_PIPELINE_OUTPUT: raise RuntimeError("Translated output exceeds the 45 MB output limit.")
+    details=f"{len(chunks)} chunk(s)"+(f"; target {target_language}" if target_language else "")
+    return _write_text_artifact(p,"translated",output,"AI translation",details)
+
 
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
@@ -3841,6 +4117,14 @@ TOOLS={
  "repo-inventory":repo_inventory,"repo-dependencies":repo_dependencies,"repo-license-report":repo_license_report,"repo-secret-scan":repo_secret_scan,
  "repo-todo-scan":repo_todo_scan,"repo-code-stats":repo_code_stats,"repo-config-audit":repo_config_audit,"repo-duplicates":repo_duplicates,"repo-intelligence":repo_intelligence,
  "repo-security-audit":repo_security_audit,"repo-supply-chain":repo_supply_chain,
+
+ "text-translate":text_translate,"language-detect":language_detect,
+ "text-uppercase":text_uppercase,"text-lowercase":text_lowercase,"text-title-case":text_title_case,
+ "text-sort-lines":text_sort_lines,"text-reverse-lines":text_reverse_lines,"text-number-lines":text_number_lines,
+ "text-remove-blank-lines":text_remove_blank_lines,"text-wrap":text_wrap,"text-trim-lines":text_trim_lines,
+ "text-extract-emails":text_extract_emails,"text-extract-urls":text_extract_urls,"text-extract-hashtags":text_extract_hashtags,
+ "text-to-base64":text_to_base64,"base64-to-text":base64_to_text,"url-encode":url_encode_text,"url-decode":url_decode_text,
+ "json-minify":json_minify,"json-sort-keys":json_sort_keys,
 }
 
 
@@ -3975,7 +4259,7 @@ def run_tool_dag(job,source,root):
     summary_lines=[f"Branch {node['id']} · {node['toolId']}: {summaries[node['id']]}" for node in nodes]
     summary="DAG hoàn tất: "+str(len(nodes))+" node, tối đa 3 node chạy đồng thời; "+str(len(leaves))+" nhánh đầu ra được đóng gói.\n\n"+"\n\n".join(summary_lines)
     return {"summary":summary[:6000],"output_path":str(package),"trace":trace}
-def run_tool_pipeline(job, source, root):
+def run_tool_pipeline(job, source, root, translation_callback=None):
     if job.get("workflowDag") is not None:
         return run_tool_dag(job,source,root)
     steps=validate_pipeline(job)
@@ -3989,7 +4273,10 @@ def run_tool_pipeline(job, source, root):
         started=time.perf_counter()
         try:
             input_bytes=current.stat().st_size if current.is_file() else 0
-            result=TOOLS[tool_id](current)
+            if tool_id=="text-translate":
+                result=TOOLS[tool_id](current,translation_callback)
+            else:
+                result=TOOLS[tool_id](current)
             if not isinstance(result,dict):
                 raise RuntimeError(f"Processor {tool_id} returned an invalid result.")
             summary=str(result.get("summary","")).strip()
@@ -4046,7 +4333,7 @@ def cmd_download(args):
     source=download_telegram(job["fileId"],job.get("fileName") or "upload.bin")
     Path(args.output).write_text(str(source),encoding="utf-8")
 
-def cmd_run(args):
+def _cmd_run(args, translation_callback=None):
     job=load_job(Path(args.job_file))
     source=Path(Path(args.input_path_file).read_text(encoding="utf-8").strip())
     root=(Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs").resolve()
@@ -4056,7 +4343,7 @@ def cmd_run(args):
     if resolved.parent != root or not resolved.is_file():
         raise RuntimeError("Input file is outside the private runner input directory.")
     try:
-        result=run_tool_pipeline(job,resolved,root)
+        result=run_tool_pipeline(job,resolved,root,translation_callback=translation_callback)
     except PipelineExecutionError as exc:
         Path(args.output).write_text(json.dumps({"error":_safe_trace_text(exc,root)[:1000],"trace":exc.trace},ensure_ascii=False),encoding="utf-8")
         raise
@@ -4075,6 +4362,29 @@ def cmd_run(args):
         except (OSError,UnicodeError):
             pass
     Path(args.output).write_text(json.dumps({"summary":summary[:6000],"output_path":output,"trace":result.get("trace",[])},ensure_ascii=False),encoding="utf-8")
+
+
+def cmd_run(args):
+    _cmd_run(args)
+
+
+def cmd_translate(args):
+    secret=os.environ.get("TELEGRAM_WEBHOOK_SECRET")
+    if not secret: raise RuntimeError("Missing TELEGRAM_WEBHOOK_SECRET for Worker-based translation.")
+    job=load_job(Path(args.job_file))
+    if not any(step.get("toolId")=="text-translate" for step in job.get("pipeline",[])):
+        raise RuntimeError("The selected job does not contain the text-translate processor.")
+    def translate_chunk(chunk):
+        response=api_json(
+            WORKER_URL+"/internal/tools/translate",
+            method="POST",
+            data={"job_id":job["id"],"text":chunk},
+            token=secret,
+        )
+        if not isinstance(response.get("translation"),str):
+            raise RuntimeError("Worker returned an invalid translation result.")
+        return response
+    _cmd_run(args,translation_callback=translate_chunk)
 
 def send_document(chat_id,path,caption):
     token=os.environ["TELEGRAM_BOT_TOKEN"]; boundary="----NolaneToolBoundary-31d9"
@@ -4140,6 +4450,7 @@ def main():
     p=sub.add_parser("fetch"); p.add_argument("job_id"); p.add_argument("output"); p.set_defaults(func=cmd_fetch)
     p=sub.add_parser("download"); p.add_argument("job_file"); p.add_argument("output"); p.set_defaults(func=cmd_download)
     p=sub.add_parser("run"); p.add_argument("job_file"); p.add_argument("input_path_file"); p.add_argument("output"); p.set_defaults(func=cmd_run)
+    p=sub.add_parser("translate"); p.add_argument("job_file"); p.add_argument("input_path_file"); p.add_argument("output"); p.set_defaults(func=cmd_translate)
     p=sub.add_parser("complete"); p.add_argument("job_id"); p.add_argument("result_file"); p.set_defaults(func=cmd_complete)
     p=sub.add_parser("fail"); p.add_argument("job_id"); p.add_argument("--message",default="Tool runner failed; see Actions logs."); p.add_argument("--result-file",default=""); p.set_defaults(func=cmd_fail)
     args=parser.parse_args()

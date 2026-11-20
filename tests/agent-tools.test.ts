@@ -36,6 +36,47 @@ describe("Nolane AI callable tools", () => {
     expect(cleaned).toBe("Café\n\nline");
   });
 
+  it("runs new everyday text, extraction, encoding and JSON utilities", async () => {
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-uppercase",content:"Xin chào"})).toBe("XIN CHÀO");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-reverse-lines",content:"first\nsecond\nthird"})).toBe("third\nsecond\nfirst");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-emails",content:"A@Example.com and a@example.com"})).toBe("A@Example.com");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"url-encode",content:"xin chào"})).toBe("xin%20ch%C3%A0o");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"url-decode",content:"xin%20ch%C3%A0o"})).toBe("xin chào");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-sort-keys",content:'{"z":1,"a":{"y":2,"b":3}}'})).toBe('{\n  "a": {\n    "b": 3,\n    "y": 2\n  },\n  "z": 1\n}');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"language-detect",content:"Xin chào, tôi là người Việt Nam"})).toContain("Vietnamese");
+    const schema=AGENT_TOOL_DEFINITIONS.find(tool=>tool.function.name==="process_text_content")?.function.parameters as {properties?:Record<string,unknown>};
+    expect(schema.properties?.target_language).toBeDefined();
+  });
+
+  it("routes AI tool-call translation through the configured translation model", async () => {
+    const fetchMock=vi.fn(async (_input:RequestInfo|URL,init?:RequestInit)=>{
+      const body=JSON.parse(String(init?.body)) as {messages:Array<{role:string;content:string}>};
+      expect(body.messages[0]?.content).toContain("professional translator");
+      expect(body.messages[1]?.content).toContain("Hello world");
+      return new Response(JSON.stringify({
+        choices:[{message:{content:"Bonjour le monde"}}],
+      }),{status:200});
+    });
+    vi.stubGlobal("fetch",fetchMock);
+    const config={
+      strategy:"priority",
+      providers:[{
+        id:"agent-translation",
+        protocol:"openai-compatible",
+        baseUrl:"https://api.example.ai/v1",
+        apiKey:"agent-translation-secret",
+        models:[{id:"translation-model",tasks:["translation"]}],
+      }],
+    };
+    const result=await executeAgentTool({
+      ...env,AI_ROUTER_CONFIG:JSON.stringify(config),
+    } as Env,"process_text_content",{
+      tool_id:"text-translate",target_language:"French",content:"Hello world",
+    });
+    expect(result).toBe("Bonjour le monde");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("cleans CSV safely and profiles columns", async () => {
     const source = "name,score\n A , 4 \nA,4\nB,";
     const cleaned = await executeAgentTool(env, "process_text_content", {tool_id:"csv-clean",content:source});

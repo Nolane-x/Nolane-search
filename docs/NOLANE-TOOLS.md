@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **105 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **125 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -189,6 +189,37 @@ Các processor ZIP trong nhóm Repository nhận **ZIP tải lên**; lệnh `/re
 | `/tool code-check` | Kiểm tra cú pháp code | Parse Python/JS/Shell/JSON/YAML/XML mà không thực thi mã được tải lên. | Báo cáo kiểm tra cú pháp |
 | `/tool archive-safe-extract` | Giải nén archive an toàn | Giải nén ZIP/TAR với kiểm tra path traversal, symlink, số lượng tệp, zip bomb và đóng gói sạch. | ZIP nội dung đã làm sạch |
 | `/tool archive-manifest` | Archive SHA-256 manifest | Tính SHA-256 từng tệp trong ZIP/TAR mà không giải nén ra đĩa. | CSV checksum manifest |
+
+### Ngôn ngữ & tiện ích văn bản
+
+Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy trên runner tạm thời; không cần cài thêm thư viện lớn.
+
+| Lệnh | Chức năng | Đầu ra |
+|---|---|---|
+| \`/tool text-translate\` | Dịch TXT/Markdown bằng AI Router. Khi dùng \`/ai_file\`, hãy nêu rõ ngôn ngữ đích, ví dụ "dịch tài liệu này sang tiếng Anh". | Tệp đã dịch |
+| \`/tool language-detect\` | Ước lượng ngôn ngữ theo hệ chữ và từ khóa phổ biến; có ghi rõ phương pháp heuristic. | Báo cáo ngôn ngữ |
+| \`/tool text-uppercase\` | Chuyển văn bản sang chữ HOA Unicode. | Tệp văn bản |
+| \`/tool text-lowercase\` | Chuyển văn bản sang chữ thường Unicode. | Tệp văn bản |
+| \`/tool text-title-case\` | Viết hoa ký tự đầu mỗi từ sau khi chuẩn hóa chữ thường. | Tệp văn bản |
+| \`/tool text-sort-lines\` | Sắp xếp dòng theo thứ tự từ điển, ổn định khi trùng. | Tệp văn bản |
+| \`/tool text-reverse-lines\` | Đảo thứ tự dòng, không đảo ký tự trong dòng. | Tệp văn bản |
+| \`/tool text-number-lines\` | Thêm số thứ tự có đệm vào từng dòng. | Tệp văn bản |
+| \`/tool text-remove-blank-lines\` | Xóa dòng trống hoặc chỉ có khoảng trắng. | Tệp văn bản |
+| \`/tool text-wrap\` | Ngắt dòng theo 88 cột, không cắt từ dài. | Tệp văn bản |
+| \`/tool text-trim-lines\` | Xóa khoảng trắng ở đầu/cuối từng dòng. | Tệp văn bản |
+| \`/tool text-extract-emails\` | Trích địa chỉ email bằng pattern và khử trùng. | Danh sách email TXT |
+| \`/tool text-extract-urls\` | Trích URL HTTP/HTTPS, loại dấu câu cuối và khử trùng. | Danh sách URL TXT |
+| \`/tool text-extract-hashtags\` | Trích hashtag Unicode và khử trùng. | Danh sách hashtag TXT |
+| \`/tool text-to-base64\` | Mã hóa văn bản UTF-8 thành Base64. | Tệp Base64 |
+| \`/tool base64-to-text\` | Giải mã Base64 nghiêm ngặt, chỉ chấp nhận UTF-8 hợp lệ. | Tệp văn bản |
+| \`/tool url-encode\` | Percent-encode nội dung UTF-8 cho URL. | Tệp URL-encoded |
+| \`/tool url-decode\` | Giải mã percent-encoding, kiểm tra UTF-8. | Tệp văn bản |
+| \`/tool json-minify\` | Minify JSON và từ chối object key trùng. | JSON minified |
+| \`/tool json-sort-keys\` | Sắp xếp key đệ quy, giữ nguyên thứ tự array và từ chối key trùng. | JSON đã sắp xếp |
+
+**Dịch thuật:** dùng \`/translate English | Xin chào\` để dịch trực tiếp một đoạn văn; thay English bằng Vietnamese, French, German, Spanish, Portuguese, Chinese, Japanese, Korean, Russian, Thai, Indonesian, Italian, Arabic hoặc Hindi. File TXT/Markdown có thể gửi kèm \`/ai_file dịch tài liệu này sang tiếng Anh\`. Bộ xử lý chia tệp thành đoạn tối đa khoảng 5.000 ký tự, gửi từng đoạn qua AI Router với task \`translation\`, sau đó ghép lại theo đúng thứ tự. Cấu hình AI phải có ít nhất một model hỗ trợ task \`translation\`; nếu không, job sẽ báo lỗi thay vì giả vờ đã dịch. API key chỉ nằm trong Worker; runner gọi endpoint nội bộ đã xác thực và không nhận AI key.
+
+**Giới hạn:** \`/translate\` nhận tối đa 6.000 ký tự mỗi lần. \`text-translate\` nhận TXT/Markdown tối đa 60.000 ký tự; nội dung dài hơn bị từ chối. \`language-detect\` là heuristic nhẹ, không phải bộ phân loại ngôn ngữ đầy đủ; văn bản ngắn hoặc trộn nhiều ngôn ngữ có thể không xác định chính xác. Các tool còn lại giới hạn đầu vào văn bản ở 1.000.000 ký tự và không thực thi nội dung.
 
 ## AI Agent
 
