@@ -2208,6 +2208,88 @@ def text_normalize_paragraph_spacing(p):
     return _write_text_artifact(p,"paragraph-spacing",output,"Paragraph spacing normalization")
 
 
+def csv_schema_infer(p):
+    import io
+    from datetime import datetime
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    headers=rows[0]
+    if len(headers)>200 or len(rows)>100_001: raise RuntimeError("CSV schema inference is limited to 100,000 rows and 200 columns.")
+    body=rows[1:]
+    date_formats=("%Y-%m-%d","%Y/%m/%d","%d/%m/%Y","%m/%d/%Y")
+    lines=["CSV inferred schema","Rows: "+str(len(body)),"Columns: "+str(len(headers))]
+    for index,header in enumerate(headers):
+        values=[row[index].strip() for row in body if index<len(row) and row[index].strip()]
+        kind="empty"
+        if values:
+            if all(value.lower() in ("true","false","yes","no") for value in values): kind="boolean"
+            elif all(re.fullmatch(r"[+-]?\d+",value) for value in values): kind="integer"
+            elif all(re.fullmatch(r"[+-]?(?:\d+[.,]\d+|\d+[eE][+-]?\d+)",value) for value in values): kind="decimal"
+            elif all(any(_valid_date(value,fmt,datetime) for fmt in date_formats) for value in values): kind="date"
+            elif all(value.lower() in ("0","1") for value in values): kind="boolean"
+            else: kind="text"
+        lines.append(json.dumps({"column":header,"type":kind,"non_empty":len(values),"empty":len(body)-len(values),"unique":len(set(values))},ensure_ascii=False))
+    return _write_text_artifact(p,"schema-report","\n".join(lines)+"\n","CSV schema inference")
+
+
+def csv_duplicates_report(p):
+    import io
+    from collections import Counter
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    if len(rows)>100_001 or max((len(row) for row in rows),default=0)>200: raise RuntimeError("CSV duplicate report is limited to 100,000 rows and 200 columns.")
+    counts=Counter(tuple(row) for row in rows[1:])
+    duplicated=[{"row":list(row),"count":count} for row,count in counts.items() if count>1]
+    lines=["CSV duplicate report","Data rows: "+str(len(rows)-1),"Unique rows: "+str(len(counts)),"Duplicated row groups: "+str(len(duplicated)),"Duplicate occurrences: "+str(sum(count-1 for count in counts.values() if count>1))]
+    lines.extend(json.dumps(item,ensure_ascii=False) for item in duplicated[:500])
+    return _write_text_artifact(p,"duplicates-report","\n".join(lines)+"\n","CSV duplicate report")
+
+
+def csv_sample_rows(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    stream=io.StringIO(newline="")
+    csv.writer(stream,lineterminator="\n").writerows(rows[:21])
+    return _write_text_artifact_ext(p,"sample",".csv",stream.getvalue(),"CSV first-row sample",str(min(20,max(0,len(rows)-1)))+" data row(s)")
+
+
+def json_array_stats(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    if not isinstance(value,list): raise RuntimeError("JSON array statistics expects a top-level array.")
+    if len(value)>100_000: raise RuntimeError("JSON array statistics exceeds 100,000 items.")
+    counts={"object":0,"array":0,"string":0,"number":0,"boolean":0,"null":0}
+    key_counts={}
+    for item in value:
+        if item is None: counts["null"]+=1
+        elif isinstance(item,bool): counts["boolean"]+=1
+        elif isinstance(item,(int,float)): counts["number"]+=1
+        elif isinstance(item,str): counts["string"]+=1
+        elif isinstance(item,list): counts["array"]+=1
+        elif isinstance(item,dict):
+            counts["object"]+=1
+            for key in item: key_counts[key]=key_counts.get(key,0)+1
+    lines=["JSON array statistics","Items: "+str(len(value))]+[key+": "+str(count) for key,count in counts.items()]+["Object keys:"]
+    lines.extend(key+"\t"+str(count) for key,count in sorted(key_counts.items()))
+    return _write_text_artifact(p,"array-stats","\n".join(lines)+"\n","JSON array statistics")
+
+
+def json_canonicalize(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    output=json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(",",":"),allow_nan=False)
+    return _write_text_artifact_ext(p,"canonical",".json",output,"Canonical JSON serialization")
+
+
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
     lines=[]
