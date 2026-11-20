@@ -4,7 +4,8 @@ if (!token) throw new Error("Missing TELEGRAM_BOT_TOKEN.");
 const commands = [
   { command: "start", description: "Mở bảng điều khiển Nolane Search" },
   { command: "menu", description: "Mở menu công cụ tương tác" },
-  { command: "tools", description: "Danh mục công cụ GitHub Actions" },
+  { command: "tools", description: "Mở Tool Center với danh mục và nút chọn" },
+  { command: "tool_search", description: "Tìm tool theo tên, mô tả hoặc định dạng" },
   { command: "tool", description: "Chọn công cụ xử lý file gửi tiếp theo" },
   { command: "tool_jobs", description: "Xem lịch sử công cụ đã chạy" },
   { command: "tool_job", description: "Xem trace chi tiết một lần chạy" },
