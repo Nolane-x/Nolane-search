@@ -194,16 +194,19 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
   }
   if (toolId === "text-trim-lines") return content.split(/\r?\n/).map(line=>line.trim()).join("\n");
   if (toolId === "text-extract-emails") {
-    const values=content.match(/[A-Z0-9.!#$%&'*+/=?^_\`{|}~-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+/gi)||[];
-    return [...new Map(values.map(value=>[value.toLowerCase(),value])).values()].join("\n");
+    const values=content.match(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+/gi)||[];
+    const seen=new Set<string>();
+    return values.filter(value=>{const key=value.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).join("\n");
   }
   if (toolId === "text-extract-urls") {
     const values=(content.match(/https?:\/\/[^\s<>"']+/gi)||[]).map(value=>value.replace(/[.,;:!?)}\]]+$/g,""));
-    return [...new Map(values.map(value=>[value.toLowerCase(),value])).values()].join("\n");
+    const seen=new Set<string>();
+    return values.filter(value=>{const key=value.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).join("\n");
   }
   if (toolId === "text-extract-hashtags") {
     const values=content.match(/(?<![\p{L}\p{N}_#])#[\p{L}\p{N}_]+/gu)||[];
-    return [...new Map(values.map(value=>[value.toLowerCase(),value])).values()].join("\n");
+    const seen=new Set<string>();
+    return values.filter(value=>{const key=value.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).join("\n");
   }
   if (toolId === "text-to-base64") {
     const bytes=new TextEncoder().encode(content);
