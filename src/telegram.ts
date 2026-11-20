@@ -467,12 +467,16 @@ export function formatToolJobDetail(job: ToolJob): string {
   }
   if (job.trace?.length) {
     lines.push("", "<b>Execution trace</b>");
-    lines.push(...job.trace.map(step =>
+    const visibleTrace = job.trace.slice(0, 8);
+    lines.push(...visibleTrace.map(step =>
       (step.status === "completed" ? "✅ " : "❌ ") +
       htmlEscape((step.nodeId ? "Node " + step.nodeId : "Step " + step.step) + "/" + step.total + " · " + step.toolId) +
       " · " + step.durationMs + " ms · " + step.inputBytes.toLocaleString("en-US") +
       " → " + (step.outputBytes === null ? "text" : step.outputBytes.toLocaleString("en-US") + " bytes") +
-      "\n" + htmlEscape((step.error || step.summary).slice(0, 260))));
+      "\n" + htmlEscape((step.error || step.summary).slice(0, 160))));
+    if (job.trace.length > visibleTrace.length) {
+      lines.push("<i>Và " + (job.trace.length - visibleTrace.length) + " bước/node khác. Dùng /tool_job " + htmlEscape(job.id) + " để xem chi tiết đầy đủ.</i>");
+    }
   } else {
     lines.push("", "<i>Runner chưa gửi trace bước nào.</i>");
   }
