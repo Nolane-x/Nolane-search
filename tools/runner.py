@@ -25,6 +25,7 @@ RUNNERS = {
     "audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean",
     "json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join",
     "markdown-outline","markdown-links","text-redact","text-extract","code-imports","code-todos","code-secret-scan","log-timeline",
+    "repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates",
 }
 
 PIPELINE_TRANSITIONS = {
@@ -91,11 +92,19 @@ PIPELINE_TRANSITIONS = {
     "code-todos": {"text-clean","text-stats","text-deduplicate"},
     "code-secret-scan": {"text-clean","text-stats"},
     "log-timeline": {"text-clean","text-stats"},
+    "repo-inventory": {"text-clean","text-stats"},
+    "repo-dependencies": {"text-clean","text-stats"},
+    "repo-license-report": {"text-clean","text-stats"},
+    "repo-secret-scan": {"text-clean","text-stats"},
+    "repo-todo-scan": {"text-clean","text-stats","text-deduplicate"},
+    "repo-code-stats": {"text-clean","text-stats"},
+    "repo-config-audit": {"text-clean","text-stats"},
+    "repo-duplicates": {"csv-profile","csv-clean","csv-to-xlsx","csv-to-json"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -2526,6 +2535,342 @@ def log_timeline(p):
 
 
 
+
+def _repo_members(p, read_text=False, hash_all=False):
+    """Yield safe ZIP repository members without extracting paths to disk."""
+    if not zipfile.is_zipfile(p):
+        raise RuntimeError("Repository Intelligence chỉ nhận ZIP hợp lệ.")
+    total=0
+    with zipfile.ZipFile(p) as archive:
+        infos=archive.infolist()
+        if len(infos)>500:
+            raise RuntimeError("Repository ZIP vượt giới hạn 500 mục.")
+        for info in infos:
+            if info.is_dir():
+                continue
+            parts=_safe_archive_parts(info.filename)
+            mode=(info.external_attr>>16)&0xFFFF
+            file_type=stat.S_IFMT(mode)
+            if stat.S_ISLNK(mode) or (file_type and file_type not in (stat.S_IFREG,stat.S_IFDIR)):
+                raise RuntimeError("Repository ZIP chứa symlink hoặc special file bị chặn.")
+            if info.flag_bits&0x1:
+                raise RuntimeError("Repository ZIP mã hóa không được hỗ trợ.")
+            if info.file_size<0 or info.file_size>100*1024*1024:
+                raise RuntimeError("Repository ZIP có file vượt giới hạn 100 MB.")
+            if info.compress_size and info.file_size/max(1,info.compress_size)>200:
+                raise RuntimeError("Repository ZIP có compression ratio bất thường.")
+            total+=info.file_size
+            if total>100*1024*1024:
+                raise RuntimeError("Repository ZIP vượt 100 MB dữ liệu giải nén.")
+            path="/".join(parts)
+            data=None
+            digest=None
+            should_read=hash_all or (read_text and info.file_size<=2*1024*1024)
+            if should_read:
+                hasher=hashlib.sha256() if hash_all else None
+                chunks=[]
+                actual=0
+                with archive.open(info,"r") as handle:
+                    while True:
+                        chunk=handle.read(1024*1024)
+                        if not chunk: break
+                        actual+=len(chunk)
+                        if actual>info.file_size or actual>100*1024*1024:
+                            raise RuntimeError("Repository ZIP member có kích thước thực tế vượt metadata.")
+                        if hasher: hasher.update(chunk)
+                        if read_text: chunks.append(chunk)
+                if actual!=info.file_size:
+                    raise RuntimeError("Repository ZIP member có kích thước thực tế không khớp metadata.")
+                if hasher: digest=hasher.hexdigest()
+                if read_text and info.file_size<=2*1024*1024:
+                    raw=b"".join(chunks)
+                    if b"\x00" not in raw:
+                        try: data=raw.decode("utf-8-sig")
+                        except UnicodeDecodeError: data=None
+            yield {"path":path,"size":info.file_size,"data":data,"sha256":digest}
+
+
+_REPO_SOURCE_EXTENSIONS={
+    ".py",".pyw",".js",".mjs",".cjs",".ts",".tsx",".jsx",".vue",".svelte",
+    ".go",".rs",".java",".kt",".kts",".scala",".c",".cc",".cpp",".h",".hpp",
+    ".cs",".php",".rb",".swift",".sh",".bash",".zsh",".sql",".css",".scss",
+    ".html",".htm",".xml",".json",".yaml",".yml",".toml",".md",".mdx",
+}
+_REPO_SKIP_PARTS={"node_modules","vendor","dist","build","target",".git",".venv","venv","__pycache__",".next",".cache"}
+_REPO_SECRET_PATTERNS=[
+    ("GitHub token",re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b")),
+    ("AWS access key",re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+    ("OpenAI-style token",re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")),
+    ("Bearer token",re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]{16,}")),
+    ("Credential assignment",re.compile(r"(?i)\b(?:api[_-]?key|access[_-]?token|client[_-]?secret|password|passwd)\b\s*[:=]\s*['\"]?([A-Za-z0-9_./+=-]{8,})")),
+    ("Private key header",re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----")),
+]
+
+
+def _repo_text_candidates(p):
+    for item in _repo_members(p,read_text=True):
+        if item["data"] is None: continue
+        path=item["path"]
+        if any(part.casefold() in _REPO_SKIP_PARTS for part in path.split("/")): continue
+        yield item
+
+
+def repo_inventory(p):
+    from collections import Counter
+    extensions=Counter(); folders=Counter(); largest=[]; total=0; files=0
+    for item in _repo_members(p):
+        path=item["path"]; size=item["size"]
+        files+=1; total+=size
+        suffix=Path(path).suffix.lower() or "[no extension]"
+        extensions[suffix]+=1
+        parent=path.rsplit("/",1)[0] if "/" in path else "[root]"
+        folders[parent.split("/",1)[0] if parent!="[root]" else parent]+=1
+        largest.append((size,path))
+    report=[f"Repository archive: {p.name}",f"Files: {files:,}",f"Uncompressed bytes: {total:,}",
+            f"Average file size: {total//max(1,files):,} bytes","","File types:"]
+    report.extend(f"{ext}: {count:,}" for ext,count in extensions.most_common(30))
+    report.extend(["","Top-level folders:"])
+    report.extend(f"{name}: {count:,} files" for name,count in folders.most_common(20))
+    report.extend(["","Largest files:"])
+    report.extend(f"{size:,} bytes · {path}" for size,path in sorted(largest,reverse=True)[:20])
+    out=p.with_name(p.stem+"-repo-inventory.txt")
+    out.write_text("\n".join(report)+"\n",encoding="utf-8")
+    return {"summary":f"Kiểm kê {files:,} file, {len(extensions)} nhóm phần mở rộng, tổng {total:,} bytes giải nén.","output_path":str(out)}
+
+
+def repo_dependencies(p):
+    import json as json_module
+    import tomllib
+    dependencies=[]
+    manifests=[]
+    for item in _repo_text_candidates(p):
+        path=item["path"]; name=Path(path).name.casefold(); raw=item["data"]
+        if name=="package.json":
+            try: obj=json_module.loads(raw)
+            except Exception: continue
+            manifests.append(path)
+            for scope in ("dependencies","devDependencies","peerDependencies","optionalDependencies"):
+                value=obj.get(scope,{})
+                if isinstance(value,dict):
+                    dependencies.extend((path,str(pkg),scope,str(version)) for pkg,version in value.items())
+        elif name=="requirements.txt":
+            manifests.append(path)
+            for line in raw.splitlines():
+                line=line.strip()
+                if not line or line.startswith(("#","-")): continue
+                line=line.split(";",1)[0].strip()
+                match=re.match(r"([A-Za-z0-9_.-]+)\s*(.*)",line)
+                if match: dependencies.append((path,match.group(1),"requirements",match.group(2).strip() or "unspecified"))
+        elif name=="pyproject.toml":
+            try: obj=tomllib.loads(raw)
+            except Exception: continue
+            manifests.append(path)
+            project=obj.get("project",{})
+            if isinstance(project,dict):
+                for value in project.get("dependencies",[]) if isinstance(project.get("dependencies",[]),list) else []:
+                    match=re.match(r"\s*([A-Za-z0-9_.-]+)\s*(.*)",str(value))
+                    if match: dependencies.append((path,match.group(1),"project",match.group(2).strip() or "unspecified"))
+                optional=project.get("optional-dependencies",{})
+                if isinstance(optional,dict):
+                    for scope,items in optional.items():
+                        if isinstance(items,list):
+                            for value in items:
+                                match=re.match(r"\s*([A-Za-z0-9_.-]+)\s*(.*)",str(value))
+                                if match: dependencies.append((path,match.group(1),str(scope),match.group(2).strip() or "unspecified"))
+        elif name=="cargo.toml":
+            try: obj=tomllib.loads(raw)
+            except Exception: continue
+            manifests.append(path)
+            for scope in ("dependencies","dev-dependencies","build-dependencies"):
+                values=obj.get(scope,{})
+                if isinstance(values,dict):
+                    dependencies.extend((path,str(pkg),scope,str(spec.get("version","workspace/path/git") if isinstance(spec,dict) else spec)) for pkg,spec in values.items())
+        elif name=="go.mod":
+            manifests.append(path); active=False
+            for line in raw.splitlines():
+                line=line.strip()
+                if line.startswith("require ("): active=True; continue
+                if active and line==")": active=False; continue
+                if line.startswith("require "):
+                    parts=line.split()
+                    if len(parts)>=3: dependencies.append((path,parts[1],"go",parts[2]))
+                elif active and line and not line.startswith("//"):
+                    parts=line.split()
+                    if len(parts)>=2: dependencies.append((path,parts[0],"go",parts[1]))
+        elif name=="composer.json":
+            try: obj=json_module.loads(raw)
+            except Exception: continue
+            manifests.append(path)
+            for scope in ("require","require-dev"):
+                value=obj.get(scope,{})
+                if isinstance(value,dict):
+                    dependencies.extend((path,str(pkg),scope,str(version)) for pkg,version in value.items() if pkg!="php")
+    report=[f"Repository: {p.name}",f"Dependency manifests: {len(manifests)}",f"Dependencies found: {len(dependencies):,}",""]
+    report.extend("Manifest: "+manifest for manifest in manifests[:40])
+    report.append("")
+    report.extend(f"{manifest} · {scope} · {package} · {version}" for manifest,package,scope,version in dependencies[:1500])
+    if not dependencies: report.append("Không tìm thấy dependency trong các manifest được hỗ trợ.")
+    report.extend(["","Static manifest parsing only. No dependency installation, network access or code execution."])
+    out=p.with_name(p.stem+"-dependencies.txt")
+    out.write_text("\n".join(report)+"\n",encoding="utf-8")
+    return {"summary":f"Đã đọc {len(manifests)} dependency manifest và trích {len(dependencies)} khai báo dependency.","output_path":str(out)}
+
+
+def repo_license_report(p):
+    import json as json_module
+    import tomllib
+    evidence=[]; metadata=[]
+    patterns=[
+        ("MIT",re.compile(r"\bMIT License\b",re.I)),
+        ("Apache-2.0",re.compile(r"Apache License\s*Version 2\.0",re.I)),
+        ("GPL-family",re.compile(r"GNU GENERAL PUBLIC LICENSE",re.I)),
+        ("BSD-family",re.compile(r"BSD [234]-Clause",re.I)),
+        ("MPL-2.0",re.compile(r"Mozilla Public License\s*Version 2\.0",re.I)),
+        ("Unlicense",re.compile(r"This is free and unencumbered software",re.I)),
+    ]
+    for item in _repo_text_candidates(p):
+        path=item["path"]; name=Path(path).name.casefold(); raw=item["data"]
+        if name.startswith(("license","licence","copying","notice")):
+            match=next((label for label,pattern in patterns if pattern.search(raw[:12000])), "Unclassified license-like file")
+            evidence.append((path,match))
+        if name=="package.json":
+            try:
+                value=json_module.loads(raw).get("license")
+                if value: metadata.append((path,str(value)[:180]))
+            except Exception: pass
+        elif name=="pyproject.toml":
+            try:
+                value=tomllib.loads(raw).get("project",{}).get("license")
+                if value: metadata.append((path,str(value)[:180]))
+            except Exception: pass
+        elif name=="cargo.toml":
+            try:
+                value=tomllib.loads(raw).get("package",{}).get("license")
+                if value: metadata.append((path,str(value)[:180]))
+            except Exception: pass
+    report=[f"Repository: {p.name}","License evidence (not legal advice):"]
+    report.extend(f"- {path}: {label}" for path,label in evidence)
+    report.append("")
+    report.append("Manifest declarations:")
+    report.extend(f"- {path}: {value}" for path,value in metadata)
+    if not evidence and not metadata: report.append("Không phát hiện license file hoặc metadata license trong các vị trí đã kiểm tra.")
+    report.extend(["","Automated text-pattern detection only. This report does not establish licensing compatibility or grant reuse rights. Review the complete license and third-party notices manually."])
+    out=p.with_name(p.stem+"-licenses.txt")
+    out.write_text("\n".join(report)+"\n",encoding="utf-8")
+    return {"summary":f"Đã kiểm tra {len(evidence)} tệp license-like và {len(metadata)} khai báo metadata license.","output_path":str(out)}
+
+
+def repo_secret_scan(p):
+    findings=[]; scanned=0
+    for item in _repo_text_candidates(p):
+        path=item["path"]
+        if Path(path).suffix.lower() not in _REPO_SOURCE_EXTENSIONS and Path(path).name not in {".env","Dockerfile"}: continue
+        scanned+=1
+        for line_no,line in enumerate(item["data"].splitlines(),1):
+            for label,pattern in _REPO_SECRET_PATTERNS:
+                for match in pattern.finditer(line):
+                    sample=match.group(1) if label=="Credential assignment" and match.lastindex else match.group(0)
+                    if sample.casefold().startswith(("changeme","example","your_","replace_me","placeholder","dummy","testtoken")): continue
+                    findings.append((path,line_no,label))
+                    if len(findings)>=1000: break
+                if len(findings)>=1000: break
+            if len(findings)>=1000: break
+        if len(findings)>=1000: break
+    report=[f"Repository: {p.name}",f"Files scanned: {scanned:,}",f"Potential findings: {len(findings):,}",""]
+    report.extend(f"{path}:L{line_no} · {label} · [value withheld]" for path,line_no,label in findings)
+    if not findings: report.append("Không phát hiện mẫu credential phổ biến trong các file văn bản được quét.")
+    report.extend(["","Static pattern scan only; false positives and false negatives are possible. Secret values are never printed."])
+    out=p.with_name(p.stem+"-repo-secret-scan.txt")
+    out.write_text("\n".join(report)+"\n",encoding="utf-8")
+    return {"summary":f"Đã quét {scanned} file văn bản trong repository; {len(findings)} mẫu secret tiềm năng, không xuất giá trị.","output_path":str(out)}
+
+
+def repo_todo_scan(p):
+    pattern=re.compile(r"\b(TODO|FIXME|HACK|BUG|XXX)\b(?:\s*[:\-]?\s*(.*))?",re.I)
+    rows=[]; scanned=0
+    for item in _repo_text_candidates(p):
+        path=item["path"]
+        if Path(path).suffix.lower() not in _REPO_SOURCE_EXTENSIONS: continue
+        scanned+=1
+        for line_no,line in enumerate(item["data"].splitlines(),1):
+            match=pattern.search(line)
+            if match:
+                rows.append((path,line_no,match.group(1).upper(),(match.group(2) or line.strip())[:180]))
+                if len(rows)>=2000: break
+        if len(rows)>=2000: break
+    report=[f"Repository: {p.name}",f"Source files scanned: {scanned:,}",f"Markers: {len(rows):,}",""]
+    report.extend(f"{path}:L{line_no} [{kind}] {message}" for path,line_no,kind,message in rows)
+    if not rows: report.append("Không tìm thấy TODO/FIXME/HACK/BUG/XXX.")
+    out=p.with_name(p.stem+"-repo-todos.txt")
+    out.write_text("\n".join(report)+"\n",encoding="utf-8")
+    return {"summary":f"Đã quét {scanned} source files và tìm {len(rows)} marker công việc.","output_path":str(out)}
+
+
+def repo_code_stats(p):
+    from collections import Counter
+    stats={}
+    total_lines=0; total_bytes=0; scanned=0; skipped=0
+    for item in _repo_text_candidates(p):
+        path=item["path"]; ext=Path(path).suffix.lower()
+        if ext not in _REPO_SOURCE_EXTENSIONS: continue
+        if item["data"] is None: skipped+=1; continue
+        lines=item["data"].splitlines()
+        bucket=stats.setdefault(ext,{"files":0,"lines":0,"blank":0,"nonblank":0,"bytes":0})
+        bucket["files"]+=1; bucket["lines"]+=len(lines)
+        bucket["blank"]+=sum(1 for line in lines if not line.strip())
+        bucket["nonblank"]+=sum(1 for line in lines if line.strip())
+        bucket["bytes"]+=item["size"]
+        total_lines+=len(lines); total_bytes+=item["size"]; scanned+=1
+    report=[f"Repository: {p.name}",f"Source files scanned: {scanned:,}",f"Skipped or unsupported text candidates: {skipped:,}",f"Total source bytes: {total_bytes:,}",f"Total lines: {total_lines:,}",""]
+    report.extend(f"{ext}: {v['files']} files · {v['lines']:,} lines · {v['blank']:,} blank · {v['bytes']:,} bytes" for ext,v in sorted(stats.items(),key=lambda pair:-pair[1]["lines"]))
+    if not stats: report.append("Không tìm thấy source file có phần mở rộng được hỗ trợ.")
+    report.extend(["","Line counts are lexical; they do not distinguish comments from executable statements. Vendor/build directories are excluded."])
+    out=p.with_name(p.stem+"-repo-code-stats.txt")
+    out.write_text("\n".join(report)+"\n",encoding="utf-8")
+    return {"summary":f"Thống kê {scanned} source files, {total_lines:,} dòng và {total_bytes:,} bytes mã nguồn.","output_path":str(out)}
+
+
+def repo_config_audit(p):
+    paths={item["path"].casefold() for item in _repo_members(p)}
+    names={Path(path).name.casefold() for path in paths}
+    checks=[
+        ("README / project documentation",any(Path(path).name.casefold().startswith("readme") for path in paths)),
+        ("License / copying notice",any(Path(path).name.casefold().startswith(("license","licence","copying")) for path in paths)),
+        ("Package manifest",bool(names.intersection({"package.json","pyproject.toml","requirements.txt","cargo.toml","go.mod","composer.json"}))),
+        ("Dependency lockfile",bool(names.intersection({"package-lock.json","pnpm-lock.yaml","yarn.lock","poetry.lock","uv.lock","cargo.lock","go.sum","composer.lock"}))),
+        ("Automated tests",any("/test" in path or "/tests/" in path or Path(path).name.startswith(("test_","test.")) for path in paths)),
+        ("CI workflow",any(path.startswith(".github/workflows/") for path in paths)),
+        ("Container build",any(Path(path).name.casefold() in {"dockerfile","docker-compose.yml","compose.yaml","compose.yml"} for path in paths)),
+        ("Lint / static-analysis config",bool(names.intersection({".eslintrc",".eslintrc.json","eslint.config.js","ruff.toml",".pre-commit-config.yaml","mypy.ini","tsconfig.json"}))),
+        ("Environment example",any(Path(path).name.casefold() in {".env.example",".env.sample","example.env"} for path in paths)),
+    ]
+    report=[f"Repository: {p.name}","Configuration inventory (presence only):",""]
+    report.extend(f"{'PRESENT' if present else 'NOT FOUND'} · {label}" for label,present in checks)
+    report.extend(["",f"Present: {sum(1 for _,present in checks if present)}/{len(checks)}",
+                   "This is a presence check, not a security, quality or CI correctness audit."])
+    out=p.with_name(p.stem+"-repo-config-audit.txt")
+    out.write_text("\n".join(report)+"\n",encoding="utf-8")
+    return {"summary":f"Đã kiểm kê {len(checks)} nhóm cấu hình; có {sum(1 for _,present in checks if present)} nhóm hiện diện.","output_path":str(out)}
+
+
+def repo_duplicates(p):
+    from collections import defaultdict
+    groups=defaultdict(list); total=0; files=0
+    for item in _repo_members(p,hash_all=True):
+        files+=1; total+=item["size"]
+        groups[(item["sha256"],item["size"])].append(item["path"])
+    duplicate_groups=[(digest,size,paths) for (digest,size),paths in groups.items() if len(paths)>1]
+    out=p.with_name(p.stem+"-repo-duplicates.csv")
+    with out.open("w",encoding="utf-8-sig",newline="") as handle:
+        writer=csv.writer(handle,lineterminator="\n")
+        writer.writerow(["sha256","size_bytes","duplicate_count","paths"])
+        for digest,size,paths in sorted(duplicate_groups,key=lambda item:(-len(item[2]),item[2][0])):
+            writer.writerow([digest,size,len(paths)," | ".join(paths)])
+    duplicate_files=sum(len(paths) for _,_,paths in duplicate_groups)
+    return {"summary":f"Đã hash {files} file ({total:,} bytes); tìm thấy {len(duplicate_groups)} nhóm trùng với {duplicate_files} file.","output_path":str(out)}
+
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -2550,6 +2895,8 @@ TOOLS={
  "json-flatten-csv":json_flatten_csv,"csv-to-sqlite":csv_to_sqlite,"log-insights":log_insights,"json-diff":json_diff,"text-join":text_join,
  "markdown-outline":markdown_outline,"markdown-links":markdown_links,"text-redact":text_redact,"text-extract":text_extract,
  "code-imports":code_imports,"code-todos":code_todos,"code-secret-scan":code_secret_scan,"log-timeline":log_timeline,
+ "repo-inventory":repo_inventory,"repo-dependencies":repo_dependencies,"repo-license-report":repo_license_report,"repo-secret-scan":repo_secret_scan,
+ "repo-todo-scan":repo_todo_scan,"repo-code-stats":repo_code_stats,"repo-config-audit":repo_config_audit,"repo-duplicates":repo_duplicates,
 }
 
 
