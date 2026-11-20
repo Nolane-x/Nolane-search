@@ -43,6 +43,7 @@ function normalizeNodes(value: unknown): ToolDagNode[] {
   if (!Array.isArray(value) || value.length < 1 || value.length > MAX_PLAN_NODES) {
     throw new Error("AI planner phải đề xuất từ 1 đến " + MAX_PLAN_NODES + " processor.");
   }
+  const seenIds = new Set<string>();
   return value.map((raw, index) => {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       throw new Error("Node " + (index + 1) + " trong kế hoạch không hợp lệ.");
@@ -50,9 +51,10 @@ function normalizeNodes(value: unknown): ToolDagNode[] {
     const item = raw as Record<string, unknown>;
     const id = typeof item.id === "string" ? item.id.trim().toLowerCase() : "";
     const toolId = typeof item.toolId === "string" ? item.toolId.trim().toLowerCase() : "";
-    if (!/^[a-z][a-z0-9_-]{0,19}$/.test(id)) {
-      throw new Error("Node " + (index + 1) + " thiếu ID hợp lệ.");
+    if (!/^[a-z][a-z0-9_-]{0,19}$/.test(id) || seenIds.has(id)) {
+      throw new Error("Node " + (index + 1) + " thiếu ID hợp lệ hoặc trùng ID.");
     }
+    seenIds.add(id);
     if (!/^[a-z0-9-]{1,80}$/.test(toolId)) {
       throw new Error("Node " + id + " có tool ID không hợp lệ.");
     }
