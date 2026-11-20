@@ -2425,7 +2425,7 @@ async function setToolJobResult(
 }
 
 async function handleToolTranslationApi(request: Request, env: Env): Promise<Response> {
-  const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+  const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   if (!env.TELEGRAM_WEBHOOK_SECRET || !constantTimeEqual(supplied, env.TELEGRAM_WEBHOOK_SECRET)) {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
@@ -2437,8 +2437,7 @@ async function handleToolTranslationApi(request: Request, env: Env): Promise<Res
     return jsonResponse({ error: "Invalid translation request or text chunk exceeds 6,000 characters." }, 400);
   }
   const job = await getToolJob(env, jobId);
-  if (!job || job.status !== "running" || job.toolId !== "text-translate" ||
-      !(job.pipeline || [{ toolId: job.toolId }]).some(step => step.toolId === "text-translate")) {
+  if (!job || job.status !== "running" || !(job.pipeline || [{ toolId: job.toolId }]).some(step => step.toolId === "text-translate")) {
     return jsonResponse({ error: "Translation is only available to an active text-translate job." }, 403);
   }
   const targetLanguage = extractTranslationTarget(job.agentPrompt || "");
