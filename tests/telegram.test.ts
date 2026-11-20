@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBackHomeKeyboard, buildHomeKeyboard, buildModePromptKeyboard, buildSearchKeyboard, buildToolCenterKeyboard, buildToolCategoryKeyboard, buildToolDetailKeyboard, buildToolSearchKeyboard, formatDeepReport, formatHomeMenu, formatModePrompt, formatSearchResults, formatToolCenterHome, formatToolCategoryPage, formatToolDetail, formatToolSearchResults, SEARCH_PAGE_SIZE } from "../src/telegram";
+import { buildBackHomeKeyboard, buildHomeKeyboard, buildModePromptKeyboard, buildSearchKeyboard, buildToolCenterKeyboard, buildToolCategoryKeyboard, buildToolDetailKeyboard, buildToolSearchKeyboard, buildToolJobDetailKeyboard, buildToolJobsKeyboard, formatDeepReport, formatHomeMenu, formatModePrompt, formatSearchResults, formatToolCenterHome, formatToolCategoryPage, formatToolDetail, formatToolJobDetail, formatToolJobsPage, formatToolSearchResults, SEARCH_PAGE_SIZE } from "../src/telegram";
 import { TOOL_CATALOG, getTool } from "../src/tools";
 import type { SearchResult } from "../src/types";
 
@@ -44,11 +44,12 @@ describe("Telegram interactive workspace UI", () => {
 describe("Telegram Tool Center UI", () => {
   it("shows every active category and navigates into paginated tool listings", () => {
     const home = formatToolCenterHome(TOOL_CATALOG, true);
-    expect(home).toContain("94 processor");
+    expect(home).toContain("102 processor");
     expect(home).toContain("Lập trình &amp; văn bản");
     const keyboard = buildToolCenterKeyboard(TOOL_CATALOG);
     const callbacks = keyboard.inline_keyboard.flat().map(button => button.callback_data).filter(Boolean) as string[];
     expect(callbacks).toContain("tc:developer");
+    expect(callbacks).toContain("tc:repository");
     expect(callbacks).toContain("tc:jobs");
     expect(callbacks).toContain("tc:workflows");
     const page = formatToolCategoryPage(TOOL_CATALOG, "developer", 0);
@@ -73,6 +74,41 @@ describe("Telegram Tool Center UI", () => {
     expect(buttons.map(button => button.callback_data)).toContain("td:markdown-links");
   });
 });
+
+
+  it("lists repository tools and exposes the repository category page", () => {
+    const page = formatToolCategoryPage(TOOL_CATALOG, "repository", 0);
+    expect(page).toContain("repo-inventory");
+    expect(page).toContain("repo-secret-scan");
+    const keyboard = buildToolCategoryKeyboard(TOOL_CATALOG, "repository", 0);
+    expect(keyboard.inline_keyboard.flat().some(button => button.callback_data === "td:repo-inventory")).toBe(true);
+  });
+
+  it("renders job progress, trace detail, refresh, pagination and retry actions", () => {
+    const job = {
+      id:"12345678-1234-1234-1234-123456789abc",userId:42,chatId:42,toolId:"repo-secret-scan",
+      fileId:"telegram-file-id-123456",fileName:"source.zip",mimeType:"application/zip",fileSize:1000,
+      status:"failed" as const,createdAt:1,updatedAt:2,attempt:2,retryOf:"abcdef12-1234-1234-1234-123456789abc",
+      progress:{completed:1,total:2,currentToolIds:["repo-todo-scan"],updatedAt:2},
+      pipeline:[{toolId:"repo-secret-scan"},{toolId:"text-stats"}],
+      trace:[{step:1,total:2,toolId:"repo-secret-scan",status:"completed" as const,durationMs:40,inputBytes:1000,outputBytes:200,summary:"No secret values printed."}],
+      error:"Runner failed",
+    };
+    const list = formatToolJobsPage([job],0);
+    expect(list).toContain("NOLANE · JOB CENTER");
+    expect(list).toContain("1/2");
+    expect(list).toContain("source.zip");
+    const listButtons = buildToolJobsKeyboard([job],0).inline_keyboard.flat();
+    expect(listButtons.some(button => button.callback_data === "tjv:"+job.id+":0")).toBe(true);
+    const detail = formatToolJobDetail(job);
+    expect(detail).toContain("Execution trace");
+    expect(detail).toContain("repo-secret-scan");
+    expect(detail).toContain("Runner failed");
+    const detailButtons = buildToolJobDetailKeyboard(job,0).inline_keyboard.flat();
+    expect(detailButtons.some(button => button.callback_data === "tjview:"+job.id+":0")).toBe(true);
+    expect(detailButtons.some(button => button.callback_data === "tjr:"+job.id)).toBe(true);
+    expect([...listButtons,...detailButtons].every(button => new TextEncoder().encode(button.callback_data || "").length <= 64)).toBe(true);
+  });
 
 describe("Telegram HTML formatting", () => {
   it("escapes untrusted search result text and URLs", () => {
