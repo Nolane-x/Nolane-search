@@ -5,7 +5,7 @@ describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
     const ids = TOOL_CATALOG.map(tool => tool.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(86);
+    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(94);
     expect(TOOL_CATALOG.every(tool => tool.ready && tool.description.length > 12 && tool.accepts.length > 0)).toBe(true);
     for (const id of ["pdf-rotate-cw","pdf-remove-blank","image-trim-border","image-pixelate","image-diff","audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean","json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join"]) expect(getTool(id)).not.toBeNull();
   });
@@ -153,6 +153,26 @@ describe("Nolane Tools registry", () => {
     expect(validateToolDagDefinition([
       { id: "only", toolId: "file-hash", dependsOn: [] },
       { id: "next", toolId: "text-clean", dependsOn: ["only"] },
+    ]).ok).toBe(false);
+  });
+
+  it("validates the new developer processors and their real data-flow transitions", () => {
+    expect(getTool("markdown-outline")?.category).toBe("developer");
+    expect(getTool("code-secret-scan")?.ready).toBe(true);
+    expect(isToolCompatible(getTool("markdown-outline")!, "text/markdown", "README.md")).toBe(true);
+    expect(isToolCompatible(getTool("code-imports")!, "text/x-python", "main.py")).toBe(true);
+    expect(isToolCompatible(getTool("log-timeline")!, "text/plain", "service.log")).toBe(true);
+    expect(validateToolPipeline({mimeType:"text/markdown",fileName:"README.md"}, [
+      {toolId:"markdown-links"},{toolId:"csv-profile"},
+    ]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"text/plain",fileName:"service.log"}, [
+      {toolId:"log-timeline"},{toolId:"text-stats"},
+    ]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"text/plain",fileName:"notes.txt"}, [
+      {toolId:"text-redact"},{toolId:"text-deduplicate"},
+    ]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"text/plain",fileName:"source.py"}, [
+      {toolId:"code-secret-scan"},{toolId:"text-stats"},
     ]).ok).toBe(false);
   });
 
