@@ -144,6 +144,32 @@ describe("Nolane AI callable tools", () => {
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"jsonl-to-csv",content:'{"name":"An","score":7}\n{"name":"B","extra":true}'})).toBe("name,score,extra\nAn,7,\nB,,true");
   });
 
+  it("runs fourth-wave naming, Markdown, JSON Pointer and CSV utilities through AI", async () => {
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-pascal-case",content:"hello world"})).toBe("HelloWorld");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-constant-case",content:"Hello World"})).toBe("HELLO_WORLD");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-dot-case",content:"Hello World"})).toBe("hello.world");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-initials",content:"Hello World"})).toBe("HW");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-normalize-unicode",content:"e\u0301"})).toBe("é");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-remove-control-chars",content:"a\u0001b\tc\n"})).toBe("ab\tc\n");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-remove-duplicate-words",content:"one two one THREE two"})).toContain("one two THREE");
+    const links=String(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-markdown-links",content:'[Open](https://example.com "Site")'}));
+    expect(links).toContain('"url":"https://example.com"');
+    const headings=String(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-markdown-headings",content:"# Main\n~~~md\n# Hidden\n~~~\n## Second"}));
+    expect(headings).toContain('"level":1');
+    expect(headings).not.toContain("Hidden");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-quotes",content:'“quoted” and "plain"'})).toBe("quoted\nplain");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-paragraph-report",content:"one two\n\nthree"})).toContain("Paragraphs: 2");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-flatten",content:'{"a":{"b":1},"c":[2,3],"a/b":{"~key":true}}'})).toContain('"/a~1b/~0key": true');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-unflatten",content:'{"/a/b":1,"/c":2}'})).toBe('{\n  "a": {\n    "b": 1\n  },\n  "c": 2\n}');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-keys-report",content:'{"items":[{"id":1}]}'})).toContain("$.items[0].id");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-remove-empty-rows",content:"a,b\n1,2\n,\n3,4"})).toBe("a,b\n1,2\n3,4\n");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-add-row-numbers",content:"a,b\n1,2\n3,4"})).toBe("_row_number,a,b\n1,1,2\n2,3,4\n");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-column-stats",content:"score,name\n1,An\n2,Bình"})).toContain('"numeric":2');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-normalize-headers",content:"Full Name,Score,Score\nAn,7,8"})).toBe("full_name,score,score_2\nAn,7,8\n");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-to-jsonl",content:"name,score\nAn,7\nBình,8"})).toBe('{"name":"An","score":"7"}\n{"name":"Bình","score":"8"}');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"jsonl-to-csv",content:'{"name":"An","score":7}\n{"name":"Bình","score":8}'})).toBe("name,score\nAn,7\nBình,8\n");
+  });
+
   it("routes AI tool-call translation through the configured translation model", async () => {
     const fetchMock=vi.fn(async (_input:RequestInfo|URL,init?:RequestInit)=>{
       const body=JSON.parse(String(init?.body)) as {messages:Array<{role:string;content:string}>};
