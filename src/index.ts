@@ -1492,20 +1492,21 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     if (job.workflowName) lines.push("Workflow: " + htmlEscape(job.workflowName));
     if (job.trace?.length) {
       lines.push("", "<b>Execution trace</b>");
-      for (const step of job.trace) {
+      for (const step of job.trace.slice(0, 8)) {
         const stateIcon = step.status === "completed" ? "✅" : "❌";
         const outputSize = step.outputBytes === null ? "text/no file" : step.outputBytes + " bytes";
         lines.push(
           stateIcon + " " + (step.nodeId ? "Node " + htmlEscape(step.nodeId) : "Step " + step.step) + "/" + step.total + " · " + htmlEscape(step.toolId) +
           " · " + step.durationMs + " ms · input " + step.inputBytes + " bytes · output " + outputSize +
-          "\n" + htmlEscape((step.error || step.summary).slice(0, 420))
+          "\n" + htmlEscape((step.error || step.summary).slice(0, 160))
         );
       }
+      if (job.trace.length > 8) lines.push("<i>Và " + (job.trace.length - 8) + " node/bước khác chưa hiển thị.</i>");
     } else {
       lines.push("", "Runner chưa gửi trace bước (có thể tác vụ lỗi trước khi chạy processor).");
     }
-    if (job.resultSummary) lines.push("", "<b>Kết quả</b>", htmlEscape(job.resultSummary.slice(0, 1200)));
-    if (job.error) lines.push("", "<b>Lỗi</b>", htmlEscape(job.error));
+    if (job.resultSummary) lines.push("", "<b>Kết quả</b>", htmlEscape(job.resultSummary.slice(0, 600)));
+    if (job.error) lines.push("", "<b>Lỗi</b>", htmlEscape(job.error.slice(0, 350)));
     if (job.status === "failed" && job.fileId) lines.push("", "Chạy lại bằng <code>/tool_retry " + job.id + "</code>.");
     await reply(env, chatId, lines.join("\n"));
     return;
