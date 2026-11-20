@@ -11,6 +11,7 @@ const TEXT_TOOL_IDS = new Set([
   "text-clean", "json-format", "csv-profile", "html-text", "subtitle-text", "json-to-csv", "csv-clean", "text-translate", "language-detect", "text-uppercase", "text-lowercase", "text-title-case", "text-sort-lines", "text-reverse-lines", "text-number-lines", "text-remove-blank-lines", "text-wrap", "text-trim-lines", "text-extract-emails", "text-extract-urls", "text-extract-hashtags", "text-to-base64", "base64-to-text", "url-encode", "url-decode", "json-minify", "json-sort-keys",
   "text-slugify", "text-word-frequency", "text-extract-numbers", "text-extract-dates", "text-reverse-characters", "text-snake-case", "text-kebab-case", "text-camel-case", "text-swap-case", "text-extract-ipv4", "text-mask-emails", "text-mask-phones", "json-to-jsonl", "jsonl-to-json", "csv-to-tsv", "tsv-to-csv", "csv-to-markdown", "text-remove-emoji",
   "text-collapse-whitespace", "text-remove-punctuation", "text-to-ascii", "text-html-escape", "text-html-unescape", "text-extract-mentions", "text-extract-hex-colors", "text-extract-phones", "text-dedupe-lines", "text-count-report", "text-quote-lines", "text-unquote-lines", "csv-transpose", "csv-sort-rows", "csv-dedupe-rows", "csv-to-xml", "csv-to-html", "json-sort-array", "json-remove-nulls", "json-to-html-table",
+  "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv",
 ]);
 
 export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
@@ -438,6 +439,143 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     const th=headers.map(key=>"<th>"+esc(key)+"</th>").join("");
     const rows=value.map(item=>"<tr>"+headers.map(key=>{const cell=(item as Record<string,unknown>)[key];return "<td>"+esc(cell==null?"":typeof cell==="string"?cell:JSON.stringify(cell))+"</td>";}).join("")+"</tr>").join("");
     return "<!doctype html><html><head><meta charset=\"utf-8\"></head><body><table><thead><tr>"+th+"</tr></thead><tbody>"+rows+"</tbody></table></body></html>";
+  }
+  if (toolId === "text-pascal-case" || toolId === "text-constant-case" || toolId === "text-dot-case" || toolId === "text-initials") {
+    return content.split(/\r?\n/).map(line=>{
+      const words=line.replace(/([a-z0-9])([A-Z])/g,"$1 $2").match(/[A-Za-z0-9À-ỹ]+/g)||[];
+      if(toolId==="text-initials") return words.map(word=>word[0]!.toUpperCase()).join("");
+      if(toolId==="text-constant-case") return words.map(word=>word.toUpperCase()).join("_");
+      if(toolId==="text-dot-case") return words.map(word=>word.toLowerCase()).join(".");
+      return words.map(word=>word[0]!.toUpperCase()+word.slice(1).toLowerCase()).join("");
+    }).join("\n");
+  }
+  if (toolId === "text-normalize-unicode") return content.normalize("NFC");
+  if (toolId === "text-remove-control-chars") return [...content].filter(char=>char==="\n"||char==="\r"||char==="\t"||!(/[\u0000-\u001F\u007F-\u009F]/.test(char))).join("");
+  if (toolId === "text-remove-duplicate-words") {
+    const seen=new Set<string>();
+    return content.replace(/\b[\p{L}\p{N}]+\b/gu,word=>{const key=word.toLocaleLowerCase();if(seen.has(key))return "";seen.add(key);return word;}).replace(/[ \t]{2,}/g," ");
+  }
+  if (toolId === "text-extract-markdown-links") {
+    const results:string[]=[];
+    for(const match of content.matchAll(/(?<!!)\[([^\]\n]+)\]\(([^)\s]+)(?:\s+["']([^"']*)["'])?\)/g)) {
+      results.push(JSON.stringify({text:match[1],url:match[2],title:match[3]||""}));
+    }
+    return [...new Set(results)].join("\n");
+  }
+  if (toolId === "text-extract-markdown-headings") {
+    const results:string[]=[];let inFence=false;
+    for(const line of content.split(/\r?\n/)) {
+      if(line.trimStart().startsWith("~~~")||line.trimStart().startsWith(String.fromCharCode(96).repeat(3))){inFence=!inFence;continue;}
+      if(inFence) continue;
+      const match=line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
+      if(match) results.push(JSON.stringify({level:match[1]!.length,text:match[2]!.replace(/\s+#+\s*$/,"").trim()}));
+    }
+    return results.join("\n");
+  }
+  if (toolId === "text-extract-quotes") {
+    const pattern=/["]([^"\n]{1,2000})["]|[']([^'\n]{1,2000})[']|“([^”\n]{1,2000})”|‘([^’\n]{1,2000})’|«([^»\n]{1,2000})»/g;
+    const values:string[]=[];for(const match of content.matchAll(pattern)){const value=match.slice(1).find(Boolean)?.trim();if(value)values.push(value);}
+    return [...new Set(values)].join("\n");
+  }
+  if (toolId === "text-paragraph-report") {
+    const paragraphs=content.split(/\n\s*\n/).map(value=>value.trim()).filter(Boolean);
+    const wordCounts=paragraphs.map(value=>(value.match(/[^\W_]+(?:['’][^\W_]+)?/gu)||[]).length);
+    const total=wordCounts.reduce((sum,value)=>sum+value,0);
+    return ["Paragraph statistics","Paragraphs: "+paragraphs.length,"Words: "+total,
+      "Average words per paragraph: "+(paragraphs.length?(total/paragraphs.length).toFixed(2):"0"),
+      "Longest paragraph characters: "+Math.max(0,...paragraphs.map(value=>value.length))].join("\n")+"\n";
+  }
+  if (toolId === "json-flatten") {
+    const value=JSON.parse(content) as unknown;
+    if(!value||typeof value!=="object"||Array.isArray(value)) throw new Error("JSON flatten expects a top-level object.");
+    const flattened:Record<string,unknown>={};
+    const escapePointer=(key:string)=>key.replace(/~/g,"~0").replace(/\//g,"~1");
+    const walk=(item:unknown,path:string)=>{
+      if(item&&typeof item==="object"&&!Array.isArray(item)&&Object.keys(item).length) {
+        for(const [key,child] of Object.entries(item as Record<string,unknown>)) walk(child,path+"/"+escapePointer(key));
+      } else flattened[path]=item;
+    };
+    walk(value,"");
+    return JSON.stringify(flattened,null,2);
+  }
+  if (toolId === "json-unflatten") {
+    const value=JSON.parse(content) as unknown;
+    if(!value||typeof value!=="object"||Array.isArray(value)) throw new Error("JSON unflatten expects a JSON Pointer mapping object.");
+    const entries=Object.entries(value as Record<string,unknown>);
+    if(entries.some(([key])=>key!==""&&!key.startsWith("/"))) throw new Error("JSON unflatten expects JSON Pointer keys.");
+    if(entries.some(([key])=>key==="")&&entries.length!==1) throw new Error("Root path cannot be combined with child paths.");
+    if(entries.length===1&&entries[0]![0]==="") return JSON.stringify(entries[0]![1],null,2);
+    const result:Record<string,unknown>={};
+    for(const [pointer,leaf] of entries) {
+      const parts=pointer.slice(1).split("/").map(part=>part.replace(/~1/g,"/").replace(/~0/g,"~"));
+      let current=result;
+      for(let index=0;index<parts.length;index++) {
+        const key=parts[index]!;
+        if(index===parts.length-1) {
+          if(Object.prototype.hasOwnProperty.call(current,key)&&current[key]&&typeof current[key]==="object") throw new Error("Conflicting JSON Pointer paths.");
+          current[key]=leaf;
+        } else {
+          const existing=current[key];
+          if(existing===undefined) current[key]={};
+          else if(!existing||typeof existing!=="object"||Array.isArray(existing)) throw new Error("Conflicting JSON Pointer paths.");
+          current=current[key] as Record<string,unknown>;
+        }
+      }
+    }
+    return JSON.stringify(result,null,2);
+  }
+  if (toolId === "json-keys-report") {
+    const value=JSON.parse(content) as unknown;const counts=new Map<string,number>();
+    const walk=(item:unknown,path="$")=>{
+      if(Array.isArray(item)) item.slice(0,100_000).forEach((child,index)=>walk(child,path+"["+index+"]"));
+      else if(item&&typeof item==="object") for(const [key,child] of Object.entries(item as Record<string,unknown>)) {
+        const next=path+"."+key;counts.set(next,(counts.get(next)||0)+1);walk(child,next);
+      }
+    };
+    walk(value);
+    return ["JSON key/path report","Unique paths: "+counts.size,...[...counts.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([path,count])=>path+"\t"+count)].join("\n")+"\n";
+  }
+  if (toolId === "csv-remove-empty-rows" || toolId === "csv-add-row-numbers" || toolId === "csv-normalize-headers" || toolId === "csv-to-jsonl" || toolId === "csv-column-stats") {
+    const rows=csvRows(content);if(!rows.length) throw new Error("CSV is empty.");
+    if(toolId==="csv-remove-empty-rows") return [rows[0]!,...rows.slice(1).filter(row=>row.some(value=>value.trim()))].map(row=>row.map(csvEscape).join(",")).join("\n");
+    if(toolId==="csv-add-row-numbers") {
+      const header=rows[0]!.slice();let col="_row_number";while(header.includes(col))col+="_";
+      return [[col,...header],...rows.slice(1).map((row,index)=>[String(index+1),...row])].map(row=>row.map(csvEscape).join(",")).join("\n");
+    }
+    if(toolId==="csv-normalize-headers") {
+      const used=new Set<string>();
+      const header=rows[0]!.map((value,index)=>{
+        const words=value.trim().normalize("NFKD").replace(/\p{M}/gu,"").replace(/[đĐ]/g,char=>char==="đ"?"d":"D").match(/[A-Za-z0-9]+/g)||[];
+        const base=words.map(word=>word.toLowerCase()).join("_")||"column_"+(index+1);let name=base,n=2;
+        while(used.has(name))name=base+"_"+n++;
+        used.add(name);return name;
+      });
+      return [header,...rows.slice(1)].map(row=>row.map(csvEscape).join(",")).join("\n");
+    }
+    if(toolId==="csv-to-jsonl") {
+      const used=new Set<string>();
+      const header=rows[0]!.map((value,index)=>{const base=value.trim()||"column_"+(index+1);let name=base,n=2;while(used.has(name))name=base+"_"+n++;used.add(name);return name;});
+      return rows.slice(1).map(row=>JSON.stringify(Object.fromEntries(header.map((key,index)=>[key,row[index]||""])))).join("\n");
+    }
+    const header=rows[0]!;
+    const body=rows.slice(1);
+    return ["CSV column statistics","Rows: "+body.length,"Columns: "+header.length,...header.map((name,index)=>{
+      const values=body.map(row=>(row[index]||"").trim()),nonempty=values.filter(Boolean);
+      const numeric=nonempty.filter(value=>/^[+-]?\d+(?:[.,]\d+)?$/.test(value)).length;
+      return JSON.stringify({column:name,non_empty:nonempty.length,empty:body.length-nonempty.length,unique:new Set(nonempty).size,numeric});
+    })].join("\n")+"\n";
+  }
+  if (toolId === "jsonl-to-csv") {
+    const records:Record<string,unknown>[]=[];
+    for(const [index,line] of content.split(/\r?\n/).entries()) {
+      if(!line.trim())continue;
+      let value:unknown;try{value=JSON.parse(line);}catch{throw new Error("Invalid JSONL at line "+(index+1)+".");}
+      if(!value||typeof value!=="object"||Array.isArray(value))throw new Error("JSONL to CSV requires every record to be an object.");
+      records.push(value as Record<string,unknown>);if(records.length>100_000)throw new Error("JSONL exceeds 100,000 records.");
+    }
+    const headers=[...new Set(records.flatMap(record=>Object.keys(record)))];
+    const cell=(value:unknown)=>value==null?"":typeof value==="string"?value:JSON.stringify(value);
+    return [headers.map(csvEscape).join(","),...records.map(record=>headers.map(key=>csvEscape(cell(record[key])).replace(/[\r\n]+/g," ")).join(","))].join("\n");
   }
   if (toolId === "language-detect") {
     const sample=content.slice(0,20_000);
