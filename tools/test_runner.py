@@ -845,6 +845,10 @@ class ToolRunnerUnitTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,"2 to 3"):
             runner.text_join([first])
 
+    def test_text_join_cannot_run_as_a_single_file_pipeline(self):
+        with self.assertRaisesRegex(RuntimeError,"only merge parent artifacts"):
+            runner.validate_pipeline({"toolId":"text-join","pipeline":[{"toolId":"text-join"}]})
+
     def test_workflow_dag_merges_two_completed_parent_branches(self):
         import json, zipfile
         source=self.write("report.pdf","mock pdf bytes")
