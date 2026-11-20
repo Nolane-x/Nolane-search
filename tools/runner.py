@@ -1605,6 +1605,94 @@ def jsonl_to_csv(p):
     return _write_text_artifact_ext(p,"records",".csv",stream.getvalue(),"JSONL to CSV",str(len(records))+" record(s)")
 
 
+def text_indent_lines(p):
+    raw=_read_text_source(p)
+    output="\n".join(("    "+line) if line.strip() else "" for line in raw.splitlines())
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"indented",output,"Line indentation","4 spaces added to non-empty lines")
+
+
+def text_unindent_lines(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    indents=[len(line)-len(line.lstrip(" \t")) for line in lines if line.strip()]
+    amount=min(indents,default=0)
+    output="\n".join(line[amount:] if line.strip() else "" for line in lines)
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"unindented",output,"Common indentation removal",str(amount)+" leading character(s) removed")
+
+
+def text_dedupe_paragraphs(p):
+    raw=_read_text_source(p)
+    paragraphs=[part.strip() for part in re.split(r"\n\s*\n",raw) if part.strip()]
+    result=[]
+    seen=set()
+    for paragraph in paragraphs:
+        key=re.sub(r"\s+"," ",paragraph).casefold()
+        if key in seen: continue
+        seen.add(key)
+        result.append(paragraph)
+    output="\n\n".join(result)+("\n" if raw.endswith(("\n","\r")) and result else "")
+    return _write_text_artifact(p,"unique-paragraphs",output,"Paragraph deduplication",str(len(paragraphs)-len(result))+" duplicate paragraph(s) removed")
+
+
+def text_tokenize_words(p):
+    raw=_read_text_source(p)
+    words=re.findall(r"[^\W_]+(?:['’][^\W_]+)?",raw,flags=re.UNICODE)
+    return _write_text_artifact(p,"tokens","\n".join(words)+("\n" if words else ""),"Word tokenization",str(len(words))+" token(s)")
+
+
+def text_sentence_report(p):
+    raw=_read_text_source(p)
+    sentences=[part.strip() for part in re.split(r"(?<=[.!?。！？])\s+",raw) if part.strip()]
+    words=re.findall(r"[^\W_]+(?:['’][^\W_]+)?",raw,flags=re.UNICODE)
+    counts=[len(re.findall(r"[^\W_]+(?:['’][^\W_]+)?",part,flags=re.UNICODE)) for part in sentences]
+    report=[
+        "Sentence statistics",
+        "Sentences (heuristic): "+str(len(sentences)),
+        "Words: "+str(len(words)),
+        "Average words per sentence: "+(f"{len(words)/len(sentences):.2f}" if sentences else "0"),
+        "Longest sentence words: "+str(max(counts,default=0)),
+        "Note: punctuation-based estimate; abbreviations and multilingual text may affect accuracy.",
+    ]
+    return _write_text_artifact(p,"sentence-report","\n".join(report)+"\n","Sentence report")
+
+
+def text_line_length_report(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    ranked=sorted(enumerate(lines,1),key=lambda item:(-len(item[1]),item[0]))[:100]
+    report=["Line length report","Total lines: "+str(len(lines)),"Longest line: "+str(max((len(line) for line in lines),default=0)),"","Rank | Line | Characters"]
+    report.extend(f"{rank} | {line_number} | {len(line)}" for rank,(line_number,line) in enumerate(ranked,1))
+    return _write_text_artifact(p,"line-lengths","\n".join(report)+"\n","Line-length report")
+
+
+def text_normalize_newlines(p):
+    raw=_read_text_source(p)
+    output=raw.replace("\r\n","\n").replace("\r","\n")
+    return _write_text_artifact(p,"unix-newlines",output,"Newline normalization","LF line endings")
+
+
+def text_remove_zero_width(p):
+    raw=_read_text_source(p)
+    output="".join(char for char in raw if char not in "\u200b\u200c\u200d\u2060\ufeff\u00ad")
+    return _write_text_artifact(p,"no-zero-width",output,"Invisible-character removal")
+
+
+def text_extract_file_paths(p):
+    raw=_read_text_source(p)
+    pattern=r"(?<![A-Za-z0-9])(?:[A-Za-z]:\\(?:[^\\/:*?""<>|\r\n]+\\)*[^\\/:*?""<>|\r\n]*|/(?:[^/\s<>:""|?*]+/)*[^/\s<>:""|?*]+)"
+    values=_ordered_unique(re.findall(pattern,raw))
+    return _write_text_artifact(p,"file-paths","\n".join(values)+("\n" if values else ""),"File-path extraction",str(len(values))+" unique candidate(s)")
+
+
+def text_sort_words(p):
+    raw=_read_text_source(p)
+    words=re.findall(r"[^\W_]+(?:['’][^\W_]+)?",raw,flags=re.UNICODE)
+    ordered=sorted(words,key=lambda value:(value.casefold(),value))
+    return _write_text_artifact(p,"sorted-words","\n".join(ordered)+("\n" if ordered else ""),"Word sorting",str(len(words))+" word(s) sorted")
+
+
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
     lines=[]
