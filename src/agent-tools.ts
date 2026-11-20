@@ -710,6 +710,68 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
       ? "Most likely: "+best.language+"\nEvidence: "+best.score+" common-word matches\nMethod: lightweight heuristic; short or mixed text may be misclassified."
       : "Most likely: Undetermined\nEvidence: insufficient distinctive characters or words\nMethod: lightweight heuristic.";
   }
+  if (toolId === "csv-remove-empty-rows" || toolId === "csv-add-row-numbers" || toolId === "csv-column-stats" || toolId === "csv-normalize-headers" || toolId === "csv-to-jsonl" || toolId === "jsonl-to-csv") {
+    const safeCsv=(value:unknown):string=>{
+      let text=typeof value==="string"?value:(value===null||value===undefined?"":typeof value==="object"?JSON.stringify(value):String(value));
+      if(typeof value==="string"&&/^[\s]*[=+@]/.test(text)) text="'"+text;
+      if(typeof value==="string"&&/^[\s]*-(?!\d+(?:[.,]\d+)?(?:$|\s))/.test(text)) text="'"+text;
+      return /[",\r\n]/.test(text)?'"'+text.replace(/"/g,'""')+'"':text;
+    };
+    if(toolId==="jsonl-to-csv"){
+      const records:Record<string,unknown>[]=[];
+      for(const [index,line] of content.split(/\r?\n/).entries()){
+        if(!line.trim()) continue;
+        let value:unknown;try{value=JSON.parse(line);}catch{throw new Error("Invalid JSONL at line "+(index+1)+".");}
+        if(!value||typeof value!=="object"||Array.isArray(value)) throw new Error("JSONL to CSV requires every record to be an object.");
+        records.push(value as Record<string,unknown>);
+        if(records.length>100_000) throw new Error("JSONL-to-CSV exceeds 100,000 records.");
+      }
+      const headers:string[]=[];const seen=new Set<string>();
+      for(const record of records) for(const key of Object.keys(record)) if(!seen.has(key)){seen.add(key);headers.push(key);}
+      const output=[headers.map(safeCsv).join(",")];
+      for(const record of records) output.push(headers.map(key=>safeCsv(record[key])).join(","));
+      return output.join("\n")+"\n";
+    }
+    const rows=csvRows(content);
+    if(!rows.length) throw new Error("CSV is empty.");
+    const width=Math.max(0,...rows.map(row=>row.length));
+    if(rows.length>100_001||width>200) throw new Error("CSV processing is limited to 100,000 data rows and 200 columns.");
+    if(toolId==="csv-remove-empty-rows"){
+      return [rows[0]!,...rows.slice(1).filter(row=>row.some(value=>value.trim()))].map(row=>row.map(safeCsv).join(",")).join("\n")+"\n";
+    }
+    if(toolId==="csv-add-row-numbers"){
+      const header=[...rows[0]!];let col="_row_number";while(header.includes(col))col+="_";
+      return [[col,...header],...rows.slice(1).map((row,index)=>[String(index+1),...row])].map(row=>row.map(safeCsv).join(",")).join("\n")+"\n";
+    }
+    if(toolId==="csv-normalize-headers"){
+      const used=new Set<string>();
+      const header=rows[0]!.map((value,index)=>{
+        const words=value.trim().replace(/([a-z0-9])([A-Z])/g,"$1 $2").normalize("NFKD").replace(/\p{M}/gu,"")
+          .replace(/đ/gi,"d").match(/[\p{L}\p{N}]+/gu)||[];
+        const base=words.map(word=>word.toLocaleLowerCase()).join("_")||"column_"+(index+1);
+        let name=base,suffix=2;while(used.has(name))name=base+"_"+suffix++;
+        used.add(name);return name;
+      });
+      return [header,...rows.slice(1)].map(row=>row.map(safeCsv).join(",")).join("\n")+"\n";
+    }
+    if(toolId==="csv-column-stats"){
+      const header=rows[0]!,body=rows.slice(1);
+      const lines=["CSV column statistics","Rows: "+body.length,"Columns: "+header.length];
+      header.forEach((name,index)=>{
+        const values=body.map(row=>(row[index]||"").trim());const nonempty=values.filter(Boolean);
+        const numeric=nonempty.filter(value=>/^[+-]?\d+(?:[.,]\d+)?$/.test(value)).length;
+        lines.push(JSON.stringify({column:name,non_empty:nonempty.length,empty:body.length-nonempty.length,unique:new Set(nonempty).size,numeric}));
+      });
+      return lines.join("\n")+"\n";
+    }
+    const used=new Set<string>();
+    const headers=rows[0]!.map((value,index)=>{
+      const base=value.trim()||"column_"+(index+1);let name=base,suffix=2;
+      while(used.has(name))name=base+"_"+suffix++;
+      used.add(name);return name;
+    });
+    return rows.slice(1).map(row=>JSON.stringify(Object.fromEntries(headers.map((key,index)=>[key,row[index]??""])))).join("\n");
+  }
   if (toolId === "csv-profile") return csvProfile(content);
   if (toolId === "csv-clean") {
     const rows = csvRows(content);
