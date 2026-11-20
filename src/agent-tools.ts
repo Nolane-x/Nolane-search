@@ -10,6 +10,7 @@ import type { Env, SearchMode } from "./types";
 const TEXT_TOOL_IDS = new Set([
   "text-clean", "json-format", "csv-profile", "html-text", "subtitle-text", "json-to-csv", "csv-clean", "text-translate", "language-detect", "text-uppercase", "text-lowercase", "text-title-case", "text-sort-lines", "text-reverse-lines", "text-number-lines", "text-remove-blank-lines", "text-wrap", "text-trim-lines", "text-extract-emails", "text-extract-urls", "text-extract-hashtags", "text-to-base64", "base64-to-text", "url-encode", "url-decode", "json-minify", "json-sort-keys",
   "text-slugify", "text-word-frequency", "text-extract-numbers", "text-extract-dates", "text-reverse-characters", "text-snake-case", "text-kebab-case", "text-camel-case", "text-swap-case", "text-extract-ipv4", "text-mask-emails", "text-mask-phones", "json-to-jsonl", "jsonl-to-json", "csv-to-tsv", "tsv-to-csv", "csv-to-markdown", "text-remove-emoji",
+  text-collapse-whitespace, text-remove-punctuation, text-to-ascii, text-html-escape, text-html-unescape, text-extract-mentions, text-extract-hex-colors, text-extract-phones, text-dedupe-lines, text-count-report, text-quote-lines, text-unquote-lines, csv-transpose, csv-sort-rows, csv-dedupe-rows, csv-to-xml, csv-to-html, json-sort-array, json-remove-nulls, json-to-html-table,
 ]);
 
 export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
@@ -335,6 +336,109 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     return lines.join("\n");
   }
   if (toolId === "text-remove-emoji") return content.replace(/[\u{1F000}-\u{1FAFF}\u2600-\u27BF\uFE0F\u200D]/gu,"");
+  if (toolId === "text-collapse-whitespace") return content.split(/\r?\n/).map(line=>line.replace(/[ \t\f\v]+/g," ").trim()).join("\n");
+  if (toolId === "text-remove-punctuation") return content.replace(/\p{P}/gu," ").replace(/[ \t]+/g," ");
+  if (toolId === "text-to-ascii") return content.replace(/[đĐ]/g,char=>char==="đ"?"d":"D").normalize("NFKD").replace(/\p{M}/gu,"").replace(/[^\x00-\x7F]/g,"");
+  if (toolId === "text-html-escape") return content.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#x27;");
+  if (toolId === "text-html-unescape") return decodeHtml(content);
+  if (toolId === "text-extract-mentions") {
+    const values=content.match(/(?<![\w@])@[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,28}[A-Za-z0-9_])?/g)||[];
+    const seen=new Set<string>(); return values.filter(value=>{const key=value.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).join("\n");
+  }
+  if (toolId === "text-extract-hex-colors") {
+    const values=content.match(/(?<![\w])#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})(?![0-9A-Fa-f])/g)||[];
+    const normalized=values.map(value=>value.toUpperCase()); const seen=new Set<string>();
+    return normalized.filter(value=>{if(seen.has(value))return false;seen.add(value);return true;}).join("\n");
+  }
+  if (toolId === "text-extract-phones") {
+    const values=content.match(/(?<!\w)\+?\d[\d\s().-]{5,}\d(?!\w)/g)||[];
+    const seen=new Set<string>();
+    return values.filter(value=>{const digits=value.replace(/\D/g,"");const key=digits;if(digits.length<7||digits.length>15||seen.has(key))return false;seen.add(key);return true;}).join("\n");
+  }
+  if (toolId === "text-dedupe-lines") {
+    const seen=new Set<string>(); return content.split(/\r?\n/).filter(line=>{const key=line.trim().toLocaleLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).join("\n");
+  }
+  if (toolId === "text-count-report") {
+    const lines=content.split(/\r?\n/);
+    const words=content.match(/[^\W_]+(?:['’][^\W_]+)?/gu)||[];
+    const nonWhitespace=[...content].filter(char=>!/\s/u.test(char)).length;
+    const nonAscii=[...content].filter(char=>char.codePointAt(0)!>127).length;
+    return ["Text statistics","Lines: "+(content.length?lines.length:0),"Words: "+words.length,"Characters: "+[...content].length,
+      "Non-whitespace characters: "+nonWhitespace,"UTF-8 bytes: "+new TextEncoder().encode(content).length,"Non-ASCII characters: "+nonAscii].join("\n")+"\n";
+  }
+  if (toolId === "text-quote-lines") return content.split(/\r?\n/).map(line=>JSON.stringify(line)).join("\n");
+  if (toolId === "text-unquote-lines") {
+    return content.split(/\r?\n/).map((line,index)=>{
+      try { const value=JSON.parse(line); if(typeof value!=="string") throw new Error(); return value; }
+      catch { throw new Error("Invalid JSON string on line "+(index+1)+"."); }
+    }).join("\n");
+  }
+  if (toolId === "csv-transpose") {
+    const rows=csvRows(content);
+    if(rows.length>10_000||Math.max(0,...rows.map(row=>row.length))>200) throw new Error("CSV transpose is limited to 10,000 rows and 200 columns.");
+    const width=Math.max(0,...rows.map(row=>row.length));
+    const padded=rows.map(row=>row.concat(Array(width-row.length).fill("")));
+    const transposed=Array.from({length:width},(_v,column)=>padded.map(row=>row[column]||""));
+    return transposed.map(row=>row.map(csvEscape).join(",")).join("\n");
+  }
+  if (toolId === "csv-sort-rows") {
+    const rows=csvRows(content); if(!rows.length) return "";
+    const ordered=[rows[0]!,...rows.slice(1).sort((a,b)=>(a[0]||"").localeCompare(b[0]||"",undefined,{sensitivity:"base"}))];
+    return ordered.map(row=>row.map(csvEscape).join(",")).join("\n");
+  }
+  if (toolId === "csv-dedupe-rows") {
+    const rows=csvRows(content); if(!rows.length) return "";
+    const seen=new Set<string>(); const result=[rows[0]!];
+    for(const row of rows.slice(1)){const key=JSON.stringify(row.map(value=>value.toLowerCase()));if(seen.has(key))continue;seen.add(key);result.push(row);}
+    return result.map(row=>row.map(csvEscape).join(",")).join("\n");
+  }
+  if (toolId === "csv-to-xml") {
+    const rows=csvRows(content); if(!rows.length) throw new Error("CSV is empty.");
+    const headers=rows[0]||[]; const used=new Set<string>();
+    const tags=headers.map((header,index)=>{
+      let tag=header.normalize("NFKD").replace(/\p{M}/gu,"").replace(/[^A-Za-z0-9_.-]/g,"_")||"column_"+(index+1);
+      if(!/^[A-Za-z_]/.test(tag)) tag="column_"+tag;
+      let name=tag,suffix=2; while(used.has(name)){name=tag+"_"+suffix++;} used.add(name); return name;
+    });
+    const escapeXml=(value:string)=>value.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");
+    return "<rows>"+rows.slice(1).map(row=>"<row>"+tags.map((tag,index)=>"<"+tag+">"+escapeXml(row[index]||"")+"</"+tag+">").join("")+"</row>").join("")+"</rows>";
+  }
+  if (toolId === "csv-to-html") {
+    const rows=csvRows(content); if(!rows.length) throw new Error("CSV is empty.");
+    if(rows.length>10_001||Math.max(...rows.map(row=>row.length))>200) throw new Error("CSV-to-HTML is limited to 10,000 rows and 200 columns.");
+    const escapeHtml=(value:string)=>value.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#x27;");
+    const header="<thead><tr>"+(rows[0]||[]).map(value=>"<th>"+escapeHtml(value)+"</th>").join("")+"</tr></thead>";
+    const body="<tbody>"+rows.slice(1).map(row=>"<tr>"+row.map(value=>"<td>"+escapeHtml(value)+"</td>").join("")+"</tr>").join("")+"</tbody>";
+    return "<!doctype html><html><head><meta charset=\"utf-8\"></head><body><table>"+header+body+"</table></body></html>";
+  }
+  if (toolId === "json-sort-array") {
+    const value=JSON.parse(content); if(!Array.isArray(value)) throw new Error("JSON array sort expects a top-level array.");
+    const stable=(item:unknown):string=>{
+      if(Array.isArray(item)) return "["+item.map(stable).join(",")+"]";
+      if(item&&typeof item==="object"){const obj=item as Record<string,unknown>;return "{"+Object.keys(obj).sort().map(key=>JSON.stringify(key)+":"+stable(obj[key])).join(",")+"}";}
+      return JSON.stringify(item);
+    };
+    return JSON.stringify([...value].sort((a,b)=>stable(a).localeCompare(stable(b))),null,2);
+  }
+  if (toolId === "json-remove-nulls") {
+    const clean=(item:unknown):unknown=>{
+      if(Array.isArray(item)) return item.filter(value=>value!==null).map(clean);
+      if(item&&typeof item==="object"){const obj=item as Record<string,unknown>;const result:Record<string,unknown>={};for(const key of Object.keys(obj))if(obj[key]!==null)result[key]=clean(obj[key]);return result;}
+      return item;
+    };
+    return JSON.stringify(clean(JSON.parse(content)),null,2);
+  }
+  if (toolId === "json-to-html-table") {
+    const value=JSON.parse(content);
+    if(!Array.isArray(value)||value.some(item=>!item||typeof item!=="object"||Array.isArray(item))) throw new Error("JSON-to-HTML-table expects an array of objects.");
+    if(value.length>10_000) throw new Error("JSON-to-HTML-table exceeds 10,000 records.");
+    const headers=[...new Set(value.flatMap(item=>Object.keys(item as Record<string,unknown>)))];
+    if(headers.length>200) throw new Error("JSON-to-HTML-table exceeds 200 columns.");
+    const esc=(cell:string)=>cell.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#x27;");
+    const th=headers.map(key=>"<th>"+esc(key)+"</th>").join("");
+    const rows=value.map(item=>"<tr>"+headers.map(key=>{const cell=(item as Record<string,unknown>)[key];return "<td>"+esc(cell==null?"":typeof cell==="string"?cell:JSON.stringify(cell))+"</td>";}).join("")+"</tr>").join("");
+    return "<!doctype html><html><head><meta charset=\"utf-8\"></head><body><table><thead><tr>"+th+"</tr></thead><tbody>"+rows+"</tbody></table></body></html>";
+  }
   if (toolId === "language-detect") {
     const sample=content.slice(0,20_000);
     const scripts:Array<[RegExp,string,string]>=[
