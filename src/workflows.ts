@@ -1,5 +1,5 @@
 import type { Env } from "./types";
-import { validateToolDagDefinition, validateToolPipelineDefinition } from "./tools";
+import { TOOL_DAG_MAX_CONCURRENCY, validateToolDagDefinition, validateToolPipelineDefinition } from "./tools";
 import type { ToolDagNode, ToolPipelineStep } from "./tools";
 
 export interface ToolWorkflow {
