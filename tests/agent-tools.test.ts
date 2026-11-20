@@ -69,6 +69,52 @@ describe("Nolane AI callable tools", () => {
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-to-markdown",content:"name,score\nAn,7"})).toContain("| An | 7 |");
   });
 
+  it("runs the third wave of text cleanup, extraction, CSV and JSON helpers", async () => {
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-collapse-whitespace",content:" a   b  \n c "})).toBe("a b\nc");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-remove-punctuation",content:"hello,world! nice-day"})).toBe("hello world nice day");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-to-ascii",content:"Đặng café"})).toBe("Dang cafe");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-html-escape",content:'<b a="x">'})).toBe("&lt;b a=&quot;x&quot;&gt;");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-html-unescape",content:"&lt;b&gt;Hi&amp;bye&lt;/b&gt;"})).toBe("<b>Hi&bye</b>");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-mentions",content:"@Nolane @Nolane user@example.com @helper"})).toBe("@Nolane\n@helper");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-hex-colors",content:"color #abc and #AABBCC #abc"})).toBe("#ABC\n#AABBCC");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-phones",content:"Call +84 912 345 678"})).toBe("+84 912 345 678");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-dedupe-lines",content:"One\nTwo\none\n"})).toBe("One\nTwo\n");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-count-report",content:"one two\nthree"})).toContain("Words: 3");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-quote-lines",content:"one\ntwo"})).toBe('"one"\n"two"');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-unquote-lines",content:'"one"\n"two"'})).toBe("one\ntwo");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-transpose",content:"a,b\n1,2\n3,4"})).toBe("a,1,3\nb,2,4");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-sort-rows",content:"name,score\nB,2\nA,1"})).toBe("name,score\nA,1\nB,2");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-dedupe-rows",content:"name,score\nA,1\na,1\nB,2"})).toBe("name,score\nA,1\nB,2");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-to-xml",content:'name,note\nAn,"<script>"'})).toContain("&lt;script&gt;");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-to-html",content:'name,note\nAn,"<script>"'})).toContain("&lt;script&gt;");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-sort-array",content:'[{"z":1},{"a":2}]'})).toBe('[\n  {\n    "a": 2\n  },\n  {\n    "z": 1\n  }\n]');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-remove-nulls",content:'{"a":null,"b":[1,null,{"x":null,"y":2}] }'})).toBe('{\n  "b": [\n    1,\n    {\n      "y": 2\n    }\n  ]\n}');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-to-html-table",content:'[{"name":"<script>","score":7}]'})).toContain("&lt;script&gt;");
+  });
+
+  it("runs third-wave AI cleanup, extraction, CSV and JSON processors", async () => {
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-collapse-whitespace",content:" a   b  \n c "})).toBe("a b\nc");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-remove-punctuation",content:"hello,world! nice-day"})).toBe("hello world nice day");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-to-ascii",content:"Đặng café"})).toBe("Dang cafe");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-html-escape",content:'<b a="x">'})).toBe("&lt;b a=&quot;x&quot;&gt;");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-html-unescape",content:"&lt;b&gt;Hi&amp;bye&lt;/b&gt;"})).toBe("<b>Hi&bye</b>");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-mentions",content:"@Nolane @Nolane user@example.com @helper"})).toBe("@Nolane\n@helper");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-hex-colors",content:"color #abc and #AABBCC #abc"})).toBe("#ABC\n#AABBCC");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-phones",content:"Call +84 912 345 678"})).toBe("+84 912 345 678");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-dedupe-lines",content:"One\nTwo\none\n"})).toBe("One\nTwo\n");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-count-report",content:"one two\nthree"})).toContain("Words: 3");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-quote-lines",content:"one\ntwo"})).toBe('"one"\n"two"');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-unquote-lines",content:'"one"\n"two"'})).toBe("one\ntwo");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-transpose",content:"a,b\n1,2\n3,4"})).toBe("a,1,3\nb,2,4");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-sort-rows",content:"name,score\nB,2\nA,1"})).toBe("name,score\nA,1\nB,2");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-dedupe-rows",content:"name,score\nA,1\na,1\nB,2"})).toBe("name,score\nA,1\nB,2");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-to-xml",content:'name,note\nAn,"<script>"'})).toContain("&lt;script&gt;");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-to-html",content:'name,note\nAn,"<script>"'})).toContain("&lt;script&gt;");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-sort-array",content:'[{"z":1},{"a":2}]'})).toBe('[\n  {\n    "a": 2\n  },\n  {\n    "z": 1\n  }\n]');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-remove-nulls",content:'{"a":null,"b":[1,null,{"x":null,"y":2}] }'})).toBe('{\n  "b": [\n    1,\n    {\n      "y": 2\n    }\n  ]\n}');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-to-html-table",content:'[{"name":"<script>","score":7}]'})).toContain("&lt;script&gt;");
+  });
+
   it("routes AI tool-call translation through the configured translation model", async () => {
     const fetchMock=vi.fn(async (_input:RequestInfo|URL,init?:RequestInit)=>{
       const body=JSON.parse(String(init?.body)) as {messages:Array<{role:string;content:string}>};

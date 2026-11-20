@@ -36,7 +36,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Personal memory | /remember, /memories, /forget | Explicit owner-controlled memories shared by Telegram and Web AI chat |
 | Status | /status | Provider configuration and compact index counters |
-| Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | 145 file processors including translation, everyday text, CSV/TSV, JSONL and data utilities, interactive Telegram Tool Center and ephemeral GitHub Actions runners |
+| Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | 165 file processors including translation, everyday text, CSV/TSV, JSONL and data utilities, interactive Telegram Tool Center and ephemeral GitHub Actions runners |
 | Workflow Intelligence | /workflow_plan, /workflow_plan_save, /workflow_plan_discard | AI designs validated pipelines and parallel DAGs with controlled text fan-in; preview, save and execution are separate |
 | GitHub Repository Intelligence | /repo URL, /repo_compare URL base...head | Analyze a public repository directly: static module/import graph, commit/branch history, dependency and lockfile inventory, license evidence, secret-pattern scan with values withheld, TODO markers, plus static CI/CD, Docker, Kubernetes and Terraform security checks. Reports include SARIF findings and supply-chain metadata; source code and workflows are never executed. |
 
@@ -83,7 +83,7 @@ No license has been selected. Do not assume this repository grants rights to reu
 
 ### AI Agent and file workflows
 
-Telegram `/ai` and the authenticated Web Workspace chat use a bounded function-calling agent for web search, safe public-page reading, Nolane tool discovery, translation, text formatting/extraction/masking, slug/case conversion, JSON/JSONL, CSV/TSV processing and SHA-256 fingerprints. `/ai_file <request>` lets the model plan a validated chain of distinct compatible processors from the full 145-tool catalog, re-validates the selected file type in the Worker, dispatches the job to an isolated GitHub Actions runner, and asks AI to synthesize the actual processor output. See [`docs/NOLANE-TOOLS.md`](docs/NOLANE-TOOLS.md) for limits and safeguards.
+Telegram `/ai` and the authenticated Web Workspace chat use a bounded function-calling agent for web search, safe public-page reading, Nolane tool discovery, translation, text formatting/extraction/masking, slug/case conversion, JSON/JSONL, CSV/TSV transpose/sort/deduplicate, safe HTML/XML tables, text cleanup/extraction and SHA-256 fingerprints. `/ai_file <request>` lets the model plan a validated chain of distinct compatible processors from the full 165-tool catalog, re-validates the selected file type in the Worker, dispatches the job to an isolated GitHub Actions runner, and asks AI to synthesize the actual processor output. See [`docs/NOLANE-TOOLS.md`](docs/NOLANE-TOOLS.md) for limits and safeguards.
 
 
 ### AI file orchestration

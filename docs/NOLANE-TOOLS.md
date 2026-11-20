@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **145 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **165 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -245,6 +245,56 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 **Dịch thuật:** dùng \`/translate English | Xin chào\` để dịch trực tiếp một đoạn văn; thay English bằng Vietnamese, French, German, Spanish, Portuguese, Chinese, Japanese, Korean, Russian, Thai, Indonesian, Italian, Arabic hoặc Hindi. File TXT/Markdown có thể gửi kèm \`/ai_file dịch tài liệu này sang tiếng Anh\`. Bộ xử lý chia tệp thành đoạn tối đa khoảng 5.000 ký tự, gửi từng đoạn qua AI Router với task \`translation\`, sau đó ghép lại theo đúng thứ tự. Cấu hình AI phải có ít nhất một model hỗ trợ task \`translation\`; nếu không, job sẽ báo lỗi thay vì giả vờ đã dịch. API key chỉ nằm trong Worker; runner gọi endpoint nội bộ đã xác thực và không nhận AI key.
 
 **Giới hạn:** \`/translate\` nhận tối đa 6.000 ký tự mỗi lần. \`text-translate\` nhận TXT/Markdown tối đa 60.000 ký tự; nội dung dài hơn bị từ chối. \`language-detect\` là heuristic nhẹ, không phải bộ phân loại ngôn ngữ đầy đủ; văn bản ngắn hoặc trộn nhiều ngôn ngữ có thể không xác định chính xác. Các tool còn lại giới hạn đầu vào văn bản ở 1.000.000 ký tự và không thực thi nội dung.
+
+### Dọn văn bản & chuyển đổi dữ liệu — đợt tiện ích tiếp theo
+
+| Lệnh | Chức năng | Đầu ra |
+|---|---|---|
+| \`/tool text-collapse-whitespace\` | Gộp khoảng trắng ngang thành một dấu cách, giữ nguyên dòng. | TXT |
+| \`/tool text-remove-punctuation\` | Thay dấu câu Unicode bằng khoảng trắng để tránh dính từ. | TXT |
+| \`/tool text-to-ascii\` | Bỏ dấu kết hợp Unicode, xử lý đ/Đ và tạo ASCII gần đúng. | TXT |
+| \`/tool text-html-escape\` | Escape ký tự HTML đặc biệt, bao gồm &, dấu nháy và ngoặc nhọn. | TXT escaped |
+| \`/tool text-html-unescape\` | Giải mã HTML named/numeric entities. | TXT |
+| \`/tool text-extract-mentions\` | Trích @username, tránh bắt phần domain email, khử trùng. | TXT mention |
+| \`/tool text-extract-hex-colors\` | Trích màu #RGB/#RRGGBB, chuẩn hóa chữ hoa và khử trùng. | TXT mã màu |
+| \`/tool text-extract-phones\` | Trích chuỗi 7–15 chữ số giống điện thoại; kết quả heuristic cần xác minh. | TXT điện thoại |
+| \`/tool text-dedupe-lines\` | Giữ dòng xuất hiện đầu tiên, so sánh không phân biệt hoa thường và bỏ qua khoảng trắng viền. | TXT |
+| \`/tool text-count-report\` | Báo cáo số dòng, từ, ký tự, byte UTF-8 và ký tự ngoài ASCII. | Báo cáo TXT |
+| \`/tool text-quote-lines\` | Đóng gói từng dòng thành JSON string riêng. | TXT JSON strings |
+| \`/tool text-unquote-lines\` | Giải mã mỗi dòng JSON string, chỉ rõ dòng lỗi. | TXT |
+| \`/tool csv-transpose\` | Chuyển hàng thành cột, pad ô thiếu; tối đa 10.000 hàng/200 cột. | CSV |
+| \`/tool csv-sort-rows\` | Giữ header, sắp xếp hàng theo cột đầu tiên. | CSV |
+| \`/tool csv-dedupe-rows\` | Loại hàng trùng toàn bộ, giữ hàng xuất hiện trước. | CSV |
+| \`/tool csv-to-xml\` | Chuyển hàng thành XML node, làm sạch tên tag và escape dữ liệu. | XML |
+| \`/tool csv-to-html\` | Tạo HTML table UTF-8 và escape nội dung ô; tối đa 10.000 hàng/200 cột. | HTML |
+| \`/tool json-sort-array\` | Sắp xếp JSON array theo biểu diễn JSON ổn định, không yêu cầu schema cụ thể. | JSON |
+| \`/tool json-remove-nulls\` | Xóa thuộc tính null và phần tử null trong array theo đệ quy. | JSON |
+| \`/tool json-to-html-table\` | Chuyển mảng object thành HTML table, escape mọi ô; tối đa 10.000 record/200 cột. | HTML |
+
+### Tiện ích làm sạch và chuyển đổi — đợt mở rộng tiếp theo
+
+| Lệnh | Chức năng | Đầu ra |
+|---|---|---|
+| \`/tool text-collapse-whitespace\` | Gộp khoảng trắng ngang thành một dấu cách, giữ nguyên dòng. | TXT |
+| \`/tool text-remove-punctuation\` | Thay dấu câu Unicode bằng khoảng trắng để không dính từ. | TXT |
+| \`/tool text-to-ascii\` | Bỏ dấu kết hợp, xử lý đ/Đ và tạo ASCII gần đúng. | TXT |
+| \`/tool text-html-escape\` | Escape ký tự HTML đặc biệt, gồm &, dấu nháy và ngoặc nhọn. | TXT |
+| \`/tool text-html-unescape\` | Giải mã HTML named/numeric entities. | TXT |
+| \`/tool text-extract-mentions\` | Trích @username, tránh phần email và khử trùng. | TXT |
+| \`/tool text-extract-hex-colors\` | Trích #RGB/#RRGGBB, chuẩn hóa chữ hoa. | TXT |
+| \`/tool text-extract-phones\` | Trích chuỗi giống điện thoại 7–15 số; heuristic cần xác minh. | TXT |
+| \`/tool text-dedupe-lines\` | Giữ dòng đầu tiên, so sánh không phân biệt hoa thường và trim viền. | TXT |
+| \`/tool text-count-report\` | Thống kê dòng, từ, ký tự, byte UTF-8 và non-ASCII. | Báo cáo TXT |
+| \`/tool text-quote-lines\` | Đóng gói từng dòng thành JSON string riêng. | TXT |
+| \`/tool text-unquote-lines\` | Giải mã mỗi dòng như JSON string, chỉ rõ dòng lỗi. | TXT |
+| \`/tool csv-transpose\` | Chuyển hàng thành cột, pad ô thiếu; tối đa 10.000 hàng/200 cột. | CSV |
+| \`/tool csv-sort-rows\` | Giữ header và sắp xếp theo cột đầu tiên. | CSV |
+| \`/tool csv-dedupe-rows\` | Xóa hàng trùng toàn bộ, giữ hàng đầu tiên. | CSV |
+| \`/tool csv-to-xml\` | Chuyển hàng thành XML, chuẩn hóa tên tag và escape nội dung. | XML |
+| \`/tool csv-to-html\` | Tạo HTML table UTF-8, escape ô; tối đa 10.000 hàng/200 cột. | HTML |
+| \`/tool json-sort-array\` | Sắp xếp array theo biểu diễn JSON ổn định, không giả định schema. | JSON |
+| \`/tool json-remove-nulls\` | Xóa thuộc tính null và phần tử null trong array theo đệ quy. | JSON |
+| \`/tool json-to-html-table\` | Chuyển mảng object thành HTML table, escape ô; tối đa 10.000 record/200 cột. | HTML |
 
 ## AI Agent
 
