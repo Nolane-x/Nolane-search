@@ -144,6 +144,30 @@ describe("Nolane AI callable tools", () => {
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"jsonl-to-csv",content:'{"name":"An","score":7}\n{"name":"B","extra":true}'})).toBe("name,score,extra\nAn,7,\nB,,true");
   });
 
+  it("runs fifth-wave text, HTML, JSON and CSV processors", async () => {
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-indent-lines",content:"alpha\n\nbeta"})).toBe("    alpha\n\n    beta");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-unindent-lines",content:"    alpha\n        beta\n    gamma"})).toBe("alpha\n    beta\ngamma");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-dedupe-paragraphs",content:"One paragraph.\n\none   paragraph.\n\nSecond."})).toBe("One paragraph.\n\nSecond.");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-tokenize-words",content:"Hello, world! I'm here."})).toBe("Hello\nworld\nI'm\nhere");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-sentence-report",content:"One sentence. Two words here!"})).toContain("Sentences (heuristic): 2");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-line-length-report",content:"a\nlongest line\nbb"})).toContain("Longest line: 12");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-normalize-newlines",content:"a\r\nb\rc"})).toBe("a\nb\nc");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-remove-zero-width",content:"a\u200bb\u200dc\ufeff"})).toBe("abc");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-file-paths",content:"See /var/log/app.log and /home/user/a.txt"})).toContain("/var/log/app.log");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-sort-words",content:"pear Apple banana"})).toBe("Apple\nbanana\npear");
+
+    const html='<html><head><title>Example &amp; Demo</title></head><body><a href="https://example.com" title="Home">Example</a><img src="/img/a.png" alt="A"></body></html>';
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"html-extract-links",content:html})).toContain('"url":"https://example.com"');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"html-extract-images",content:html})).toContain("/img/a.png");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"html-extract-title",content:html})).toBe("Example & Demo\n");
+
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-to-xml",content:'{"person":{"@id":"7","name":"An","tags":["a","b"]}}'})).toContain('<person id="7">');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-type-report",content:'{"a":[1,true,null]}'})).toContain("Maximum depth: 2");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-escape-string",content:'hello "world"'})).toBe('"hello \\"world\\""');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-unescape-string",content:'"hello \\"world\\""'})).toBe('hello "world"');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-unique-values",content:"Name,Team\nAn,A\nAn,B\nBình,A"})).toContain('"count":2');
+  });
+
   it("routes AI tool-call translation through the configured translation model", async () => {
     const fetchMock=vi.fn(async (_input:RequestInfo|URL,init?:RequestInit)=>{
       const body=JSON.parse(String(init?.body)) as {messages:Array<{role:string;content:string}>};
