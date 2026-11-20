@@ -2632,6 +2632,257 @@ def csv_empty_cell_report(p):
     return _write_text_artifact(p,"empty-cell-report","\n".join(lines)+"\n","CSV empty-cell report")
 
 
+def text_sort_lines_natural(p):
+    raw=_read_text_source(p)
+    def key(value):
+        return [int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)",value)]
+    lines=sorted(raw.splitlines(),key=key)
+    output="\n".join(lines)+("\n" if raw.endswith(("\n","\r")) else "")
+    return _write_text_artifact(p,"natural-sorted",output,"Natural line sorting",str(len(lines))+" line(s)")
+
+
+def text_extract_percentages(p):
+    raw=_read_text_source(p)
+    values=_ordered_unique(re.findall(r"(?<![\w.])[+-]?\d+(?:[.,]\d+)?\s*%(?!\w)",raw))
+    return _write_text_artifact(p,"percentages","\n".join(values)+("\n" if values else ""),"Percentage extraction",str(len(values))+" unique values")
+
+
+def text_extract_currencies(p):
+    raw=_read_text_source(p)
+    codes=r"(?:USD|EUR|VND|GBP|JPY|CNY|CAD|AUD|INR|CHF|SGD|THB)"
+    symbols=r"[$€£¥₹₫]"
+    amount=r"[+-]?\d{1,3}(?:,\d{3})*(?:\.\d+)?|[+-]?\d+(?:[.,]\d+)?"
+    pattern=rf"(?<![\w])(?:{codes}\s*{amount}|{symbols}\s*{amount}|{amount}\s*(?:{codes}|₫|đ))(?!\w)"
+    values=_ordered_unique(re.findall(pattern,raw,flags=re.I))
+    return _write_text_artifact(p,"currencies","\n".join(values)+("\n" if values else ""),"Currency amount extraction",str(len(values))+" candidates; format heuristic")
+
+
+def text_extract_bracketed(p):
+    raw=_read_text_source(p)
+    pattern=r"\(([^()\n]{1,1000})\)|\[([^\[\]\n]{1,1000})\]|\{([^{}\n]{1,1000})\}"
+    values=[]
+    for match in re.finditer(pattern,raw):
+        value=next((group for group in match.groups() if group is not None),"").strip()
+        if value: values.append(value)
+    values=_ordered_unique(values)
+    return _write_text_artifact(p,"bracketed","\n".join(values)+("\n" if values else ""),"Bracketed-text extraction",str(len(values))+" unique item(s)")
+
+
+def text_character_frequency(p):
+    from collections import Counter
+    raw=_read_text_source(p)
+    counts=Counter(raw)
+    lines=["Character frequency","Characters: "+str(len(raw)),"Unique characters: "+str(len(counts)),"","Character\tCount"]
+    lines.extend(json.dumps(char,ensure_ascii=False)+"\t"+str(count) for char,count in sorted(counts.items(),key=lambda item:(-item[1],item[0]))[:1000])
+    return _write_text_artifact(p,"character-frequency","\n".join(lines)+"\n","Character frequency report")
+
+
+def text_extract_acronyms(p):
+    raw=_read_text_source(p)
+    values=_ordered_unique(re.findall(r"(?<![A-Za-z])[A-Z][A-Z0-9]{1,9}(?![A-Za-z0-9])",raw))
+    return _write_text_artifact(p,"acronyms","\n".join(values)+("\n" if values else ""),"Acronym extraction",str(len(values))+" unique items")
+
+
+def text_strip_diacritics(p):
+    raw=_read_text_source(p)
+    normalized=raw.replace("đ","d").replace("Đ","D")
+    output="".join(char for char in unicodedata.normalize("NFKD",normalized) if unicodedata.category(char)!="Mn")
+    return _write_text_artifact(p,"no-diacritics",output,"Diacritic removal")
+
+
+def text_hard_wrap(p):
+    raw=_read_text_source(p)
+    lines=[]
+    for line in raw.splitlines():
+        if not line.strip():
+            lines.append("")
+        else:
+            lines.extend(textwrap.wrap(line,width=80,break_long_words=True,break_on_hyphens=False) or [""])
+    output="\n".join(lines)+("\n" if raw.endswith(("\n","\r")) else "")
+    return _write_text_artifact(p,"hard-wrapped",output,"Hard line wrapping","80-column target")
+
+
+def text_ensure_final_newline(p):
+    raw=_read_text_source(p)
+    output=raw if not raw or raw.endswith("\n") else raw.rstrip("\r")+"\n"
+    return _write_text_artifact(p,"final-newline",output,"Final newline normalization")
+
+
+def text_rot13(p):
+    import codecs
+    raw=_read_text_source(p)
+    return _write_text_artifact(p,"rot13",codecs.encode(raw,"rot_13"),"ROT13 transformation")
+
+
+def base64url_encode_text(p):
+    raw=_read_text_source(p)
+    output=base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
+    return _write_text_artifact(p,"base64url",output+"\n","Base64URL encoding")
+
+
+def base64url_decode_text(p):
+    raw=_read_text_source(p)
+    compact="".join(raw.split())
+    if not re.fullmatch(r"[A-Za-z0-9_-]*={0,2}",compact):
+        raise RuntimeError("Input contains characters that are not valid Base64URL.")
+    unpadded=compact.rstrip("=")
+    if len(unpadded)%4==1:
+        raise RuntimeError("Invalid Base64URL length.")
+    padded=unpadded+"="*((-len(unpadded))%4)
+    try:
+        decoded=base64.b64decode(padded,altchars=b"-_",validate=True).decode("utf-8-sig")
+    except (ValueError,UnicodeDecodeError) as exc:
+        raise RuntimeError("Input must be valid Base64URL containing UTF-8 text.") from exc
+    return _write_text_artifact(p,"base64url-decoded",decoded,"Base64URL decoding")
+
+
+def hex_encode_text(p):
+    raw=_read_text_source(p)
+    output=raw.encode("utf-8").hex()
+    return _write_text_artifact(p,"hex",output+"\n","Hexadecimal encoding")
+
+
+def hex_decode_text(p):
+    raw=_read_text_source(p)
+    compact=re.sub(r"\s+","",raw)
+    if compact.lower().startswith("0x"): compact=compact[2:]
+    if len(compact)%2 or not re.fullmatch(r"[0-9A-Fa-f]*",compact):
+        raise RuntimeError("Input must contain an even number of hexadecimal digits.")
+    try: decoded=bytes.fromhex(compact).decode("utf-8-sig")
+    except UnicodeDecodeError as exc: raise RuntimeError("Decoded hex bytes are not valid UTF-8.") from exc
+    return _write_text_artifact(p,"hex-decoded",decoded,"Hexadecimal decoding")
+
+
+def binary_encode_text(p):
+    raw=_read_text_source(p)
+    output=" ".join(format(byte,"08b") for byte in raw.encode("utf-8"))
+    return _write_text_artifact(p,"binary",output+"\n","Binary encoding")
+
+
+def binary_decode_text(p):
+    raw=_read_text_source(p)
+    compact="".join(raw.split())
+    if not re.fullmatch(r"[01]*",compact) or len(compact)%8:
+        raise RuntimeError("Binary input must contain groups of exactly 8 bits.")
+    try: decoded=bytes(int(compact[index:index+8],2) for index in range(0,len(compact),8)).decode("utf-8-sig")
+    except UnicodeDecodeError as exc: raise RuntimeError("Decoded binary bytes are not valid UTF-8.") from exc
+    return _write_text_artifact(p,"binary-decoded",decoded,"Binary decoding")
+
+
+def url_query_params(p):
+    raw=_read_text_source(p)
+    candidates=re.findall(r"https?://[^\s<>""']+",raw,flags=re.I)
+    records=[]
+    seen=set()
+    for candidate in candidates:
+        url=candidate.rstrip(".,;:!?)]}")
+        try:
+            parsed=urllib.parse.urlsplit(url)
+            if not parsed.scheme or not parsed.netloc: continue
+            pairs=urllib.parse.parse_qsl(parsed.query,keep_blank_values=True,strict_parsing=False)
+        except ValueError:
+            continue
+        key=(url,tuple(pairs))
+        if key in seen: continue
+        seen.add(key)
+        records.append(json.dumps({"url":url,"params":[{"key":name,"value":value} for name,value in pairs]},ensure_ascii=False))
+    output="\n".join(records)
+    return _write_text_artifact_ext(p,"query-params",".jsonl",output+("\n" if output else ""),"URL query extraction",str(len(records))+" URL(s)")
+
+
+def json_deep_merge(p):
+    raw=_read_text_source(p)
+    try: values=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    if not isinstance(values,list) or not values or any(not isinstance(value,dict) for value in values):
+        raise RuntimeError("JSON deep merge expects a non-empty array of objects.")
+    if len(values)>10_000: raise RuntimeError("JSON deep merge is limited to 10,000 objects.")
+    def merge(left,right):
+        if not isinstance(left,dict) or not isinstance(right,dict): return right
+        result=dict(left)
+        for key,value in right.items():
+            result[key]=merge(result[key],value) if key in result and isinstance(result[key],dict) and isinstance(value,dict) else value
+        return result
+    result={}
+    for value in values: result=merge(result,value)
+    output=json.dumps(result,ensure_ascii=False,indent=2)
+    return _write_text_artifact(p,"deep-merged",output+"\n","Recursive JSON object merge","Arrays are replaced by the later object")
+
+
+def json_array_flatten(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    if not isinstance(value,list): raise RuntimeError("JSON array flatten expects a top-level array.")
+    flattened=[]
+    stack=[(value,0)]
+    while stack:
+        current,depth=stack.pop()
+        if depth>100: raise RuntimeError("JSON array nesting exceeds the depth limit of 100.")
+        for item in reversed(current):
+            if isinstance(item,list): stack.append((item,depth+1))
+            else: flattened.append(item)
+        if len(flattened)+sum(len(items) for items,_depth in stack)>100_000:
+            raise RuntimeError("JSON array flatten exceeds 100,000 output items.")
+    output=json.dumps(flattened,ensure_ascii=False,indent=2)
+    return _write_text_artifact(p,"flat-array",output+"\n","Nested JSON array flattening",str(len(flattened))+" item(s)")
+
+
+def _split_markdown_table_row(line):
+    value=line.strip()
+    if value.startswith("|"): value=value[1:]
+    if value.endswith("|") and not value.endswith("\\|"): value=value[:-1]
+    cells=[]
+    current=[]
+    index=0
+    while index<len(value):
+        char=value[index]
+        if char=="\\" and index+1<len(value) and value[index+1]=="|":
+            current.append("|")
+            index+=2
+            continue
+        if char=="|":
+            cells.append("".join(current).strip())
+            current=[]
+        else:
+            current.append(char)
+        index+=1
+    cells.append("".join(current).strip())
+    return cells
+
+
+def markdown_table_to_csv(p):
+    import io
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    tables=[]
+    index=0
+    while index+1<len(lines):
+        if "|" not in lines[index] or "|" not in lines[index+1]:
+            index+=1
+            continue
+        header=_split_markdown_table_row(lines[index])
+        separator=_split_markdown_table_row(lines[index+1])
+        if not header or len(header)!=len(separator) or not all(re.fullmatch(r":?-{3,}:?",cell.strip()) for cell in separator):
+            index+=1
+            continue
+        rows=[header]
+        index+=2
+        while index<len(lines) and "|" in lines[index] and lines[index].strip():
+            row=_split_markdown_table_row(lines[index])
+            row=(row+[""]*len(header))[:len(header)]
+            rows.append(row)
+            index+=1
+        if len(rows)>10_001 or len(header)>200:
+            raise RuntimeError("Markdown table conversion is limited to 10,000 data rows and 200 columns.")
+        tables.append(rows)
+    if not tables: raise RuntimeError("No GitHub-Flavored Markdown table was found.")
+    if len(tables)>1: raise RuntimeError("Multiple Markdown tables found; convert one table per file.")
+    stream=__import__("io").StringIO(newline="")
+    csv.writer(stream,lineterminator="\n").writerows(tables[0])
+    return _write_text_artifact_ext(p,"table",".csv",stream.getvalue(),"Markdown table to CSV",str(len(tables[0])-1)+" data row(s)")
+
+
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
     lines=[]
