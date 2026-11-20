@@ -28,7 +28,8 @@ RUNNERS = {
     "repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates","repo-intelligence","repo-security-audit","repo-supply-chain",
     "text-translate", "language-detect", "text-uppercase", "text-lowercase", "text-title-case", "text-sort-lines", "text-reverse-lines", "text-number-lines", "text-remove-blank-lines", "text-wrap", "text-trim-lines", "text-extract-emails", "text-extract-urls", "text-extract-hashtags", "text-to-base64", "base64-to-text", "url-encode", "url-decode", "json-minify", "json-sort-keys",
     "text-slugify", "text-word-frequency", "text-extract-numbers", "text-extract-dates", "text-reverse-characters", "text-snake-case", "text-kebab-case", "text-camel-case", "text-swap-case", "text-extract-ipv4", "text-mask-emails", "text-mask-phones", "json-to-jsonl", "jsonl-to-json", "csv-to-tsv", "tsv-to-csv", "csv-to-markdown", "html-minify", "xml-minify", "text-remove-emoji",
-    "text-collapse-whitespace", "text-remove-punctuation", "text-to-ascii", "text-html-escape", "text-html-unescape", "text-extract-mentions", "text-extract-hex-colors", "text-extract-phones", "text-dedupe-lines", "text-count-report", "text-quote-lines", "text-unquote-lines", "csv-transpose", "csv-sort-rows", "csv-dedupe-rows", "csv-to-xml", "csv-to-html", "json-sort-array", "json-remove-nulls", "json-to-html-table"
+    "text-collapse-whitespace", "text-remove-punctuation", "text-to-ascii", "text-html-escape", "text-html-unescape", "text-extract-mentions", "text-extract-hex-colors", "text-extract-phones", "text-dedupe-lines", "text-count-report", "text-quote-lines", "text-unquote-lines", "csv-transpose", "csv-sort-rows", "csv-dedupe-rows", "csv-to-xml", "csv-to-html", "json-sort-array", "json-remove-nulls", "json-to-html-table",
+    "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv"
 }
 
 PIPELINE_TRANSITIONS = {
@@ -165,6 +166,26 @@ PIPELINE_TRANSITIONS = {
     "json-sort-array": {"json-format","json-minify","json-to-jsonl","json-to-csv"},
     "json-remove-nulls": {"json-format","json-minify","json-sort-keys","json-to-csv"},
     "json-to-html-table": {"html-minify","html-text"},
+    "text-pascal-case": {"text-clean","text-stats","text-deduplicate"},
+    "text-constant-case": {"text-clean","text-stats","text-deduplicate"},
+    "text-dot-case": {"text-clean","text-stats","text-deduplicate"},
+    "text-initials": {"text-clean","text-stats"},
+    "text-normalize-unicode": {"text-clean","text-stats","text-deduplicate"},
+    "text-remove-control-chars": {"text-clean","text-stats"},
+    "text-remove-duplicate-words": {"text-clean","text-stats"},
+    "text-extract-markdown-links": {"text-deduplicate","text-stats"},
+    "text-extract-markdown-headings": {"text-deduplicate","text-stats"},
+    "text-extract-quotes": {"text-deduplicate","text-stats"},
+    "text-paragraph-report": {"text-clean","text-stats"},
+    "json-flatten": {"json-unflatten","json-format","json-minify"},
+    "json-unflatten": {"json-format","json-minify","json-sort-keys"},
+    "json-keys-report": {"json-format","json-sort-keys"},
+    "csv-remove-empty-rows": {"csv-profile","csv-clean","csv-normalize-headers"},
+    "csv-add-row-numbers": {"csv-profile","csv-clean","csv-normalize-headers"},
+    "csv-column-stats": {"csv-profile","csv-clean"},
+    "csv-normalize-headers": {"csv-profile","csv-clean","csv-to-jsonl","csv-to-tsv"},
+    "csv-to-jsonl": {"jsonl-to-csv","jsonl-format"},
+    "jsonl-to-csv": {"csv-profile","csv-clean","csv-normalize-headers"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
@@ -5011,6 +5032,15 @@ TOOLS={
  "csv-transpose":csv_transpose,"csv-sort-rows":csv_sort_rows,"csv-dedupe-rows":csv_dedupe_rows,
  "csv-to-xml":csv_to_xml,"csv-to-html":csv_to_html,"json-sort-array":json_sort_array,"json-remove-nulls":json_remove_nulls,
  "json-to-html-table":json_to_html_table,
+ "text-pascal-case":text_pascal_case,"text-constant-case":text_constant_case,"text-dot-case":text_dot_case,
+ "text-initials":text_initials,"text-normalize-unicode":text_normalize_unicode,
+ "text-remove-control-chars":text_remove_control_chars,"text-remove-duplicate-words":text_remove_duplicate_words,
+ "text-extract-markdown-links":text_extract_markdown_links,"text-extract-markdown-headings":text_extract_markdown_headings,
+ "text-extract-quotes":text_extract_quotes,"text-paragraph-report":text_paragraph_report,
+ "json-flatten":json_flatten,"json-unflatten":json_unflatten,"json-keys-report":json_keys_report,
+ "csv-remove-empty-rows":csv_remove_empty_rows,"csv-add-row-numbers":csv_add_row_numbers,
+ "csv-column-stats":csv_column_stats,"csv-normalize-headers":csv_normalize_headers,
+ "csv-to-jsonl":csv_to_jsonl,"jsonl-to-csv":jsonl_to_csv,
 }
 
 
