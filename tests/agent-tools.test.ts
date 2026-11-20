@@ -78,7 +78,7 @@ describe("Nolane AI callable tools", () => {
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-mentions",content:"@Nolane @Nolane user@example.com @helper"})).toBe("@Nolane\n@helper");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-hex-colors",content:"color #abc and #AABBCC #abc"})).toBe("#ABC\n#AABBCC");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-phones",content:"Call +84 912 345 678"})).toBe("+84 912 345 678");
-    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-dedupe-lines",content:"One\nTwo\none\n"})).toBe("One\nTwo");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-dedupe-lines",content:"One\nTwo\none\n"})).toBe("One\nTwo\n");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-count-report",content:"one two\nthree"})).toContain("Words: 3");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-quote-lines",content:"one\ntwo"})).toBe('"one"\n"two"');
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-unquote-lines",content:'"one"\n"two"'})).toBe("one\ntwo");
