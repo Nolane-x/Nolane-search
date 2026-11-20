@@ -69,7 +69,7 @@ describe("Telegram Tool Center UI", () => {
 
   it("renders search results and buttons only for the bounded shortlist", () => {
     const matches = TOOL_CATALOG.filter(tool => tool.id.includes("markdown"));
-    expect(formatToolSearchResults(matches, "markdown")).toContain("2 kết quả");
+    expect(formatToolSearchResults(matches, "markdown")).toContain("3 kết quả");
     const buttons = buildToolSearchKeyboard(matches).inline_keyboard.flat();
     expect(buttons.map(button => button.callback_data)).toContain("td:markdown-links");
   });
