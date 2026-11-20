@@ -2952,7 +2952,7 @@ def run_tool_dag(job,source,root):
     while pending:
         ready=[node for node in pending if all(parent_id in outputs for parent_id in node["dependsOn"])]
         if not ready: raise RuntimeError("DAG scheduler found a cycle or unresolved dependency.")
-        report_job_progress(job,len(traces),len(nodes),[node["toolId"] for node in ready])
+        report_job_progress(job,len(traces),len(nodes),[node["toolId"] for node in ready[:3]])
         def execute_node(node):
             node_id=node["id"]; tool_id=node["toolId"]; started=time.perf_counter()
             parent_ids=node["dependsOn"]
