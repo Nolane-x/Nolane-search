@@ -985,6 +985,276 @@ def text_remove_emoji(p):
     return _write_text_artifact(p,"no-emoji",output,"Emoji removal")
 
 
+def text_collapse_whitespace(p):
+    raw=_read_text_source(p)
+    output="\n".join(re.sub(r"[ \t\f\v]+"," ",line).strip() for line in raw.splitlines())
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"collapsed",output,"Whitespace normalization")
+
+
+def text_remove_punctuation(p):
+    raw=_read_text_source(p)
+    output="".join(" " if unicodedata.category(char).startswith("P") else char for char in raw)
+    output=re.sub(r"[ \t]+"," ",output)
+    return _write_text_artifact(p,"no-punctuation",output,"Punctuation removal")
+
+
+def text_to_ascii(p):
+    raw=_read_text_source(p)
+    normalized=raw.replace("đ","d").replace("Đ","D")
+    output=unicodedata.normalize("NFKD",normalized).encode("ascii","ignore").decode("ascii")
+    return _write_text_artifact(p,"ascii",output,"ASCII transliteration")
+
+
+def text_html_escape(p):
+    raw=_read_text_source(p)
+    return _write_text_artifact(p,"html-escaped",escape(raw,quote=True),"HTML escaping")
+
+
+def text_html_unescape(p):
+    raw=_read_text_source(p)
+    return _write_text_artifact(p,"html-unescaped",unescape(raw),"HTML entity decoding")
+
+
+def text_extract_mentions(p):
+    raw=_read_text_source(p)
+    values=_ordered_unique(re.findall(r"(?<![\w@])@[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,28}[A-Za-z0-9_])?",raw))
+    return _write_text_artifact(p,"mentions","\n".join(values)+("\n" if values else ""),"Mention extraction",str(len(values))+" unique mentions")
+
+
+def text_extract_hex_colors(p):
+    raw=_read_text_source(p)
+    values=re.findall(r"(?<![\w])#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})(?![0-9A-Fa-f])",raw)
+    values=_ordered_unique([value.upper() for value in values])
+    return _write_text_artifact(p,"hex-colors","\n".join(values)+("\n" if values else ""),"Hex color extraction",str(len(values))+" unique colors")
+
+
+def text_extract_phones(p):
+    raw=_read_text_source(p)
+    candidates=re.findall(r"(?<!\w)\+?\d[\d\s().-]{5,}\d(?!\w)",raw)
+    values=[]
+    for candidate in candidates:
+        digits=re.sub(r"\D","",candidate)
+        if 7<=len(digits)<=15:
+            values.append(candidate.strip())
+    values=_ordered_unique(values)
+    return _write_text_artifact(p,"phones","\n".join(values)+("\n" if values else ""),"Phone extraction",str(len(values))+" candidates; heuristic")
+
+
+def text_dedupe_lines(p):
+    raw=_read_text_source(p)
+    seen=set()
+    output=[]
+    removed=0
+    for line in raw.splitlines():
+        key=line.strip().casefold()
+        if key in seen:
+            removed+=1
+            continue
+        seen.add(key)
+        output.append(line)
+    result="\n".join(output)+("\n" if raw.endswith(("\n","\r")) and output else "")
+    return _write_text_artifact(p,"unique-lines",result,"Duplicate-line removal",str(removed)+" duplicate line(s) removed")
+
+
+def text_count_report(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    words=re.findall(r"[^\W_]+(?:['’][^\W_]+)?",raw,flags=re.UNICODE)
+    nonspace=sum(not char.isspace() for char in raw)
+    nonascii=sum(ord(char)>127 for char in raw)
+    report=(
+        "Text statistics\n"
+        "Lines: "+str(len(lines))+"\n"
+        "Words: "+str(len(words))+"\n"
+        "Characters: "+str(len(raw))+"\n"
+        "Non-whitespace characters: "+str(nonspace)+"\n"
+        "UTF-8 bytes: "+str(len(raw.encode("utf-8")))+"\n"
+        "Non-ASCII characters: "+str(nonascii)+"\n"
+    )
+    return _write_text_artifact(p,"count-report",report,"Text count report")
+
+
+def text_quote_lines(p):
+    raw=_read_text_source(p)
+    output="\n".join(json.dumps(line,ensure_ascii=False) for line in raw.splitlines())
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"quoted-lines",output,"JSON string quoting per line")
+
+
+def text_unquote_lines(p):
+    raw=_read_text_source(p)
+    output=[]
+    for line_number,line in enumerate(raw.splitlines(),1):
+        try:
+            value=json.loads(line)
+        except ValueError as exc:
+            raise RuntimeError("Invalid JSON string on line "+str(line_number)+".") from exc
+        if not isinstance(value,str):
+            raise RuntimeError("Line "+str(line_number)+" must be a JSON string.")
+        output.append(value)
+    result="\n".join(output)+("\n" if raw.endswith(("\n","\r")) and output else "")
+    return _write_text_artifact(p,"unquoted-lines",result,"JSON string unquoting")
+
+
+def csv_transpose(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    width=max(len(row) for row in rows)
+    if len(rows)>10_000 or width>200: raise RuntimeError("CSV transpose is limited to 10,000 rows and 200 columns.")
+    padded=[row+[""]*(width-len(row)) for row in rows]
+    transposed=list(map(list,zip(*padded)))
+    stream=__import__("io").StringIO(newline="")
+    writer=csv.writer(stream,lineterminator="\n")
+    writer.writerows(transposed)
+    return _write_text_artifact_ext(p,"transposed",".csv",stream.getvalue(),"CSV transpose",str(len(rows))+" x "+str(width))
+
+
+def csv_sort_rows(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    header,body=rows[0],rows[1:]
+    body=sorted(body,key=lambda row:(row[0] if row else "").casefold())
+    stream=io.StringIO(newline="")
+    writer=csv.writer(stream,lineterminator="\n")
+    writer.writerow(header)
+    writer.writerows(body)
+    return _write_text_artifact_ext(p,"sorted",".csv",stream.getvalue(),"CSV row sorting",str(len(body))+" row(s)")
+
+
+def csv_dedupe_rows(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    header,body=rows[0],rows[1:]
+    seen=set()
+    unique=[]
+    removed=0
+    for row in body:
+        key=tuple(value.casefold() for value in row)
+        if key in seen:
+            removed+=1
+            continue
+        seen.add(key)
+        unique.append(row)
+    stream=io.StringIO(newline="")
+    writer=csv.writer(stream,lineterminator="\n")
+    writer.writerow(header)
+    writer.writerows(unique)
+    return _write_text_artifact_ext(p,"deduped",".csv",stream.getvalue(),"CSV duplicate-row removal",str(removed)+" duplicate row(s) removed")
+
+
+def _csv_xml_tag(value,index,used):
+    tag=re.sub(r"[^A-Za-z0-9_.-]","_",value.strip()) or "column_"+str(index+1)
+    if not re.match(r"[A-Za-z_]",tag): tag="column_"+tag
+    candidate=tag
+    suffix=2
+    while candidate in used:
+        candidate=tag+"_"+str(suffix)
+        suffix+=1
+    used.add(candidate)
+    return candidate
+
+
+def csv_to_xml(p):
+    import io
+    import xml.etree.ElementTree as ET
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    headers=rows[0]
+    if len(headers)>200 or len(rows)>100_001: raise RuntimeError("CSV-to-XML is limited to 100,000 rows and 200 columns.")
+    used=set()
+    tags=[_csv_xml_tag(value,index,used) for index,value in enumerate(headers)]
+    root=ET.Element("rows")
+    for row in rows[1:]:
+        node=ET.SubElement(root,"row")
+        for index,tag in enumerate(tags):
+            child=ET.SubElement(node,tag)
+            child.text=row[index] if index<len(row) else ""
+    output=ET.tostring(root,encoding="unicode",short_empty_elements=True)
+    return _write_text_artifact_ext(p,"converted",".xml",output,"CSV to XML conversion",str(len(rows)-1)+" row(s)")
+
+
+def csv_to_html(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    if len(rows)>10_001 or max((len(row) for row in rows),default=0)>200:
+        raise RuntimeError("CSV-to-HTML is limited to 10,000 rows and 200 columns.")
+    parts=["<!doctype html><html><head><meta charset=\"utf-8\"><title>CSV table</title></head><body><table><thead><tr>"]
+    parts.extend("<th>"+escape(value)+"</th>" for value in rows[0])
+    parts.append("</tr></thead><tbody>")
+    for row in rows[1:]:
+        parts.append("<tr>")
+        parts.extend("<td>"+escape(value)+"</td>" for value in row)
+        parts.append("</tr>")
+    parts.append("</tbody></table></body></html>")
+    return _write_text_artifact_ext(p,"table",".html","CSV to HTML table",str(len(rows)-1)+" row(s)")
+
+
+def json_sort_array(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    if not isinstance(value,list): raise RuntimeError("JSON array sort expects a top-level array.")
+    ordered=sorted(value,key=lambda item:json.dumps(item,ensure_ascii=False,sort_keys=True, separators=(",",":")))
+    output=json.dumps(ordered,ensure_ascii=False,indent=2)
+    return _write_text_artifact(p,"sorted-array",output+"\n","JSON array sorting",str(len(ordered))+" item(s)")
+
+
+def json_remove_nulls(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    def clean(item):
+        if isinstance(item,dict): return {key:clean(child) for key,child in item.items() if child is not None}
+        if isinstance(item,list): return [clean(child) for child in item if child is not None]
+        return item
+    output=json.dumps(clean(value),ensure_ascii=False,indent=2)
+    return _write_text_artifact(p,"without-nulls",output+"\n","JSON null removal")
+
+
+def json_to_html_table(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    if not isinstance(value,list) or any(not isinstance(item,dict) for item in value):
+        raise RuntimeError("JSON-to-HTML-table expects an array of objects.")
+    if len(value)>10_000: raise RuntimeError("JSON-to-HTML-table exceeds 10,000 records.")
+    headers=[]
+    seen=set()
+    for item in value:
+        for key in item:
+            if key not in seen:
+                seen.add(key)
+                headers.append(key)
+    if len(headers)>200: raise RuntimeError("JSON-to-HTML-table exceeds 200 columns.")
+    parts=["<!doctype html><html><head><meta charset=\"utf-8\"><title>JSON table</title></head><body><table><thead><tr>"]
+    parts.extend("<th>"+escape(key)+"</th>" for key in headers)
+    parts.append("</tr></thead><tbody>")
+    for item in value:
+        parts.append("<tr>")
+        for key in headers:
+            cell=item.get(key)
+            content="" if cell is None else (cell if isinstance(cell,str) else json.dumps(cell,ensure_ascii=False))
+            parts.append("<td>"+escape(content)+"</td>")
+        parts.append("</tr>")
+    parts.append("</tbody></table></body></html>")
+    return _write_text_artifact_ext(p,"table",".html","JSON to HTML table",str(len(value))+" row(s)")
+
+
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
     lines=[]
