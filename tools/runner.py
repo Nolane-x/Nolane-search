@@ -1222,7 +1222,7 @@ def csv_to_html(p):
         parts.extend("<td>"+escape(value)+"</td>" for value in row)
         parts.append("</tr>")
     parts.append("</tbody></table></body></html>")
-    return _write_text_artifact_ext(p,"table",".html","CSV to HTML table",str(len(rows)-1)+" row(s)")
+    return _write_text_artifact_ext(p,"table",".html","".join(parts),"CSV to HTML table",str(len(rows)-1)+" row(s)")
 
 
 def json_sort_array(p):
