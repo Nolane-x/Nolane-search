@@ -201,10 +201,10 @@ export function validateToolPipelineDefinition(rawSteps: unknown): ToolPipelineV
     if (!tool?.ready) return { ok: false, error: "Tool không tồn tại hoặc chưa sẵn sàng: " + (toolId || "unknown") };
     if (seen.has(toolId)) return { ok: false, error: "Không cho phép lặp lại cùng một tool trong pipeline." };
     seen.add(toolId);
+    if (TOOL_MULTI_INPUT_DAG_TOOLS.has(toolId)) {
+      return { ok: false, error: "Processor " + toolId + " chỉ có thể hợp nhất nhiều nhánh trong DAG, không dùng trong pipeline tuần tự hoặc một tệp đơn." };
+    }
     if (index > 0) {
-      if (TOOL_MULTI_INPUT_DAG_TOOLS.has(toolId)) {
-        return { ok: false, error: "Processor " + toolId + " chỉ có thể hợp nhất nhiều nhánh trong DAG, không dùng trong pipeline tuần tự." };
-      }
       const previous = steps[index - 1]!.toolId;
       const allowed = TOOL_PIPELINE_TRANSITIONS[previous] || [];
       if (!allowed.includes(toolId)) {
