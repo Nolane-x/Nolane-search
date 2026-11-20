@@ -71,7 +71,7 @@ describe("Nolane AI callable tools", () => {
 
   it("runs the third wave of text cleanup, extraction, CSV and JSON helpers", async () => {
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-collapse-whitespace",content:" a   b  \n c "})).toBe("a b\nc");
-    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-remove-punctuation",content:"hello,world! nice-day"})).toBe("hello world  nice day");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-remove-punctuation",content:"hello,world! nice-day"})).toBe("hello world nice day");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-to-ascii",content:"Đặng café"})).toBe("Dang cafe");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-html-escape",content:'<b a="x">'})).toBe("&lt;b a=&quot;x&quot;&gt;");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-html-unescape",content:"&lt;b&gt;Hi&amp;bye&lt;/b&gt;"})).toBe("<b>Hi&bye</b>");
@@ -94,7 +94,7 @@ describe("Nolane AI callable tools", () => {
 
   it("runs third-wave AI cleanup, extraction, CSV and JSON processors", async () => {
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-collapse-whitespace",content:" a   b  \n c "})).toBe("a b\nc");
-    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-remove-punctuation",content:"hello,world! nice-day"})).toBe("hello world  nice day");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-remove-punctuation",content:"hello,world! nice-day"})).toBe("hello world nice day");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-to-ascii",content:"Đặng café"})).toBe("Dang cafe");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-html-escape",content:'<b a="x">'})).toBe("&lt;b a=&quot;x&quot;&gt;");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-html-unescape",content:"&lt;b&gt;Hi&amp;bye&lt;/b&gt;"})).toBe("<b>Hi&bye</b>");
