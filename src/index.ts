@@ -16,6 +16,7 @@ import { completeAi, getAiRouterStatus } from "./ai-router";
 import { planToolWorkflow } from "./workflow-planner";
 import type { AiFunctionTool, AiTask } from "./ai-router";
 import { runAgentLoop } from "./agent-tools";
+import { extractTranslationTarget, normalizeTranslationLanguage, translateText, MAX_TRANSLATION_CHARS } from "./translation";
 import { performDeepSearch, performSearch } from "./search";
 import { fetchOpenRouterSummary, fetchTinyFishPage, parseOpenRouterModels } from "./providers";
 import {
@@ -1558,7 +1559,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/workflows</code> — xem thư viện workflow\n" +
       "<code>/workflow_run ID</code> — chạy workflow với tệp tiếp theo\n" +
       "<code>/workflow_delete ID</code> — xóa workflow\n" +
-      "<code>/ai câu hỏi</code> — AI tự gọi web, đọc trang và các tool tích hợp\n" +
+      "<code>/ai câu hỏi</code> — AI tự gọi web, đọc trang và các tool tích hợp\n" +      "<code>/translate English | văn bản</code> — dịch văn bản bằng AI Router\n" +
       "<code>/ai_file yêu cầu</code> — mở batch xử lý liên tục, AI tự lập pipeline cho từng tệp\n" +
       "<code>/ai_file_done</code> — kết thúc batch AI File\n" +
       "<code>/search từ khóa</code> — tìm web nhanh, có phân trang kết quả\n" +
@@ -1814,6 +1815,29 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     ).bind(key, JSON.stringify({userId,chatId,prompt:args,filesUsed:0}), now + 5 * 60 * 1000, now).run();
     await reply(env, chatId,
       "<b>AI File batch đã sẵn sàng.</b>\nGửi liên tiếp số tệp tùy nhu cầu; AI sẽ lập pipeline riêng cho từng tệp theo cùng yêu cầu. Mỗi tệp chạy trên runner tạm thời và được AI tổng hợp riêng.\n\nGõ <code>/ai_file_done</code> để kết thúc hoặc <code>/cancel</code> để hủy.");
+    return;
+  }
+
+  if (command === "translate") {
+    const separator = args.indexOf("|");
+    if (separator < 0) {
+      await reply(env, chatId, "Cú pháp: <code>/translate English | Văn bản cần dịch</code>. Hỗ trợ 15 ngôn ngữ phổ biến.");
+      return;
+    }
+    const targetLanguage = normalizeTranslationLanguage(args.slice(0, separator));
+    const sourceText = args.slice(separator + 1).trim();
+    if (!targetLanguage || !sourceText || sourceText.length > MAX_TRANSLATION_CHARS) {
+      await reply(env, chatId, "Hãy nhập ngôn ngữ đích hợp lệ và tối đa 6.000 ký tự sau dấu |. Ví dụ: <code>/translate tiếng Anh | Xin chào</code>.");
+      return;
+    }
+    try {
+      const result = await translateText(env, targetLanguage, sourceText);
+      const route = "<i>" + htmlEscape(result.provider) + " / " + htmlEscape(result.model) + " · " + result.latencyMs + " ms</i>";
+      await reply(env, chatId, "<b>Bản dịch · " + htmlEscape(targetLanguage) + "</b>\n" + route + "\n\n" + boundedHtml(result.text, 10_000));
+    } catch (error) {
+      console.error("Translation command failed:", error instanceof Error ? error.message : "unknown");
+      await reply(env, chatId, "Không thể dịch lúc này. Hãy kiểm tra model có hỗ trợ task <code>translation</code>, API key và quota trong <code>/ai_status</code>.");
+    }
     return;
   }
 
@@ -2400,6 +2424,36 @@ async function setToolJobResult(
   return true;
 }
 
+async function handleToolTranslationApi(request: Request, env: Env): Promise<Response> {
+  const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+  if (!env.TELEGRAM_WEBHOOK_SECRET || !constantTimeEqual(supplied, env.TELEGRAM_WEBHOOK_SECRET)) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+  if (request.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
+  const body = await parseJsonObjectBody(request, 100_000);
+  const jobId = typeof body?.job_id === "string" ? body.job_id : "";
+  const sourceText = typeof body?.text === "string" ? body.text : "";
+  if (!/^[a-f0-9-]{36}$/i.test(jobId) || !sourceText.trim() || sourceText.length > MAX_TRANSLATION_CHARS) {
+    return jsonResponse({ error: "Invalid translation request or text chunk exceeds 6,000 characters." }, 400);
+  }
+  const job = await getToolJob(env, jobId);
+  if (!job || job.status !== "running" || job.toolId !== "text-translate" ||
+      !(job.pipeline || [{ toolId: job.toolId }]).some(step => step.toolId === "text-translate")) {
+    return jsonResponse({ error: "Translation is only available to an active text-translate job." }, 403);
+  }
+  const targetLanguage = extractTranslationTarget(job.agentPrompt || "");
+  if (!targetLanguage) {
+    return jsonResponse({ error: "Please state an explicit target language, for example: translate this file to English." }, 422);
+  }
+  try {
+    const result = await translateText(env, targetLanguage, sourceText);
+    return jsonResponse({ translation: result.text, targetLanguage, provider: result.provider, model: result.model });
+  } catch (error) {
+    console.error("Tool translation failed:", error instanceof Error ? error.message : "unknown");
+    return jsonResponse({ error: "The configured AI translation route could not complete this text chunk. Check translation model access and provider quota." }, 502);
+  }
+}
+
 async function handleToolRunnerApi(request: Request, env: Env): Promise<Response> {
   const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   if (!env.TELEGRAM_WEBHOOK_SECRET || !constantTimeEqual(supplied, env.TELEGRAM_WEBHOOK_SECRET)) {
@@ -2744,6 +2798,7 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/") return webAppResponse();
+    if (url.pathname === "/internal/tools/translate") return handleToolTranslationApi(request, env);
     if (url.pathname === "/internal/tools/runner") return handleToolRunnerApi(request, env);
     if (url.pathname.startsWith("/api/")) return handleWebApi(request, env);
     if (request.method === "GET" && url.pathname === "/health") {
