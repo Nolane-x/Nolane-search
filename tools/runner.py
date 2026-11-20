@@ -29,7 +29,8 @@ RUNNERS = {
     "text-translate", "language-detect", "text-uppercase", "text-lowercase", "text-title-case", "text-sort-lines", "text-reverse-lines", "text-number-lines", "text-remove-blank-lines", "text-wrap", "text-trim-lines", "text-extract-emails", "text-extract-urls", "text-extract-hashtags", "text-to-base64", "base64-to-text", "url-encode", "url-decode", "json-minify", "json-sort-keys",
     "text-slugify", "text-word-frequency", "text-extract-numbers", "text-extract-dates", "text-reverse-characters", "text-snake-case", "text-kebab-case", "text-camel-case", "text-swap-case", "text-extract-ipv4", "text-mask-emails", "text-mask-phones", "json-to-jsonl", "jsonl-to-json", "csv-to-tsv", "tsv-to-csv", "csv-to-markdown", "html-minify", "xml-minify", "text-remove-emoji",
     "text-collapse-whitespace", "text-remove-punctuation", "text-to-ascii", "text-html-escape", "text-html-unescape", "text-extract-mentions", "text-extract-hex-colors", "text-extract-phones", "text-dedupe-lines", "text-count-report", "text-quote-lines", "text-unquote-lines", "csv-transpose", "csv-sort-rows", "csv-dedupe-rows", "csv-to-xml", "csv-to-html", "json-sort-array", "json-remove-nulls", "json-to-html-table",
-    "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv"
+    "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv",
+    "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "html-sanitize", "xml-to-json", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values"
 }
 
 PIPELINE_TRANSITIONS = {
@@ -186,6 +187,26 @@ PIPELINE_TRANSITIONS = {
     "csv-normalize-headers": {"csv-profile","csv-clean","csv-to-jsonl","csv-to-tsv"},
     "csv-to-jsonl": {"jsonl-to-csv","jsonl-format"},
     "jsonl-to-csv": {"csv-profile","csv-clean","csv-normalize-headers"},
+    "text-indent-lines": {"text-unindent-lines","text-clean","text-stats"},
+    "text-unindent-lines": {"text-indent-lines","text-clean","text-stats"},
+    "text-dedupe-paragraphs": {"text-clean","text-stats"},
+    "text-tokenize-words": {"text-word-frequency","text-sort-words","text-stats"},
+    "text-sentence-report": {"text-paragraph-report","text-stats"},
+    "text-line-length-report": {"text-clean","text-stats"},
+    "text-normalize-newlines": {"text-clean","text-stats"},
+    "text-remove-zero-width": {"text-clean","text-stats"},
+    "text-extract-file-paths": {"text-deduplicate","text-stats"},
+    "text-sort-words": {"text-word-frequency","text-stats"},
+    "html-extract-links": {"html-text","text-clean"},
+    "html-extract-images": {"html-text","text-clean"},
+    "html-extract-title": {"html-text","text-clean"},
+    "html-sanitize": {"html-minify","html-text"},
+    "xml-to-json": {"json-format","json-minify","json-sort-keys"},
+    "json-to-xml": {"xml-minify","xml-format","xml-to-json"},
+    "json-type-report": {"json-format","json-sort-keys"},
+    "json-escape-string": {"json-unescape-string","json-format"},
+    "json-unescape-string": {"text-clean","text-stats"},
+    "csv-unique-values": {"csv-profile","csv-clean","text-deduplicate"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
@@ -5410,6 +5431,13 @@ TOOLS={
  "csv-remove-empty-rows":csv_remove_empty_rows,"csv-add-row-numbers":csv_add_row_numbers,
  "csv-column-stats":csv_column_stats,"csv-normalize-headers":csv_normalize_headers,
  "csv-to-jsonl":csv_to_jsonl,"jsonl-to-csv":jsonl_to_csv,
+ "text-indent-lines":text_indent_lines,"text-unindent-lines":text_unindent_lines,"text-dedupe-paragraphs":text_dedupe_paragraphs,
+ "text-tokenize-words":text_tokenize_words,"text-sentence-report":text_sentence_report,"text-line-length-report":text_line_length_report,
+ "text-normalize-newlines":text_normalize_newlines,"text-remove-zero-width":text_remove_zero_width,"text-extract-file-paths":text_extract_file_paths,
+ "text-sort-words":text_sort_words,"html-extract-links":html_extract_links,"html-extract-images":html_extract_images,
+ "html-extract-title":html_extract_title,"html-sanitize":html_sanitize,"xml-to-json":xml_to_json,"json-to-xml":json_to_xml,
+ "json-type-report":json_type_report,"json-escape-string":json_escape_string,"json-unescape-string":json_unescape_string,
+ "csv-unique-values":csv_unique_values,
 }
 
 
