@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **102 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **103 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -10,6 +10,19 @@ Nolane Tools hiện có **102 công cụ đã có handler và kiểm thử**. M�
 4. Dùng `/tool_search từ khóa` để tìm tên, mô tả, ID hoặc đuôi tệp; `/tool_jobs` để xem tác vụ gần đây và `/workflows` để mở Workflow Library.
 
 Web Workspace có tab Tools để xem catalog và sao chép lệnh; thao tác gửi tệp vẫn thực hiện qua Telegram.
+
+## GitHub Repository Intelligence
+
+Dùng trực tiếp URL GitHub công khai, không cần tải ZIP về máy:
+
+- `/repo https://github.com/owner/repository` — phân tích default branch.
+- `/repo https://github.com/owner/repository/tree/feature/name` — phân tích branch/ref cụ thể.
+- `/repo_compare https://github.com/owner/repository main...feature/name` — phân tích snapshot branch đích và bổ sung metadata so sánh branch qua GitHub Compare API.
+- `/tool_jobs`, `/tool_job ID`, `/tool_retry ID` — theo dõi, xem trace và chạy lại job.
+
+Kết quả là ZIP gồm báo cáo Markdown, module/import graph JSON, metadata GitHub và các báo cáo inventory, dependencies, license evidence, secret scan, TODO scan, code statistics, config audit và duplicate files. Import graph hiện dùng Python AST và heuristic cho relative imports của JS/TS; đây không phải call graph hoàn chỉnh. Commit messages có marker fix/bug chỉ là tín hiệu tìm kiếm, không phải defect rate.
+
+Chỉ nhận repository công khai. Runner tải ZIP snapshot qua GitHub API và codeload.github.com, giới hạn 100 MB tải xuống / 100 MB dữ liệu giải nén / 500 entries. Không giải nén đường dẫn ra filesystem, không chạy mã, GitHub Actions workflow hoặc build script trong repository, không cài dependency và không truy vấn CVE/advisory. Secret scan chỉ báo file, dòng và loại pattern, không tiết lộ giá trị. Báo cáo license là bằng chứng văn bản, không phải tư vấn pháp lý.
 
 ## Danh mục
 
