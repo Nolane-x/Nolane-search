@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **72 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **86 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -57,6 +57,7 @@ Giới hạn an toàn theo từng processor được kiểm tra ở runner: ví 
 | `/tool video-silence-report` | Phát hiện khoảng lặng video | Phân tích audio track của video để tìm đoạn im lặng. | Báo cáo TXT |
 | `/tool subtitle-convert` | Chuyển SRT ↔ VTT | Tự nhận dạng định dạng đầu vào, giữ nguyên cue. | SRT hoặc VTT |
 | `/tool text-deduplicate` | Loại dòng trùng | Chuẩn hóa Unicode và loại dòng trùng, giữ thứ tự đầu tiên. | TXT/Markdown |
+| `/tool text-join` | Hợp nhất nhiều nhánh văn bản | Chỉ dùng làm node DAG; hợp nhất 2–3 đầu ra UTF-8 theo thứ tự node cha, gắn tiêu đề nguồn và giới hạn tổng đầu vào/đầu ra 45 MB. | TXT |
 | `/tool text-diff` | So sánh hai tệp văn bản | Tạo unified diff từ đúng hai tệp trong ZIP. | TXT |
 | `/tool code-size-report` | Thống kê quy mô mã nguồn | Đếm dòng, comment-like, whitespace và độ dài dòng, không chạy code. | Báo cáo TXT |
 
@@ -187,14 +188,14 @@ Tool runner dùng Python 3.12, Pillow, PyMuPDF, FFmpeg và các thư viện chuy
 
 The private Workflow Library stores reusable, validated tool pipelines in the existing D1 `search_cache` table; it does not provision another database or runner.
 - `/workflow_save Name | tool-a -> tool-b` saves a linear sequence of real processors. Each adjacent transition must be present in the explicit allowlist enforced by Worker and runner.
-- `/workflow_save Name | source=video-audio@input; transcript=audio-transcribe@source; converted=audio-convert@source` saves a branching DAG. Every node has a stable ID, a tool ID and either `input` or one earlier parent node. DAGs contain 2–12 nodes and must have at least two branches that can run independently.
+- `/workflow_save Name | source=pdf-text@input; clean=text-clean@source; stats=text-stats@clean; unique=text-deduplicate@clean; merged=text-join@stats,unique` saves a DAG with fan-out and fan-in. Every node has a stable ID and a tool ID. Roots read `input`; ordinary nodes accept one earlier parent; only `text-join` may accept 2–3 distinct earlier parents, and every parent-to-join edge must be allowlisted. DAGs contain 2–12 nodes and need at least one parallel fan-out layer.
 - `/workflows` lists the current user's workflows; `/workflow_run ID` arms one workflow for the next upload; `/workflow_delete ID` removes a workflow.
 - There is no application-level workflow-count quota or expiry for saved definitions. A one-file pending run still expires after 15 minutes and is consumed only after the job is successfully dispatched.
 - The actual uploaded MIME type and extension are revalidated at run time. An incompatible file does not consume the pending workflow.
 - Every run is a separate existing Tool Job on an ephemeral GitHub Actions runner. Job history retains the workflow ID/name and reports the executed pipeline. The original reusable definition is not mutated by a run.
 - Workflows are private to the allowlisted Telegram account and the bot's private chat. They contain tool IDs only, not file contents or Telegram file IDs.
 
-The runner executes DAG nodes in topological dependency layers, with a hard maximum of three concurrent processors. Nodes read the original upload when they are roots or a parent node artifact when they have one dependency. Terminal branch artifacts are bundled into `workflow-results.zip`, alongside `manifest.json`; combined terminal outputs and the final archive are each bounded to 45 MB. A processor still receives exactly one input file. Multi-parent joins, branch conditions, loops, arbitrary shell commands and uploaded-code execution are not supported. The DAG trace is validated against node IDs and parent completion before it is persisted.
+The runner executes DAG nodes in topological dependency layers, with a hard maximum of three concurrent processors. Roots read the uploaded file and ordinary child nodes read one parent artifact. The sole reviewed multi-input processor, `text-join`, receives 2–3 completed UTF-8 text artifacts in the declared parent order, labels each source, and enforces 45 MB combined-input and output limits. A DAG may therefore converge to one final artifact; otherwise its terminal branch artifacts are bundled into `workflow-results.zip` with `manifest.json`. Conditional branches, loops, arbitrary shell commands and uploaded-code execution are not supported. The DAG trace is validated against node IDs and every parent completion before it is persisted.
 ## Workflow Intelligence planner
 
 - `/workflow_plan goal` asks the configured AI Router to propose a file-processing plan using only ready processors in `TOOL_CATALOG` and the explicit `TOOL_PIPELINE_TRANSITIONS` allowlist.
