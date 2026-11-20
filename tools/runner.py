@@ -1753,10 +1753,9 @@ def subtitle_convert(p):
 
 
 def text_join(inputs):
-    is_multi=isinstance(inputs,list)
-    paths=inputs if is_multi else [inputs]
-    if (is_multi and not 2<=len(paths)<=MAX_DAG_PARENTS) or not paths:
-        raise RuntimeError(f"Text join requires 2 to {MAX_DAG_PARENTS} input artifacts when used as a DAG join.")
+    if not isinstance(inputs,list) or not 2<=len(inputs)<=MAX_DAG_PARENTS:
+        raise RuntimeError(f"Text join requires 2 to {MAX_DAG_PARENTS} parent artifacts inside a DAG workflow.")
+    paths=inputs
     sections=[]
     total=0
     for index,path in enumerate(paths,1):
