@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **185 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **205 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -320,6 +320,31 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 | \`/tool csv-normalize-headers\` | Chuẩn hóa header sang snake_case, tự xử lý tên trùng. | CSV |
 | \`/tool csv-to-jsonl\` | Chuyển mỗi hàng CSV thành một JSON object line. | JSONL |
 | \`/tool jsonl-to-csv\` | Chuyển object JSONL thành CSV theo thứ tự key xuất hiện. | CSV |
+
+### HTML, XML, JSON và thống kê văn bản — đợt thứ năm
+
+| Lệnh | Chức năng | Đầu ra |
+|---|---|---|
+| \`/tool text-indent-lines\` | Thêm bốn dấu cách vào dòng có nội dung. | TXT |
+| \`/tool text-unindent-lines\` | Loại mức indent chung nhỏ nhất. | TXT |
+| \`/tool text-dedupe-paragraphs\` | Loại đoạn lặp, giữ lần xuất hiện đầu tiên. | TXT |
+| \`/tool text-tokenize-words\` | Tách từ Unicode, một token mỗi dòng. | TXT |
+| \`/tool text-sentence-report\` | Ước lượng số câu và độ dài câu theo dấu câu; heuristic. | Báo cáo TXT |
+| \`/tool text-line-length-report\` | Xếp hạng tối đa 100 dòng dài nhất. | Báo cáo TXT |
+| \`/tool text-normalize-newlines\` | Chuẩn hóa CRLF/CR thành LF. | TXT |
+| \`/tool text-remove-zero-width\` | Xóa một số ký tự zero-width/BOM/soft-hyphen phổ biến. | TXT |
+| \`/tool text-extract-file-paths\` | Trích ứng viên đường dẫn Windows/POSIX; cần xác minh kết quả. | TXT |
+| \`/tool text-sort-words\` | Tách và sắp xếp token từ Unicode, giữ từ trùng. | TXT |
+| \`/tool html-extract-links\` | Trích URL, anchor text, title và ảnh từ HTML. | JSONL |
+| \`/tool html-extract-images\` | Trích src/alt/title của ảnh HTML. | JSONL |
+| \`/tool html-extract-title\` | Trích tiêu đề trang HTML. | TXT |
+| \`/tool html-sanitize\` | Lọc script/style/iframe, event handlers và URL nguy hiểm phổ biến. Không thay thế sanitizer theo ngữ cảnh ứng dụng. | HTML |
+| \`/tool xml-tree-report\` | Báo cáo element, attribute, text node, depth và tag counts; từ chối DTD/ENTITY. | Báo cáo TXT |
+| \`/tool json-to-xml\` | Chuyển object JSON thành XML, hỗ trợ nested object, list, @attributes và #text. | XML |
+| \`/tool json-type-report\` | Đếm kiểu JSON và độ sâu cây. | Báo cáo TXT |
+| \`/tool json-escape-string\` | Escape toàn bộ văn bản thành JSON string scalar. | JSON |
+| \`/tool json-unescape-string\` | Giải mã JSON string scalar, từ chối object/array/number. | TXT |
+| \`/tool csv-unique-values\` | Liệt kê giá trị unique theo cột và tần suất. | Báo cáo TXT |
 
 ## AI Agent
 

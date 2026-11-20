@@ -29,7 +29,8 @@ RUNNERS = {
     "text-translate", "language-detect", "text-uppercase", "text-lowercase", "text-title-case", "text-sort-lines", "text-reverse-lines", "text-number-lines", "text-remove-blank-lines", "text-wrap", "text-trim-lines", "text-extract-emails", "text-extract-urls", "text-extract-hashtags", "text-to-base64", "base64-to-text", "url-encode", "url-decode", "json-minify", "json-sort-keys",
     "text-slugify", "text-word-frequency", "text-extract-numbers", "text-extract-dates", "text-reverse-characters", "text-snake-case", "text-kebab-case", "text-camel-case", "text-swap-case", "text-extract-ipv4", "text-mask-emails", "text-mask-phones", "json-to-jsonl", "jsonl-to-json", "csv-to-tsv", "tsv-to-csv", "csv-to-markdown", "html-minify", "xml-minify", "text-remove-emoji",
     "text-collapse-whitespace", "text-remove-punctuation", "text-to-ascii", "text-html-escape", "text-html-unescape", "text-extract-mentions", "text-extract-hex-colors", "text-extract-phones", "text-dedupe-lines", "text-count-report", "text-quote-lines", "text-unquote-lines", "csv-transpose", "csv-sort-rows", "csv-dedupe-rows", "csv-to-xml", "csv-to-html", "json-sort-array", "json-remove-nulls", "json-to-html-table",
-    "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv"
+    "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv",
+    "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "html-sanitize", "xml-tree-report", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values"
 }
 
 PIPELINE_TRANSITIONS = {
@@ -186,6 +187,26 @@ PIPELINE_TRANSITIONS = {
     "csv-normalize-headers": {"csv-profile","csv-clean","csv-to-jsonl","csv-to-tsv"},
     "csv-to-jsonl": {"jsonl-to-csv","jsonl-format"},
     "jsonl-to-csv": {"csv-profile","csv-clean","csv-normalize-headers"},
+    "text-indent-lines": {"text-unindent-lines","text-clean","text-stats"},
+    "text-unindent-lines": {"text-indent-lines","text-clean","text-stats"},
+    "text-dedupe-paragraphs": {"text-clean","text-stats"},
+    "text-tokenize-words": {"text-word-frequency","text-sort-words","text-stats"},
+    "text-sentence-report": {"text-paragraph-report","text-stats"},
+    "text-line-length-report": {"text-clean","text-stats"},
+    "text-normalize-newlines": {"text-clean","text-stats"},
+    "text-remove-zero-width": {"text-clean","text-stats"},
+    "text-extract-file-paths": {"text-deduplicate","text-stats"},
+    "text-sort-words": {"text-word-frequency","text-stats"},
+    "html-extract-links": {"html-text","text-clean"},
+    "html-extract-images": {"html-text","text-clean"},
+    "html-extract-title": {"text-clean","text-stats"},
+    "html-sanitize": {"html-minify","html-text"},
+    "xml-tree-report": {"text-clean","text-stats"},
+    "json-to-xml": {"xml-minify","xml-format","xml-to-json"},
+    "json-type-report": {"json-format","json-sort-keys"},
+    "json-escape-string": {"json-unescape-string","json-format"},
+    "json-unescape-string": {"text-clean","text-stats"},
+    "csv-unique-values": {"csv-profile","csv-clean","text-deduplicate"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
@@ -1603,6 +1624,368 @@ def jsonl_to_csv(p):
     for record in records:
         writer.writerow([json.dumps(record.get(key),ensure_ascii=False) if isinstance(record.get(key),(dict,list)) else ("" if record.get(key) is None else record.get(key)) for key in headers])
     return _write_text_artifact_ext(p,"records",".csv",stream.getvalue(),"JSONL to CSV",str(len(records))+" record(s)")
+
+
+def text_indent_lines(p):
+    raw=_read_text_source(p)
+    output="\n".join(("    "+line) if line.strip() else "" for line in raw.splitlines())
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"indented",output,"Line indentation","4 spaces added to non-empty lines")
+
+
+def text_unindent_lines(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    indents=[len(line)-len(line.lstrip(" \t")) for line in lines if line.strip()]
+    amount=min(indents,default=0)
+    output="\n".join(line[amount:] if line.strip() else "" for line in lines)
+    if raw.endswith(("\n","\r")): output+="\n"
+    return _write_text_artifact(p,"unindented",output,"Common indentation removal",str(amount)+" leading character(s) removed")
+
+
+def text_dedupe_paragraphs(p):
+    raw=_read_text_source(p)
+    paragraphs=[part.strip() for part in re.split(r"\n\s*\n",raw) if part.strip()]
+    result=[]
+    seen=set()
+    for paragraph in paragraphs:
+        key=re.sub(r"\s+"," ",paragraph).casefold()
+        if key in seen: continue
+        seen.add(key)
+        result.append(paragraph)
+    output="\n\n".join(result)+("\n" if raw.endswith(("\n","\r")) and result else "")
+    return _write_text_artifact(p,"unique-paragraphs",output,"Paragraph deduplication",str(len(paragraphs)-len(result))+" duplicate paragraph(s) removed")
+
+
+def text_tokenize_words(p):
+    raw=_read_text_source(p)
+    words=re.findall(r"[^\W_]+(?:['’][^\W_]+)?",raw,flags=re.UNICODE)
+    return _write_text_artifact(p,"tokens","\n".join(words)+("\n" if words else ""),"Word tokenization",str(len(words))+" token(s)")
+
+
+def text_sentence_report(p):
+    raw=_read_text_source(p)
+    sentences=[part.strip() for part in re.split(r"(?<=[.!?。！？])\s+",raw) if part.strip()]
+    words=re.findall(r"[^\W_]+(?:['’][^\W_]+)?",raw,flags=re.UNICODE)
+    counts=[len(re.findall(r"[^\W_]+(?:['’][^\W_]+)?",part,flags=re.UNICODE)) for part in sentences]
+    report=[
+        "Sentence statistics",
+        "Sentences (heuristic): "+str(len(sentences)),
+        "Words: "+str(len(words)),
+        "Average words per sentence: "+(f"{len(words)/len(sentences):.2f}" if sentences else "0"),
+        "Longest sentence words: "+str(max(counts,default=0)),
+        "Note: punctuation-based estimate; abbreviations and multilingual text may affect accuracy.",
+    ]
+    return _write_text_artifact(p,"sentence-report","\n".join(report)+"\n","Sentence report")
+
+
+def text_line_length_report(p):
+    raw=_read_text_source(p)
+    lines=raw.splitlines()
+    ranked=sorted(enumerate(lines,1),key=lambda item:(-len(item[1]),item[0]))[:100]
+    report=["Line length report","Total lines: "+str(len(lines)),"Longest line: "+str(max((len(line) for line in lines),default=0)),"","Rank | Line | Characters"]
+    report.extend(f"{rank} | {line_number} | {len(line)}" for rank,(line_number,line) in enumerate(ranked,1))
+    return _write_text_artifact(p,"line-lengths","\n".join(report)+"\n","Line-length report")
+
+
+def text_normalize_newlines(p):
+    raw=_read_text_source(p)
+    output=raw.replace("\r\n","\n").replace("\r","\n")
+    return _write_text_artifact(p,"unix-newlines",output,"Newline normalization","LF line endings")
+
+
+def text_remove_zero_width(p):
+    raw=_read_text_source(p)
+    output="".join(char for char in raw if char not in "\u200b\u200c\u200d\u2060\ufeff\u00ad")
+    return _write_text_artifact(p,"no-zero-width",output,"Invisible-character removal")
+
+
+def text_extract_file_paths(p):
+    raw=_read_text_source(p)
+    pattern=r'(?<![A-Za-z0-9])(?:[A-Za-z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]+|/(?:[^/\s<>:"|?*]+/)*[^/\s<>:"|?*]+)'
+    values=_ordered_unique(re.findall(pattern,raw))
+    return _write_text_artifact(p,"file-paths","\n".join(values)+("\n" if values else ""),"File-path extraction",str(len(values))+" unique candidate(s)")
+
+
+def text_sort_words(p):
+    raw=_read_text_source(p)
+    words=re.findall(r"[^\W_]+(?:['’][^\W_]+)?",raw,flags=re.UNICODE)
+    ordered=sorted(words,key=lambda value:(value.casefold(),value))
+    return _write_text_artifact(p,"sorted-words","\n".join(ordered)+("\n" if ordered else ""),"Word sorting",str(len(words))+" word(s) sorted")
+
+
+def html_extract_links(p):
+    raw=_read_text_source(p,max_chars=5_000_000)
+    class LinkParser(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.items=[]
+            self.current=None
+        def handle_starttag(self,tag,attrs):
+            if tag.lower()=="a":
+                values=dict(attrs)
+                if values.get("href"):
+                    self.current={"url":values["href"],"text":"","title":values.get("title","")}
+            elif tag.lower()=="img":
+                values=dict(attrs)
+                if values.get("src"):
+                    self.items.append({"url":values["src"],"alt":values.get("alt",""),"title":values.get("title","")})
+        def handle_data(self,data):
+            if self.current is not None: self.current["text"]+=data
+        def handle_endtag(self,tag):
+            if tag.lower()=="a" and self.current is not None:
+                self.items.append(self.current)
+                self.current=None
+    parser=LinkParser()
+    try: parser.feed(raw); parser.close()
+    except Exception as exc: raise RuntimeError("Invalid HTML: "+str(exc)) from exc
+    seen=set()
+    results=[]
+    for item in parser.items:
+        key=(item.get("url",""),item.get("text",""),item.get("alt",""))
+        if key in seen: continue
+        seen.add(key)
+        results.append(json.dumps(item,ensure_ascii=False))
+    output="\n".join(results)
+    return _write_text_artifact_ext(p,"html-links",".jsonl",output+("\n" if output else ""),"HTML link/image extraction",str(len(results))+" item(s)")
+
+
+def html_extract_images(p):
+    raw=_read_text_source(p,max_chars=5_000_000)
+    class ImageParser(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.items=[]
+        def handle_starttag(self,tag,attrs):
+            if tag.lower()=="img":
+                values=dict(attrs)
+                if values.get("src"): self.items.append({"src":values["src"],"alt":values.get("alt",""),"title":values.get("title","")})
+    parser=ImageParser()
+    try: parser.feed(raw); parser.close()
+    except Exception as exc: raise RuntimeError("Invalid HTML: "+str(exc)) from exc
+    unique=[]
+    seen=set()
+    for item in parser.items:
+        if item["src"] in seen: continue
+        seen.add(item["src"])
+        unique.append(json.dumps(item,ensure_ascii=False))
+    output="\n".join(unique)
+    return _write_text_artifact_ext(p,"html-images",".jsonl",output+("\n" if output else ""),"HTML image extraction",str(len(unique))+" unique image(s)")
+
+
+def html_extract_title(p):
+    raw=_read_text_source(p,max_chars=5_000_000)
+    class TitleParser(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.active=False
+            self.parts=[]
+        def handle_starttag(self,tag,attrs):
+            if tag.lower()=="title": self.active=True
+        def handle_endtag(self,tag):
+            if tag.lower()=="title": self.active=False
+        def handle_data(self,data):
+            if self.active: self.parts.append(data)
+    parser=TitleParser()
+    try: parser.feed(raw); parser.close()
+    except Exception as exc: raise RuntimeError("Invalid HTML: "+str(exc)) from exc
+    title=re.sub(r"\s+"," "," ".join(parser.parts)).strip()
+    return _write_text_artifact_ext(p,"html-title",".txt",title+"\n" if title else "","HTML title extraction")
+
+
+def html_sanitize(p):
+    raw=_read_text_source(p,max_chars=5_000_000)
+    class Sanitizer(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=False)
+            self.parts=[]
+            self.skip_stack=[]
+            self.void={"area","base","br","col","embed","hr","img","input","link","meta","param","source","track","wbr"}
+            self.drop={"script","style","iframe","object","embed","applet"}
+        def handle_starttag(self,tag,attrs):
+            tag=tag.lower()
+            if self.skip_stack:
+                if tag not in self.void: self.skip_stack.append(tag)
+                return
+            if tag in self.drop:
+                if tag not in self.void: self.skip_stack.append(tag)
+                return
+            safe=[]
+            for key,value in attrs:
+                key=key.lower()
+                if key.startswith("on") or key in {"style","srcdoc","srcset"}: continue
+                if value is not None and key in {"href","src","xlink:href","formaction","action","poster"}:
+                    normalized=re.sub(r"[\x00-\x20]+","",value).lower()
+                    if normalized.startswith(("javascript:","vbscript:","data:","blob:","file:")): continue
+                safe.append((key,value))
+            self.parts.append("<"+tag)
+            for key,value in safe:
+                if value is None: self.parts.append(" "+key)
+                else: self.parts.append(" "+key+'="'+escape(value,quote=True)+'"')
+            self.parts.append(">")
+        def handle_startendtag(self,tag,attrs):
+            tag=tag.lower()
+            if self.skip_stack or tag in self.drop: return
+            safe=[]
+            for key,value in attrs:
+                key=key.lower()
+                if key.startswith("on") or key in {"style","srcdoc","srcset"}: continue
+                if value is not None and key in {"href","src","xlink:href","formaction","action","poster"}:
+                    normalized=re.sub(r"[\x00-\x20]+","",value).lower()
+                    if normalized.startswith(("javascript:","vbscript:","data:","blob:","file:")): continue
+                safe.append((key,value))
+            self.parts.append("<"+tag)
+            for key,value in safe:
+                if value is None: self.parts.append(" "+key)
+                else: self.parts.append(" "+key+'="'+escape(value,quote=True)+'"')
+            self.parts.append("/>")
+        def handle_endtag(self,tag):
+            tag=tag.lower()
+            if self.skip_stack:
+                if tag in self.skip_stack:
+                    index=len(self.skip_stack)-1-self.skip_stack[::-1].index(tag)
+                    self.skip_stack=self.skip_stack[:index]
+                return
+            if tag not in self.void: self.parts.append("</"+tag+">")
+        def handle_data(self,data):
+            if not self.skip_stack: self.parts.append(data)
+        def handle_entityref(self,name):
+            if not self.skip_stack: self.parts.append("&"+name+";")
+        def handle_charref(self,name):
+            if not self.skip_stack: self.parts.append("&#"+name+";")
+        def handle_comment(self,data): pass
+        def handle_decl(self,decl):
+            if not self.skip_stack and not re.match(r"\s*doctype\s+html",decl,re.I): self.parts.append("<!"+decl+">")
+    parser=Sanitizer()
+    try: parser.feed(raw); parser.close()
+    except Exception as exc: raise RuntimeError("HTML sanitization failed: "+str(exc)) from exc
+    output="".join(parser.parts)
+    return _write_text_artifact_ext(p,"sanitized",".html",output,"HTML sanitization","removed executable elements, event handlers, inline styles and unsafe URL schemes")
+
+
+def _xml_safe_tag(value,index=1):
+    tag=re.sub(r"[^A-Za-z0-9_.-]","_",str(value)) or "item_"+str(index)
+    if not re.match(r"[A-Za-z_]",tag): tag="item_"+tag
+    return tag
+
+
+def json_to_xml(p):
+    import xml.etree.ElementTree as ET
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    if not isinstance(value,dict): raise RuntimeError("JSON-to-XML expects a top-level object.")
+    def add_value(parent,name,item):
+        if isinstance(item,list):
+            for child in item: add_value(parent,name,child)
+            return
+        element=ET.SubElement(parent,_xml_safe_tag(name))
+        if isinstance(item,dict):
+            for key,child in item.items():
+                if key=="#text":
+                    element.text="" if child is None else str(child)
+                elif key.startswith("@"):
+                    element.set(_xml_safe_tag(key[1:]),"" if child is None else str(child))
+                else:
+                    add_value(element,key,child)
+        elif item is not None:
+            element.text=str(item).lower() if isinstance(item,bool) else str(item)
+    root=ET.Element("root")
+    for key,item in value.items():
+        if key.startswith("@"):
+            root.set(_xml_safe_tag(key[1:]),"" if item is None else str(item))
+        elif key=="#text":
+            root.text="" if item is None else str(item)
+        else:
+            add_value(root,key,item)
+    output=ET.tostring(root,encoding="unicode",short_empty_elements=True)
+    return _write_text_artifact_ext(p,"converted",".xml",output,"JSON to XML conversion")
+
+
+def json_type_report(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    counts={"object":0,"array":0,"string":0,"number":0,"boolean":0,"null":0}
+    max_depth=0
+    def visit(item,depth):
+        nonlocal max_depth
+        max_depth=max(max_depth,depth)
+        if item is None: counts["null"]+=1
+        elif isinstance(item,bool): counts["boolean"]+=1
+        elif isinstance(item,(int,float)): counts["number"]+=1
+        elif isinstance(item,str): counts["string"]+=1
+        elif isinstance(item,dict):
+            counts["object"]+=1
+            for child in item.values(): visit(child,depth+1)
+        elif isinstance(item,list):
+            counts["array"]+=1
+            for child in item: visit(child,depth+1)
+    visit(value,0)
+    lines=["JSON type report","Maximum depth: "+str(max_depth)]
+    lines.extend(kind+": "+str(count) for kind,count in counts.items())
+    return _write_text_artifact_ext(p,"type-report",".txt","\n".join(lines)+"\n","JSON type report")
+
+
+def json_escape_string(p):
+    raw=_read_text_source(p)
+    return _write_text_artifact_ext(p,"json-string",".json",json.dumps(raw,ensure_ascii=False)+"\n","JSON string escaping")
+
+
+def json_unescape_string(p):
+    raw=_read_text_source(p)
+    try: value=json.loads(raw)
+    except json.JSONDecodeError as exc: raise RuntimeError("Input must be a valid JSON string scalar.") from exc
+    if not isinstance(value,str): raise RuntimeError("Input must be a JSON string, not an object, array or number.")
+    return _write_text_artifact_ext(p,"unescaped-string",".txt",value,"JSON string decoding")
+
+
+def csv_unique_values(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    header=rows[0]
+    if len(header)>200: raise RuntimeError("CSV unique-value report supports at most 200 columns.")
+    columns=[]
+    for index,name in enumerate(header):
+        counts={}
+        order=[]
+        for row in rows[1:]:
+            value=row[index].strip() if index<len(row) else ""
+            if not value: continue
+            if value not in counts: order.append(value); counts[value]=0
+            counts[value]+=1
+        for value in order:
+            columns.append(json.dumps({"column":name,"value":value,"count":counts[value]},ensure_ascii=False))
+    output="\n".join(columns)
+    return _write_text_artifact_ext(p,"unique-values",".txt",output+("\n" if output else ""),"CSV unique-value report",str(len(columns))+" column/value pair(s)")
+
+
+def xml_tree_report(p):
+    import xml.etree.ElementTree as ET
+    raw=_read_text_source(p)
+    if re.search(r"<!\s*(?:DOCTYPE|ENTITY)\b",raw,re.I):
+        raise RuntimeError("XML DTD and ENTITY declarations are not supported.")
+    try: root=ET.fromstring(raw)
+    except ET.ParseError as exc: raise RuntimeError("Invalid XML: "+str(exc)) from exc
+    tags={}
+    attributes=0
+    text_nodes=0
+    max_depth=0
+    def visit(element,depth):
+        nonlocal attributes,text_nodes,max_depth
+        max_depth=max(max_depth,depth)
+        tags[element.tag]=tags.get(element.tag,0)+1
+        attributes+=len(element.attrib)
+        if (element.text or "").strip(): text_nodes+=1
+        for child in list(element): visit(child,depth+1)
+    visit(root,1)
+    lines=["XML tree report","Root: "+root.tag,"Elements: "+str(sum(tags.values())),"Attributes: "+str(attributes),
+      "Non-empty text nodes: "+str(text_nodes),"Maximum depth: "+str(max_depth),"","Element counts"]
+    lines.extend(tag+"\t"+str(count) for tag,count in sorted(tags.items()))
+    return _write_text_artifact_ext(p,"xml-tree-report",".txt","\n".join(lines)+"\n","XML tree report")
 
 
 def subtitle_text(p):
@@ -5044,6 +5427,13 @@ TOOLS={
  "csv-remove-empty-rows":csv_remove_empty_rows,"csv-add-row-numbers":csv_add_row_numbers,
  "csv-column-stats":csv_column_stats,"csv-normalize-headers":csv_normalize_headers,
  "csv-to-jsonl":csv_to_jsonl,"jsonl-to-csv":jsonl_to_csv,
+ "text-indent-lines":text_indent_lines,"text-unindent-lines":text_unindent_lines,"text-dedupe-paragraphs":text_dedupe_paragraphs,
+ "text-tokenize-words":text_tokenize_words,"text-sentence-report":text_sentence_report,"text-line-length-report":text_line_length_report,
+ "text-normalize-newlines":text_normalize_newlines,"text-remove-zero-width":text_remove_zero_width,"text-extract-file-paths":text_extract_file_paths,
+ "text-sort-words":text_sort_words,"html-extract-links":html_extract_links,"html-extract-images":html_extract_images,
+ "html-extract-title":html_extract_title,"html-sanitize":html_sanitize,"xml-tree-report":xml_tree_report,"json-to-xml":json_to_xml,
+ "json-type-report":json_type_report,"json-escape-string":json_escape_string,"json-unescape-string":json_unescape_string,
+ "csv-unique-values":csv_unique_values,
 }
 
 
