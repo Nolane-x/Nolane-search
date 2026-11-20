@@ -1001,7 +1001,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     await reply(env, chatId,
       "<b>Nolane Tools · " + TOOL_CATALOG.length + " công cụ</b>\n" +
       (env.NOLANE_GH_ACTIONS_TOKEN ? "" : "⚠️ Chưa cấu hình GitHub Actions token. Hãy thêm secret NOLANE_GH_ACTIONS_TOKEN vào repository trước khi chạy công cụ.\n\n") +
-      "Gửi /tool ID để chọn công cụ, /workflow_plan để AI lập quy trình hoặc /workflows để chạy pipeline đã lưu. Ảnh sẽ tự chạy OCR nếu không chọn trước.\\n\\n" +
+      "Gửi /tool ID để chọn công cụ, /workflow_plan để AI lập quy trình hoặc /workflows để chạy pipeline đã lưu. Ảnh sẽ tự chạy OCR nếu không chọn trước.\n\n" +
       lines.join("\n\n") + "\n\nDùng /tool_jobs để xem lịch sử xử lý.");
     return;
   }
@@ -1153,7 +1153,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       await reply(env, chatId, "Bản nháp workflow chỉ được lưu trong chat riêng được cấp quyền.");
       return;
     }
-    const match = args.trim().match(/^([a-f0-9]{8})\\s+([\\s\\S]{3,80})$/i);
+    const match = args.trim().match(/^([a-f0-9]{8})\s+([\s\S]{3,80})$/i);
     if (!match) {
       await reply(env, chatId, "Cú pháp: <code>/workflow_plan_save PLAN_ID Tên workflow</code>.");
       return;
