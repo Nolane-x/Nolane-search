@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **165 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **185 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -295,6 +295,31 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 | \`/tool json-sort-array\` | Sắp xếp array theo biểu diễn JSON ổn định, không giả định schema. | JSON |
 | \`/tool json-remove-nulls\` | Xóa thuộc tính null và phần tử null trong array theo đệ quy. | JSON |
 | \`/tool json-to-html-table\` | Chuyển mảng object thành HTML table, escape ô; tối đa 10.000 record/200 cột. | HTML |
+
+### Công cụ Markdown, JSON và CSV — đợt mở rộng thứ tư
+
+| Lệnh | Chức năng | Đầu ra |
+|---|---|---|
+| \`/tool text-pascal-case\` | Chuyển từng dòng sang PascalCase. | TXT |
+| \`/tool text-constant-case\` | Chuyển từng dòng sang CONSTANT_CASE. | TXT |
+| \`/tool text-dot-case\` | Chuyển từng dòng sang dot.case. | TXT |
+| \`/tool text-initials\` | Lấy chữ cái đầu của từng từ theo dòng. | TXT |
+| \`/tool text-normalize-unicode\` | Chuẩn hóa Unicode về NFC. | TXT |
+| \`/tool text-remove-control-chars\` | Xóa control characters, giữ newline/tab. | TXT |
+| \`/tool text-remove-duplicate-words\` | Loại từ xuất hiện lặp, giữ thứ tự lần đầu. | TXT |
+| \`/tool text-extract-markdown-links\` | Trích label, URL và title của Markdown links. | JSONL |
+| \`/tool text-extract-markdown-headings\` | Trích H1–H6 ngoài code fence. | JSONL |
+| \`/tool text-extract-quotes\` | Trích nội dung giữa các dấu nháy phổ biến. | TXT |
+| \`/tool text-paragraph-report\` | Thống kê số đoạn, từ và độ dài lớn nhất. | Báo cáo TXT |
+| \`/tool json-flatten\` | Làm phẳng object thành JSON Pointer paths; array giữ nguyên như leaf. | JSON |
+| \`/tool json-unflatten\` | Khôi phục object từ JSON Pointer mapping, từ chối xung đột path. | JSON |
+| \`/tool json-keys-report\` | Liệt kê key paths và số lần xuất hiện. | Báo cáo TXT |
+| \`/tool csv-remove-empty-rows\` | Giữ header, xóa hàng dữ liệu rỗng. | CSV |
+| \`/tool csv-add-row-numbers\` | Thêm cột số hàng duy nhất từ 1. | CSV |
+| \`/tool csv-column-stats\` | Đếm ô trống, unique và numeric theo từng cột. | Báo cáo TXT |
+| \`/tool csv-normalize-headers\` | Chuẩn hóa header sang snake_case, tự xử lý tên trùng. | CSV |
+| \`/tool csv-to-jsonl\` | Chuyển mỗi hàng CSV thành một JSON object line. | JSONL |
+| \`/tool jsonl-to-csv\` | Chuyển object JSONL thành CSV theo thứ tự key xuất hiện. | CSV |
 
 ## AI Agent
 
