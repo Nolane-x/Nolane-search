@@ -1,4 +1,5 @@
 import { constantTimeEqual, htmlEscape, normalizeUrl } from "./security";
+import { parseGitHubRepositoryUrl, parseGitHubCompareCommand } from "./github-intelligence";
 import {
   deletePersonalMemory, getRelevantPersonalMemoryContext, listPersonalMemories, savePersonalMemory,
 } from "./memory";
@@ -1483,7 +1484,9 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "Trạng thái: " + state + " · lần chạy " + (job.attempt || 1),
       "Tiến trình: " + (job.progress?.completed ?? job.trace?.filter(step => step.status === "completed").length ?? 0) + "/" + (job.progress?.total ?? (job.workflowDag?.length || steps.length)),
       ...(job.progress?.currentToolIds.length ? ["Đang chạy: " + job.progress.currentToolIds.map(id => getTool(id)?.name || id).join(", ")] : []),
-      "Tệp: " + htmlEscape(job.fileName),
+      (job.githubSource
+        ? "GitHub: " + htmlEscape(job.githubSource.owner + "/" + job.githubSource.repo + "@" + (job.githubSource.ref || "default"))
+        : "Tệp: " + htmlEscape(job.fileName)),
       (job.workflowDag
         ? "DAG:\n" + htmlEscape(job.workflowDag.map(node => node.id + " = " + (getTool(node.toolId)?.name || node.toolId) + " ← " + (node.dependsOn.join(",") || "input")).join("\n"))
         : "Pipeline: " + htmlEscape(steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → "))),
@@ -1507,7 +1510,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     }
     if (job.resultSummary) lines.push("", "<b>Kết quả</b>", htmlEscape(job.resultSummary.slice(0, 600)));
     if (job.error) lines.push("", "<b>Lỗi</b>", htmlEscape(job.error.slice(0, 350)));
-    if (job.status === "failed" && job.fileId) lines.push("", "Chạy lại bằng <code>/tool_retry " + job.id + "</code>.");
+    if (job.status === "failed" && (job.fileId || job.githubSource)) lines.push("", "Chạy lại bằng <code>/tool_retry " + job.id + "</code>.");
     await reply(env, chatId, lines.join("\n"));
     return;
   }
@@ -1529,7 +1532,9 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
         "Job cũ: <code>" + htmlEscape(id) + "</code>\n" +
         "Job mới: <code>" + htmlEscape(job.id) + "</code> · lần " + (job.attempt || 1) + "\n" +
         "Pipeline: " + htmlEscape((job.pipeline || []).map(step => getTool(step.toolId)?.name || step.toolId).join(" → ")) +
-        "\nTệp gốc được tải lại từ Telegram; lịch sử job cũ được giữ nguyên.");
+        (job.githubSource
+          ? "\nRepository GitHub sẽ được tải lại từ cùng URL/ref; lịch sử job cũ được giữ nguyên."
+          : "\nTệp gốc được tải lại từ Telegram; lịch sử job cũ được giữ nguyên."));
     } catch (error) {
       await reply(env, chatId, "Không thể retry: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
     }
@@ -1544,6 +1549,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/tool_jobs</code> — lịch sử xử lý file\n" +
       "<code>/tool_job ID</code> — trace chi tiết từng bước xử lý\n" +
       "<code>/tool_retry ID</code> — chạy lại job lỗi từ file gốc\n" +
+      "<code>/repo https://github.com/owner/repo</code> — phân tích repository GitHub công khai\n" +
+      "<code>/repo_compare https://github.com/owner/repo branchA...branchB</code> — so sánh hai branch/version\n" +
       "<code>/workflow_plan mục tiêu</code> — AI thiết kế pipeline/DAG, chỉ tạo bản xem trước\n" +
       "<code>/workflow_plan_save ID Tên</code> — lưu bản nháp AI sau khi xem lại\n" +
       "<code>/workflow_plan_discard ID</code> — xóa bản nháp AI\n" +
@@ -1690,6 +1697,44 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     } catch (error) {
       console.error("TinyFish read failed:", error instanceof Error ? error.message : "unknown");
       await reply(env, chatId, "TinyFish không thể đọc trang này. Trang có thể chặn truy cập, hết quota hoặc API key chưa hợp lệ.");
+    }
+    return;
+  }
+
+  if (command === "repo" || command === "repo_compare") {
+    if (chatId !== userId || !allowedUser(env, userId)) {
+      await reply(env, chatId, "GitHub Repository Intelligence chỉ khả dụng trong chat riêng được cấp quyền.");
+      return;
+    }
+    const source = command === "repo"
+      ? parseGitHubRepositoryUrl(args)
+      : parseGitHubCompareCommand(args);
+    if (!source) {
+      await reply(env, chatId, command === "repo"
+        ? "Cú pháp: <code>/repo https://github.com/owner/repository</code> hoặc URL /tree/branch. Chỉ nhận GitHub HTTPS công khai."
+        : "Cú pháp: <code>/repo_compare https://github.com/owner/repository main...feature</code>. Mỗi branch/ref phải hợp lệ và khác nhau.");
+      return;
+    }
+    try {
+      const job = await createToolJob(env, {
+        userId, chatId, toolId: "repo-intelligence", fileId: "",
+        fileName: source.owner + "-" + source.repo + "-snapshot.zip",
+        mimeType: "application/zip", fileSize: 0,
+        githubSource: source,
+        pipeline: [{ toolId: "repo-intelligence" }],
+      });
+      const refLabel = source.compareBase && source.compareHead
+        ? source.compareBase + " → " + source.compareHead
+        : (source.ref || "default branch");
+      await reply(env, chatId,
+        "⏳ <b>GitHub Repository Intelligence đã được xếp hàng</b>\n" +
+        "Repository: <a href=\"https://github.com/" + htmlEscape(source.owner) + "/" + htmlEscape(source.repo) + "\">" +
+        htmlEscape(source.owner + "/" + source.repo) + "</a>\n" +
+        "Ref: <code>" + htmlEscape(refLabel) + "</code>\n" +
+        "Job: <code>" + job.id + "</code>\n\n" +
+        "Runner sẽ tải snapshot công khai, phân tích module/import graph, dependencies, cấu hình, license, secret patterns (ẩn giá trị), TODO và commit history. Không chạy code hoặc workflow trong repository. Dùng /tool_jobs để theo dõi.");
+    } catch (error) {
+      await reply(env, chatId, "Không thể khởi chạy GitHub Intelligence: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
     }
     return;
   }

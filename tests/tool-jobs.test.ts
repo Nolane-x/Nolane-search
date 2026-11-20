@@ -303,4 +303,77 @@ describe("GitHub Actions tool dispatch", () => {
     expect(validateToolJobProgress({completed:1,total:3,currentToolIds:["a","b","c","d"]},dagJob).ok).toBe(false);
   });
 
+
+  it("creates a GitHub repository job without a Telegram file identifier", async () => {
+    const { db, rows } = fakeDb();
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || "{}")) as { ref?: string; inputs?: { job_id?: string } };
+      expect(body.ref).toBe("main");
+      expect(body.inputs?.job_id).toBeTruthy();
+      expect(JSON.stringify(body)).not.toContain("private-source-url");
+      return new Response(null, { status: 204 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = { DB: db, NOLANE_GH_ACTIONS_TOKEN: "test-actions-token" } as unknown as Env;
+    const job = await createToolJob(env, {
+      userId: 42, chatId: 42, toolId: "repo-intelligence", fileId: "",
+      fileName: "acme-project-snapshot.zip", mimeType: "application/zip", fileSize: 0,
+      githubSource: { owner: "acme", repo: "project", ref: "feature/new-ui" },
+      pipeline: [{ toolId: "repo-intelligence" }],
+    });
+    expect(job.status).toBe("queued");
+    expect(job.fileId).toBe("");
+    expect(job.githubSource).toEqual({ owner: "acme", repo: "project", ref: "feature/new-ui" });
+    const saved = JSON.parse(rows.get("tool-job:" + job.id) || "{}");
+    expect(saved.githubSource.owner).toBe("acme");
+    expect(saved.fileId).toBe("");
+  });
+
+  it("rejects malformed GitHub source jobs before persistence or dispatch", async () => {
+    const DB = { prepare: () => { throw new Error("D1 should not be used"); } } as unknown as D1Database;
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const env = { DB, NOLANE_GH_ACTIONS_TOKEN: "test-actions-token" } as unknown as Env;
+    await expect(createToolJob(env, {
+      userId: 42, chatId: 42, toolId: "repo-intelligence", fileId: "",
+      fileName: "repo.zip", mimeType: "application/zip", fileSize: 0,
+      githubSource: { owner: "acme", repo: "project", ref: "../private" },
+    })).rejects.toThrow("GitHub source job");
+    await expect(createToolJob(env, {
+      userId: 42, chatId: 42, toolId: "repo-inventory", fileId: "",
+      fileName: "repo.zip", mimeType: "application/zip", fileSize: 0,
+      githubSource: { owner: "acme", repo: "project", ref: "main" },
+    })).rejects.toThrow("GitHub source job");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("retries a failed GitHub source job from its public repository reference", async () => {
+    const { db, rows } = fakeDb();
+    const dispatchIds: string[] = [];
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || "{}")) as { inputs?: { job_id?: string } };
+      dispatchIds.push(body.inputs?.job_id || "");
+      return new Response(null, { status: 204 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = { DB: db, NOLANE_GH_ACTIONS_TOKEN: "test-actions-token" } as unknown as Env;
+    const original = await createToolJob(env, {
+      userId: 42, chatId: 42, toolId: "repo-intelligence", fileId: "",
+      fileName: "acme-project-snapshot.zip", mimeType: "application/zip", fileSize: 0,
+      githubSource: { owner: "acme", repo: "project", ref: "main", compareBase: "main", compareHead: "feature" },
+      pipeline: [{ toolId: "repo-intelligence" }],
+    });
+    await updateToolJob(env, original.id, { status: "failed", finishedAt: Date.now(), error: "GitHub API timeout" });
+    const retry = await retryToolJob(env, 42, 42, original.id);
+    expect(retry.status).toBe("queued");
+    expect(retry.githubSource).toEqual(original.githubSource);
+    expect(retry.retryOf).toBe(original.id);
+    expect(retry.attempt).toBe(2);
+    expect(dispatchIds).toHaveLength(2);
+    expect(dispatchIds[0]).not.toBe(dispatchIds[1]);
+    const saved = JSON.parse(rows.get("tool-job:" + retry.id) || "{}");
+    expect(saved.githubSource.compareHead).toBe("feature");
+    expect(saved.fileId).toBe("");
+  });
+
 });

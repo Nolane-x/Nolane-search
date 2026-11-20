@@ -449,8 +449,10 @@ export function formatToolJobDetail(job: ToolJob): string {
   const lines = [
     "<b>◈ TOOL JOB · " + state + "</b>",
     "ID: <code>" + htmlEscape(job.id) + "</code>",
-    "Tệp: " + htmlEscape(job.fileName),
-    "Dung lượng: " + job.fileSize.toLocaleString("en-US") + " bytes · Lần chạy: " + (job.attempt || 1),
+    job.githubSource
+      ? "GitHub: " + htmlEscape(job.githubSource.owner + "/" + job.githubSource.repo + "@" + (job.githubSource.ref || "default"))
+      : "Tệp: " + htmlEscape(job.fileName),
+    (job.githubSource ? "Nguồn: GitHub public snapshot · tự tải lúc chạy" : "Dung lượng: " + job.fileSize.toLocaleString("en-US") + " bytes") + " · Lần chạy: " + (job.attempt || 1),
     "Tiến trình: <b>" + (job.progress?.completed ?? job.trace?.filter(item => item.status === "completed").length ?? 0) + "/" + total + "</b>",
   ];
   if (job.progress?.currentToolIds.length) {
@@ -482,7 +484,7 @@ export function formatToolJobDetail(job: ToolJob): string {
   }
   if (job.resultSummary) lines.push("", "<b>Kết quả</b>", htmlEscape(job.resultSummary.slice(0, 900)));
   if (job.error) lines.push("", "<b>Lỗi</b>", htmlEscape(job.error.slice(0, 500)));
-  if (job.status === "failed" && !job.fileId) lines.push("", "Tệp gốc không còn khả dụng để retry; hãy gửi lại tệp.");
+  if (job.status === "failed" && !job.fileId && !job.githubSource) lines.push("", "Tệp gốc không còn khả dụng để retry; hãy gửi lại tệp.");
   return lines.join("\n");
 }
 
@@ -490,7 +492,7 @@ export function buildToolJobDetailKeyboard(job: ToolJob, page = 0): TelegramInli
   const rows: TelegramInlineButton[][] = [
     [{ text: "↻ Làm mới tiến trình", callback_data: "tjview:" + job.id + ":" + page }],
   ];
-  if (job.status === "failed" && job.fileId) {
+  if (job.status === "failed" && (job.fileId || job.githubSource)) {
     rows.push([{ text: "↻ Retry toàn pipeline", callback_data: "tjr:" + job.id }]);
   }
   rows.push([

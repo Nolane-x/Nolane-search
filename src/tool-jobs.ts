@@ -1,6 +1,8 @@
 import type { Env } from "./types";
 import { getTool, validateToolDag, validateToolPipeline } from "./tools";
 import type { ToolDagNode, ToolPipelineStep } from "./tools";
+import { isValidGitHubRepositorySource } from "./github-intelligence";
+import type { GitHubRepositorySource } from "./github-intelligence";
 
 export interface ToolStepTrace {
   nodeId?: string;
@@ -52,6 +54,8 @@ export interface ToolJob {
   retryOf?: string;
   trace?: ToolStepTrace[];
   progress?: ToolJobProgress;
+  /** Public GitHub source; no repository code is executed and no Telegram file ID is stored. */
+  githubSource?: GitHubRepositorySource;
 }
 
 const PREFIX = "tool-job:";
@@ -230,6 +234,15 @@ export async function retryToolJob(env: Env, userId: number, chatId: number, sou
     throw new Error("Không tìm thấy tool job thuộc cuộc trò chuyện của bạn.");
   }
   if (previous.status !== "failed") throw new Error("Chỉ có thể retry job đã thất bại.");
+  if (previous.githubSource) {
+    return createToolJob(env, {
+      userId: previous.userId, chatId: previous.chatId, toolId: previous.toolId, fileId: "",
+      fileName: previous.fileName, mimeType: previous.mimeType, fileSize: previous.fileSize,
+      githubSource: previous.githubSource,
+      pipeline: previous.pipeline || [{ toolId: previous.toolId }],
+      retryOf: previous.id, attempt: (previous.attempt || 1) + 1,
+    });
+  }
   if (!previous.fileId || previous.fileId.length < 8) {
     throw new Error("Job cũ không còn Telegram file reference. Hãy gửi lại tệp gốc để chạy lại.");
   }
@@ -268,10 +281,18 @@ export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "statu
   if (!env.NOLANE_GH_ACTIONS_TOKEN) {
     throw new Error("Thiếu GitHub Actions token. Hãy thêm GitHub Secret NOLANE_GH_ACTIONS_TOKEN với quyền Actions: write cho repository Nolane-x/Nolane-search.");
   }
-  if (typeof input.fileId !== "string" || input.fileId.length < 8 || input.fileId.length > 1024 || /[\u0000-\u001f\u007f]/.test(input.fileId)) {
-    throw new Error("Telegram file_id không hợp lệ.");
+  if (input.githubSource) {
+    if (input.toolId !== "repo-intelligence" || !isValidGitHubRepositorySource(input.githubSource) ||
+        input.mimeType !== "application/zip" || !input.fileName.toLowerCase().endsWith(".zip") ||
+        input.fileId !== "" || input.fileSize !== 0 || input.workflowDag) {
+      throw new Error("GitHub source job không hợp lệ hoặc không được hỗ trợ.");
+    }
+  } else {
+    if (typeof input.fileId !== "string" || input.fileId.length < 8 || input.fileId.length > 1024 || /[\u0000-\u001f\u007f]/.test(input.fileId)) {
+      throw new Error("Telegram file_id không hợp lệ.");
+    }
+    if (input.fileSize > 20 * 1024 * 1024) throw new Error("Telegram Bot API chỉ tải được tệp tối đa 20 MB qua getFile.");
   }
-  if (input.fileSize > 20 * 1024 * 1024) throw new Error("Telegram Bot API chỉ tải được tệp tối đa 20 MB qua getFile.");
   const now = Date.now();
   const job: ToolJob = { ...input, pipeline: normalizedPipeline, workflowDag: normalizedDag, trace: undefined, attempt: input.attempt || 1, id: crypto.randomUUID(), status: "queued", createdAt: now, updatedAt: now };
   await saveToolJob(env, job);

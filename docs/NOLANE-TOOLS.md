@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **102 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **103 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -10,6 +10,19 @@ Nolane Tools hiện có **102 công cụ đã có handler và kiểm thử**. M�
 4. Dùng `/tool_search từ khóa` để tìm tên, mô tả, ID hoặc đuôi tệp; `/tool_jobs` để xem tác vụ gần đây và `/workflows` để mở Workflow Library.
 
 Web Workspace có tab Tools để xem catalog và sao chép lệnh; thao tác gửi tệp vẫn thực hiện qua Telegram.
+
+## GitHub Repository Intelligence
+
+Dùng trực tiếp URL GitHub công khai, không cần tải ZIP về máy:
+
+- `/repo https://github.com/owner/repository` — phân tích default branch.
+- `/repo https://github.com/owner/repository/tree/feature/name` — phân tích branch/ref cụ thể.
+- `/repo_compare https://github.com/owner/repository main...feature/name` — phân tích snapshot branch đích và bổ sung metadata so sánh branch qua GitHub Compare API.
+- `/tool_jobs`, `/tool_job ID`, `/tool_retry ID` — theo dõi, xem trace và chạy lại job.
+
+Kết quả là ZIP gồm báo cáo Markdown, module/import graph JSON, metadata GitHub và các báo cáo inventory, dependencies, license evidence, secret scan, TODO scan, code statistics, config audit và duplicate files. Import graph hiện dùng Python AST và heuristic cho relative imports của JS/TS; đây không phải call graph hoàn chỉnh. Commit messages có marker fix/bug chỉ là tín hiệu tìm kiếm, không phải defect rate.
+
+Chỉ nhận repository công khai. Runner tải ZIP snapshot qua GitHub API và codeload.github.com, giới hạn 100 MB tải xuống / 100 MB dữ liệu giải nén / 500 entries. Không giải nén đường dẫn ra filesystem, không chạy mã, GitHub Actions workflow hoặc build script trong repository, không cài dependency và không truy vấn CVE/advisory. Secret scan chỉ báo file, dòng và loại pattern, không tiết lộ giá trị. Báo cáo license là bằng chứng văn bản, không phải tư vấn pháp lý.
 
 ## Danh mục
 
@@ -158,8 +171,9 @@ Các processor văn bản này giới hạn đầu vào 5 MB và yêu cầu UTF-
 | `/tool repo-code-stats` | Thống kê codebase | Gom số file, dòng trống, dòng nội dung và dung lượng theo phần mở rộng. | TXT |
 | `/tool repo-config-audit` | Kiểm kê cấu hình dự án | Kiểm tra hiện diện của README, license, manifest, lockfile, test, CI, container và lint config. | TXT |
 | `/tool repo-duplicates` | Tìm file trùng repository | Hash SHA-256 các member và gom nhóm file có nội dung giống nhau. | CSV |
+| `/repo URL` / `/repo_compare URL base...head` | GitHub Repository Intelligence | Tải snapshot repository GitHub công khai, phân tích import graph, metadata, tối đa 20 commit gần nhất và thông tin files changed của hai ref; đóng gói 8 audit report. | ZIP gồm Markdown, JSON và báo cáo audit |
 
-Repository tools nhận **ZIP** (không nhận Git URL trực tiếp), giới hạn 500 mục và tối đa 100 MB dữ liệu giải nén. Mỗi file text được đọc để phân tích giới hạn 2 MB; file lớn/binary được bỏ qua ở các phép phân tích văn bản. Tool không giải nén archive ra filesystem, không cài package, không truy cập mạng và không chạy code trong repository. Archive path traversal, symlink/special file, file mã hóa và compression ratio bất thường bị từ chối. Secret scan có thể có false positive/false negative và không thay thế secret scanner chuyên dụng.
+Các processor ZIP trong nhóm Repository nhận **ZIP tải lên**; lệnh `/repo` và `/repo_compare` nhận **GitHub URL công khai** và tự tải snapshot riêng. Cả hai đường xử lý đều giới hạn 500 mục và tối đa 100 MB dữ liệu giải nén. Mỗi file text được đọc để phân tích giới hạn 2 MB; file lớn/binary được bỏ qua ở các phép phân tích văn bản. Tool không giải nén archive ra filesystem, không cài package, không truy cập mạng và không chạy code trong repository. Archive path traversal, symlink/special file, file mã hóa và compression ratio bất thường bị từ chối. Secret scan có thể có false positive/false negative và không thay thế secret scanner chuyên dụng.
 
 ### Tiện ích
 
