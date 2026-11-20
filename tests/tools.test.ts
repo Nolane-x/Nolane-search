@@ -246,4 +246,16 @@ describe("Nolane Tools registry", () => {
 
   });
 
+
+  it("validates common fourth-wave text, JSON Pointer and CSV/JSONL pipelines", () => {
+    const textFile={mimeType:"text/plain",fileName:"notes.txt"};
+    const jsonFile={mimeType:"application/json",fileName:"nested.json"};
+    const csvFile={mimeType:"text/csv",fileName:"rows.csv"};
+    const jsonlFile={mimeType:"application/x-ndjson",fileName:"records.jsonl"};
+    expect(validateToolPipeline(textFile,[{toolId:"text-pascal-case"},{toolId:"text-clean"}]).ok).toBe(true);
+    expect(validateToolPipeline(jsonFile,[{toolId:"json-flatten"},{toolId:"json-unflatten"}]).ok).toBe(true);
+    expect(validateToolPipeline(csvFile,[{toolId:"csv-normalize-headers"},{toolId:"csv-to-jsonl"},{toolId:"jsonl-to-csv"}]).ok).toBe(true);
+    expect(isToolCompatible(getTool("jsonl-to-csv")!,jsonlFile.mimeType,jsonlFile.fileName)).toBe(true);
+  });
+
 });
