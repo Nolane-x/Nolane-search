@@ -946,7 +946,7 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     return values.filter(value=>{const key=value.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).join("\n");
   }
   if (toolId === "text-extract-ipv6") {
-    const candidates=content.match(/(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![0-9A-Fa-f:])/g)||[];
+    const candidates=content.match(/(?<![A-Za-z0-9:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![A-Za-z0-9:])/g)||[];
     const valid=candidates.filter(value=>{
       if(value.split("::").length>2) return false;
       const compressed=value.includes("::");
