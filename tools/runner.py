@@ -1863,35 +1863,6 @@ def html_sanitize(p):
     return _write_text_artifact_ext(p,"sanitized",".html",output,"HTML sanitization","removed executable elements, event handlers, inline styles and unsafe URL schemes")
 
 
-def _xml_element_to_value(element):
-    result={}
-    for key,value in element.attrib.items():
-        result["@"+key]=value
-    grouped={}
-    for child in list(element):
-        grouped.setdefault(child.tag,[]).append(_xml_element_to_value(child))
-    for key,values in grouped.items():
-        result[key]=values[0] if len(values)==1 else values
-    text=(element.text or "").strip()
-    if text:
-        if result: result["#text"]=text
-        else: return text
-    return result
-
-
-def xml_to_json(p):
-    import xml.etree.ElementTree as ET
-    raw=_read_text_source(p)
-    if re.search(r"<!\s*(?:DOCTYPE|ENTITY)\b",raw,re.I):
-        raise RuntimeError("XML DTD and ENTITY declarations are not supported.")
-    try:
-        root=ET.fromstring(raw)
-        result={root.tag:_xml_element_to_value(root)}
-    except ET.ParseError as exc: raise RuntimeError("Invalid XML: "+str(exc)) from exc
-    output=json.dumps(result,ensure_ascii=False,indent=2)
-    return _write_text_artifact_ext(p,"converted",".json",output+"\n","XML to JSON conversion")
-
-
 def _xml_safe_tag(value,index=1):
     tag=re.sub(r"[^A-Za-z0-9_.-]","_",str(value)) or "item_"+str(index)
     if not re.match(r"[A-Za-z_]",tag): tag="item_"+tag
