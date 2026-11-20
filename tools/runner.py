@@ -2128,7 +2128,7 @@ def text_markdown_toc(p):
         base=_markdown_slug(re.sub(r"[*_\x60\[\]]","",title)) or "section"
         count=used.get(base,0)+1;used[base]=count
         slug=base if count==1 else base+"-"+str(count)
-        lines.append("  "*max(0,level-1)+"- ["+title+"]( #"+slug+")".replace("( #","(#"))
+        lines.append("  "*max(0,level-1)+"- ["+title+"](#"+slug+")")
     return _write_text_artifact(p,"table-of-contents","\n".join(lines)+("\n" if lines else ""),"Markdown table of contents",str(len(lines))+" heading(s)")
 
 
