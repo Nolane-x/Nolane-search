@@ -25,7 +25,7 @@ RUNNERS = {
     "audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean",
     "json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join",
     "markdown-outline","markdown-links","text-redact","text-extract","code-imports","code-todos","code-secret-scan","log-timeline",
-    "repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates","repo-intelligence",
+    "repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates","repo-intelligence","repo-security-audit","repo-supply-chain","repo-security-audit","repo-supply-chain",
 }
 
 PIPELINE_TRANSITIONS = {
@@ -100,6 +100,8 @@ PIPELINE_TRANSITIONS = {
     "repo-code-stats": {"text-clean","text-stats"},
     "repo-config-audit": {"text-clean","text-stats"},
     "repo-duplicates": {"csv-profile","csv-clean","csv-to-xlsx","csv-to-json"},
+    "repo-security-audit": {"archive-inspect","archive-safe-extract","archive-manifest"},
+    "repo-supply-chain": {"archive-inspect","archive-safe-extract","archive-manifest"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
@@ -3141,6 +3143,8 @@ def repo_intelligence(p):
         ("code-stats", repo_code_stats),
         ("config-audit", repo_config_audit),
         ("duplicates", repo_duplicates),
+        ("security-audit", repo_security_audit),
+        ("supply-chain", repo_supply_chain),
     ]
     summaries = {}
     for name, processor in processors:
@@ -3198,7 +3202,7 @@ def repo_intelligence(p):
         "- Lockfiles indicate install reproducibility only. This runner does not install dependencies or query CVE/advisory databases.", "",
         "## Static audit results",
     ]
-    for name in ("inventory", "dependencies", "license", "secret-scan", "todo-scan", "code-stats", "config-audit", "duplicates"):
+    for name in ("inventory", "dependencies", "license", "secret-scan", "todo-scan", "code-stats", "config-audit", "duplicates", "security-audit", "supply-chain"):
         report.append("- " + name + ": " + summaries.get(name, "not available"))
     report.extend([
         "", "## Git history and change signals",
@@ -3274,6 +3278,532 @@ def repo_intelligence(p):
 
 
 
+def repo_security_audit(p):
+    """Static security checks for GitHub Actions, containers, Kubernetes and Terraform."""
+    import zipfile
+    try:
+        import yaml
+    except ImportError:
+        yaml = None
+
+    rules = {
+        "NOLANE-GHA-001": ("Privileged pull_request_target workflow", "warning",
+            "pull_request_target runs with the base repository trust context. Keep untrusted pull-request code and expressions out of privileged jobs."),
+        "NOLANE-GHA-002": ("Pull-request shell expression injection", "error",
+            "Pass untrusted GitHub event values through environment variables and quote them; do not interpolate them directly into run scripts."),
+        "NOLANE-GHA-003": ("GitHub Action is not pinned to an immutable reference", "warning",
+            "Pin third-party actions to a verified full commit SHA and optionally keep the release tag in a comment."),
+        "NOLANE-GHA-004": ("Privileged pull_request_target checks out untrusted code", "error",
+            "Do not check out or execute a contributor-controlled head in a privileged pull_request_target workflow."),
+        "NOLANE-CTR-001": ("Container base image is not immutable", "warning",
+            "Pin production base images to an explicit supported version or digest; avoid latest and implicit tags."),
+        "NOLANE-CTR-002": ("Remote script is piped to a shell", "error",
+            "Download and verify scripts separately, pin checksums/signatures, then execute only reviewed content."),
+        "NOLANE-CTR-003": ("Potential secret is declared as a Docker build ARG or ENV", "warning",
+            "Do not bake credentials into image layers. Use the build platform's secret-mount mechanism."),
+        "NOLANE-CTR-004": ("Container explicitly runs as root", "warning",
+            "Use a dedicated unprivileged runtime user unless root is demonstrably required."),
+        "NOLANE-K8S-001": ("Privileged container security context", "error",
+            "Remove privileged mode and grant only the minimum Linux capabilities required."),
+        "NOLANE-K8S-002": ("Privilege escalation is allowed", "warning",
+            "Set allowPrivilegeEscalation to false unless the workload has a documented requirement."),
+        "NOLANE-K8S-003": ("Container runs as UID 0", "warning",
+            "Set runAsNonRoot: true and use a non-zero runAsUser."),
+        "NOLANE-K8S-004": ("Pod uses host namespaces", "error",
+            "Avoid hostNetwork, hostPID and hostIPC; isolate workloads unless host access is necessary."),
+        "NOLANE-K8S-005": ("Pod mounts a host path", "warning",
+            "Avoid hostPath volumes or restrict them to a narrowly scoped, read-only host directory."),
+        "NOLANE-K8S-006": ("Dangerous Linux capability requested", "error",
+            "Remove broad capabilities such as ALL or SYS_ADMIN; grant only narrowly justified capabilities."),
+        "NOLANE-IAC-001": ("Wildcard IAM action and resource", "warning",
+            "Replace wildcard IAM actions/resources with the smallest required action and resource set."),
+        "NOLANE-IAC-002": ("Sensitive management port exposed to the world", "error",
+            "Restrict SSH/RDP ingress to trusted networks or an identity-aware access path."),
+        "NOLANE-IAC-003": ("Object storage public access appears enabled", "warning",
+            "Block public access by default and grant access through explicit identity policies."),
+    }
+    findings = []
+    scanned = 0
+
+    def add(rule_id, path, line, detail=""):
+        if len(findings) >= 1000:
+            return
+        title, level, help_text = rules[rule_id]
+        findings.append({
+            "ruleId": rule_id, "level": level, "path": path,
+            "line": max(1, int(line or 1)), "title": title,
+            "detail": str(detail)[:240], "remediation": help_text,
+        })
+
+    def line_for(raw, token):
+        index = raw.find(token)
+        return raw[:index].count("\n") + 1 if index >= 0 else 1
+
+    def visit_kubernetes(value, path, raw, parent_key=""):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                key_text = str(key)
+                low = key_text.casefold()
+                if low == "privileged" and child is True:
+                    add("NOLANE-K8S-001", path, line_for(raw, key_text + ": true"))
+                elif low == "allowprivilegeescalation" and child is True:
+                    add("NOLANE-K8S-002", path, line_for(raw, key_text + ": true"))
+                elif low == "runasuser" and str(child) == "0":
+                    add("NOLANE-K8S-003", path, line_for(raw, key_text + ": 0"))
+                elif low in ("hostnetwork", "hostpid", "hostipc") and child is True:
+                    add("NOLANE-K8S-004", path, line_for(raw, key_text + ": true"), key_text)
+                elif low == "hostpath" and isinstance(child, dict):
+                    add("NOLANE-K8S-005", path, line_for(raw, key_text + ":"))
+                elif low == "add" and isinstance(child, list):
+                    dangerous = [str(item) for item in child if str(item).upper() in ("ALL", "SYS_ADMIN")]
+                    if dangerous:
+                        add("NOLANE-K8S-006", path, line_for(raw, key_text + ":"), ", ".join(dangerous))
+                visit_kubernetes(child, path, raw, key_text)
+        elif isinstance(value, list):
+            for child in value:
+                visit_kubernetes(child, path, raw, parent_key)
+
+    for item in _repo_text_candidates(p):
+        path = item["path"]
+        raw = item.get("data")
+        if raw is None:
+            continue
+        scanned += 1
+        low_path = path.casefold()
+        basename = Path(path).name.casefold()
+
+        if ("/.github/workflows/" in "/" + low_path) and basename.endswith((".yml", ".yaml")):
+            pull_target = bool(re.search(r"(?m)^\s*pull_request_target\s*:", raw) or
+                               re.search(r"(?m)^\s*on\s*:\s*\[[^\]]*\bpull_request_target\b", raw))
+            elevated = bool(re.search(
+                r"(?im)^\s*(?:write-all|contents|pull-requests|actions|packages|id-token)\s*:\s*write\b", raw
+            ) or re.search(r"(?im)^\s*permissions\s*:\s*write-all\b", raw))
+            checks_out_head = bool(re.search(
+                r"(?im)^\s*ref\s*:\s*.*\$\{\{\s*github\.event\.pull_request\.head\.(?:sha|ref)", raw
+            ))
+            if pull_target:
+                add("NOLANE-GHA-004" if checks_out_head and elevated else "NOLANE-GHA-001",
+                    path, line_for(raw, "pull_request_target"),
+                    "Workflow also grants write permissions." if elevated else
+                    ("Workflow checks out contributor-controlled head code." if checks_out_head else ""))
+
+            for line_no, line in enumerate(raw.splitlines(), 1):
+                uses = re.match(r"^\s*uses\s*:\s*([^\s#]+)", line)
+                if uses:
+                    ref = uses.group(1).rsplit("@", 1)[-1] if "@" in uses.group(1) else ""
+                    immutable = bool(re.fullmatch(r"[a-f0-9]{40}", ref, re.I) or
+                                     re.fullmatch(r"sha256:[a-f0-9]{64}", ref, re.I))
+                    if not immutable:
+                        add("NOLANE-GHA-003", path, line_no, uses.group(1)[:160])
+
+            if yaml is not None:
+                try:
+                    document = yaml.safe_load(raw)
+                except Exception:
+                    document = None
+
+                def inspect_steps(value):
+                    if isinstance(value, dict):
+                        for key, child in value.items():
+                            if str(key) == "run" and isinstance(child, str):
+                                for match in re.finditer(
+                                    r"\$\{\{\s*github\.event\.(?:pull_request\.(?:title|body|head\.ref)|issue\.(?:title|body)|comment\.body)\s*\}\}",
+                                    child,
+                                ):
+                                    expr = match.group(0)
+                                    add("NOLANE-GHA-002", path, line_for(raw, expr), expr[:120])
+                            else:
+                                inspect_steps(child)
+                    elif isinstance(value, list):
+                        for child in value:
+                            inspect_steps(child)
+                inspect_steps(document)
+
+        if basename.startswith(("dockerfile", "containerfile")):
+            lines = raw.splitlines()
+            has_user = False
+            for line_no, line in enumerate(lines, 1):
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                match = re.match(r"(?i)^FROM\s+(?:--platform=\S+\s+)?(\S+)", stripped)
+                if match:
+                    image = match.group(1)
+                    if not image.lower().endswith(":latest") and "@" not in image and ":" not in image.rsplit("/", 1)[-1]:
+                        add("NOLANE-CTR-001", path, line_no, image[:120] + " (implicit tag)")
+                    elif image.lower().endswith(":latest"):
+                        add("NOLANE-CTR-001", path, line_no, image[:120])
+                if re.match(r"(?i)^ADD\s+https?://", stripped):
+                    add("NOLANE-CTR-002", path, line_no, "Remote URL used by ADD.")
+                if re.match(r"(?i)^RUN\b", stripped) and re.search(
+                    r"(?i)(?:curl|wget)\b[^|;&]*\|\s*(?:sudo\s+)?(?:sh|bash)\b", stripped
+                ):
+                    add("NOLANE-CTR-002", path, line_no)
+                if re.match(r"(?i)^(?:ARG|ENV)\s+", stripped) and re.search(
+                    r"(?i)\b(?:[A-Z0-9_]*(?:API[_-]?KEY|TOKEN|PASSWORD|PASSWD|SECRET)[A-Z0-9_]*)\b", stripped
+                ):
+                    add("NOLANE-CTR-003", path, line_no, "Credential-like variable name; value intentionally omitted.")
+                user_match = re.match(r"(?i)^USER\s+(.+)$", stripped)
+                if user_match:
+                    has_user = True
+                    if user_match.group(1).strip().lower() in ("root", "0"):
+                        add("NOLANE-CTR-004", path, line_no)
+            if not has_user:
+                add("NOLANE-CTR-004", path, 1, "No USER instruction found; runtime may default to root.")
+
+        if basename.endswith(".tf"):
+            if (re.search(r'(?i)\bAction\s*[:=]\s*["\']\*["\']', raw) and
+                    re.search(r'(?i)\bResource\s*[:=]\s*["\']\*["\']', raw)):
+                add("NOLANE-IAC-001", path, line_for(raw, "*"))
+            if re.search(r'(?i)\b(?:cidr_blocks|source_ranges)\s*=\s*\[[^\]]*["\']0\.0\.0\.0/0["\']', raw, re.S) and re.search(
+                r"(?is)(?:from_port|to_port|port)\s*=\s*(?:22|3389)", raw
+            ):
+                add("NOLANE-IAC-002", path, line_for(raw, "0.0.0.0/0"))
+            if re.search(r'(?i)\bacl\s*=\s*["\']public-read["\']', raw) or re.search(
+                r"(?i)\bblock_public_(?:acls|policy)\s*=\s*false", raw
+            ):
+                add("NOLANE-IAC-003", path, line_for(raw, "public-read") if "public-read" in raw else line_for(raw, "block_public_"))
+
+        if basename.endswith((".yaml", ".yml")) and yaml is not None:
+            # Only inspect YAML documents that look like Kubernetes resources.
+            if re.search(r"(?m)^\s*(?:apiVersion|kind)\s*:", raw):
+                try:
+                    for document in yaml.safe_load_all(raw):
+                        if isinstance(document, dict) and ("apiVersion" in document or "kind" in document):
+                            visit_kubernetes(document, path, raw)
+                except Exception:
+                    pass
+
+    findings.sort(key=lambda item: (item["level"] != "error", item["ruleId"], item["path"], item["line"]))
+    counts = {level: sum(1 for item in findings if item["level"] == level) for level in ("error", "warning", "note")}
+    rules_used = sorted({item["ruleId"] for item in findings})
+    sarif_rules = [{
+        "id": rule_id,
+        "name": rule_id,
+        "shortDescription": {"text": rules[rule_id][0]},
+        "fullDescription": {"text": rules[rule_id][2]},
+        "defaultConfiguration": {"level": rules[rule_id][1]},
+        "help": {"text": rules[rule_id][2]},
+        "properties": {"tags": ["security", "static-analysis"]},
+    } for rule_id in rules_used]
+    sarif_results = [{
+        "ruleId": item["ruleId"],
+        "level": item["level"],
+        "message": {"text": item["title"] + (": " + item["detail"] if item["detail"] else "")},
+        "locations": [{
+            "physicalLocation": {
+                "artifactLocation": {"uri": item["path"]},
+                "region": {"startLine": item["line"]},
+            }
+        }],
+    } for item in findings]
+    sarif = {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {"driver": {"name": "Nolane Repository Security Audit", "rules": sarif_rules}},
+            "results": sarif_results,
+        }],
+    }
+    report = [
+        "# Static repository security audit", "",
+        f"- Text/config files scanned: {scanned:,}",
+        f"- Findings: {len(findings):,} (errors {counts['error']}, warnings {counts['warning']})",
+        "- Output includes SARIF 2.1.0 for compatible code-scanning viewers.",
+        "",
+        "## Findings",
+    ]
+    for item in findings:
+        report.append(
+            f"- [{item['level'].upper()}] {item['ruleId']} · {item['path']}:L{item['line']} · "
+            f"{item['title']}" + (f" · {item['detail']}" if item["detail"] else "") +
+            f"\\n  Remediation: {item['remediation']}"
+        )
+    if not findings:
+        report.append("No matching patterns were detected in the scanned files.")
+    report.extend([
+        "", "## Scope and limitations",
+        "- Static pattern and YAML-structure checks only; no workflow, container, Terraform or application code is executed.",
+        "- Heuristics can produce false positives and false negatives. Review each finding in context.",
+        "- This is not a complete cloud posture assessment, penetration test or guarantee of security.",
+    ])
+    json_path = p.with_name(p.stem + "-security-findings.json")
+    sarif_path = p.with_name(p.stem + "-security.sarif")
+    text_path = p.with_name(p.stem + "-security-audit.md")
+    json_path.write_text(json.dumps({"schema_version": 1, "scanned_files": scanned, "counts": counts, "findings": findings}, ensure_ascii=False, indent=2), encoding="utf-8")
+    sarif_path.write_text(json.dumps(sarif, ensure_ascii=False, indent=2), encoding="utf-8")
+    text_path.write_text("\n".join(report) + "\n", encoding="utf-8")
+    package = p.with_name(p.stem + "-security-audit.zip")
+    with zipfile.ZipFile(package, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=4) as archive:
+        archive.write(text_path, "security-audit.md")
+        archive.write(sarif_path, "security.sarif")
+        archive.write(json_path, "security-findings.json")
+    if package.stat().st_size > 15 * 1024 * 1024:
+        package.unlink(missing_ok=True)
+        raise RuntimeError("Repository security audit package exceeds the 15 MB output limit.")
+    return {
+        "summary": f"Static security audit: {scanned:,} files · {len(findings):,} findings · {counts['error']} errors · {counts['warning']} warnings.",
+        "output_path": str(package),
+    }
+
+
+def repo_supply_chain(p):
+    """Inventory manifest and lockfile evidence without resolving or installing packages."""
+    import json as json_module
+    import tomllib
+    import zipfile
+
+    manifest_kinds = {
+        "package.json": "npm", "pyproject.toml": "python", "requirements.txt": "python",
+        "cargo.toml": "cargo", "go.mod": "go", "composer.json": "composer",
+        "gemfile": "ruby", "pom.xml": "maven", "build.gradle": "gradle",
+        "build.gradle.kts": "gradle",
+    }
+    lock_kinds = {
+        "package-lock.json": "npm", "pnpm-lock.yaml": "npm", "yarn.lock": "npm",
+        "bun.lock": "npm", "bun.lockb": "npm", "npm-shrinkwrap.json": "npm",
+        "poetry.lock": "python", "uv.lock": "python", "pipfile.lock": "python",
+        "cargo.lock": "cargo", "go.sum": "go", "composer.lock": "composer",
+        "gemfile.lock": "ruby", "gradle.lockfile": "gradle",
+    }
+    lock_names_by_kind = {}
+    for name, kind in lock_kinds.items():
+        lock_names_by_kind.setdefault(kind, set()).add(name)
+
+    members = list(_repo_members(p))
+    candidates = {item["path"]: item for item in _repo_text_candidates(p)}
+    manifests = []
+    lockfiles = []
+    dependencies = []
+    lifecycle_hooks = []
+    remote_sources = []
+    floating_specs = []
+
+    def classify_requirement(value):
+        spec = str(value or "").strip()
+        lower = spec.lower()
+        if re.search(r"(?:git\+|https?://|github:)", lower):
+            return "remote-vcs-or-url"
+        if lower.startswith(("file:", "workspace:", "path:")):
+            return "local-or-workspace-reference"
+        if lower in ("", "*", "latest", "x"):
+            return "unspecified-or-floating"
+        if re.search(r"(?:\^|~|>=|<=|!=|>|<|\|\|)", spec):
+            return "version-range"
+        if re.search(r"==|===", spec):
+            return "exact-version-pin"
+        return "tag-or-version-specifier"
+
+    def add_dependency(manifest, ecosystem, name, scope, requirement):
+        if len(dependencies) >= 5000:
+            return
+        dep_name = str(name).strip()[:180]
+        req = str(requirement or "").strip()[:180]
+        classification = classify_requirement(req)
+        item = {
+            "manifest": manifest, "ecosystem": ecosystem, "name": dep_name,
+            "scope": str(scope)[:80], "requirement": req,
+            "source_class": classification,
+        }
+        dependencies.append(item)
+        if classification == "remote-vcs-or-url":
+            remote_sources.append({"manifest": manifest, "name": dep_name, "scope": str(scope)[:80]})
+        if classification == "unspecified-or-floating":
+            floating_specs.append({"manifest": manifest, "name": dep_name, "scope": str(scope)[:80]})
+
+    for path, item in candidates.items():
+        name = Path(path).name.casefold()
+        ecosystem = manifest_kinds.get(name)
+        if not ecosystem:
+            if name in lock_kinds:
+                lockfiles.append({"path": path, "ecosystem": lock_kinds[name]})
+            continue
+        raw = item.get("data") or ""
+        dependencies_before = len(dependencies)
+        entry = {"path": path, "ecosystem": ecosystem}
+        try:
+            if name == "package.json":
+                obj = json_module.loads(raw)
+                for scope in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
+                    values = obj.get(scope, {})
+                    if isinstance(values, dict):
+                        for dep_name, requirement in values.items():
+                            add_dependency(path, ecosystem, dep_name, scope, requirement)
+                scripts = obj.get("scripts", {})
+                if isinstance(scripts, dict):
+                    for hook in ("preinstall", "install", "postinstall", "prepare"):
+                        if hook in scripts:
+                            lifecycle_hooks.append({"manifest": path, "hook": hook})
+            elif name == "requirements.txt":
+                for line in raw.splitlines():
+                    value = line.strip()
+                    if not value or value.startswith(("#", "-")):
+                        continue
+                    value = value.split(";", 1)[0].strip()
+                    match = re.match(r"([A-Za-z0-9_.-]+)(.*)", value)
+                    if match:
+                        add_dependency(path, ecosystem, match.group(1), "requirements", match.group(2).strip())
+            elif name == "pyproject.toml":
+                obj = tomllib.loads(raw)
+                project = obj.get("project", {})
+                if isinstance(project, dict):
+                    for value in project.get("dependencies", []) if isinstance(project.get("dependencies", []), list) else []:
+                        match = re.match(r"\s*([A-Za-z0-9_.-]+)\s*(.*)", str(value))
+                        if match:
+                            add_dependency(path, ecosystem, match.group(1), "project", match.group(2).strip())
+                    optional = project.get("optional-dependencies", {})
+                    if isinstance(optional, dict):
+                        for scope, values in optional.items():
+                            if isinstance(values, list):
+                                for value in values:
+                                    match = re.match(r"\s*([A-Za-z0-9_.-]+)\s*(.*)", str(value))
+                                    if match:
+                                        add_dependency(path, ecosystem, match.group(1), str(scope), match.group(2).strip())
+            elif name == "cargo.toml":
+                obj = tomllib.loads(raw)
+                for scope in ("dependencies", "dev-dependencies", "build-dependencies"):
+                    values = obj.get(scope, {})
+                    if isinstance(values, dict):
+                        for dep_name, spec in values.items():
+                            if isinstance(spec, dict):
+                                requirement = spec.get("version", "git/path/workspace")
+                                if spec.get("git"):
+                                    requirement = "git+" + str(spec.get("git"))[:100]
+                                elif spec.get("path"):
+                                    requirement = "path:" + str(spec.get("path"))[:100]
+                            else:
+                                requirement = spec
+                            add_dependency(path, ecosystem, dep_name, scope, requirement)
+            elif name == "go.mod":
+                active = False
+                for line in raw.splitlines():
+                    value = line.strip()
+                    if value.startswith("require ("):
+                        active = True
+                        continue
+                    if active and value == ")":
+                        active = False
+                        continue
+                    if value.startswith("require "):
+                        parts = value.split()
+                        if len(parts) >= 3:
+                            add_dependency(path, ecosystem, parts[1], "require", parts[2])
+                    elif active and value and not value.startswith("//"):
+                        parts = value.split()
+                        if len(parts) >= 2:
+                            add_dependency(path, ecosystem, parts[0], "require", parts[1])
+            elif name == "composer.json":
+                obj = json_module.loads(raw)
+                for scope in ("require", "require-dev"):
+                    values = obj.get(scope, {})
+                    if isinstance(values, dict):
+                        for dep_name, requirement in values.items():
+                            if dep_name.lower() != "php":
+                                add_dependency(path, ecosystem, dep_name, scope, requirement)
+        except Exception:
+            entry["parse_status"] = "invalid-or-unsupported"
+        entry["dependency_count"] = len(dependencies) - dependencies_before
+        manifests.append(entry)
+
+    lock_dirs = {}
+    for item in lockfiles:
+        parent = str(Path(item["path"]).parent)
+        lock_dirs.setdefault((item["ecosystem"], parent), []).append(item["path"])
+
+    def nearby_locks(manifest_path, ecosystem):
+        parent = Path(manifest_path).parent
+        found = []
+        parts = parent.parts
+        for depth in range(0, min(3, len(parts)) + 1):
+            ancestor = str(Path(*parts[:len(parts) - depth])) if depth else str(parent)
+            found.extend(lock_dirs.get((ecosystem, ancestor), []))
+        return sorted(set(found))
+
+    for manifest in manifests:
+        nearby = nearby_locks(manifest["path"], manifest["ecosystem"])
+        manifest["nearby_lockfiles"] = nearby
+        manifest["lockfile_status"] = "paired" if len(nearby) == 1 else ("ambiguous" if nearby else "not-found")
+
+    multiple_lockfile_dirs = []
+    for (ecosystem, parent), values in sorted(lock_dirs.items()):
+        if len(values) > 1:
+            multiple_lockfile_dirs.append({"ecosystem": ecosystem, "directory": parent, "lockfiles": sorted(values)})
+
+    data = {
+        "schema_version": 1,
+        "analysis": "Static manifest/lockfile inventory only; no dependency installation, network resolution or CVE lookup.",
+        "counts": {
+            "manifests": len(manifests), "lockfiles": len(lockfiles),
+            "dependencies": len(dependencies), "remote_sources": len(remote_sources),
+            "floating_or_unspecified_specs": len(floating_specs),
+            "lifecycle_hooks": len(lifecycle_hooks), "manifests_without_nearby_lockfile": sum(1 for item in manifests if item["lockfile_status"] == "not-found"),
+            "manifests_with_ambiguous_lockfiles": sum(1 for item in manifests if item["lockfile_status"] == "ambiguous"),
+        },
+        "manifests": manifests[:500],
+        "lockfiles": lockfiles[:500],
+        "dependencies": dependencies,
+        "remote_sources": remote_sources[:1000],
+        "floating_or_unspecified_specs": floating_specs[:1000],
+        "package_lifecycle_hooks": lifecycle_hooks[:1000],
+        "multiple_lockfile_directories": multiple_lockfile_dirs[:500],
+    }
+    report = [
+        "# Repository dependency and supply-chain inventory", "",
+        f"- Manifests: {data['counts']['manifests']:,}",
+        f"- Lockfiles: {data['counts']['lockfiles']:,}",
+        f"- Manifest dependency declarations: {data['counts']['dependencies']:,}",
+        f"- Remote VCS/URL references: {data['counts']['remote_sources']:,}",
+        f"- Floating or unspecified requirements: {data['counts']['floating_or_unspecified_specs']:,}",
+        f"- Package lifecycle hooks: {data['counts']['lifecycle_hooks']:,}",
+        f"- Manifests without a nearby lockfile: {data['counts']['manifests_without_nearby_lockfile']:,}",
+        f"- Manifests with ambiguous lockfiles: {data['counts']['manifests_with_ambiguous_lockfiles']:,}",
+        "", "## Manifest and lockfile pairing",
+    ]
+    for manifest in manifests[:300]:
+        report.append(
+            f"- {manifest['path']} · {manifest['ecosystem']} · {manifest['dependency_count']} declarations · "
+            f"lockfile: {manifest['lockfile_status']}" +
+            (f" ({', '.join(manifest['nearby_lockfiles'])})" if manifest["nearby_lockfiles"] else "")
+        )
+    report.extend(["", "## Remote dependency sources"])
+    for item in remote_sources[:300]:
+        report.append(f"- {item['manifest']} · {item['scope']} · {item['name']} · remote VCS/URL source")
+    if not remote_sources:
+        report.append("- None detected in supported manifest fields.")
+    report.extend(["", "## Install lifecycle hooks"])
+    for item in lifecycle_hooks[:300]:
+        report.append(f"- {item['manifest']} · {item['hook']} hook is declared (command omitted).")
+    if not lifecycle_hooks:
+        report.append("- No supported npm lifecycle hooks detected.")
+    report.extend([
+        "", "## Interpretation",
+        "- Lockfile pairing is a path-based heuristic; workspace/package-manager conventions may use a parent lockfile or another mechanism.",
+        "- Version ranges are not automatically vulnerabilities. A lockfile is evidence of resolution intent, not proof of safety.",
+        "- Only supported manifest fields are parsed. Lockfile contents are inventoried but not resolved into a complete transitive dependency graph.",
+        "- No packages are installed, no network requests are made and no CVE/advisory database is queried.",
+    ])
+    md_path = p.with_name(p.stem + "-supply-chain.md")
+    json_path = p.with_name(p.stem + "-supply-chain.json")
+    md_path.write_text("\n".join(report) + "\n", encoding="utf-8")
+    json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    package = p.with_name(p.stem + "-supply-chain.zip")
+    with zipfile.ZipFile(package, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=4) as archive:
+        archive.write(md_path, "supply-chain.md")
+        archive.write(json_path, "supply-chain.json")
+    if package.stat().st_size > 15 * 1024 * 1024:
+        package.unlink(missing_ok=True)
+        raise RuntimeError("Repository supply-chain package exceeds the 15 MB output limit.")
+    return {
+        "summary": (
+            f"Supply-chain inventory: {len(manifests)} manifests · {len(lockfiles)} lockfiles · "
+            f"{len(dependencies)} dependencies · {len(remote_sources)} remote refs · "
+            f"{len(lifecycle_hooks)} lifecycle hooks."
+        ),
+        "output_path": str(package),
+    }
+
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -3300,6 +3830,7 @@ TOOLS={
  "code-imports":code_imports,"code-todos":code_todos,"code-secret-scan":code_secret_scan,"log-timeline":log_timeline,
  "repo-inventory":repo_inventory,"repo-dependencies":repo_dependencies,"repo-license-report":repo_license_report,"repo-secret-scan":repo_secret_scan,
  "repo-todo-scan":repo_todo_scan,"repo-code-stats":repo_code_stats,"repo-config-audit":repo_config_audit,"repo-duplicates":repo_duplicates,"repo-intelligence":repo_intelligence,
+ "repo-security-audit":repo_security_audit,"repo-supply-chain":repo_supply_chain,
 }
 
 
