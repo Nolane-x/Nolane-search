@@ -1076,7 +1076,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         license_text=Path(licenses["output_path"]).read_text(encoding="utf-8")
         self.assertIn("MIT",license_text)
         self.assertIn("package.json",license_text)
-        self.assertIn("not legal advice",licenses["summary"].lower())
+        self.assertIn("not legal advice",license_text.lower())
 
     def test_repo_secret_and_todo_scans_never_disclose_secret_values(self):
         path,token=self.make_repository_archive()
