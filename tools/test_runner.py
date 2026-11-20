@@ -1098,6 +1098,81 @@ class ToolRunnerUnitTests(unittest.TestCase):
         canonical=Path(runner.json_canonicalize(array)["output_path"]).read_text(encoding="utf-8")
         self.assertEqual(canonical,'[{"a":1,"b":2},null,"x",true,3,[1]]')
 
+    def test_sixth_wave_markdown_security_and_text_extractors(self):
+        fence=chr(96)*3
+        source=self.write("notes.md","---\ntitle: Example\nlang: vi\n---\n# Title\n\n![Logo](https://example.com/logo.png \"Brand\")\n\n- **Hello** [world](https://example.org)\n\n"+fence+"python\nprint(1)\n"+fence)
+        frontmatter=Path(runner.text_strip_markdown_frontmatter(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertTrue(frontmatter.startswith("# Title"))
+        self.assertNotIn("title: Example",frontmatter)
+        images=Path(runner.text_extract_markdown_images(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn('"alt": "Logo"',images)
+        self.assertIn("https://example.com/logo.png",images)
+        plain=Path(runner.text_markdown_to_plain(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Hello world",plain)
+        self.assertIn("print(1)",plain)
+        todos=self.write("todos.py","# TODO: finish parser\nvalue = 1 # FIXME improve\n// BUG: bad line")
+        todo_report=Path(runner.text_extract_todo_comments(todos)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("1\tTODO\tfinish parser",todo_report)
+        self.assertIn("2\tFIXME",todo_report)
+        comments=Path(runner.text_extract_comment_lines(todos)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("1\t# TODO",comments)
+        self.assertIn("3\t// BUG",comments)
+
+        self.assertEqual(Path(runner.text_sort_unique_words(self.write("words.txt","Pear apple PEAR banana"))["output_path"]).read_text(encoding="utf-8"),"apple\nPear\nbanana\n")
+        self.assertEqual(Path(runner.text_word_to_lines(self.write("tokens.txt","one  two\nthree"))["output_path"]).read_text(encoding="utf-8"),"one\ntwo\nthree\n")
+        self.assertEqual(Path(runner.text_join_lines(self.write("lines.txt"," one \n\n two\t\n three"))["output_path"]).read_text(encoding="utf-8"),"one two three")
+        domains=Path(runner.text_extract_domains(self.write("domains.txt","https://sub.example.com mail user@example.net and foo.org"))["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("sub.example.com",domains)
+        self.assertIn("foo.org",domains)
+        self.assertNotIn("example.net",domains)
+        uuid="550e8400-e29b-41d4-a716-446655440000"
+        self.assertEqual(Path(runner.text_extract_uuids(self.write("uuid.txt",uuid+" "+uuid))["output_path"]).read_text(encoding="utf-8"),uuid+"\n")
+        versions=Path(runner.text_extract_semver(self.write("versions.txt","v1.2.3 2.0.0-rc.1 2.0.0+build.4"))["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("v1.2.3",versions)
+        self.assertIn("2.0.0-rc.1",versions)
+        ips=Path(runner.text_extract_ipv6(self.write("ipv6.txt","2001:db8::1 and 2001:gg::1"))["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("2001:db8::1",ips)
+        self.assertNotIn("2001:gg",ips)
+
+    def test_sixth_wave_secret_redaction_regex_and_json_arrays(self):
+        token="ghp_"+"A"*36
+        aws="AKIA"+"A"*16
+        secrets=self.write("secrets.txt","GITHUB_TOKEN="+token+"\napi_key='abc123'\npassword=hunter2\naws="+aws)
+        redacted=Path(runner.text_redact_secrets(secrets)["output_path"]).read_text(encoding="utf-8")
+        self.assertNotIn(token,redacted)
+        self.assertNotIn("abc123",redacted)
+        self.assertNotIn("hunter2",redacted)
+        self.assertNotIn(aws,redacted)
+        self.assertIn("[REDACTED",redacted)
+        source=self.write("tabs.txt","a\tb\n\tc")
+        self.assertEqual(Path(runner.text_tabs_to_spaces(source)["output_path"]).read_text(encoding="utf-8"),"a   b\n    c")
+        escaped=Path(runner.text_escape_regex(self.write("pattern.txt","a+b(c)"))["output_path"]).read_text(encoding="utf-8")
+        self.assertEqual(escaped,re.escape("a+b(c)"))
+        unescaped=Path(runner.text_unescape_regex(self.write("escaped.txt",r"\.\+"))["output_path"]).read_text(encoding="utf-8")
+        self.assertEqual(unescaped,".+")
+        objects=self.write("merge.json",'[{"a":1,"nested":{"x":1}},{"a":2,"b":3}]')
+        merged=json.loads(Path(runner.json_merge_objects(objects)["output_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(merged,{"a":2,"nested":{"x":1},"b":3})
+        array=self.write("array.json",'[{"a":1,"b":2},{"b":2,"a":1},null,"x","x"]')
+        unique=json.loads(Path(runner.json_array_dedupe(array)["output_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(unique,[{"a":1,"b":2},None,"x"])
+        lines=Path(runner.json_array_to_lines(self.write("strings.json",'["one","two","ba\\nna"]'))["output_path"]).read_text(encoding="utf-8")
+        self.assertEqual(lines,"one\ntwo\nba\nna\n")
+        invalid=self.write("not-strings.json",'["ok",1]')
+        with self.assertRaisesRegex(RuntimeError,"string"):
+            runner.json_array_to_lines(invalid)
+
+    def test_sixth_wave_csv_trim_empty_column_and_missing_value_reports(self):
+        source=self.write("missing.csv","Name,Unused,Score\n An ,  ,7 \nB,   ,8\n")
+        trimmed=Path(runner.csv_trim_cells(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertEqual(list(csv.reader(trimmed.splitlines())),[["Name","Unused","Score"],["An","","7"],["B","","8"]])
+        reduced=Path(runner.csv_remove_empty_columns(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertEqual(list(csv.reader(reduced.splitlines())),[["Name","Score"],[" An ","7 "],["B","8"]])
+        report=Path(runner.csv_empty_cell_report(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn('"column": "Unused"',report)
+        self.assertIn('"empty": 2',report)
+        self.assertIn("Total empty cells: 2",report)
+
     def test_runner_catalog_allowlist_and_docs_stay_in_sync(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
 
