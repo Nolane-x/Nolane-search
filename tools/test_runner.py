@@ -1124,7 +1124,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          echo "\${{ github.event.pull_request.title }}"
+          echo "${{ github.event.pull_request.title }}"
 """)
             archive.writestr("project/Dockerfile", """FROM node:latest
 ARG API_KEY=never-print-this-secret
@@ -1209,7 +1209,7 @@ resource "aws_s3_bucket_acl" "public" {
 name = "service"
 dependencies = ["requests>=2.0", "httpx"]
 """)
-            archive.writestr("project/service/requirements.txt", "requests==2.31.0\\nhttps://user:private-password@example.invalid/pkg.whl\\n")
+            archive.writestr("project/service/requirements.txt", "requests==2.31.0\nhttps://user:private-password@example.invalid/pkg.whl\n")
 
         result = runner.repo_supply_chain(path)
         with zipfile.ZipFile(result["output_path"]) as package:
