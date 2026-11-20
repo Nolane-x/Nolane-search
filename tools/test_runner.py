@@ -1184,7 +1184,7 @@ resource "aws_s3_bucket_acl" "public" {
             "NOLANE-K8S-003", "NOLANE-K8S-004", "NOLANE-K8S-005",
             "NOLANE-K8S-006", "NOLANE-IAC-001", "NOLANE-IAC-002",
             "NOLANE-IAC-003",
-        }).issubset(rule_ids)
+        }.issubset(rule_ids))
         self.assertEqual(sarif["version"], "2.1.0")
         self.assertEqual(len(sarif["runs"][0]["results"]), len(findings["findings"]))
         self.assertNotIn("never-print-this-secret", report)
