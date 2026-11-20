@@ -957,6 +957,11 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual(back_rows[0],["Name","Score","Name_2"])
         self.assertEqual(back_rows[1],["An","7","first"])
 
+        formula_source=self.write("formula.jsonl",'{"amount":-7,"formula":"=1+1","plus":"+cmd","note":"-not numeric"}')
+        formula_csv=Path(runner.jsonl_to_csv(formula_source)["output_path"]).read_text(encoding="utf-8")
+        formula_rows=list(csv.reader(formula_csv.splitlines()))
+        self.assertEqual(formula_rows[1],["-7","'=1+1","'+cmd","'-not numeric"])
+
     def test_runner_catalog_allowlist_and_docs_stay_in_sync(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
 
