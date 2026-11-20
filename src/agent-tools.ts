@@ -804,7 +804,7 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     const values:Array<{level:number;text:string;slug:string}>=[];let inFence=false;let fenceChar="";
     const seen=new Map<string,number>();const tick=String.fromCharCode(96);
     for(const line of source.split(/\r?\n/)){
-      const stripped=line.trimStart(),marker=stripped[0]||"",length=marker==="~"||marker===tick?stripped.length-stripped.replace(new RegExp("^"+marker+"+"),"")[0]?.length:0;
+      const stripped=line.trimStart(),marker=stripped[0]||"",length=marker==="~"||marker===tick?(stripped.match(new RegExp("^"+marker+"+"))?.[0].length||0):0;
       if((marker==="~"||marker===tick)&&length>=3){inFence=!inFence;fenceChar=marker;continue;}
       if(inFence)continue;
       const match=line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);if(!match)continue;
@@ -819,10 +819,10 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
   if (toolId === "text-markdown-code-blocks") {
     const lines=content.split(/\r?\n/);const records:unknown[]=[];let index=0;const tick=String.fromCharCode(96);
     while(index<lines.length){
-      const stripped=lines[index]!.trimStart(),marker=stripped[0]||"",length=marker===tick||marker==="~"?stripped.length-stripped.replace(new RegExp("^"+marker+"+"),"")[0]?.length:0;
+      const stripped=lines[index]!.trimStart(),marker=stripped[0]||"",length=marker===tick||marker==="~"?(stripped.match(new RegExp("^"+marker+"+"))?.[0].length||0):0;
       if(length<3){index++;continue;}
       const info=stripped.slice(length).trim(),start=index+1;index++;const body:string[]=[];let closed=false;
-      while(index<lines.length){const candidate=lines[index]!.trimStart();const count=candidate.startsWith(marker)?candidate.length-candidate.replace(new RegExp("^"+marker+"+"),"")[0]?.length:0;
+      while(index<lines.length){const candidate=lines[index]!.trimStart();const count=candidate.startsWith(marker)?(candidate.match(new RegExp("^"+marker+"+"))?.[0].length||0):0;
         if(count>=length&&!candidate.slice(count).trim()){closed=true;index++;break;}body.push(lines[index]!);index++;}
       records.push({index:records.length+1,language:info.split(/\s+/)[0]||"",start_line:start,closed,code:body.join("\n")});
     }
