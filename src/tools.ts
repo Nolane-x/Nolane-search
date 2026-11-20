@@ -115,6 +115,7 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "repo-code-stats", name: "Thống kê codebase repository", category: "repository", description: "Đếm dòng code, dòng trống, dòng nội dung và dung lượng theo ngôn ngữ/phần mở rộng; bỏ qua binary và thư mục vendor phổ biến.", accepts: [".zip"], output: "Báo cáo codebase TXT", ready: true },
   { id: "repo-config-audit", name: "Kiểm kê cấu hình dự án", category: "repository", description: "Kiểm tra hiện diện của CI, container, package manager, test, lint, license và tài liệu; không tự sửa file.", accepts: [".zip"], output: "Báo cáo cấu hình TXT", ready: true },
   { id: "repo-duplicates", name: "Tìm file trùng trong repository", category: "repository", description: "Tính SHA-256 cho file trong ZIP và nhóm nội dung trùng nhau mà không giải nén hay thay đổi archive.", accepts: [".zip"], output: "CSV file trùng", ready: true },
+  { id: "repo-intelligence", name: "GitHub Repository Intelligence", category: "repository", description: "Nhận ZIP snapshot từ GitHub công khai để tạo báo cáo tổng hợp: cấu trúc module/import graph, dependencies, license, secret pattern (ẩn giá trị), TODO/bug markers, codebase, cấu hình, lịch sử commit và so sánh branch.", accepts: [".zip"], output: "ZIP gồm báo cáo Markdown, JSON module graph và các báo cáo kiểm toán", ready: true },
 
 ];
 
