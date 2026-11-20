@@ -195,6 +195,37 @@ describe("Nolane AI callable tools", () => {
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-canonicalize",content:'{"z":1,"a":{"d":2,"b":3}}'})).toBe('{"a":{"b":3,"d":2},"z":1}');
   });
 
+  it("runs sixth-wave Markdown, secret, extraction, JSON and CSV helpers", async () => {
+    const frontmatter="---\ntitle: Demo\n---\n# Hello\n\n![Logo](https://example.com/a.png \"Brand\")";
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-strip-markdown-frontmatter",content:frontmatter})).toBe("# Hello\n\n![Logo](https://example.com/a.png \"Brand\")");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-markdown-images",content:'![Logo](https://example.com/a.png "Brand")'})).toContain('"url":"https://example.com/a.png"');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-markdown-to-plain",content:"# Hello\n\n- **World** [link](https://example.com)"})).toBe("Hello\n\nWorld link");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-todo-comments",content:"# TODO: finish\n// FIXME: repair"})).toBe("1\tTODO\tfinish\n2\tFIXME\trepair");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-sort-unique-words",content:"Pear apple PEAR banana"})).toBe("apple\nbanana\nPear");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-word-to-lines",content:"one  two\nthree"})).toBe("one\ntwo\nthree");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-join-lines",content:" one \n\n two\t\n three"})).toBe("one two three");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-domains",content:"https://sub.example.com mail user@example.net and foo.org"})).toBe("sub.example.com\nfoo.org");
+    const uuid="550e8400-e29b-41d4-a716-446655440000";
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-uuids",content:uuid+" "+uuid})).toBe(uuid);
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-semver",content:"v1.2.3 2.0.0-rc.1"})).toBe("v1.2.3\n2.0.0-rc.1");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-ipv6",content:"2001:db8::1 and bad::gg"})).toBe("2001:db8::1");
+    const secret="ghp_"+"A".repeat(36);
+    const redacted=String(await executeAgentTool(env,"process_text_content",{tool_id:"text-redact-secrets",content:"GITHUB_TOKEN="+secret+"\napi_key='abc123'"}));
+    expect(redacted).not.toContain(secret);
+    expect(redacted).not.toContain("abc123");
+    expect(redacted).toContain("[REDACTED");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-comment-lines",content:"// comment\nconst a=1\n# config"})).toBe("1\t// comment\n3\t# config");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-tabs-to-spaces",content:"a\tb\n\tc"})).toBe("a   b\n    c");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-escape-regex",content:"a+b(c)"})).toBe("a\\+b\\(c\\)");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-unescape-regex",content:"a\\+b\\(c\\)"})).toBe("a+b(c)");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-merge-objects",content:'[{"a":1},{"a":2,"b":3}]'})).toBe('{\n  "a": 2,\n  "b": 3\n}');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-array-dedupe",content:'[{"a":1,"b":2},{"b":2,"a":1},null,null,"x"]'})).toBe('[\n  {\n    "a": 1,\n    "b": 2\n  },\n  null,\n  "x"\n]');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"json-array-to-lines",content:'["one","two"]'})).toBe("one\ntwo");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-trim-cells",content:" Name ,Score \n An , 7 "})).toBe("Name,Score\nAn,7");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-remove-empty-columns",content:"Name,Unused,Score\nAn,,7\nB,,8"})).toBe("Name,Score\nAn,7\nB,8");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-empty-cell-report",content:"Name,Score\nAn,7\nB,"})).toContain('"empty":1');
+  });
+
   it("routes AI tool-call translation through the configured translation model", async () => {
     const fetchMock=vi.fn(async (_input:RequestInfo|URL,init?:RequestInit)=>{
       const body=JSON.parse(String(init?.body)) as {messages:Array<{role:string;content:string}>};
