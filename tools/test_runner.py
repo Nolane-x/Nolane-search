@@ -983,7 +983,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertEqual(sorted_words,["Apple","apple","banana","pear"])
 
     def test_fifth_wave_html_xml_json_and_csv_helpers(self):
-        html=self.write("page.html",'<html><head><title>Example &amp; Demo</title></head><body><a href="https://example.com" title="Home">Example</a><img src="/img/a.png" alt="A"><script>alert(1)</script><div onclick="evil()" style="color:red"><a href="javascript:evil()">bad</a></div></body></html>')
+        html=self.write("page.html",'<html><head><title>Example &amp; Demo</title></head><body><a href="https://example.com" title="Home">Example</a><img src="/img/a.png" alt="A"><script>alert(1)</script><embed src="/evil.swf"><div onclick="evil()" style="color:red"><a href="javascript:evil()">bad</a><a href="data:text/html,evil">data</a></div><p>keep content</p></body></html>')
         links=Path(runner.html_extract_links(html)["output_path"]).read_text(encoding="utf-8")
         self.assertIn("https://example.com",links)
         self.assertIn("Example",links)
@@ -996,6 +996,11 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertNotIn("onclick",sanitized.lower())
         self.assertNotIn("javascript:",sanitized.lower())
         self.assertNotIn("style=",sanitized.lower())
+        self.assertNotIn("data:text/html",sanitized.lower())
+        self.assertIn("<p>keep content</p>",sanitized)
+        self.assertTrue(Path(runner.html_extract_links(html)["output_path"]).suffix==".jsonl")
+        self.assertTrue(Path(runner.html_extract_images(html)["output_path"]).suffix==".jsonl")
+        self.assertTrue(Path(runner.html_extract_title(html)["output_path"]).suffix==".txt")
 
         xml=self.write("tree.xml",'<root id="r"><item>One</item><item>Two</item><group><child x="1"/></group></root>')
         report=Path(runner.xml_tree_report(xml)["output_path"]).read_text(encoding="utf-8")
@@ -1013,6 +1018,7 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertIn("object: 1",type_report)
         self.assertIn("array: 1",type_report)
         self.assertIn("boolean: 1",type_report)
+        self.assertEqual(Path(runner.json_type_report(self.write("types-2.json",'{"x":1}'))["output_path"]).suffix,".txt")
         escaped=Path(runner.json_escape_string(self.write("free.txt",'hello "world"\nline'))["output_path"]).read_text(encoding="utf-8")
         self.assertEqual(json.loads(escaped),'hello "world"\nline')
         unescaped=Path(runner.json_unescape_string(self.write("scalar.json",'"hello\\nworld"'))["output_path"]).read_text(encoding="utf-8")
@@ -1023,6 +1029,8 @@ class ToolRunnerUnitTests(unittest.TestCase):
         unique=Path(runner.csv_unique_values(self.write("values.csv","Name,Team\nAn,A\nAn,B\nBình,A\n"))["output_path"]).read_text(encoding="utf-8")
         self.assertIn('"column": "Name", "value": "An", "count": 2',unique)
         self.assertIn('"column": "Team", "value": "A", "count": 2',unique)
+        self.assertEqual(Path(runner.csv_unique_values(self.write("unique.csv","A,B\nx,y"))["output_path"]).suffix,".txt")
+        self.assertEqual(Path(runner.json_unescape_string(self.write("scalar-2.json",'"ok"'))["output_path"]).suffix,".txt")
 
     def test_runner_catalog_allowlist_and_docs_stay_in_sync(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
