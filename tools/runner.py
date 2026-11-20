@@ -2735,6 +2735,256 @@ def text_extract_code_fence_languages(p):
     return _write_text_artifact(p,"code-fence-languages","\n".join(lines)+("\n" if lines else ""),"Code-fence language extraction",str(len(lines))+" block(s)")
 
 
+def text_extract_mac_addresses(p):
+    raw=_read_text_source(p)
+    candidates=re.findall(r"(?<![0-9A-Fa-f])(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}(?![0-9A-Fa-f])",raw)
+    values=[]
+    seen=set()
+    for value in candidates:
+        canonical=value.replace("-",":").upper()
+        if canonical not in seen:
+            seen.add(canonical)
+            values.append(canonical)
+    return _write_text_artifact(p,"mac-addresses","\n".join(values)+("\n" if values else ""),"MAC address extraction",str(len(values))+" address(es)")
+
+
+def text_extract_port_numbers(p):
+    raw=_read_text_source(p)
+    patterns=[r"(?i)\bport\s*[:=]\s*(\d{1,5})\b",r"(?i)\blocalhost:(\d{1,5})\b",r"(?i)https?://[^/\s:]+:(\d{1,5})(?:[/\s?#]|$)"]
+    values=[]
+    seen=set()
+    for pattern in patterns:
+        for value in re.findall(pattern,raw):
+            number=int(value)
+            if 1<=number<=65535 and number not in seen:
+                seen.add(number)
+                values.append(number)
+    return _write_text_artifact(p,"port-numbers","\n".join(map(str,values))+("\n" if values else ""),"Port extraction",str(len(values))+" port(s)")
+
+
+def text_normalize_path_separators(p):
+    raw=_read_text_source(p)
+    return _write_text_artifact(p,"normalized-paths",raw.replace("\\","/"),"Path separator normalization")
+
+
+def text_extract_file_extensions(p):
+    raw=_read_text_source(p)
+    candidates=re.findall(r"(?<![A-Za-z0-9])(?:[A-Za-z0-9_.-]+)\.([A-Za-z0-9]{1,12})(?![A-Za-z0-9])",raw)
+    values=[]
+    seen=set()
+    for value in candidates:
+        extension=value.lower()
+        if extension not in seen:
+            seen.add(extension)
+            values.append(extension)
+    return _write_text_artifact(p,"file-extensions","\n".join(values)+("\n" if values else ""),"File extension extraction",str(len(values))+" extension(s)")
+
+
+def text_escape_shell_argument(p):
+    raw=_read_text_source(p)
+    output="'" + raw.replace("'","'\"'\"'") + "'"
+    return _write_text_artifact(p,"shell-quoted",output,"POSIX shell argument quoting","one complete argument; POSIX shells")
+
+
+def text_sort_unique_lines(p):
+    raw=_read_text_source(p)
+    values=[]
+    seen=set()
+    for line in raw.splitlines():
+        key=line.strip().casefold()
+        if key and key not in seen:
+            seen.add(key)
+            values.append(line)
+    values.sort(key=lambda value:(value.casefold(),value))
+    output="\n".join(values)
+    return _write_text_artifact(p,"sorted-unique-lines",output+("\n" if output else ""),"Unique line sorting",str(len(values))+" unique line(s)")
+
+
+def text_normalize_unicode_nfkc(p):
+    raw=_read_text_source(p)
+    return _write_text_artifact(p,"unicode-nfkc",unicodedata.normalize("NFKC",raw),"Unicode NFKC normalization")
+
+
+def csv_to_sql_inserts(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    headers=rows[0]
+    if not headers or len(headers)>200 or len(rows)>100_001:
+        raise RuntimeError("CSV-to-SQL is limited to 100,000 rows and 200 columns.")
+    def safe_identifier(value,index):
+        name=re.sub(r"[^A-Za-z0-9_]","_",value.strip()) or "column_"+str(index+1)
+        if name[0].isdigit(): name="_"+name
+        return name
+    names=[]
+    used=set()
+    for index,value in enumerate(headers):
+        base=safe_identifier(value,index)
+        name=base
+        suffix=2
+        while name.casefold() in used:
+            name=base+"_"+str(suffix)
+            suffix+=1
+        used.add(name.casefold())
+        names.append('"'+name+'"')
+    statements=["-- Review the target table and column types before executing."]
+    for row in rows[1:]:
+        values=[]
+        for index in range(len(headers)):
+            value=row[index] if index<len(row) else ""
+            values.append("NULL" if value=="" else "'"+value.replace("'","''")+"'")
+        statements.append('INSERT INTO "records" ('+", ".join(names)+") VALUES ("+", ".join(values)+");")
+    if len(rows)==1: statements.append("-- No data rows were present.")
+    return _write_text_artifact_ext(p,"inserts",".sql","\n".join(statements)+"\n","CSV to SQL INSERT",str(max(0,len(rows)-1))+" row(s)")
+
+
+def csv_to_yaml(p):
+    import io
+    try:
+        import yaml
+    except ImportError as exc:
+        raise RuntimeError("CSV-to-YAML requires PyYAML on the runner.") from exc
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    if len(rows)>100_001 or len(rows[0])>200:
+        raise RuntimeError("CSV-to-YAML is limited to 100,000 rows and 200 columns.")
+    headers=[]
+    used=set()
+    for index,value in enumerate(rows[0]):
+        base=value.strip() or "column_"+str(index+1)
+        name=base
+        suffix=2
+        while name in used:
+            name=base+"_"+str(suffix)
+            suffix+=1
+        used.add(name)
+        headers.append(name)
+    records=[]
+    for row in rows[1:]:
+        records.append({key:(row[index] if index<len(row) else "") for index,key in enumerate(headers)})
+    output=yaml.safe_dump(records,allow_unicode=True,sort_keys=False,default_flow_style=False)
+    return _write_text_artifact_ext(p,"records",".yaml",output,"CSV to YAML",str(len(records))+" record(s)")
+
+
+def csv_empty_row_report(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    empty=[index for index,row in enumerate(rows[1:],1) if not any(cell.strip() for cell in row)]
+    report=["CSV empty-row report","Header columns: "+str(len(rows[0])),"Data rows: "+str(len(rows)-1),"Empty rows: "+str(len(empty)),
+            "Empty row numbers (excluding header): "+(", ".join(map(str,empty)) if empty else "none")]
+    return _write_text_artifact(p,"empty-row-report","\n".join(report)+"\n","CSV empty-row report")
+
+
+def csv_row_width_report(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    expected=len(rows[0])
+    mismatches=[]
+    for line_number,row in enumerate(rows[1:],2):
+        if len(row)!=expected:
+            mismatches.append({"line":line_number,"actual_columns":len(row),"expected_columns":expected,"difference":len(row)-expected})
+    report=["CSV row-width report","Expected columns: "+str(expected),"Data rows: "+str(len(rows)-1),"Mismatched rows: "+str(len(mismatches))]
+    report.extend(json.dumps(item,ensure_ascii=False) for item in mismatches[:5000])
+    return _write_text_artifact(p,"row-width-report","\n".join(report)+"\n","CSV row-width report")
+
+
+def json_remove_empty_values(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    def clean(item):
+        if isinstance(item,dict):
+            result={}
+            for key,child in item.items():
+                cleaned=clean(child)
+                if cleaned is None or cleaned=="" or cleaned==[] or cleaned=={}: continue
+                result[key]=cleaned
+            return result
+        if isinstance(item,list):
+            result=[]
+            for child in item:
+                cleaned=clean(child)
+                if cleaned is None or cleaned=="" or cleaned==[] or cleaned=={}: continue
+                result.append(cleaned)
+            return result
+        return item
+    output=json.dumps(clean(value),ensure_ascii=False,indent=2,allow_nan=False)
+    return _write_text_artifact(p,"no-empty-values",output+"\n","JSON empty-value removal")
+
+
+def json_to_typescript(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    declarations=[]
+    name_counts={}
+    def safe_name(value):
+        words=re.findall(r"[A-Za-z0-9]+",str(value))
+        name="".join(word[:1].upper()+word[1:] for word in words) or "Field"
+        if name[0].isdigit(): name="T"+name
+        return name
+    def type_of(item,name):
+        if item is None: return "null"
+        if isinstance(item,bool): return "boolean"
+        if isinstance(item,(int,float)): return "number"
+        if isinstance(item,str): return "string"
+        if isinstance(item,list):
+            if not item: return "unknown[]"
+            types=sorted(set(type_of(child,name+"Item") for child in item))
+            return "("+ " | ".join(types)+")[]"
+        if isinstance(item,dict):
+            base=safe_name(name)
+            count=name_counts.get(base,0)+1
+            name_counts[base]=count
+            interface=base if count==1 else base+str(count)
+            members=[]
+            for key,child in item.items():
+                members.append("  "+json.dumps(key,ensure_ascii=False)+": "+type_of(child,interface+safe_name(key))+";")
+            declarations.append("export interface "+interface+" {\n"+"\n".join(members)+"\n}")
+            return interface
+        return "unknown"
+    root_type=type_of(value,"Root")
+    output="\n\n".join(declarations)+"\n\nexport type RootType = "+root_type+";\n"
+    return _write_text_artifact_ext(p,"types",".ts",output,"JSON to TypeScript type")
+
+
+def json_nesting_report(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    counts={"objects":0,"arrays":0,"strings":0,"numbers":0,"booleans":0,"nulls":0,"keys":0,"items":0}
+    maximum=0
+    def visit(item,depth):
+        nonlocal maximum
+        maximum=max(maximum,depth)
+        if isinstance(item,dict):
+            counts["objects"]+=1
+            counts["keys"]+=len(item)
+            for child in item.values(): visit(child,depth+1)
+        elif isinstance(item,list):
+            counts["arrays"]+=1
+            counts["items"]+=len(item)
+            for child in item: visit(child,depth+1)
+        elif isinstance(item,str): counts["strings"]+=1
+        elif isinstance(item,bool): counts["booleans"]+=1
+        elif item is None: counts["nulls"]+=1
+        elif isinstance(item,(int,float)): counts["numbers"]+=1
+    visit(value,0)
+    lines=["JSON nesting report","Maximum depth: "+str(maximum)]
+    lines.extend(key.replace("_"," ").title()+": "+str(count) for key,count in counts.items())
+    return _write_text_artifact(p,"nesting-report","\n".join(lines)+"\n","JSON nesting report")
+
+
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
     lines=[]
