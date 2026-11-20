@@ -116,6 +116,8 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "repo-config-audit", name: "Kiểm kê cấu hình dự án", category: "repository", description: "Kiểm tra hiện diện của CI, container, package manager, test, lint, license và tài liệu; không tự sửa file.", accepts: [".zip"], output: "Báo cáo cấu hình TXT", ready: true },
   { id: "repo-duplicates", name: "Tìm file trùng trong repository", category: "repository", description: "Tính SHA-256 cho file trong ZIP và nhóm nội dung trùng nhau mà không giải nén hay thay đổi archive.", accepts: [".zip"], output: "CSV file trùng", ready: true },
   { id: "repo-intelligence", name: "GitHub Repository Intelligence", category: "repository", description: "Nhận ZIP snapshot từ GitHub công khai để tạo báo cáo tổng hợp: cấu trúc module/import graph, dependencies, license, secret pattern (ẩn giá trị), TODO/bug markers, codebase, cấu hình, lịch sử commit và so sánh branch.", accepts: [".zip"], output: "ZIP gồm báo cáo Markdown, JSON module graph và các báo cáo kiểm toán", ready: true },
+  { id: "repo-security-audit", name: "Kiểm toán bảo mật repository", category: "repository", description: "Quét tĩnh GitHub Actions, Dockerfile, Kubernetes YAML và Terraform để phát hiện cấu hình rủi ro; xuất báo cáo Markdown, JSON và SARIF. Không chạy workflow hay mã trong repo.", accepts: [".zip"], output: "ZIP gồm báo cáo Markdown, JSON findings và SARIF 2.1.0", ready: true },
+  { id: "repo-supply-chain", name: "Kiểm toán dependency & supply chain", category: "repository", description: "Đối chiếu manifest/lockfile, phân loại khai báo dependency, nguồn Git/URL, version thả nổi và lifecycle hooks; không cài package, resolve dependency hay truy vấn CVE.", accepts: [".zip"], output: "ZIP gồm báo cáo Markdown và JSON inventory", ready: true },
 
 ];
 
@@ -211,6 +213,8 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "repo-code-stats": ["text-clean","text-stats"],
   "repo-config-audit": ["text-clean","text-stats"],
   "repo-duplicates": ["csv-profile","csv-clean","csv-to-xlsx","csv-to-json"],
+  "repo-security-audit": ["archive-inspect","archive-safe-extract","archive-manifest"],
+  "repo-supply-chain": ["archive-inspect","archive-safe-extract","archive-manifest"],
 };
 
 export type ToolPipelineValidation =
