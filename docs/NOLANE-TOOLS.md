@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **225 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **247 công cụ đã có handler và kiểm thử**. Mỗi mục trong catalog đều có handler trên Python runner và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -345,6 +345,35 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 | \`/tool csv-sample-rows\` | Lấy header và 20 hàng dữ liệu đầu. | CSV |
 | \`/tool json-array-stats\` | Thống kê kiểu phần tử và tần suất key trong JSON array. | Báo cáo TXT |
 | \`/tool json-canonicalize\` | Sắp xếp key đệ quy, serialize JSON compact ổn định. | JSON |
+
+### Markdown, code hygiene, security và JSON/CSV — đợt sáu
+
+| Lệnh | Chức năng | Đầu ra |
+|---|---|---|
+| \`/tool text-extract-todo-comments\` | Trích TODO/FIXME/BUG/HACK/XXX/NOTE kèm số dòng. | Báo cáo TXT |
+| \`/tool text-extract-markdown-images\` | Trích alt text, URL và title ảnh Markdown. | JSONL |
+| \`/tool text-strip-markdown-frontmatter\` | Bỏ YAML frontmatter đầu file; báo lỗi nếu thiếu delimiter đóng. | Markdown |
+| \`/tool text-markdown-to-plain\` | Loại cú pháp Markdown phổ biến, giữ nội dung và code. | TXT |
+| \`/tool text-sort-unique-words\` | Trích từ Unicode, khử trùng và sắp xếp alphabet. | TXT |
+| \`/tool text-word-to-lines\` | Tách mỗi token thành một dòng. | TXT |
+| \`/tool text-join-lines\` | Trim và nối các dòng không rỗng thành một đoạn. | TXT |
+| \`/tool text-extract-domains\` | Trích domain, bỏ phần email và khử trùng. | TXT |
+| \`/tool text-extract-uuids\` | Trích UUID version/variant hợp lệ. | TXT |
+| \`/tool text-extract-semver\` | Trích version SemVer, kể cả prerelease/build metadata. | TXT |
+| \`/tool text-extract-ipv6\` | Xác minh candidate IPv6 và chuẩn hóa dạng compressed. | TXT |
+| \`/tool text-redact-secrets\` | Che một số token/API key/JWT phổ biến và trường secret/password; pattern-based, không bảo đảm tuyệt đối. | TXT đã che |
+| \`/tool text-extract-comment-lines\` | Trích dòng comment có marker //, #, -- hoặc /*, kèm số dòng. | TXT |
+| \`/tool text-tabs-to-spaces\` | Mở rộng tab thành bốn spaces theo vị trí cột. | TXT |
+| \`/tool text-escape-regex\` | Escape literal để dùng an toàn trong regex. | TXT |
+| \`/tool text-unescape-regex\` | Bỏ escape ở các ký tự regex phổ biến. | TXT |
+| \`/tool json-merge-objects\` | Gộp mảng object theo thứ tự, object sau ghi đè key trước; merge nông. | JSON object |
+| \`/tool json-array-dedupe\` | Khử trùng JSON array bằng canonical serialization, giữ mục đầu tiên. | JSON array |
+| \`/tool json-array-to-lines\` | Chuyển JSON array string thành dòng văn bản, chỉ chấp nhận phần tử string. | TXT |
+| \`/tool csv-trim-cells\` | Trim khoảng trắng viền mọi cell và serialize CSV chuẩn. | CSV |
+| \`/tool csv-remove-empty-columns\` | Loại cột có mọi cell dữ liệu rỗng, giữ thứ tự cột khác. | CSV |
+| \`/tool csv-empty-cell-report\` | Báo missing cells theo cột, phần trăm và tổng số ô trống. | Báo cáo TXT |
+
+**Lưu ý bảo mật:** \`text-redact-secrets\` chỉ nhận diện các định dạng phổ biến và một số tên trường; không thay thế secret scanner chuyên dụng. Hãy kiểm tra kết quả trước khi chia sẻ dữ liệu nhạy cảm.
 
 ## AI Agent
 
