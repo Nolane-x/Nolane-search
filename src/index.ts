@@ -9,9 +9,10 @@ import { deleteIndexedContent, listIndexedPages, normalizeIndexDomain, normalize
 import { TOOL_CATALOG, TOOL_PIPELINE_TRANSITIONS, getTool, inferToolForUpload, isToolCompatible, validateToolDag, validateToolPipeline, toolCategoryLabel } from "./tools";
 import type { ToolPipelineStep } from "./tools";
 import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, validateToolDagTrace, validateToolStepTrace } from "./tool-jobs";
-import { clearPendingToolWorkflow, deleteToolWorkflow, getPendingToolWorkflow, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow } from "./workflows";
+import { clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWorkflow, getPendingToolWorkflow, getPendingToolWorkflowPlan, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow, storeToolWorkflowPlan } from "./workflows";
 import { webAppResponse } from "./web-ui";
 import { completeAi, getAiRouterStatus } from "./ai-router";
+import { planToolWorkflow } from "./workflow-planner";
 import type { AiFunctionTool, AiTask } from "./ai-router";
 import { runAgentLoop } from "./agent-tools";
 import { performDeepSearch, performSearch } from "./search";
@@ -1000,7 +1001,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     await reply(env, chatId,
       "<b>Nolane Tools · " + TOOL_CATALOG.length + " công cụ</b>\n" +
       (env.NOLANE_GH_ACTIONS_TOKEN ? "" : "⚠️ Chưa cấu hình GitHub Actions token. Hãy thêm secret NOLANE_GH_ACTIONS_TOKEN vào repository trước khi chạy công cụ.\n\n") +
-      "Gửi /tool ID để chọn công cụ hoặc /workflows để chạy pipeline đã lưu. Ảnh sẽ tự chạy OCR nếu không chọn trước.\n\n" +
+      "Gửi /tool ID để chọn công cụ, /workflow_plan để AI lập quy trình hoặc /workflows để chạy pipeline đã lưu. Ảnh sẽ tự chạy OCR nếu không chọn trước.\n\n" +
       lines.join("\n\n") + "\n\nDùng /tool_jobs để xem lịch sử xử lý.");
     return;
   }
@@ -1074,6 +1075,137 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     } catch (error) {
       await reply(env, chatId, "Không thể lưu workflow: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
     }
+    return;
+  }
+
+
+  if (command === "workflow_plan") {
+    if (chatId !== userId || !allowedUser(env, userId)) {
+      await reply(env, chatId, "AI Workflow Planner chỉ khả dụng trong chat riêng được cấp quyền.");
+      return;
+    }
+    const goal = args.trim();
+    if (goal.length < 6 || goal.length > 1_200) {
+      await reply(env, chatId,
+        "Cú pháp: <code>/workflow_plan mô tả kết quả bạn muốn tạo từ tệp</code>\n" +
+        "Ví dụ: <code>/workflow_plan Tách video thành phụ đề SRT và transcript TXT</code>\n" +
+        "Planner chỉ tạo bản xem trước, chưa lưu hoặc chạy processor.");
+      return;
+    }
+    try {
+      const result = await planToolWorkflow(env, goal);
+      const draft = await storeToolWorkflowPlan(env, userId, chatId, goal, result.plan);
+      const plan = result.plan;
+      const nodeLines = plan.mode === "dag" && plan.dag
+        ? plan.dag.map(node => {
+            const tool = getTool(node.toolId);
+            return "<code>" + htmlEscape(node.id) + "</code> = <b>" + htmlEscape(tool?.name || node.toolId) +
+              "</b> <code>" + htmlEscape(node.toolId) + "</code> ← " +
+              htmlEscape(node.dependsOn[0] || "input") +
+              (node.reason ? "\n   " + htmlEscape(node.reason.slice(0, 65)) : "");
+          })
+        : plan.steps.map((step, index) => {
+            const tool = getTool(step.toolId);
+            return (index + 1) + ". <b>" + htmlEscape(tool?.name || step.toolId) + "</b> <code>" +
+              htmlEscape(step.toolId) + "</code>" +
+              (step.reason ? "\n   " + htmlEscape(step.reason.slice(0, 65)) : "");
+          });
+      const modeLabel = plan.mode === "dag" ? "DAG song song" : plan.mode === "single" ? "Một processor" : "Pipeline tuần tự";
+      const routeCost = result.route.estimatedCostUsd !== undefined
+        ? " · chi phí AI ước tính $" + result.route.estimatedCostUsd.toFixed(6) : "";
+      const sections = [
+        "<b>Nolane · Workflow Intelligence</b>",
+        "Bản nháp: <code>" + draft.id + "</code> · hết hạn sau 15 phút",
+        "Mục tiêu: " + htmlEscape(goal.slice(0, 220)),
+        "",
+        "<b>Phương án đề xuất · " + htmlEscape(modeLabel) + "</b>",
+        htmlEscape(plan.summary.slice(0, 300)),
+        ...nodeLines,
+        "",
+        "Độ tin cậy tự đánh giá: " + Math.round(plan.confidence * 100) + "%",
+        "Workload: " + plan.workload.nodeCount + " processor · đường găng " +
+          plan.workload.criticalPathLength + " bước · tối đa " + plan.workload.maxParallelism +
+          " node song song",
+      ];
+      if (plan.assumptions.length) sections.push("", "<b>Giả định</b>", ...plan.assumptions.slice(0, 2).map(item => "• " + htmlEscape(item.slice(0, 110))));
+      if (plan.warnings.length) sections.push("", "<b>Lưu ý</b>", ...plan.warnings.slice(0, 2).map(item => "⚠️ " + htmlEscape(item.slice(0, 110))));
+      sections.push(
+        "",
+        "<i>AI: " + htmlEscape(result.route.providerId + " / " + result.route.model) +
+          " · " + result.route.latencyMs + " ms" + routeCost + "</i>",
+        "",
+        "Chưa có processor nào chạy. Để lưu bản nháp này, gửi:",
+        "<code>/workflow_plan_save " + draft.id + " Tên workflow</code>",
+        "Sau khi lưu, dùng <code>/workflow_run WORKFLOW_ID</code> và gửi tệp."
+      );
+      const previewChunks: string[] = [];
+      let currentChunk = "";
+      for (const section of sections) {
+        const candidate = currentChunk ? currentChunk + "\n" + section : section;
+        if (candidate.length > 3_500 && currentChunk) {
+          previewChunks.push(currentChunk);
+          currentChunk = section;
+        } else {
+          currentChunk = candidate;
+        }
+      }
+      if (currentChunk) previewChunks.push(currentChunk);
+      for (const chunk of previewChunks) await reply(env, chatId, chunk);
+    } catch (error) {
+      await reply(env, chatId,
+        "Không thể lập kế hoạch workflow: " +
+        htmlEscape(error instanceof Error ? error.message : "unknown error") +
+        "\nKiểm tra <code>/ai_status</code> hoặc thu hẹp mục tiêu.");
+    }
+    return;
+  }
+
+  if (command === "workflow_plan_save") {
+    if (chatId !== userId || !allowedUser(env, userId)) {
+      await reply(env, chatId, "Bản nháp workflow chỉ được lưu trong chat riêng được cấp quyền.");
+      return;
+    }
+    const match = args.trim().match(/^([a-f0-9]{8})\s+([\s\S]{3,40})$/i);
+    if (!match) {
+      await reply(env, chatId, "Cú pháp: <code>/workflow_plan_save PLAN_ID Tên workflow</code>.");
+      return;
+    }
+    const planId = match[1]!.toLowerCase();
+    const name = match[2]!.trim();
+    try {
+      const draft = await getPendingToolWorkflowPlan(env, userId, chatId, planId);
+      if (!draft) {
+        await reply(env, chatId, "Không tìm thấy bản nháp hoặc bản nháp đã hết hạn. Hãy chạy lại <code>/workflow_plan</code>.");
+        return;
+      }
+      const definition = draft.plan.mode === "dag" ? draft.plan.dag : draft.plan.steps;
+      const workflow = await saveToolWorkflow(env, userId, chatId, name, definition);
+      await deletePendingToolWorkflowPlan(env, userId, chatId, planId);
+      const route = workflow.dag ? "DAG · tối đa 3 node song song" : workflow.steps.length === 1 ? "Một processor" : "Pipeline tuần tự";
+      await reply(env, chatId,
+        "<b>Đã lưu workflow từ AI plan</b>\n" +
+        "Tên: <b>" + htmlEscape(workflow.name) + "</b>\n" +
+        "ID: <code>" + workflow.id + "</code> · " + route + "\n" +
+        "Processor: " + htmlEscape(workflow.steps.map(step => getTool(step.toolId)?.name || step.toolId).join(" → ")) +
+        "\n\nChưa chạy. Dùng <code>/workflow_run " + workflow.id + "</code> rồi gửi tệp phù hợp.");
+    } catch (error) {
+      await reply(env, chatId, "Không thể lưu bản nháp: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
+    }
+    return;
+  }
+
+  if (command === "workflow_plan_discard") {
+    if (chatId !== userId || !allowedUser(env, userId)) {
+      await reply(env, chatId, "Bản nháp workflow chỉ được quản lý trong chat riêng được cấp quyền.");
+      return;
+    }
+    const planId = args.trim().toLowerCase();
+    if (!/^[a-f0-9]{8}$/.test(planId)) {
+      await reply(env, chatId, "Cú pháp: <code>/workflow_plan_discard PLAN_ID</code>.");
+      return;
+    }
+    await deletePendingToolWorkflowPlan(env, userId, chatId, planId);
+    await reply(env, chatId, "Đã xóa bản nháp <code>" + planId + "</code> nếu bản nháp thuộc phiên này.");
     return;
   }
 
@@ -1271,6 +1403,9 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/tool_jobs</code> — lịch sử xử lý file\n" +
       "<code>/tool_job ID</code> — trace chi tiết từng bước xử lý\n" +
       "<code>/tool_retry ID</code> — chạy lại job lỗi từ file gốc\n" +
+      "<code>/workflow_plan mục tiêu</code> — AI thiết kế pipeline/DAG, chỉ tạo bản xem trước\n" +
+      "<code>/workflow_plan_save ID Tên</code> — lưu bản nháp AI sau khi xem lại\n" +
+      "<code>/workflow_plan_discard ID</code> — xóa bản nháp AI\n" +
       "<code>/workflow_save Tên | tool-1 -> tool-2</code> — lưu pipeline dùng lại\n" +
       "<code>/workflows</code> — xem thư viện workflow\n" +
       "<code>/workflow_run ID</code> — chạy workflow với tệp tiếp theo\n" +
@@ -1317,7 +1452,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       env.DB.prepare("SELECT COUNT(*) AS count FROM watches WHERE active = 1").first<{ count: number }>(),
       env.DB.prepare("SELECT COUNT(*) AS count FROM indexed_pages").first<{ count: number }>(),
       env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE cache_key LIKE 'personal-memory:%' AND expires_at > ?").bind(Date.now()).first<{ count: number }>(),
-      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ? AND cache_key NOT LIKE 'telegram-search:%' AND cache_key NOT LIKE 'search-feedback:%' AND cache_key NOT LIKE 'search-vote:%' AND cache_key NOT LIKE 'search-event:%' AND cache_key NOT LIKE 'site-crawl:%' AND cache_key NOT LIKE 'telegram-ui:%' AND cache_key NOT LIKE 'personal-memory:%' AND cache_key NOT LIKE 'ai-synthesis:%' AND cache_key NOT LIKE 'tool-job:%' AND cache_key NOT LIKE 'tool-pending:%' AND cache_key NOT LIKE 'tool-workflow:%' AND cache_key NOT LIKE 'tool-workflow-pending:%'").bind(Date.now()).first<{ count: number }>(),
+      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ? AND cache_key NOT LIKE 'telegram-search:%' AND cache_key NOT LIKE 'search-feedback:%' AND cache_key NOT LIKE 'search-vote:%' AND cache_key NOT LIKE 'search-event:%' AND cache_key NOT LIKE 'site-crawl:%' AND cache_key NOT LIKE 'telegram-ui:%' AND cache_key NOT LIKE 'personal-memory:%' AND cache_key NOT LIKE 'ai-synthesis:%' AND cache_key NOT LIKE 'tool-job:%' AND cache_key NOT LIKE 'tool-pending:%' AND cache_key NOT LIKE 'tool-workflow:%' AND cache_key NOT LIKE 'tool-workflow-pending:%' AND cache_key NOT LIKE 'tool-workflow-plan:%'").bind(Date.now()).first<{ count: number }>(),
       env.DB.prepare("SELECT status, COUNT(*) AS count FROM deep_search_jobs WHERE created_at >= ? GROUP BY status")
         .bind(Date.now() - 7 * 24 * 60 * 60 * 1000).all<{ status: string; count: number }>(),
     ]);

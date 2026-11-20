@@ -195,6 +195,16 @@ The private Workflow Library stores reusable, validated tool pipelines in the ex
 - Workflows are private to the allowlisted Telegram account and the bot's private chat. They contain tool IDs only, not file contents or Telegram file IDs.
 
 The runner executes DAG nodes in topological dependency layers, with a hard maximum of three concurrent processors. Nodes read the original upload when they are roots or a parent node artifact when they have one dependency. Terminal branch artifacts are bundled into `workflow-results.zip`, alongside `manifest.json`; combined terminal outputs and the final archive are each bounded to 45 MB. A processor still receives exactly one input file. Multi-parent joins, branch conditions, loops, arbitrary shell commands and uploaded-code execution are not supported. The DAG trace is validated against node IDs and parent completion before it is persisted.
+## Workflow Intelligence planner
+
+- `/workflow_plan goal` asks the configured AI Router to propose a file-processing plan using only ready processors in `TOOL_CATALOG` and the explicit `TOOL_PIPELINE_TRANSITIONS` allowlist.
+- The model returns a structured JSON plan. The Worker independently validates tool IDs, uniqueness, direct pipeline edges, DAG topology and the DAG node/parent limits before showing a preview.
+- The preview includes assumptions, warnings, a model-reported confidence value and graph-derived workload counters. These counters describe graph shape; they are not measured runtime estimates or a guarantee of completion time.
+- The planner has no file bytes and cannot dispatch jobs. It does not execute code, invoke arbitrary processors or change the catalog.
+- Drafts are stored in the existing D1 `search_cache` under owner and private-chat scoped keys. They expire after 15 minutes.
+- `/workflow_plan_save PLAN_ID Name` explicitly saves a validated draft into the Workflow Library. `/workflow_plan_discard PLAN_ID` deletes a draft. Save does not execute; users must separately issue `/workflow_run WORKFLOW_ID` and upload a compatible file.
+- Uploaded files are revalidated against the saved workflow before dispatch. This is defense-in-depth: AI suggestions do not override the Worker/runner validation rules.
+
 ## Tool execution traces and retries
 
 - `/tool_jobs` lists recent jobs; `/tool_job ID` shows the validated per-step trace (processor, elapsed milliseconds, input/output bytes, summary and any failure).

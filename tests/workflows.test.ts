@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  clearPendingToolWorkflow, deleteToolWorkflow, getPendingToolWorkflow,
-  getToolWorkflow, listToolWorkflows,
-  saveToolWorkflow, setPendingToolWorkflow,
+  clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWorkflow, getPendingToolWorkflow,
+  getPendingToolWorkflowPlan, getToolWorkflow, listToolWorkflows,
+  saveToolWorkflow, setPendingToolWorkflow, storeToolWorkflowPlan,
 } from "../src/workflows";
 import type { D1Database, D1Result, D1Statement, Env } from "../src/types";
+import type { ToolWorkflowPlan } from "../src/workflows";
 
 function fakeDb() {
   const rows = new Map<string, { payload: string; expiresAt: number; createdAt: number }>();
@@ -141,6 +142,82 @@ describe("Saved Nolane Tool Workflows", () => {
     const loaded = await getToolWorkflow(env, 42, workflow.id);
     expect(loaded?.dag).toEqual(nodes);
     expect((await listToolWorkflows(env, 42))).toHaveLength(1);
+  });
+
+
+  it("stores, scopes, reloads and clears an expiring AI workflow plan draft", async () => {
+    const { db, rows } = fakeDb();
+    const env = envFor(db);
+    const plan: ToolWorkflowPlan = {
+      mode: "pipeline",
+      summary: "Trích xuất âm thanh và tạo transcript.",
+      confidence: 0.9,
+      assumptions: ["Tệp đầu vào là video có track audio."],
+      warnings: [],
+      steps: [{ toolId: "video-audio" }, { toolId: "audio-convert" }, { toolId: "audio-transcribe" }],
+      workload: { nodeCount: 3, criticalPathLength: 3, maxParallelism: 1 },
+    };
+    const draft = await storeToolWorkflowPlan(env, 42, 42, "Tạo transcript từ video", plan);
+    expect(draft.id).toMatch(/^[a-f0-9]{8}$/);
+    expect(draft.expiresAt).toBeGreaterThan(draft.createdAt);
+    expect(await getPendingToolWorkflowPlan(env, 42, 42, draft.id)).toMatchObject({
+      userId: 42, chatId: 42, goal: "Tạo transcript từ video", plan,
+    });
+    expect(await getPendingToolWorkflowPlan(env, 43, 42, draft.id)).toBeNull();
+    expect(await getPendingToolWorkflowPlan(env, 42, 43, draft.id)).toBeNull();
+    await deletePendingToolWorkflowPlan(env, 42, 42, draft.id);
+    expect(await getPendingToolWorkflowPlan(env, 42, 42, draft.id)).toBeNull();
+    expect([...rows.keys()].some(key => key.startsWith("tool-workflow-plan:"))).toBe(false);
+  });
+
+  it("rejects unsupported modes, inconsistent DAG steps and forged workload estimates", async () => {
+    const { db, rows } = fakeDb();
+    const env = envFor(db);
+    const base = {
+      summary: "Tạo phụ đề và transcript",
+      confidence: 0.8,
+      assumptions: [],
+      warnings: [],
+      steps: [
+        { toolId: "video-audio" },
+        { toolId: "audio-subtitles" },
+        { toolId: "audio-transcribe" },
+      ],
+      workload: { nodeCount: 3, criticalPathLength: 2, maxParallelism: 2 },
+    };
+    const dag = [
+      { id: "source", toolId: "video-audio", dependsOn: [] },
+      { id: "subtitles", toolId: "audio-subtitles", dependsOn: ["source"] },
+      { id: "transcript", toolId: "audio-transcribe", dependsOn: ["source"] },
+    ];
+    await expect(storeToolWorkflowPlan(env, 42, 42, "Invalid workflow mode", {
+      ...base, mode: "execute" as never,
+    })).rejects.toThrow("Bản nháp workflow không hợp lệ");
+    await expect(storeToolWorkflowPlan(env, 42, 42, "Invalid workflow confidence", {
+      ...base, mode: "dag", dag, confidence: 5,
+    } as unknown as ToolWorkflowPlan)).rejects.toThrow("Bản nháp workflow không hợp lệ");
+    await expect(storeToolWorkflowPlan(env, 42, 42, "Invalid workload counters", {
+      ...base, mode: "dag", dag,
+      workload: { nodeCount: 3, criticalPathLength: 3, maxParallelism: 1 },
+    } as ToolWorkflowPlan)).rejects.toThrow("Bản nháp workflow không hợp lệ");
+    await expect(storeToolWorkflowPlan(env, 42, 42, "Mismatched dag compatibility steps", {
+      ...base, mode: "dag", dag,
+      steps: [{ toolId: "video-audio" }, { toolId: "audio-info" }, { toolId: "audio-transcribe" }],
+    })).rejects.toThrow("Bản nháp workflow không hợp lệ");
+    expect(rows.size).toBe(0);
+  });
+
+  it("rejects invalid workflow plan drafts before storing them", async () => {
+    const { db, rows } = fakeDb();
+    const env = envFor(db);
+    const invalid = {
+      mode: "pipeline", summary: "Broken", confidence: 0.5, assumptions: [], warnings: [],
+      steps: [{ toolId: "video-info" }, { toolId: "audio-transcribe" }],
+      workload: { nodeCount: 2, criticalPathLength: 2, maxParallelism: 1 },
+    } as unknown as ToolWorkflowPlan;
+    await expect(storeToolWorkflowPlan(env, 42, 42, "Invalid workflow plan", invalid))
+      .rejects.toThrow("Bản nháp workflow không hợp lệ");
+    expect(rows.size).toBe(0);
   });
 
 });

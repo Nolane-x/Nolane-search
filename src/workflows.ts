@@ -1,5 +1,5 @@
 import type { Env } from "./types";
-import { validateToolDagDefinition, validateToolPipelineDefinition } from "./tools";
+import { TOOL_DAG_MAX_CONCURRENCY, validateToolDagDefinition, validateToolPipelineDefinition } from "./tools";
 import type { ToolDagNode, ToolPipelineStep } from "./tools";
 
 export interface ToolWorkflow {
@@ -20,8 +20,30 @@ export interface PendingToolWorkflow {
   workflowId: string;
 }
 
+export interface ToolWorkflowPlan {
+  mode: "single" | "pipeline" | "dag";
+  summary: string;
+  confidence: number;
+  assumptions: string[];
+  warnings: string[];
+  steps: ToolPipelineStep[];
+  dag?: ToolDagNode[];
+  workload: { nodeCount: number; criticalPathLength: number; maxParallelism: number };
+}
+
+export interface PendingToolWorkflowPlan {
+  id: string;
+  userId: number;
+  chatId: number;
+  goal: string;
+  plan: ToolWorkflowPlan;
+  createdAt: number;
+  expiresAt: number;
+}
+
 const WORKFLOW_PREFIX = "tool-workflow:";
 const PENDING_PREFIX = "tool-workflow-pending:";
+const PLAN_PREFIX = "tool-workflow-plan:";
 const WORKFLOW_EXPIRES_AT = Number.MAX_SAFE_INTEGER;
 const PENDING_TTL_MS = 15 * 60 * 1000;
 
@@ -31,6 +53,74 @@ function workflowKey(userId: number, id: string): string {
 
 function pendingKey(userId: number, chatId: number): string {
   return PENDING_PREFIX + userId + ":" + chatId;
+}
+
+function planKey(userId: number, chatId: number, id: string): string {
+  return PLAN_PREFIX + userId + ":" + chatId + ":" + id;
+}
+
+function validatedWorkflowPlan(raw: unknown): ToolWorkflowPlan | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  if (value.mode !== "single" && value.mode !== "pipeline" && value.mode !== "dag") return null;
+  if (typeof value.summary !== "string" || !value.summary.trim() || value.summary.length > 500 ||
+      typeof value.confidence !== "number" || !Number.isFinite(value.confidence) ||
+      value.confidence < 0 || value.confidence > 1 ||
+      !Array.isArray(value.assumptions) || value.assumptions.length > 5 ||
+      !value.assumptions.every(item => typeof item === "string" && item.length <= 220) ||
+      !Array.isArray(value.warnings) || value.warnings.length > 5 ||
+      !value.warnings.every(item => typeof item === "string" && item.length <= 220) ||
+      !Array.isArray(value.steps)) return null;
+
+  let steps: ToolPipelineStep[];
+  let expected: ToolWorkflowPlan["workload"];
+  let dag: ToolDagNode[] | undefined;
+  if (value.mode === "dag") {
+    const validation = validateToolDagDefinition(value.dag);
+    if (!validation.ok || value.steps.length !== validation.nodes.length) return null;
+    const rawStepIds = value.steps.map(item =>
+      item && typeof item === "object" && !Array.isArray(item) && typeof (item as Record<string, unknown>).toolId === "string"
+        ? (item as Record<string, unknown>).toolId : null
+    );
+    if (rawStepIds.some((id, index) => id !== validation.nodes[index]!.toolId)) return null;
+    dag = validation.nodes;
+    steps = validation.nodes.map(node => ({ toolId: node.toolId, ...(node.reason ? { reason: node.reason } : {}) }));
+    const depths = new Map<string, number>();
+    const layers = new Map<number, number>();
+    for (const node of dag) {
+      const layer = node.dependsOn.length ? (depths.get(node.dependsOn[0]!) ?? 0) + 1 : 0;
+      depths.set(node.id, layer);
+      layers.set(layer, (layers.get(layer) || 0) + 1);
+    }
+    expected = {
+      nodeCount: dag.length,
+      criticalPathLength: Math.max(0, ...depths.values()) + 1,
+      maxParallelism: Math.min(TOOL_DAG_MAX_CONCURRENCY, Math.max(1, ...layers.values())),
+    };
+  } else {
+    const validation = validateToolPipelineDefinition(value.steps);
+    if (!validation.ok || (value.mode === "single" && validation.steps.length !== 1)) return null;
+    if (value.dag !== undefined) return null;
+    steps = validation.steps;
+    expected = { nodeCount: steps.length, criticalPathLength: steps.length, maxParallelism: 1 };
+  }
+
+  if (!value.workload || typeof value.workload !== "object" || Array.isArray(value.workload)) return null;
+  const workload = value.workload as Record<string, unknown>;
+  if (workload.nodeCount !== expected.nodeCount ||
+      workload.criticalPathLength !== expected.criticalPathLength ||
+      workload.maxParallelism !== expected.maxParallelism) return null;
+
+  return {
+    mode: value.mode,
+    summary: value.summary.trim(),
+    confidence: value.confidence,
+    assumptions: value.assumptions as string[],
+    warnings: value.warnings as string[],
+    steps,
+    ...(dag ? { dag } : {}),
+    workload: expected,
+  };
 }
 
 function normalizeWorkflowName(value: string): string {
@@ -186,4 +276,63 @@ export async function getPendingToolWorkflow(
 export async function clearPendingToolWorkflow(env: Env, userId: number, chatId: number): Promise<void> {
   await env.DB.prepare("DELETE FROM search_cache WHERE cache_key = ?")
     .bind(pendingKey(userId, chatId)).run();
+}
+
+export async function storeToolWorkflowPlan(
+  env: Env,
+  userId: number,
+  chatId: number,
+  goal: string,
+  plan: ToolWorkflowPlan,
+): Promise<PendingToolWorkflowPlan> {
+  if (goal.trim().length < 6 || goal.length > 1_200) throw new Error("Mục tiêu workflow không hợp lệ.");
+  if (!Number.isSafeInteger(userId) || !Number.isSafeInteger(chatId) || chatId !== userId) {
+    throw new Error("Bản nháp workflow chỉ được lưu cho tài khoản Telegram cá nhân.");
+  }
+  const validatedPlan = validatedWorkflowPlan(plan);
+  if (!validatedPlan) throw new Error("Bản nháp workflow không hợp lệ hoặc workload không khớp với đồ thị.");
+  const now = Date.now();
+  const pending: PendingToolWorkflowPlan = {
+    id: crypto.randomUUID().replace(/-/g, "").slice(0, 8),
+    userId, chatId, goal: goal.trim().slice(0, 1_200), plan: validatedPlan,
+    createdAt: now, expiresAt: now + PENDING_TTL_MS,
+  };
+  await env.DB.prepare(
+    "INSERT INTO search_cache (cache_key, payload, expires_at, created_at) VALUES (?, ?, ?, ?)",
+  ).bind(planKey(userId, chatId, pending.id), JSON.stringify(pending), pending.expiresAt, now).run();
+  return pending;
+}
+
+export async function getPendingToolWorkflowPlan(
+  env: Env,
+  userId: number,
+  chatId: number,
+  id: string,
+): Promise<PendingToolWorkflowPlan | null> {
+  if (!/^[a-f0-9]{8}$/i.test(id)) return null;
+  const row = await env.DB.prepare(
+    "SELECT payload FROM search_cache WHERE cache_key = ? AND expires_at > ?",
+  ).bind(planKey(userId, chatId, id), Date.now()).first<{ payload: string }>();
+  if (!row?.payload) return null;
+  try {
+    const value = JSON.parse(row.payload) as Partial<PendingToolWorkflowPlan>;
+    if (value.id !== id || value.userId !== userId || value.chatId !== chatId ||
+        typeof value.goal !== "string" || typeof value.createdAt !== "number" ||
+        typeof value.expiresAt !== "number" || value.expiresAt <= Date.now() ||
+        !value.plan || typeof value.plan !== "object") return null;
+    const plan = validatedWorkflowPlan(value.plan);
+    if (!plan) return null;
+    return { ...value, plan } as PendingToolWorkflowPlan;
+  } catch { return null; }
+}
+
+export async function deletePendingToolWorkflowPlan(
+  env: Env,
+  userId: number,
+  chatId: number,
+  id: string,
+): Promise<void> {
+  if (!/^[a-f0-9]{8}$/i.test(id)) return;
+  await env.DB.prepare("DELETE FROM search_cache WHERE cache_key = ?")
+    .bind(planKey(userId, chatId, id)).run();
 }
