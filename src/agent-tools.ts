@@ -292,7 +292,7 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
       (_match,local:string,domain:string,suffix:string)=>(local[0]||"*")+"***@"+(domain[0]||"*")+"***"+suffix);
   }
   if (toolId === "text-mask-phones") {
-    return content.replace(/(?<!\w)(?:\+?\d[\d\s().-]{5,}\d)(?!\w)",match=>{
+    return content.replace(/(?<!\w)(?:\+?\d[\d\s().-]{5,}\d)(?!\w)/g,match=>{
       const digits=match.replace(/\D/g,"");
       return digits.length<7?match:"*".repeat(Math.max(4,digits.length-2))+digits.slice(-2);
     });
