@@ -23,7 +23,7 @@ RUNNERS = {
     "pdf-merge", "pdf-metadata-clean", "pdf-outline", "image-contact-sheet", "image-duplicates", "csv-split", "csv-join", "json-schema", "json-to-yaml", "sqlite-integrity", "audio-silence-report", "video-silence-report", "video-frames", "subtitle-convert", "text-deduplicate", "text-diff", "code-size-report",
     "pdf-rotate-cw","pdf-remove-blank","image-trim-border","image-pixelate","image-diff",
     "audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean",
-    "json-flatten-csv","csv-to-sqlite","log-insights","json-diff",
+    "json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join",
 }
 
 PIPELINE_TRANSITIONS = {
@@ -1752,9 +1752,10 @@ def subtitle_convert(p):
 
 
 def text_join(inputs):
-    paths=inputs if isinstance(inputs,list) else [inputs]
-    if not 2<=len(paths)<=MAX_DAG_PARENTS:
-        raise RuntimeError(f"Text join requires 2 to {MAX_DAG_PARENTS} input artifacts.")
+    is_multi=isinstance(inputs,list)
+    paths=inputs if is_multi else [inputs]
+    if (is_multi and not 2<=len(paths)<=MAX_DAG_PARENTS) or not paths:
+        raise RuntimeError(f"Text join requires 2 to {MAX_DAG_PARENTS} input artifacts when used as a DAG join.")
     sections=[]
     total=0
     for index,path in enumerate(paths,1):
@@ -1769,13 +1770,15 @@ def text_join(inputs):
             content=path.read_text(encoding="utf-8-sig")
         except UnicodeError as exc:
             raise RuntimeError("Text join input is not valid UTF-8: "+path.name) from exc
-        if "\\x00" in content:
+        if "\x00" in content:
             raise RuntimeError("Text join refuses binary-like input: "+path.name)
-        label=path.name.replace("\\r"," ").replace("\\n"," ").replace("[","(").replace("]",")")[:120]
-        sections.append(f"===== SOURCE {index}: {label} =====\\n{content.strip()}\\n")
-    out=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"/"text-join-result.txt"
-    out.parent.mkdir(parents=True,exist_ok=True)
-    out.write_text("\\n".join(sections).rstrip()+"\\n",encoding="utf-8")
+        label=path.name.replace("\r"," ").replace("\n"," ").replace("[","(").replace("]",")")[:120]
+        sections.append(f"===== SOURCE {index}: {label} =====\n{content.strip()}\n")
+    out=Path(paths[0]).parent/(Path(paths[0]).stem+"-joined.txt")
+    rendered="\n".join(sections).rstrip()+"\n"
+    if len(rendered.encode("utf-8"))>MAX_PIPELINE_OUTPUT:
+        raise RuntimeError("Merged text output exceeds the 45 MB limit.")
+    out.write_text(rendered,encoding="utf-8")
     return {"summary":f"Đã hợp nhất {len(paths)} nhánh văn bản theo thứ tự phụ thuộc, tổng {total:,} bytes đầu vào.","output_path":str(out)}
 
 
@@ -2291,7 +2294,7 @@ TOOLS={
  "image-trim-border":image_trim_border,"image-pixelate":image_pixelate,"image-diff":image_diff,
  "audio-stereo-split":audio_stereo_split,"audio-metadata-clean":audio_metadata_clean,
  "video-scene-frames":video_scene_frames,"video-metadata-clean":video_metadata_clean,
- "json-flatten-csv":json_flatten_csv,"csv-to-sqlite":csv_to_sqlite,"log-insights":log_insights,"json-diff":json_diff,
+ "json-flatten-csv":json_flatten_csv,"csv-to-sqlite":csv_to_sqlite,"log-insights":log_insights,"json-diff":json_diff,"text-join":text_join,
 }
 
 
