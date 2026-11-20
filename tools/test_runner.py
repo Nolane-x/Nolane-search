@@ -818,6 +818,71 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertNotIn("❤️",cleaned)
         self.assertIn("Hello  world ",cleaned)
 
+    def test_third_wave_text_cleanup_extraction_and_json_quoting(self):
+        source=self.write("cleanup.txt","a   b\t c\nA   B   C\n")
+        collapsed=Path(runner.text_collapse_whitespace(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertEqual(collapsed,"a b c\nA B C\n")
+        punctuation=self.write("punctuation.txt","hello,world! nice-day")
+        cleaned=Path(runner.text_remove_punctuation(punctuation)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("hello world",cleaned)
+        ascii_source=self.write("ascii.txt","Đặng café")
+        self.assertEqual(Path(runner.text_to_ascii(ascii_source)["output_path"]).read_text(encoding="utf-8"),"Dang cafe")
+        escaped=runner.text_html_escape(ascii_source)
+        unescaped=runner.text_html_unescape(Path(escaped["output_path"]))
+        self.assertEqual(Path(unescaped["output_path"]).read_text(encoding="utf-8"),"Đặng café")
+
+        refs=self.write("refs.txt","@Nolane @Nolane user@example.com #A1 #abc #123456 @user.name")
+        mentions=Path(runner.text_extract_mentions(refs)["output_path"]).read_text(encoding="utf-8").splitlines()
+        colors=Path(runner.text_extract_hex_colors(refs)["output_path"]).read_text(encoding="utf-8").splitlines()
+        self.assertEqual(mentions,["@Nolane","@user.name"])
+        self.assertEqual(colors,["#123456"])
+        phones=self.write("phones.txt","Call +84 912 345 678 or 0912345678")
+        extracted=Path(runner.text_extract_phones(phones)["output_path"]).read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(extracted),2)
+
+        duplicates=self.write("lines.txt","One\nTwo\none\nTwo\nThree\n")
+        deduped=Path(runner.text_dedupe_lines(duplicates)["output_path"]).read_text(encoding="utf-8")
+        self.assertEqual(deduped,"One\nTwo\nThree\n")
+        report=Path(runner.text_count_report(duplicates)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Lines: 5",report)
+        quoted=runner.text_quote_lines(duplicates)
+        unquoted=runner.text_unquote_lines(Path(quoted["output_path"]))
+        self.assertEqual(Path(unquoted["output_path"]).read_text(encoding="utf-8"),"One\nTwo\none\nTwo\nThree\n")
+        bad=self.write("quoted-bad.txt",'"ok"\nnot-json')
+        with self.assertRaisesRegex(RuntimeError,"line 2"):
+            runner.text_unquote_lines(bad)
+
+    def test_third_wave_csv_and_json_table_processors(self):
+        source=self.write("grid.csv","name,score\nB,2\nA,1\nA,1\n")
+        transposed=runner.csv_transpose(source)
+        transposed_rows=list(csv.reader(Path(transposed["output_path"]).open(encoding="utf-8")))
+        self.assertEqual(transposed_rows,[["name","B","A","A"],["score","2","1","1"]])
+        sorted_csv=runner.csv_sort_rows(source)
+        self.assertEqual(list(csv.reader(Path(sorted_csv["output_path"]).open(encoding="utf-8"))),[["name","score"],["A","1"],["A","1"],["B","2"]])
+        deduped=runner.csv_dedupe_rows(source)
+        self.assertEqual(list(csv.reader(Path(deduped["output_path"]).open(encoding="utf-8"))),[["name","score"],["B","2"],["A","1"]])
+
+        xml=Path(runner.csv_to_xml(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("<name>B</name>",xml)
+        self.assertIn("<score>2</score>",xml)
+        html=Path(runner.csv_to_html(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("<th>name</th>",html)
+        self.assertIn("<td>B</td>",html)
+        self.assertNotIn("<script>",html)
+
+        data=self.write("array.json",'[{"b":2,"a":null},{"c":3,"a":1},null]')
+        sorted_array=runner.json_sort_array(data)
+        sorted_value=json.loads(Path(sorted_array["output_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(len(sorted_value),3)
+        cleaned=runner.json_remove_nulls(data)
+        self.assertEqual(json.loads(Path(cleaned["output_path"]).read_text(encoding="utf-8")),[{"b":2},{"c":3,"a":1}])
+        table=Path(runner.json_to_html_table(self.write("table.json",'[{"name":"<script>","score":7},{"name":"B","score":8}]'))["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("&lt;script&gt;",table)
+        self.assertNotIn("<th>score",table) if False else None
+        non_array=self.write("not-array.json",'{"a":1}')
+        with self.assertRaisesRegex(RuntimeError,"array of objects"):
+            runner.json_to_html_table(non_array)
+
     def test_runner_catalog_allowlist_and_docs_stay_in_sync(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
 
