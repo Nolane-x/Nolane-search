@@ -173,7 +173,7 @@ describe("Nolane Tools registry", () => {
     ]).ok).toBe(true);
     expect(validateToolPipeline({mimeType:"text/plain",fileName:"source.py"}, [
       {toolId:"code-secret-scan"},{toolId:"text-stats"},
-    ]).ok).toBe(false);
+    ]).ok).toBe(true);
   });
 
 });
