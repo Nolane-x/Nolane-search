@@ -1102,13 +1102,13 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
             return "<code>" + htmlEscape(node.id) + "</code> = <b>" + htmlEscape(tool?.name || node.toolId) +
               "</b> <code>" + htmlEscape(node.toolId) + "</code> ← " +
               htmlEscape(node.dependsOn[0] || "input") +
-              (node.reason ? "\n   " + htmlEscape(node.reason.slice(0, 120)) : "");
+              (node.reason ? "\n   " + htmlEscape(node.reason.slice(0, 65)) : "");
           })
         : plan.steps.map((step, index) => {
             const tool = getTool(step.toolId);
             return (index + 1) + ". <b>" + htmlEscape(tool?.name || step.toolId) + "</b> <code>" +
               htmlEscape(step.toolId) + "</code>" +
-              (step.reason ? "\n   " + htmlEscape(step.reason.slice(0, 120)) : "");
+              (step.reason ? "\n   " + htmlEscape(step.reason.slice(0, 65)) : "");
           });
       const modeLabel = plan.mode === "dag" ? "DAG song song" : plan.mode === "single" ? "Một processor" : "Pipeline tuần tự";
       const routeCost = result.route.estimatedCostUsd !== undefined
@@ -1116,10 +1116,10 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       const sections = [
         "<b>Nolane · Workflow Intelligence</b>",
         "Bản nháp: <code>" + draft.id + "</code> · hết hạn sau 15 phút",
-        "Mục tiêu: " + htmlEscape(goal.slice(0, 500)),
+        "Mục tiêu: " + htmlEscape(goal.slice(0, 220)),
         "",
         "<b>Phương án đề xuất · " + htmlEscape(modeLabel) + "</b>",
-        htmlEscape(plan.summary),
+        htmlEscape(plan.summary.slice(0, 300)),
         nodeLines.join("\n"),
         "",
         "Độ tin cậy tự đánh giá: " + Math.round(plan.confidence * 100) + "%",
@@ -1127,8 +1127,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
           plan.workload.criticalPathLength + " bước · tối đa " + plan.workload.maxParallelism +
           " node song song",
       ];
-      if (plan.assumptions.length) sections.push("", "<b>Giả định</b>", ...plan.assumptions.slice(0, 3).map(item => "• " + htmlEscape(item)));
-      if (plan.warnings.length) sections.push("", "<b>Lưu ý</b>", ...plan.warnings.slice(0, 3).map(item => "⚠️ " + htmlEscape(item)));
+      if (plan.assumptions.length) sections.push("", "<b>Giả định</b>", ...plan.assumptions.slice(0, 2).map(item => "• " + htmlEscape(item.slice(0, 110))));
+      if (plan.warnings.length) sections.push("", "<b>Lưu ý</b>", ...plan.warnings.slice(0, 2).map(item => "⚠️ " + htmlEscape(item.slice(0, 110))));
       sections.push(
         "",
         "<i>AI: " + htmlEscape(result.route.providerId + " / " + result.route.model) +
@@ -1138,7 +1138,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
         "<code>/workflow_plan_save " + draft.id + " Tên workflow</code>",
         "Sau khi lưu, dùng <code>/workflow_run WORKFLOW_ID</code> và gửi tệp."
       );
-      await reply(env, chatId, sections.join("\n").slice(0, 3_500));
+      await reply(env, chatId, sections.join("\n"));
     } catch (error) {
       await reply(env, chatId,
         "Không thể lập kế hoạch workflow: " +
@@ -1440,7 +1440,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       env.DB.prepare("SELECT COUNT(*) AS count FROM watches WHERE active = 1").first<{ count: number }>(),
       env.DB.prepare("SELECT COUNT(*) AS count FROM indexed_pages").first<{ count: number }>(),
       env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE cache_key LIKE 'personal-memory:%' AND expires_at > ?").bind(Date.now()).first<{ count: number }>(),
-      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ? AND cache_key NOT LIKE 'telegram-search:%' AND cache_key NOT LIKE 'search-feedback:%' AND cache_key NOT LIKE 'search-vote:%' AND cache_key NOT LIKE 'search-event:%' AND cache_key NOT LIKE 'site-crawl:%' AND cache_key NOT LIKE 'telegram-ui:%' AND cache_key NOT LIKE 'personal-memory:%' AND cache_key NOT LIKE 'ai-synthesis:%' AND cache_key NOT LIKE 'tool-job:%' AND cache_key NOT LIKE 'tool-pending:%' AND cache_key NOT LIKE 'tool-workflow:%' AND cache_key NOT LIKE 'tool-workflow-pending:%'").bind(Date.now()).first<{ count: number }>(),
+      env.DB.prepare("SELECT COUNT(*) AS count FROM search_cache WHERE expires_at > ? AND cache_key NOT LIKE 'telegram-search:%' AND cache_key NOT LIKE 'search-feedback:%' AND cache_key NOT LIKE 'search-vote:%' AND cache_key NOT LIKE 'search-event:%' AND cache_key NOT LIKE 'site-crawl:%' AND cache_key NOT LIKE 'telegram-ui:%' AND cache_key NOT LIKE 'personal-memory:%' AND cache_key NOT LIKE 'ai-synthesis:%' AND cache_key NOT LIKE 'tool-job:%' AND cache_key NOT LIKE 'tool-pending:%' AND cache_key NOT LIKE 'tool-workflow:%' AND cache_key NOT LIKE 'tool-workflow-pending:%' AND cache_key NOT LIKE 'tool-workflow-plan:%'").bind(Date.now()).first<{ count: number }>(),
       env.DB.prepare("SELECT status, COUNT(*) AS count FROM deep_search_jobs WHERE created_at >= ? GROUP BY status")
         .bind(Date.now() - 7 * 24 * 60 * 60 * 1000).all<{ status: string; count: number }>(),
     ]);
