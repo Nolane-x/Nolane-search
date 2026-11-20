@@ -1177,14 +1177,15 @@ resource "aws_s3_bucket_acl" "public" {
             sarif = json_module.loads(package.read("security.sarif"))
             findings = json_module.loads(package.read("security-findings.json"))
         rule_ids = {item["ruleId"] for item in findings["findings"]}
-        self.assertTrue({
+        expected_rules = {
             "NOLANE-GHA-001", "NOLANE-GHA-002", "NOLANE-GHA-003",
             "NOLANE-CTR-001", "NOLANE-CTR-002", "NOLANE-CTR-003",
             "NOLANE-CTR-004", "NOLANE-K8S-001", "NOLANE-K8S-002",
             "NOLANE-K8S-003", "NOLANE-K8S-004", "NOLANE-K8S-005",
             "NOLANE-K8S-006", "NOLANE-IAC-001", "NOLANE-IAC-002",
             "NOLANE-IAC-003",
-        }.issubset(rule_ids))
+        }
+        self.assertFalse(expected_rules - rule_ids, f"Missing rules: {sorted(expected_rules - rule_ids)}; actual: {sorted(rule_ids)}")
         self.assertEqual(sarif["version"], "2.1.0")
         self.assertEqual(len(sarif["runs"][0]["results"]), len(findings["findings"]))
         self.assertNotIn("never-print-this-secret", report)
