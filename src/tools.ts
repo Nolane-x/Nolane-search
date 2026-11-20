@@ -1,4 +1,4 @@
-export type ToolCategory = "image" | "document" | "audio-video" | "data" | "utility";
+export type ToolCategory = "image" | "document" | "audio-video" | "data" | "utility" | "developer";
 
 export interface ToolDefinition {
   id: string;
@@ -99,6 +99,14 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "csv-to-sqlite", name: "CSV sang SQLite", category: "data", description: "Nhập CSV vào SQLite với header chuẩn hóa, giá trị lưu dạng TEXT để tránh ép kiểu mất dữ liệu.", accepts: ["text/csv", ".csv"], output: "Database SQLite", ready: true },
   { id: "log-insights", name: "Phân tích log", category: "utility", description: "Thống kê level ERROR/FATAL/WARN/INFO/DEBUG và nhóm thông điệp lỗi lặp lại, không thực thi log.", accepts: ["text/plain", ".txt", ".log"], output: "Báo cáo TXT", ready: true },
   { id: "json-diff", name: "So sánh JSON", category: "data", description: "Nhận ZIP đúng hai JSON, chuẩn hóa key order rồi tạo unified diff dễ đọc.", accepts: [".zip"], output: "Báo cáo JSON diff TXT", ready: true },
+  { id: "markdown-outline", name: "Lập mục lục Markdown", category: "developer", description: "Đọc heading Markdown ngoài code fence, dựng cây đề mục và mục lục có anchor slug.", accepts: ["text/markdown", "text/plain", ".md", ".markdown"], output: "Mục lục TXT", ready: true },
+  { id: "markdown-links", name: "Trích liên kết Markdown", category: "developer", description: "Trích URL từ link và ảnh Markdown, kèm dòng, nhãn và loại liên kết để kiểm tra ngoại tuyến.", accepts: ["text/markdown", "text/plain", ".md", ".markdown"], output: "CSV liên kết", ready: true },
+  { id: "text-redact", name: "Che dữ liệu nhạy cảm", category: "developer", description: "Tạo bản sao đã che email, bearer/API token và chuỗi khóa phổ biến; không ghi giá trị gốc vào báo cáo.", accepts: ["text/plain", ".txt", ".md", ".log", ".json", ".yaml", ".yml", ".env", ".py", ".js", ".ts", ".html"], output: "Tệp văn bản đã redaction", ready: true },
+  { id: "text-extract", name: "Trích URL, email và IP", category: "developer", description: "Tìm URL, email và địa chỉ IPv4 hợp lệ trong văn bản, khử trùng và đếm số lần xuất hiện.", accepts: ["text/plain", ".txt", ".md", ".log", ".html", ".json", ".csv"], output: "CSV thực thể trích xuất", ready: true },
+  { id: "code-imports", name: "Báo cáo import code", category: "developer", description: "Phân tích tĩnh import/require trong Python, JavaScript, TypeScript và Go; không chạy mã.", accepts: [".py", ".pyw", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go"], output: "Báo cáo dependency TXT", ready: true },
+  { id: "code-todos", name: "Quét TODO / FIXME", category: "developer", description: "Tìm TODO, FIXME, HACK, BUG và XXX theo dòng, nhóm theo loại ưu tiên.", accepts: [".py", ".pyw", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".css", ".html", ".go", ".rs", ".java", ".c", ".cpp", ".h", ".hpp", ".cs", ".sql", ".sh", ".bash", ".md"], output: "Báo cáo công việc TXT", ready: true },
+  { id: "code-secret-scan", name: "Quét secret trong code", category: "developer", description: "Quét tĩnh một số mẫu token/credential phổ biến; báo loại và số dòng, tuyệt đối không in giá trị bí mật.", accepts: [".py", ".pyw", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".json", ".yaml", ".yml", ".toml", ".ini", ".env", ".cfg", ".sh", ".bash", ".go", ".rs", ".java", ".cs"], output: "Báo cáo secret scan TXT", ready: true },
+  { id: "log-timeline", name: "Tóm tắt timeline log", category: "developer", description: "Nhận diện timestamp ISO, thống kê log theo ngày và giờ, xác định khoảng thời gian được ghi nhận.", accepts: ["text/plain", ".txt", ".log"], output: "Báo cáo timeline TXT", ready: true },
 
 ];
 
@@ -178,6 +186,14 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "csv-to-sqlite": ["sqlite-inspect","sqlite-integrity","sqlite-export"],
   "log-insights": ["text-clean","text-stats","text-deduplicate"],
   "json-diff": ["text-clean","text-stats","text-deduplicate"],
+  "markdown-outline": ["text-clean","text-stats"],
+  "markdown-links": ["csv-profile","csv-clean","csv-to-xlsx","csv-to-json"],
+  "text-redact": ["text-clean","text-stats","text-deduplicate"],
+  "text-extract": ["csv-profile","csv-clean","csv-to-xlsx"],
+  "code-imports": ["text-clean","text-stats"],
+  "code-todos": ["text-clean","text-stats","text-deduplicate"],
+  "code-secret-scan": ["text-clean","text-stats"],
+  "log-timeline": ["text-clean","text-stats"],
 };
 
 export type ToolPipelineValidation =
