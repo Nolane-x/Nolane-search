@@ -1120,7 +1120,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
         "",
         "<b>Phương án đề xuất · " + htmlEscape(modeLabel) + "</b>",
         htmlEscape(plan.summary.slice(0, 300)),
-        nodeLines.join("\n"),
+        ...nodeLines,
         "",
         "Độ tin cậy tự đánh giá: " + Math.round(plan.confidence * 100) + "%",
         "Workload: " + plan.workload.nodeCount + " processor · đường găng " +
@@ -1138,7 +1138,19 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
         "<code>/workflow_plan_save " + draft.id + " Tên workflow</code>",
         "Sau khi lưu, dùng <code>/workflow_run WORKFLOW_ID</code> và gửi tệp."
       );
-      await reply(env, chatId, sections.join("\n"));
+      const previewChunks: string[] = [];
+      let currentChunk = "";
+      for (const section of sections) {
+        const candidate = currentChunk ? currentChunk + "\n" + section : section;
+        if (candidate.length > 3_500 && currentChunk) {
+          previewChunks.push(currentChunk);
+          currentChunk = section;
+        } else {
+          currentChunk = candidate;
+        }
+      }
+      if (currentChunk) previewChunks.push(currentChunk);
+      for (const chunk of previewChunks) await reply(env, chatId, chunk);
     } catch (error) {
       await reply(env, chatId,
         "Không thể lập kế hoạch workflow: " +
@@ -1153,7 +1165,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       await reply(env, chatId, "Bản nháp workflow chỉ được lưu trong chat riêng được cấp quyền.");
       return;
     }
-    const match = args.trim().match(/^([a-f0-9]{8})\s+([\s\S]{3,80})$/i);
+    const match = args.trim().match(/^([a-f0-9]{8})\s+([\s\S]{3,40})$/i);
     if (!match) {
       await reply(env, chatId, "Cú pháp: <code>/workflow_plan_save PLAN_ID Tên workflow</code>.");
       return;
