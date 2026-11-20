@@ -1473,7 +1473,9 @@ def json_keys_report(p):
                 visit(child,child_path)
         elif isinstance(item,list):
             for index,child in enumerate(item[:100_000]):
-                visit(child,path+"["+str(index)+"]")
+                child_path=path+"["+str(index)+"]"
+                counts[child_path]=counts.get(child_path,0)+1
+                visit(child,child_path)
     visit(value)
     lines=["JSON key/path report","Unique paths: "+str(len(counts))]
     lines.extend(path+"\t"+str(count) for path,count in sorted(counts.items()))
