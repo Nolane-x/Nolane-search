@@ -26,7 +26,7 @@ function escapeRegExp(value: string): string {
 }
 
 export function normalizeTranslationLanguage(value: string): string | null {
-  const normalized = value.normalize("NFC").trim().toLocaleLowerCase("vi");
+  const normalized = value.normalize("NFC").trim().toLocaleLowerCase("vi").replace(/^tiếng\\s+/, "");
   for (const item of LANGUAGE_ALIASES) {
     if (item.language.toLocaleLowerCase("en") === normalized || item.aliases.some(alias => alias.toLocaleLowerCase("vi") === normalized)) {
       return item.language;
