@@ -1572,7 +1572,8 @@ def csv_to_jsonl(p):
         used.add(name)
         headers.append(name)
     if len(headers)>200 or len(rows)>100_001: raise RuntimeError("CSV-to-JSONL is limited to 100,000 rows and 200 columns.")
-    records=[dict(zip(headers,row)) for row in rows[1:]]
+    if any(len(row)>len(headers) for row in rows[1:]): raise RuntimeError("CSV data row contains more fields than the header.")
+    records=[dict(zip(headers,row+[""]*(len(headers)-len(row)))) for row in rows[1:]]
     output="\n".join(json.dumps(record,ensure_ascii=False,separators=(",",":")) for record in records)
     if records: output+="\n"
     return _write_text_artifact_ext(p,"records",".jsonl",output,"CSV to JSONL",str(len(records))+" record(s)")
