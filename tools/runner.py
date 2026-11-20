@@ -2385,8 +2385,11 @@ def text_redact(p):
 
 
 def text_extract(p):
+    import bisect
     import ipaddress
     raw=_read_small_text(p)
+    line_starts=[0]
+    line_starts.extend(index+1 for index,char in enumerate(raw) if char=="\n")
     found={}
     patterns=[
         ("URL",re.compile(r"https?://[^\s<>()\[\]{}\"']+",re.I)),
@@ -2394,6 +2397,7 @@ def text_extract(p):
         ("IPv4",re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")),
     ]
     for kind,pattern in patterns:
+        if len(found)>=20000: break
         for match in pattern.finditer(raw):
             value=match.group(0).rstrip(".,;:!?)]}")
             if kind=="IPv4":
@@ -2402,7 +2406,7 @@ def text_extract(p):
             if kind=="URL" and value.endswith("."): value=value[:-1]
             if not value: continue
             key=(kind,value)
-            item=found.setdefault(key,{"count":0,"line":raw.count("\n",0,match.start())+1})
+            item=found.setdefault(key,{"count":0,"line":bisect.bisect_right(line_starts,match.start())})
             item["count"]+=1
             if len(found)>=20000: break
     out=p.with_name(p.stem+"-entities.csv")
