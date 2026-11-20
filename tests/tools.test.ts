@@ -5,11 +5,12 @@ describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
     const ids = TOOL_CATALOG.map(tool => tool.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(TOOL_CATALOG).toHaveLength(247);
+    expect(TOOL_CATALOG).toHaveLength(267);
     expect(TOOL_CATALOG.every(tool => tool.ready && tool.description.length > 12 && tool.accepts.length > 0)).toBe(true);
     for (const id of ["text-extract-todo-comments", "text-extract-markdown-images", "text-strip-markdown-frontmatter", "text-markdown-to-plain", "text-sort-unique-words", "text-word-to-lines", "text-join-lines", "text-extract-domains", "text-extract-uuids", "text-extract-semver", "text-extract-ipv6", "text-redact-secrets", "text-extract-comment-lines", "text-tabs-to-spaces", "text-escape-regex", "text-unescape-regex", "json-merge-objects", "json-array-dedupe", "json-array-to-lines", "csv-trim-cells", "csv-remove-empty-columns", "csv-empty-cell-report"]) expect(getTool(id)?.ready).toBe(true);
     for (const id of ["text-translate","language-detect","text-uppercase","text-lowercase","text-title-case","text-sort-lines","text-reverse-lines","text-number-lines","text-remove-blank-lines","text-wrap","text-trim-lines","text-extract-emails","text-extract-urls","text-extract-hashtags","text-to-base64","base64-to-text","url-encode","url-decode","json-minify","json-sort-keys","text-slugify","text-word-frequency","text-extract-numbers","text-extract-dates","text-reverse-characters","text-snake-case","text-kebab-case","text-camel-case","text-swap-case","text-extract-ipv4","text-mask-emails","text-mask-phones","json-to-jsonl","jsonl-to-json","csv-to-tsv","tsv-to-csv","csv-to-markdown","html-minify","xml-minify","text-remove-emoji","text-collapse-whitespace","text-remove-punctuation","text-to-ascii","text-html-escape","text-html-unescape","text-extract-mentions","text-extract-hex-colors","text-extract-phones","text-dedupe-lines","text-count-report","text-quote-lines","text-unquote-lines","csv-transpose","csv-sort-rows","csv-dedupe-rows","csv-to-xml","csv-to-html","json-sort-array","json-remove-nulls","json-to-html-table","text-pascal-case","text-constant-case","text-dot-case","text-initials","text-normalize-unicode","text-remove-control-chars","text-remove-duplicate-words","text-extract-markdown-links","text-extract-markdown-headings","text-extract-quotes","text-paragraph-report","json-flatten","json-unflatten","json-keys-report","csv-remove-empty-rows","csv-add-row-numbers","csv-column-stats","csv-normalize-headers","csv-to-jsonl","jsonl-to-csv","text-indent-lines","text-unindent-lines","text-dedupe-paragraphs","text-tokenize-words","text-sentence-report","text-line-length-report","text-normalize-newlines","text-remove-zero-width","text-extract-file-paths","text-sort-words","html-extract-links","html-extract-images","html-extract-title","html-sanitize","xml-tree-report","json-to-xml","json-type-report","json-escape-string","json-unescape-string","csv-unique-values","text-sentence-case","text-normalize-quotes","text-normalize-dashes","text-reverse-word-order","text-extract-words","text-extract-sentences","text-dedupe-sentences","text-remove-markdown-formatting","text-markdown-toc","text-markdown-code-blocks","text-markdown-table-extract","text-extract-numbered-lists","text-join-hyphenated-lines","text-strip-bom","text-normalize-paragraph-spacing","csv-schema-infer","csv-duplicates-report","csv-sample-rows","json-array-stats","json-canonicalize"]) expect(getTool(id)?.ready).toBe(true);
     for (const id of ["pdf-rotate-cw","pdf-remove-blank","image-trim-border","image-pixelate","image-diff","audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean","json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join"]) expect(getTool(id)).not.toBeNull();
+    for (const id of ["text-sort-lines-natural","text-extract-percentages","text-extract-currencies","text-extract-bracketed","text-character-frequency","text-extract-acronyms","text-strip-diacritics","text-hard-wrap","text-ensure-final-newline","text-rot13","base64url-encode","base64url-decode","hex-encode-text","hex-decode-text","binary-encode-text","binary-decode-text","url-query-params","json-deep-merge","json-array-flatten","markdown-table-to-csv"]) expect(getTool(id)?.ready).toBe(true);
   });
 
   it("infers a suitable default tool from common uploaded media", () => {
@@ -56,6 +57,17 @@ describe("Nolane Tools registry", () => {
     ]).ok).toBe(true);
     expect(validateToolPipeline({mimeType:"text/csv",fileName:"rows.csv"}, [{toolId:"csv-to-json"},{toolId:"json-format"}]).ok).toBe(true);
     expect(validateToolPipeline({mimeType:"application/pdf",fileName:"scan.pdf"}, [{toolId:"pdf-extract-images"},{toolId:"archive-inspect"}]).ok).toBe(true);
+  });
+
+  it("validates fifth-wave encoding, URL, JSON and Markdown pipelines", () => {
+    const textFile={mimeType:"text/plain",fileName:"content.txt"};
+    const jsonFile={mimeType:"application/json",fileName:"objects.json"};
+    expect(validateToolPipeline(textFile,[{toolId:"hex-encode-text"},{toolId:"hex-decode-text"}]).ok).toBe(true);
+    expect(validateToolPipeline(textFile,[{toolId:"base64url-encode"},{toolId:"base64url-decode"}]).ok).toBe(true);
+    expect(validateToolPipeline(jsonFile,[{toolId:"json-deep-merge"},{toolId:"json-canonicalize"}]).ok).toBe(true);
+    expect(validateToolPipeline(jsonFile,[{toolId:"json-array-flatten"},{toolId:"json-array-stats"}]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"text/markdown",fileName:"table.md"},[{toolId:"markdown-table-to-csv"},{toolId:"csv-profile"}]).ok).toBe(true);
+    expect(isToolCompatible(getTool("binary-decode-text")!,"text/plain","bits.txt")).toBe(true);
   });
 
   it("validates reusable workflow definitions without assuming an uploaded file", () => {
