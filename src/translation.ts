@@ -40,7 +40,7 @@ export function extractTranslationTarget(prompt: string): string | null {
   const normalized = prompt.normalize("NFC").toLocaleLowerCase("vi");
   for (const item of LANGUAGE_ALIASES) {
     for (const alias of item.aliases) {
-      const escaped = escapeRegExp(alias.toLocaleLowerCase("vi")).replace(/\\ /g, "\\s+");
+      const escaped = escapeRegExp(alias.toLocaleLowerCase("vi")).replace(/ /g, "\\s+");
       const pattern = new RegExp("(?:\\bsang\\s+(?:tiếng\\s+)?|\\bto\\s+|\\binto\\s+)" + escaped + "(?=$|[\\s.,!?;:])", "i");
       if (pattern.test(normalized)) return item.language;
     }
