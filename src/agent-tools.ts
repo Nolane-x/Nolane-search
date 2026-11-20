@@ -972,7 +972,7 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     return output;
   }
   if (toolId === "text-extract-comment-lines") {
-    const patterns=[/^\/\//,/^\/\*/,/^\*/,/^\*\//,/^--/,/^#(?!\s)/];
+    const patterns=[/^\/\//,/^\/\*/,/^\*/,/^\*\//,/^--/,/^#/];
     return content.split(/\r?\n/).flatMap((line,index)=>patterns.some(pattern=>pattern.test(line.trimStart()))?[(index+1)+"\t"+line.trim()]:[]).join("\n");
   }
   if (toolId === "text-tabs-to-spaces") {
