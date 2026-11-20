@@ -3063,6 +3063,15 @@ def _repo_architecture_graph(p):
         ]
         return next((candidate for candidate in candidates if candidate in paths), None)
 
+    def resolve_python_module(module):
+        base = module.replace(".", "/")
+        candidates = (base + ".py", base + "/__init__.py")
+        for candidate in candidates:
+            exact = next((path for path in sorted(paths) if path == candidate or path.endswith("/" + candidate)), None)
+            if exact:
+                return exact
+        return None
+
     for source, raw in text_files.items():
         suffix = Path(source).suffix.lower()
         if suffix in (".py", ".pyw"):
@@ -3071,17 +3080,17 @@ def _repo_architecture_graph(p):
                 for node in ast.walk(tree):
                     if isinstance(node, ast.Import):
                         for alias in node.names:
-                            module = alias.name.replace(".", "/")
-                            match = next((candidate for candidate in (module + ".py", module + "/__init__.py") if candidate in paths), None)
+                            match = resolve_python_module(alias.name)
                             if match:
                                 edges.add((source, match))
                     elif isinstance(node, ast.ImportFrom):
                         if node.level:
                             parent = posixpath.dirname(source)
                             base = posixpath.normpath(posixpath.join(parent, *([".."] * (node.level - 1)), (node.module or "").replace(".", "/")))
+                            candidates = (base + ".py", base + "/__init__.py")
+                            match = next((candidate for candidate in candidates if candidate in paths), None)
                         else:
-                            base = (node.module or "").replace(".", "/")
-                        match = next((candidate for candidate in (base + ".py", base + "/__init__.py") if candidate in paths), None)
+                            match = resolve_python_module(node.module or "")
                         if match:
                             edges.add((source, match))
             except (SyntaxError, ValueError, RecursionError):
