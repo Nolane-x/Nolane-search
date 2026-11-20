@@ -576,8 +576,14 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
       records.push(value as Record<string,unknown>);if(records.length>100_000)throw new Error("JSONL exceeds 100,000 records.");
     }
     const headers=[...new Set(records.flatMap(record=>Object.keys(record)))];
+    const encodeCsvCell=(value:string)=>{
+      let safe=value;
+      const numericNegative=/^\s*-\d+(?:[.,]\d+)?\s*$/.test(safe);
+      if(/^[\s]*[=+@]/.test(safe)||(/^[\s]*-/.test(safe)&&!numericNegative)) safe="'"+safe;
+      return /[",\r\n]/.test(safe)?'"'+safe.replace(/"/g,'""')+'"':safe;
+    };
     const cell=(value:unknown)=>value==null?"":typeof value==="string"?value:JSON.stringify(value);
-    return [headers.map(csvEscape).join(","),...records.map(record=>headers.map(key=>csvEscape(cell(record[key])).replace(/[\r\n]+/g," ")).join(","))].join("\n");
+    return [headers.map(encodeCsvCell).join(","),...records.map(record=>headers.map(key=>encodeCsvCell(cell(record[key]).replace(/[\r\n]+/g," "))).join(","))].join("\n");
   }
   if (toolId === "text-indent-lines") return content.split(/\r?\n/).map(line=>line.trim()?"    "+line:"").join("\n");
   if (toolId === "text-unindent-lines") {

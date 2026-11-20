@@ -1620,9 +1620,18 @@ def jsonl_to_csv(p):
     import io
     stream=io.StringIO(newline="")
     writer=csv.writer(stream,lineterminator="\n")
-    writer.writerow(headers)
+    def spreadsheet_safe(value):
+        if not isinstance(value,str):
+            return value
+        stripped=value.lstrip()
+        if stripped.startswith(("=","+","@")):
+            return "'"+value
+        if stripped.startswith("-") and not re.fullmatch(r"-\d+(?:[.,]\d+)?",stripped):
+            return "'"+value
+        return value
+    writer.writerow([spreadsheet_safe(key) for key in headers])
     for record in records:
-        writer.writerow([json.dumps(record.get(key),ensure_ascii=False) if isinstance(record.get(key),(dict,list)) else ("" if record.get(key) is None else record.get(key)) for key in headers])
+        writer.writerow([spreadsheet_safe(json.dumps(record.get(key),ensure_ascii=False) if isinstance(record.get(key),(dict,list)) else ("" if record.get(key) is None else record.get(key))) for key in headers])
     return _write_text_artifact_ext(p,"records",".csv",stream.getvalue(),"JSONL to CSV",str(len(records))+" record(s)")
 
 

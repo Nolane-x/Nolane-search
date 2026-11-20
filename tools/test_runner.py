@@ -956,6 +956,10 @@ class ToolRunnerUnitTests(unittest.TestCase):
         back_rows=list(csv.reader(Path(back["output_path"]).open(encoding="utf-8")))
         self.assertEqual(back_rows[0],["Name","Score","Name_2"])
         self.assertEqual(back_rows[1],["An","7","first"])
+        formula_jsonl=self.write("formula.jsonl",'{"amount":-7,"formula":"=1+1","command":"-1+2"}')
+        safe_csv=Path(runner.jsonl_to_csv(formula_jsonl)["output_path"]).read_text(encoding="utf-8")
+        safe_rows=list(csv.reader(safe_csv.splitlines()))
+        self.assertEqual(safe_rows[1],["-7","'=1+1","'-1+2"])
 
     def test_fifth_wave_text_structure_and_statistics_tools(self):
         source=self.write("structure.txt","    alpha beta\n        gamma\n\n    delta")
