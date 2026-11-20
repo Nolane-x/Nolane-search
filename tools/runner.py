@@ -1693,6 +1693,284 @@ def text_sort_words(p):
     return _write_text_artifact(p,"sorted-words","\n".join(ordered)+("\n" if ordered else ""),"Word sorting",str(len(words))+" word(s) sorted")
 
 
+def html_extract_links(p):
+    raw=_read_text_source(p,max_chars=5_000_000)
+    class LinkParser(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.items=[]
+            self.current=None
+        def handle_starttag(self,tag,attrs):
+            if tag.lower()=="a":
+                values=dict(attrs)
+                if values.get("href"):
+                    self.current={"url":values["href"],"text":"","title":values.get("title","")}
+            elif tag.lower()=="img":
+                values=dict(attrs)
+                if values.get("src"):
+                    self.items.append({"url":values["src"],"alt":values.get("alt",""),"title":values.get("title","")})
+        def handle_data(self,data):
+            if self.current is not None: self.current["text"]+=data
+        def handle_endtag(self,tag):
+            if tag.lower()=="a" and self.current is not None:
+                self.items.append(self.current)
+                self.current=None
+    parser=LinkParser()
+    try: parser.feed(raw); parser.close()
+    except Exception as exc: raise RuntimeError("Invalid HTML: "+str(exc)) from exc
+    seen=set()
+    results=[]
+    for item in parser.items:
+        key=(item.get("url",""),item.get("text",""),item.get("alt",""))
+        if key in seen: continue
+        seen.add(key)
+        results.append(json.dumps(item,ensure_ascii=False))
+    output="\n".join(results)
+    return _write_text_artifact(p,"html-links",output+("\n" if output else ""),"HTML link/image extraction",str(len(results))+" item(s)")
+
+
+def html_extract_images(p):
+    raw=_read_text_source(p,max_chars=5_000_000)
+    class ImageParser(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.items=[]
+        def handle_starttag(self,tag,attrs):
+            if tag.lower()=="img":
+                values=dict(attrs)
+                if values.get("src"): self.items.append({"src":values["src"],"alt":values.get("alt",""),"title":values.get("title","")})
+    parser=ImageParser()
+    try: parser.feed(raw); parser.close()
+    except Exception as exc: raise RuntimeError("Invalid HTML: "+str(exc)) from exc
+    unique=[]
+    seen=set()
+    for item in parser.items:
+        if item["src"] in seen: continue
+        seen.add(item["src"])
+        unique.append(json.dumps(item,ensure_ascii=False))
+    output="\n".join(unique)
+    return _write_text_artifact(p,"html-images",output+("\n" if output else ""),"HTML image extraction",str(len(unique))+" unique image(s)")
+
+
+def html_extract_title(p):
+    raw=_read_text_source(p,max_chars=5_000_000)
+    class TitleParser(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.active=False
+            self.parts=[]
+        def handle_starttag(self,tag,attrs):
+            if tag.lower()=="title": self.active=True
+        def handle_endtag(self,tag):
+            if tag.lower()=="title": self.active=False
+        def handle_data(self,data):
+            if self.active: self.parts.append(data)
+    parser=TitleParser()
+    try: parser.feed(raw); parser.close()
+    except Exception as exc: raise RuntimeError("Invalid HTML: "+str(exc)) from exc
+    title=re.sub(r"\s+"," "," ".join(parser.parts)).strip()
+    return _write_text_artifact(p,"html-title",title+"\n" if title else "","HTML title extraction")
+
+
+def html_sanitize(p):
+    raw=_read_text_source(p,max_chars=5_000_000)
+    class Sanitizer(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=False)
+            self.parts=[]
+            self.skip_stack=[]
+            self.void={"area","base","br","col","embed","hr","img","input","link","meta","param","source","track","wbr"}
+            self.drop={"script","style","iframe","object","embed","applet"}
+        def handle_starttag(self,tag,attrs):
+            tag=tag.lower()
+            if self.skip_stack:
+                if tag not in self.void: self.skip_stack.append(tag)
+                return
+            if tag in self.drop:
+                self.skip_stack.append(tag)
+                return
+            safe=[]
+            for key,value in attrs:
+                key=key.lower()
+                if key.startswith("on") or key=="style": continue
+                if value is not None and key in {"href","src","xlink:href","formaction"}:
+                    normalized=re.sub(r"[\x00-\x20]+","",value).lower()
+                    if normalized.startswith(("javascript:","vbscript:","data:text/html")): continue
+                safe.append((key,value))
+            self.parts.append("<"+tag)
+            for key,value in safe:
+                if value is None: self.parts.append(" "+key)
+                else: self.parts.append(" "+key+'="'+escape(value,quote=True)+'"')
+            self.parts.append(">")
+        def handle_startendtag(self,tag,attrs):
+            tag=tag.lower()
+            if self.skip_stack or tag in self.drop: return
+            safe=[]
+            for key,value in attrs:
+                key=key.lower()
+                if key.startswith("on") or key=="style": continue
+                if value is not None and key in {"href","src","xlink:href","formaction"}:
+                    normalized=re.sub(r"[\x00-\x20]+","",value).lower()
+                    if normalized.startswith(("javascript:","vbscript:","data:text/html")): continue
+                safe.append((key,value))
+            self.parts.append("<"+tag)
+            for key,value in safe:
+                if value is None: self.parts.append(" "+key)
+                else: self.parts.append(" "+key+'="'+escape(value,quote=True)+'"')
+            self.parts.append("/>")
+        def handle_endtag(self,tag):
+            tag=tag.lower()
+            if self.skip_stack:
+                if tag in self.skip_stack:
+                    index=len(self.skip_stack)-1-self.skip_stack[::-1].index(tag)
+                    self.skip_stack=self.skip_stack[:index]
+                return
+            if tag not in self.void: self.parts.append("</"+tag+">")
+        def handle_data(self,data):
+            if not self.skip_stack: self.parts.append(data)
+        def handle_entityref(self,name):
+            if not self.skip_stack: self.parts.append("&"+name+";")
+        def handle_charref(self,name):
+            if not self.skip_stack: self.parts.append("&#"+name+";")
+        def handle_comment(self,data): pass
+        def handle_decl(self,decl):
+            if not self.skip_stack and not re.match(r"\s*doctype\s+html",decl,re.I): self.parts.append("<!"+decl+">")
+    parser=Sanitizer()
+    try: parser.feed(raw); parser.close()
+    except Exception as exc: raise RuntimeError("HTML sanitization failed: "+str(exc)) from exc
+    output="".join(parser.parts)
+    return _write_text_artifact_ext(p,"sanitized",".html",output,"HTML sanitization","removed executable elements, event handlers, inline styles and unsafe URL schemes")
+
+
+def _xml_element_to_value(element):
+    result={}
+    for key,value in element.attrib.items():
+        result["@"+key]=value
+    grouped={}
+    for child in list(element):
+        grouped.setdefault(child.tag,[]).append(_xml_element_to_value(child))
+    for key,values in grouped.items():
+        result[key]=values[0] if len(values)==1 else values
+    text=(element.text or "").strip()
+    if text:
+        if result: result["#text"]=text
+        else: return text
+    return result
+
+
+def xml_to_json(p):
+    import xml.etree.ElementTree as ET
+    raw=_read_text_source(p)
+    if re.search(r"<!\s*(?:DOCTYPE|ENTITY)\b",raw,re.I):
+        raise RuntimeError("XML DTD and ENTITY declarations are not supported.")
+    try:
+        root=ET.fromstring(raw)
+        result={root.tag:_xml_element_to_value(root)}
+    except ET.ParseError as exc: raise RuntimeError("Invalid XML: "+str(exc)) from exc
+    output=json.dumps(result,ensure_ascii=False,indent=2)
+    return _write_text_artifact_ext(p,"converted",".json",output+"\n","XML to JSON conversion")
+
+
+def _xml_safe_tag(value,index=1):
+    tag=re.sub(r"[^A-Za-z0-9_.-]","_",str(value)) or "item_"+str(index)
+    if not re.match(r"[A-Za-z_]",tag): tag="item_"+tag
+    return tag
+
+
+def json_to_xml(p):
+    import xml.etree.ElementTree as ET
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    if not isinstance(value,dict): raise RuntimeError("JSON-to-XML expects a top-level object.")
+    def add_value(parent,name,item):
+        if isinstance(item,list):
+            for child in item: add_value(parent,name,child)
+            return
+        element=ET.SubElement(parent,_xml_safe_tag(name))
+        if isinstance(item,dict):
+            for key,child in item.items():
+                if key=="#text":
+                    element.text="" if child is None else str(child)
+                elif key.startswith("@"):
+                    element.set(_xml_safe_tag(key[1:]),"" if child is None else str(child))
+                else:
+                    add_value(element,key,child)
+        elif item is not None:
+            element.text=str(item).lower() if isinstance(item,bool) else str(item)
+    root=ET.Element("root")
+    for key,item in value.items():
+        if key.startswith("@"):
+            root.set(_xml_safe_tag(key[1:]),"" if item is None else str(item))
+        elif key=="#text":
+            root.text="" if item is None else str(item)
+        else:
+            add_value(root,key,item)
+    output=ET.tostring(root,encoding="unicode",short_empty_elements=True)
+    return _write_text_artifact_ext(p,"converted",".xml",output,"JSON to XML conversion")
+
+
+def json_type_report(p):
+    raw=_read_text_source(p)
+    try: value=_load_json_reject_duplicates(raw)
+    except (ValueError,json.JSONDecodeError) as exc: raise RuntimeError("Invalid JSON: "+str(exc)) from exc
+    counts={"object":0,"array":0,"string":0,"number":0,"boolean":0,"null":0}
+    max_depth=0
+    def visit(item,depth):
+        nonlocal max_depth
+        max_depth=max(max_depth,depth)
+        if item is None: counts["null"]+=1
+        elif isinstance(item,bool): counts["boolean"]+=1
+        elif isinstance(item,(int,float)): counts["number"]+=1
+        elif isinstance(item,str): counts["string"]+=1
+        elif isinstance(item,dict):
+            counts["object"]+=1
+            for child in item.values(): visit(child,depth+1)
+        elif isinstance(item,list):
+            counts["array"]+=1
+            for child in item: visit(child,depth+1)
+    visit(value,0)
+    lines=["JSON type report","Maximum depth: "+str(max_depth)]
+    lines.extend(kind+": "+str(count) for kind,count in counts.items())
+    return _write_text_artifact(p,"type-report","\n".join(lines)+"\n","JSON type report")
+
+
+def json_escape_string(p):
+    raw=_read_text_source(p)
+    return _write_text_artifact_ext(p,"json-string",".json",json.dumps(raw,ensure_ascii=False)+"\n","JSON string escaping")
+
+
+def json_unescape_string(p):
+    raw=_read_text_source(p)
+    try: value=json.loads(raw)
+    except json.JSONDecodeError as exc: raise RuntimeError("Input must be a valid JSON string scalar.") from exc
+    if not isinstance(value,str): raise RuntimeError("Input must be a JSON string, not an object, array or number.")
+    return _write_text_artifact(p,"unescaped-string",value,"JSON string decoding")
+
+
+def csv_unique_values(p):
+    import io
+    raw=_read_text_source(p)
+    try: rows=list(csv.reader(io.StringIO(raw,newline="")))
+    except csv.Error as exc: raise RuntimeError("Invalid CSV: "+str(exc)) from exc
+    if not rows: raise RuntimeError("CSV is empty.")
+    header=rows[0]
+    if len(header)>200: raise RuntimeError("CSV unique-value report supports at most 200 columns.")
+    columns=[]
+    for index,name in enumerate(header):
+        counts={}
+        order=[]
+        for row in rows[1:]:
+            value=row[index].strip() if index<len(row) else ""
+            if not value: continue
+            if value not in counts: order.append(value); counts[value]=0
+            counts[value]+=1
+        for value in order:
+            columns.append(json.dumps({"column":name,"value":value,"count":counts[value]},ensure_ascii=False))
+    output="\n".join(columns)
+    return _write_text_artifact(p,"unique-values",output+("\n" if output else ""),"CSV unique-value report",str(len(columns))+" column/value pair(s)")
+
+
 def subtitle_text(p):
     raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
     lines=[]
