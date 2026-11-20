@@ -5,9 +5,9 @@ describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
     const ids = TOOL_CATALOG.map(tool => tool.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(85);
+    expect(TOOL_CATALOG.length).toBeGreaterThanOrEqual(86);
     expect(TOOL_CATALOG.every(tool => tool.ready && tool.description.length > 12 && tool.accepts.length > 0)).toBe(true);
-    for (const id of ["pdf-rotate-cw","pdf-remove-blank","image-trim-border","image-pixelate","image-diff","audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean","json-flatten-csv","csv-to-sqlite","log-insights","json-diff"]) expect(getTool(id)).not.toBeNull();
+    for (const id of ["pdf-rotate-cw","pdf-remove-blank","image-trim-border","image-pixelate","image-diff","audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean","json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join"]) expect(getTool(id)).not.toBeNull();
   });
 
   it("infers a suitable default tool from common uploaded media", () => {
@@ -101,6 +101,36 @@ describe("Nolane Tools registry", () => {
     expect(isToolCompatible(getTool("image-grayscale")!, "image/png", "photo.png")).toBe(true);
     expect(getTool("not-a-tool")).toBeNull();
   });
+  it("allows a bounded text-join fan-in only after compatible parent branches", () => {
+    const dag = [
+      { id: "source", toolId: "pdf-text", dependsOn: [] },
+      { id: "clean", toolId: "text-clean", dependsOn: ["source"] },
+      { id: "stats", toolId: "text-stats", dependsOn: ["clean"] },
+      { id: "unique", toolId: "text-deduplicate", dependsOn: ["clean"] },
+      { id: "merged", toolId: "text-join", dependsOn: ["stats", "unique"] },
+    ];
+    expect(validateToolDagDefinition(dag)).toMatchObject({
+      ok: true, roots: ["source"], leaves: ["merged"],
+    });
+    expect(validateToolDag({ mimeType: "application/pdf", fileName: "report.pdf" }, dag).ok).toBe(true);
+
+    const ordinaryMultiParent = dag.map(node => ({ ...node }));
+    ordinaryMultiParent[4] = { id: "merged", toolId: "text-clean", dependsOn: ["stats", "unique"] };
+    expect(validateToolDagDefinition(ordinaryMultiParent).ok).toBe(false);
+
+    const singleParentJoin = dag.map(node => ({ ...node }));
+    singleParentJoin[4] = { id: "merged", toolId: "text-join", dependsOn: ["stats"] };
+    expect(validateToolDagDefinition(singleParentJoin).ok).toBe(false);
+
+    const repeatedParent = dag.map(node => ({ ...node }));
+    repeatedParent[4] = { id: "merged", toolId: "text-join", dependsOn: ["stats", "stats"] };
+    expect(validateToolDagDefinition(repeatedParent).ok).toBe(false);
+
+    expect(validateToolPipelineDefinition([
+      { toolId: "text-stats" }, { toolId: "text-join" },
+    ]).ok).toBe(false);
+  });
+
   it("validates branching DAGs, topological dependencies and file-compatible roots", () => {
     const dag = [
       { id: "source", toolId: "video-audio", dependsOn: [] },
