@@ -123,6 +123,8 @@ def validate_pipeline(job):
     if not ids or ids[0] != job.get("toolId"):
         raise RuntimeError("The first pipeline step must match the selected tool.")
     for previous,current in zip(ids,ids[1:]):
+        if current in MULTI_INPUT_TOOLS:
+            raise RuntimeError(f"{current} can only merge multiple branches inside a DAG workflow.")
         if current not in PIPELINE_TRANSITIONS.get(previous,set()):
             raise RuntimeError(f"Unsupported pipeline transition: {previous} -> {current}.")
     return [{"toolId":tool_id} for tool_id in ids]
