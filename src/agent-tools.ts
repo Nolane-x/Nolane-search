@@ -29,6 +29,16 @@ const TEXT_TOOL_IDS = new Set([
   "json-remove-empty-values",
   "json-to-typescript",
   "json-nesting-report",
+  "env-audit",
+  "env-redact",
+  "env-to-example",
+  "ini-to-json",
+  "ini-validate",
+  "dockerfile-audit",
+  "requirements-audit",
+  "package-json-audit",
+  "gitignore-audit",
+  "env-reference-report",
 ]);
 
 export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
@@ -80,12 +90,12 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
     type: "function",
     function: {
       name: "process_text_content",
-      description: "Run bounded text/data processors on supplied content: translation, language detection, developer text and network extraction, POSIX shell argument quoting (text only), Markdown/HTML extraction, JSON cleanup/type reports/TypeScript generation, CSV/JSONL/SQL/YAML conversions and statistics. Never executes SQL, shell commands, uploaded code or arbitrary commands.",
+      description: "Run bounded text/data processors on supplied content: environment-file auditing/redaction/template generation, INI inspection/conversion, Dockerfile/requirements/package manifest/gitignore static audits, environment-reference extraction, translation, developer text and network extraction, Markdown/HTML extraction, JSON/CSV/SQL/YAML conversions and statistics. Never executes shell commands, SQL, package scripts, uploaded code or arbitrary commands.",
       parameters: {
         type: "object",
         properties: {
           tool_id: { type: "string", enum: [...TEXT_TOOL_IDS], description: "Processor ID to run." },
-          content: { type: "string", description: "Text, JSON, CSV, HTML or SRT/VTT content to process." },
+          content: { type: "string", description: "Text, JSON, CSV, HTML, dotenv, INI, Dockerfile, requirements, package manifest or SRT/VTT content to process." },
           target_language: { type: "string", description: "Required only for text-translate, e.g. English, Vietnamese, French or Japanese." },
         },
         required: ["tool_id", "content"],
@@ -1294,6 +1304,109 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     visit(value,0);
     return ["JSON nesting report","Maximum depth: "+maximum,...Object.entries(counts).map(([key,count])=>
       key.replace(/_/g," ").replace(/\b\w/g,char=>char.toUpperCase())+": "+count)].join("\n")+"\n";
+  }
+
+
+  if (toolId === "env-audit") {
+    const counts=new Map<string,number>(),empty:string[]=[],secrets=new Set<string>();let assignments=0,invalid=0;
+    for(const line of content.split(/\r?\n/)){
+      const value=line.trim();if(!value||value.startsWith("#"))continue;
+      const match=/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+      if(!match){if(value.includes("="))invalid++;continue;}
+      assignments++;const key=match[1]!,rhs=match[2]!;counts.set(key,(counts.get(key)||0)+1);
+      if(!rhs.trim()||rhs.trim()==="''"||rhs.trim()==='""')empty.push(key);
+      if(/(?:PASS(?:WORD)?|TOKEN|SECRET|API[_-]?KEY|PRIVATE|CREDENTIAL|AUTH|ACCESS[_-]?KEY)/i.test(key))secrets.add(key);
+    }
+    const duplicates=[...counts].filter(([,count])=>count>1).map(([key])=>key).sort();
+    return ["ENV audit report","Assignment lines: "+assignments,"Unique keys: "+counts.size,"Duplicate keys: "+duplicates.length,"Invalid assignment lines: "+invalid,"Empty values: "+empty.length,"Secret-like variable names: "+secrets.size,
+      ...(duplicates.length?["Duplicate names: "+duplicates.slice(0,100).join(", ")]:[]),
+      ...(empty.length?["Empty variable names: "+[...new Set(empty)].slice(0,100).join(", ")]:[]),
+      ...(secrets.size?["Secret-like names (values never shown): "+[...secrets].sort().join(", ")]:[])].join("\n");
+  }
+  if (toolId === "env-redact" || toolId === "env-to-example") {
+    const placeholder=toolId==="env-redact"?"[REDACTED]":"";
+    return content.split(/(?<=\n)/).map(line=>{
+      const match=/(\r\n|\n|\r)$/.exec(line);const ending=match?match[0]:"";const body=ending?line.slice(0,-ending.length):line;
+      return body.replace(/^([ \t]*(?:export[ \t]+)?[A-Za-z_][A-Za-z0-9_]*[ \t]*=[ \t]*).*$/,(_all,prefix)=>prefix+placeholder)+ending;
+    }).join("");
+  }
+  if (toolId === "ini-to-json" || toolId === "ini-validate") {
+    const output:Record<string,Record<string,string>>={DEFAULT:{}};let section="DEFAULT",sectionCount=0,keys=0;
+    for(const [index,line] of content.split(/\r?\n/).entries()){
+      const value=line.trim();if(!value||value.startsWith("#")||value.startsWith(";"))continue;
+      const header=/^\[([^\]]+)\]$/.exec(value);
+      if(header){section=header[1]!.trim();if(!section||output[section])throw new Error("Invalid INI: duplicate or empty section on line "+(index+1));output[section]={};sectionCount++;continue;}
+      const assignment=/^([^=:]+?)\s*[:=]\s*(.*)$/.exec(value);
+      if(!assignment)throw new Error("Invalid INI option on line "+(index+1));
+      const key=assignment[1]!.trim();if(!key||Object.prototype.hasOwnProperty.call(output[section]!,key))throw new Error("Invalid INI: duplicate or empty key on line "+(index+1));
+      output[section]![key]=assignment[2]!;keys++;
+    }
+    if(toolId==="ini-to-json")return JSON.stringify(output,null,2);
+    return ["INI validation report","Status: valid","Sections: "+sectionCount,"Options: "+keys].join("\n");
+  }
+  if (toolId === "dockerfile-audit") {
+    const logical=content.replace(/\\\r?\n/g,"\n"),instructions:{line:number,command:string,arg:string}[]=[];
+    for(const [i,line] of logical.split(/\r?\n/).entries()){const value=line.trim();if(!value||value.startsWith("#"))continue;const m=/^([A-Za-z]+)\s+(.*)$/.exec(value);if(m)instructions.push({line:i+1,command:m[1]!.toUpperCase(),arg:m[2]!});}
+    const count=(name:string)=>instructions.filter(x=>x.command===name).length,findings:string[]=[];
+    const from=instructions.filter(x=>x.command==="FROM");
+    if(!from.length)findings.push("ERROR: no FROM instruction found");
+    for(const item of from){const image=item.arg.split(/\s+/)[0]!;if(image.toLowerCase().endsWith(":latest")||(!image.includes(":")&&!image.includes("@")&&image.toLowerCase()!=="scratch"))findings.push("WARN line "+item.line+": base image "+image+" is not explicitly version-pinned");}
+    for(const item of instructions){
+      if(item.command==="ADD")findings.push("WARN line "+item.line+": ADD is broader than COPY");
+      if(item.command==="ENV"||item.command==="ARG")for(const m of item.arg.matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^\s]+)/g))if(/(?:PASS(?:WORD)?|TOKEN|SECRET|API[_-]?KEY|PRIVATE|CREDENTIAL|AUTH|ACCESS[_-]?KEY)/i.test(m[1]!))findings.push("WARN line "+item.line+": secret-like "+item.command+" key "+m[1]+"; value omitted");
+    }
+    if(!count("USER"))findings.push("WARN: USER is not set; container may run as root");
+    if(!count("HEALTHCHECK"))findings.push("INFO: HEALTHCHECK is not defined");
+    return ["Dockerfile static audit","Instructions: "+instructions.length,"FROM: "+count("FROM"),"RUN: "+count("RUN"),"USER: "+count("USER"),"HEALTHCHECK: "+count("HEALTHCHECK"),"Findings: "+findings.length,...(findings.length?findings:["No baseline findings."]),"Static inspection only; no image was built and no command was executed."].join("\n");
+  }
+  if (toolId === "requirements-audit") {
+    const seen=new Map<string,number[]>(),unpinned:string[]=[],direct:number[]=[],invalid:number[]=[];
+    for(const [index,line] of content.split(/\r?\n/).entries()){
+      const value=line.trim();if(!value||value.startsWith("#")||/^(-r|--requirement|-c|--constraint)\s+/.test(value)||value.startsWith("-"))continue;
+      if(/(?:git\+|https?:\/\/|svn\+|hg\+)/i.test(value)){direct.push(index+1);continue;}
+      const m=/^([A-Za-z0-9][A-Za-z0-9_.-]*)(.*)$/.exec(value);if(!m){invalid.push(index+1);continue;}
+      const name=m[1]!.replace(/[-_.]+/g,"-").toLowerCase();seen.set(name,[...(seen.get(name)||[]),index+1]);
+      const spec=m[2]!.split(";",1)[0]!.trim();if(!(/^(?:===|==)[A-Za-z0-9]/.test(spec)))unpinned.push(name+" (line "+(index+1)+")");
+    }
+    const duplicates=[...seen].filter(([,lines])=>lines.length>1);
+    return ["Python requirements audit","Requirement entries: "+[...seen.values()].reduce((a,b)=>a+b.length,0),"Unique package names: "+seen.size,"Duplicate packages: "+duplicates.length,"Not exactly pinned: "+unpinned.length,"Direct URL/VCS references: "+direct.length,"Invalid lines: "+invalid.length,
+      ...duplicates.map(([name,lines])=>"DUPLICATE "+name+": lines "+lines.join(", ")).slice(0,80),...unpinned.slice(0,100).map(x=>"UNPINNED "+x),
+      ...(direct.length?["Direct URL/VCS line numbers: "+direct.join(", ")]:[]),...(invalid.length?["Invalid line numbers: "+invalid.join(", ")]:[]),
+      "Static review only; no package index, CVE database or dependency resolver was queried."].join("\n");
+  }
+  if (toolId === "package-json-audit") {
+    const value:unknown=JSON.parse(content);if(!value||typeof value!=="object"||Array.isArray(value))throw new Error("package.json root must be an object.");
+    const pkg=value as Record<string,unknown>,findings:string[]=[],groups=["dependencies","devDependencies","peerDependencies","optionalDependencies"];
+    if(typeof pkg.name!=="string"||!pkg.name.trim())findings.push("WARN: package name is missing");
+    let total=0,wildcards=0,external=0,unpinned=0,dangerous=0;
+    for(const group of groups){const deps=pkg[group];if(deps===undefined)continue;if(!deps||typeof deps!=="object"||Array.isArray(deps)){findings.push("ERROR: "+group+" must be an object");continue;}
+      for(const [dep,specRaw] of Object.entries(deps as Record<string,unknown>)){total++;const spec=String(specRaw).trim();
+        if(spec==="*"||spec==="latest"){wildcards++;findings.push("HIGH "+group+": "+dep+" uses "+spec);}
+        else if(/^(?:git\+|https?:\/\/|github:|file:|link:|workspace:)/i.test(spec)){external++;findings.push("INFO "+group+": "+dep+" uses non-registry/workspace spec");}
+        else if(!/^(?:\^|~|=|>|<|[0-9]|npm:)/.test(spec)){unpinned++;findings.push("WARN "+group+": "+dep+" has unrecognized version spec");}
+      }
+    }
+    const scripts=pkg.scripts;if(scripts&&typeof scripts==="object"&&!Array.isArray(scripts))for(const [name,command] of Object.entries(scripts as Record<string,unknown>))if(typeof command==="string"&&/(?:curl|wget)[^|;]*\|\s*(?:sh|bash)|\beval\s*\(/i.test(command)){dangerous++;findings.push("HIGH script "+name+": download-to-shell or eval pattern");}
+    return ["package.json static audit","Package: "+(typeof pkg.name==="string"?pkg.name:"(missing)"),"Dependency entries: "+total,"Wildcard/latest specs: "+wildcards,"Non-registry/workspace specs: "+external,"Unrecognized specs: "+unpinned,"Script patterns for review: "+dangerous,"Findings: "+findings.length,...(findings.length?findings:["No baseline findings."]),"Static manifest inspection only; package scripts were not executed and no registry/CVE lookup was made."].join("\n");
+  }
+  if (toolId === "gitignore-audit") {
+    const patterns=content.split(/\r?\n/).map(x=>x.trim()).filter(x=>x&&!x.startsWith("#"));
+    const candidates=[".env",".env.production",".dev.vars","id_rsa","server.pem",".npmrc"];
+    const escapedPattern=(pattern:string)=>pattern.replace(/[.+^{}()|[\]\\]/g,(char)=>"\\"+char).replace(/\*/g,".*").replace(/\?/g,".");
+    const missing=candidates.filter(path=>{
+      let ignored=false;
+      for(const raw of patterns){const negative=raw.startsWith("!"),p=(negative?raw.slice(1):raw).replace(/^\//,"");const matcher=new RegExp("^(?:"+escapedPattern(p)+")(?:/.*)?$");
+        if(matcher.test(path)||(!p.includes("/")&&path.split("/").some(part=>matcher.test(part))))ignored=!negative;}
+      return !ignored;
+    });
+    return ["Git ignore baseline audit","Active non-comment rules: "+patterns.length,"Secret/config examples checked: "+candidates.length,"Not ignored: "+missing.length,
+      ...missing.map(x=>"MISSING protection: "+x),...(missing.length?[]:["All checked secret/config examples appear to be ignored."]),
+      "Approximate static matcher only; this is not Git's complete ignore evaluation or a check of the current index."].join("\n");
+  }
+  if (toolId === "env-reference-report") {
+    const patterns=[/\bprocess\.env\.([A-Za-z_][A-Za-z0-9_]*)/g,/\bimport\.meta\.env\.([A-Za-z_][A-Za-z0-9_]*)/g,/\bos\.environ(?:\.get)?\s*\[\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]\s*\]/g,/\bos\.getenv\s*\(\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]/g,/(?<!process\.)\benv\.([A-Z][A-Z0-9_]*)\b/g,/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g];
+    const counts=new Map<string,number>();for(const pattern of patterns)for(const match of content.matchAll(pattern)){const name=match.slice(1).find(Boolean);if(name)counts.set(name,(counts.get(name)||0)+1);}
+    return ["Environment variable reference report","Unique names: "+counts.size,"Occurrences: "+[...counts.values()].reduce((a,b)=>a+b,0),...[...counts].sort(([a],[b])=>a.localeCompare(b)).slice(0,500).map(([name,count])=>name+"\t"+count),"Names and occurrence counts only; environment values are not read."].join("\n");
   }
 
   const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter(line => {

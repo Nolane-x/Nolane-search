@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **261 công cụ đã được tích hợp và triển khai trên production**. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **275 công cụ trong catalog**; Wave 7 (261 công cụ) đã được triển khai production và Wave 8 (14 công cụ cấu hình/DevOps) đang được kiểm thử trên nhánh phát triển. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -396,6 +396,29 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 | \`/tool json-nesting-report\` | Báo cáo độ sâu và phân bố object/array/key/value theo kiểu. | Báo cáo TXT |
 
 **Giới hạn và an toàn:** JSON cleanup/nesting report dừng ở 80 cấp; JSON-to-TypeScript dừng ở 40 cấp. CSV direct AI giới hạn 10.000 dòng và 200 cột. SQL chỉ là mã để xem lại, không kết nối database hoặc thực thi SQL. Shell quoting chỉ quote một đối số POSIX; runner không thực thi shell command. TypeScript được suy luận từ một mẫu JSON, không thay thế schema/runtime validation.
+
+
+
+### Cấu hình, Docker và DevOps — đợt tám
+
+| Lệnh | Chức năng | Đầu ra |
+|---|---|---|
+| /tool env-audit | Kiểm tra dotenv: khóa trùng, dòng sai, giá trị rỗng và tên biến giống secret; không in giá trị. | Báo cáo TXT |
+| /tool env-redact | Che giá trị thành [REDACTED], giữ comment và tên biến. | ENV đã che |
+| /tool env-to-example | Tạo mẫu ENV với giá trị trống. | ENV example |
+| /tool ini-to-json | Parse INI và chuyển cấu trúc section/key sang JSON. | JSON |
+| /tool ini-validate | Kiểm tra cú pháp INI ở chế độ strict. | Báo cáo TXT |
+| /tool toml-to-json | Parse TOML bằng thư viện chuẩn và chuyển date/time sang ISO-8601. | JSON |
+| /tool toml-validate | Kiểm tra cú pháp TOML và đếm table/key. | Báo cáo TXT |
+| /tool properties-to-json | Parse Java Properties, escape/continuation và key trùng. | JSON |
+| /tool dockerfile-audit | Audit tĩnh base image, ADD, USER, HEALTHCHECK và ARG/ENV giống secret. | Báo cáo TXT |
+| /tool docker-compose-audit | Audit privileged, host network, port, host mount, image latest và secret literal. | Báo cáo TXT |
+| /tool requirements-audit | Phát hiện package trùng, không pin version, URL/VCS trực tiếp và dòng sai. | Báo cáo TXT |
+| /tool package-json-audit | Kiểm tra dependency wildcard/latest, Git/file/workspace và script nguy hiểm. | Báo cáo TXT |
+| /tool gitignore-audit | Kiểm tra sơ bộ quy tắc loại trừ .env, dev vars, private keys và npmrc. | Báo cáo TXT |
+| /tool env-reference-report | Trích tên biến từ JS/TS/Python/Shell; không đọc giá trị. | Báo cáo TXT |
+
+**Giới hạn và an toàn:** đây là kiểm tra cấu hình tĩnh. Không build Docker image, không chạy Compose, shell, package scripts, không cài dependency và không truy cập registry/CVE database. Báo cáo ENV chỉ hiển thị tên biến và số lượng, không hiển thị giá trị. gitignore-audit là matcher gần đúng, không thay thế Git's complete ignore engine. Các bộ phân tích TOML/Properties/Compose chạy trên runner khi tải file; AI direct mode chỉ bật cho các phép xử lý văn bản có thể thực hiện an toàn.
 
 
 ## AI Agent

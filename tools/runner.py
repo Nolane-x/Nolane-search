@@ -47,6 +47,20 @@ RUNNERS = {
     "json-remove-empty-values",
     "json-to-typescript",
     "json-nesting-report",
+    "env-audit",
+    "env-redact",
+    "env-to-example",
+    "ini-to-json",
+    "ini-validate",
+    "toml-to-json",
+    "toml-validate",
+    "properties-to-json",
+    "dockerfile-audit",
+    "docker-compose-audit",
+    "requirements-audit",
+    "package-json-audit",
+    "gitignore-audit",
+    "env-reference-report",
 }
 
 PIPELINE_TRANSITIONS = {
@@ -280,6 +294,21 @@ PIPELINE_TRANSITIONS = {
     "json-remove-empty-values": {"json-format", "json-canonicalize", "json-schema"},
     "json-to-typescript": {"code-check", "text-clean"},
     "json-nesting-report": {"text-clean", "text-stats"},
+    "env-audit": {"env-redact", "env-to-example", "text-stats"},
+    "env-redact": {"env-audit", "text-clean", "text-stats"},
+    "env-to-example": {"env-audit", "env-redact", "text-clean"},
+    "ini-to-json": {"json-format", "json-schema"},
+    "ini-validate": {"text-clean", "text-stats"},
+    "toml-to-json": {"json-format", "json-schema"},
+    "toml-validate": {"text-clean", "text-stats"},
+    "properties-to-json": {"json-format", "json-schema"},
+    "dockerfile-audit": {"text-clean", "text-stats"},
+    "docker-compose-audit": {"text-clean", "text-stats"},
+    "requirements-audit": {"text-clean", "text-stats"},
+    "package-json-audit": {"json-format", "json-schema"},
+    "gitignore-audit": {"text-clean", "text-stats"},
+    "env-reference-report": {"text-clean", "text-stats"},
+
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
@@ -6302,6 +6331,385 @@ def json_nesting_report(p):
     lines.extend(key.replace("_"," ").title()+": "+str(count) for key,count in counts.items())
     return _write_text_artifact(p,"nesting-report","\n".join(lines)+"\n","JSON nesting report")
 
+
+
+
+def _env_parse(raw):
+    parsed=[]
+    invalid=[]
+    for line_no,line in enumerate(raw.splitlines(),1):
+        stripped=line.strip()
+        if not stripped or stripped.startswith("#"): continue
+        match=re.match(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$",line)
+        if match: parsed.append((line_no,match.group(1),match.group(2)))
+        elif "=" in line: invalid.append(line_no)
+    return parsed,invalid
+
+
+def _looks_secret_name(name):
+    return bool(re.search(r"(?:PASS(?:WORD)?|TOKEN|SECRET|API[_-]?KEY|PRIVATE|CREDENTIAL|AUTH|ACCESS[_-]?KEY)",name,re.I))
+
+
+def _redact_env(raw,placeholder="[REDACTED]"):
+    output=[]
+    pattern=re.compile(r"^(\s*(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*=\s*).*$")
+    for line in raw.splitlines(keepends=True):
+        ending=""
+        body=line
+        if body.endswith("\r\n"): body,ending=body[:-2],"\r\n"
+        elif body.endswith("\n") or body.endswith("\r"): body,ending=body[:-1],body[-1]
+        match=pattern.match(body)
+        output.append((match.group(1)+placeholder if match else body)+ending)
+    return "".join(output)
+
+
+def env_audit(p):
+    raw=_read_text_source(p)
+    parsed,invalid=_env_parse(raw)
+    counts={}
+    for _,name,_ in parsed: counts[name]=counts.get(name,0)+1
+    duplicates=sorted(name for name,count in counts.items() if count>1)
+    empty=sorted(name for _,name,value in parsed if not value.strip() or value.strip() in ("''",'""'))
+    secret_names=sorted(set(name for _,name,_ in parsed if _looks_secret_name(name)))
+    lines=["ENV audit report",f"Assignment lines: {len(parsed)}",f"Unique keys: {len(counts)}",
+        f"Duplicate keys: {len(duplicates)}",f"Invalid assignment lines: {len(invalid)}",
+        f"Empty values: {len(empty)}",f"Secret-like variable names: {len(secret_names)}"]
+    if duplicates: lines.append("Duplicate names: "+", ".join(duplicates[:100]))
+    if invalid: lines.append("Invalid assignment line numbers: "+", ".join(map(str,invalid[:100])))
+    if empty: lines.append("Empty variable names: "+", ".join(empty[:100]))
+    if secret_names: lines.append("Secret-like names (values never shown): "+", ".join(secret_names[:100]))
+    return _write_text_artifact(p,"env-audit","\n".join(lines)+"\n","ENV audit")
+
+
+def env_redact(p):
+    raw=_read_text_source(p)
+    result=_redact_env(raw,"[REDACTED]")
+    return _write_text_artifact_ext(p,"redacted",".env",result,"ENV values redacted","No assignment values are included in the output")
+
+
+def env_to_example(p):
+    raw=_read_text_source(p)
+    result=_redact_env(raw,"")
+    return _write_text_artifact_ext(p,"example",".env.example",result,"ENV example template","All assignment values are blank")
+
+
+def _ini_parser(raw):
+    import configparser
+    parser=configparser.ConfigParser(interpolation=None,strict=True,allow_no_value=True,empty_lines_in_values=False)
+    parser.optionxform=str
+    parser.read_string(raw)
+    return parser
+
+
+def ini_to_json(p):
+    raw=_read_text_source(p)
+    try: parser=_ini_parser(raw)
+    except Exception as exc: raise RuntimeError("Invalid INI: "+str(exc)[:300]) from exc
+    value={"DEFAULT":dict(parser.defaults())}
+    for section in parser.sections():
+        value[section]=dict(parser.items(section,raw=True))
+    output=json.dumps(value,ensure_ascii=False,indent=2)
+    return _write_text_artifact_ext(p,"converted",".json",output+"\n","INI to JSON",str(len(parser.sections()))+" section(s)")
+
+
+def ini_validate(p):
+    raw=_read_text_source(p)
+    try: parser=_ini_parser(raw)
+    except Exception as exc: raise RuntimeError("Invalid INI: "+str(exc)[:300]) from exc
+    option_count=sum(len(list(parser.options(section))) for section in parser.sections())
+    lines=["INI validation report","Status: valid",f"Sections: {len(parser.sections())}",f"Options (including inherited defaults): {option_count}"]
+    return _write_text_artifact(p,"ini-report","\n".join(lines)+"\n","INI validation")
+
+
+def _toml_value(value):
+    import datetime
+    if isinstance(value,dict): return {str(k):_toml_value(v) for k,v in value.items()}
+    if isinstance(value,list): return [_toml_value(v) for v in value]
+    if isinstance(value,(datetime.datetime,datetime.date,datetime.time)): return value.isoformat()
+    return value
+
+
+def _load_toml(raw):
+    import tomllib
+    try: return tomllib.loads(raw)
+    except Exception as exc: raise RuntimeError("Invalid TOML: "+str(exc)[:300]) from exc
+
+
+def toml_to_json(p):
+    raw=_read_text_source(p)
+    value=_toml_value(_load_toml(raw))
+    output=json.dumps(value,ensure_ascii=False,indent=2,allow_nan=False)
+    return _write_text_artifact_ext(p,"converted",".json",output+"\n","TOML to JSON")
+
+
+def toml_validate(p):
+    raw=_read_text_source(p)
+    value=_load_toml(raw)
+    def count_tables(obj):
+        total=0
+        for item in obj.values():
+            if isinstance(item,dict):
+                total+=1+count_tables(item)
+            elif isinstance(item,list):
+                total+=sum(1+count_tables(x) for x in item if isinstance(x,dict))
+        return total
+    lines=["TOML validation report","Status: valid",f"Top-level keys: {len(value)}",f"Nested table/object count: {count_tables(value)}",
+        "Top-level key names: "+(", ".join(sorted(value.keys())[:100]) if value else "none")]
+    return _write_text_artifact(p,"toml-report","\n".join(lines)+"\n","TOML validation")
+
+
+def _properties_unescape(value):
+    output=[]
+    index=0
+    mapping={"t":"\t","n":"\n","r":"\r","f":"\f"}
+    while index<len(value):
+        char=value[index]
+        if char!="\\":
+            output.append(char);index+=1;continue
+        index+=1
+        if index>=len(value): break
+        escaped=value[index]
+        if escaped=="u" and index+4<len(value):
+            code=value[index+1:index+5]
+            try: output.append(chr(int(code,16)));index+=5;continue
+            except ValueError: pass
+        output.append(mapping.get(escaped,escaped))
+        index+=1
+    return "".join(output)
+
+
+def _parse_properties(raw):
+    logical=[]
+    pending=""
+    for line in raw.splitlines():
+        current=pending+line.lstrip() if pending else line
+        slash_count=len(current)-len(current.rstrip("\\"))
+        if slash_count%2==1:
+            pending=current[:-1]
+            continue
+        logical.append(current);pending=""
+    if pending: logical.append(pending)
+    values={};duplicates=[];invalid=[]
+    for line_no,line in enumerate(logical,1):
+        stripped=line.lstrip()
+        if not stripped or stripped.startswith(("#","!")): continue
+        escaped=False;separator=None
+        for index,char in enumerate(line):
+            if escaped: escaped=False;continue
+            if char=="\\": escaped=True;continue
+            if char in ("=",":") or char.isspace():
+                separator=index;break
+        if separator is None:
+            key=line.strip();value=""
+        else:
+            key=line[:separator].rstrip()
+            index=separator
+            if line[index].isspace():
+                while index<len(line) and line[index].isspace(): index+=1
+                if index<len(line) and line[index] in ("=",":"): index+=1
+            else: index+=1
+            while index<len(line) and line[index].isspace(): index+=1
+            value=line[index:]
+        key=_properties_unescape(key)
+        value=_properties_unescape(value)
+        if not key: invalid.append(line_no);continue
+        if key in values: duplicates.append(key)
+        values[key]=value
+    return values,duplicates,invalid
+
+
+def properties_to_json(p):
+    raw=_read_text_source(p)
+    values,duplicates,invalid=_parse_properties(raw)
+    output=json.dumps(values,ensure_ascii=False,indent=2)
+    return _write_text_artifact_ext(p,"converted",".json",output+"\n","Java Properties to JSON",
+        f"{len(values)} key(s); {len(duplicates)} duplicate assignment(s); {len(invalid)} invalid line(s)")
+
+
+def dockerfile_audit(p):
+    raw=_read_text_source(p)
+    logical=re.sub(r"\\\r?\n","\n",raw)
+    instructions=[]
+    for line_no,line in enumerate(logical.splitlines(),1):
+        stripped=line.strip()
+        if not stripped or stripped.startswith("#"): continue
+        match=re.match(r"^([A-Za-z]+)\s+(.*)$",stripped)
+        if match: instructions.append((line_no,match.group(1).upper(),match.group(2).strip()))
+    counts={}
+    for _,command,_ in instructions: counts[command]=counts.get(command,0)+1
+    findings=[]
+    from_lines=[(n,v) for n,k,v in instructions if k=="FROM"]
+    if not from_lines: findings.append("ERROR: no FROM instruction found")
+    for line_no,value in from_lines:
+        image=value.split()[0]
+        if image.lower().endswith(":latest") or ":" not in image and image.lower()!="scratch":
+            findings.append(f"WARN line {line_no}: base image {image.split('@')[0]} is not explicitly version-pinned")
+    for number,command,arg in instructions:
+        if command=="ADD": findings.append(f"WARN line {number}: ADD is broader than COPY; review remote URL/archive behavior")
+        if command in ("ENV","ARG"):
+            pairs=re.findall(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^\s]+)",arg)
+            for key,_secret_value in pairs:
+                if _looks_secret_name(key): findings.append(f"WARN line {number}: secret-like {command} key {key}; do not bake credentials into image layers")
+    if not counts.get("USER"): findings.append("WARN: USER is not set; container may run as root")
+    if not counts.get("HEALTHCHECK"): findings.append("INFO: HEALTHCHECK is not defined")
+    lines=["Dockerfile static audit",f"Instructions: {len(instructions)}",f"FROM: {counts.get('FROM',0)}",f"RUN: {counts.get('RUN',0)}",f"USER: {counts.get('USER',0)}",f"HEALTHCHECK: {counts.get('HEALTHCHECK',0)}",f"Findings: {len(findings)}"]
+    lines.extend(findings or ["No baseline findings."])
+    lines.append("Static inspection only; no image was built and no command was executed.")
+    return _write_text_artifact(p,"dockerfile-audit","\n".join(lines)+"\n","Dockerfile audit")
+
+
+def docker_compose_audit(p):
+    import yaml
+    raw=_read_text_source(p)
+    try: document=yaml.safe_load(raw)
+    except Exception as exc: raise RuntimeError("Invalid Compose YAML: "+str(exc)[:300]) from exc
+    if not isinstance(document,dict) or not isinstance(document.get("services"),dict):
+        raise RuntimeError("Compose file must contain a top-level services mapping.")
+    findings=[]
+    services=document["services"]
+    secret_count=0;published_ports=0
+    for service,value in services.items():
+        if not isinstance(value,dict): findings.append(f"ERROR: service {service} is not a mapping");continue
+        image=value.get("image")
+        if isinstance(image,str) and (image.endswith(":latest") or ":" not in image and "@" not in image):
+            findings.append(f"WARN {service}: image is not explicitly version-pinned")
+        if value.get("privileged") is True: findings.append(f"HIGH {service}: privileged mode is enabled")
+        if str(value.get("network_mode","")).lower()=="host": findings.append(f"HIGH {service}: host network mode is enabled")
+        ports=value.get("ports",[])
+        if isinstance(ports,list):
+            for port in ports:
+                published_ports+=1
+                source=str(port.get("published","") if isinstance(port,dict) else port)
+                if source.startswith("0.0.0.0:") or source.startswith(":::"):
+                    findings.append(f"WARN {service}: port binding listens on all interfaces")
+        volumes=value.get("volumes",[])
+        if isinstance(volumes,list):
+            for volume in volumes:
+                source=str(volume.get("source","") if isinstance(volume,dict) else volume).split(":")[0]
+                if source=="/var/run/docker.sock" or source=="/":
+                    findings.append(f"HIGH {service}: Docker socket or root host path is mounted ({source})")
+        environment=value.get("environment",{})
+        env_items=environment.items() if isinstance(environment,dict) else [(str(x).split("=",1)[0],str(x).split("=",1)[1] if "=" in str(x) else "") for x in environment] if isinstance(environment,list) else []
+        for key,val in env_items:
+            if _looks_secret_name(str(key)) and val not in (None,"") and not (isinstance(val,str) and re.fullmatch(r"\$\{[^}]+\}",val.strip())):
+                secret_count+=1
+                findings.append(f"HIGH {service}: secret-like environment key {key} appears to have a literal value (value omitted)")
+    if document.get("version") is not None: findings.append("INFO: top-level version field is obsolete in modern Compose specification")
+    lines=["Docker Compose static audit",f"Services: {len(services)}",f"Published port entries: {published_ports}",f"Literal secret-like values: {secret_count}",f"Findings: {len(findings)}"]
+    lines.extend(findings or ["No baseline findings."])
+    lines.append("Static YAML inspection only; no containers or commands were started.")
+    return _write_text_artifact(p,"compose-audit","\n".join(lines)+"\n","Docker Compose audit")
+
+
+def requirements_audit(p):
+    raw=_read_text_source(p)
+    seen={};unpinned=[];direct=[];invalid=[]
+    for line_no,line in enumerate(raw.splitlines(),1):
+        value=line.strip()
+        if not value or value.startswith("#") or value.startswith(("-r ","--requirement ","-c ","--constraint ")): continue
+        if value.startswith(("-","--")): continue
+        if re.search(r"(?:git[+]|https?://|svn[+]|hg[+])",value,re.I):
+            direct.append(line_no);continue
+        match=re.match(r"^([A-Za-z0-9][A-Za-z0-9_.-]*)(.*)$",value)
+        if not match: invalid.append(line_no);continue
+        name=re.sub(r"[-_.]+","-",match.group(1)).lower()
+        if name in seen: seen[name].append(line_no)
+        else: seen[name]=[line_no]
+        spec=match.group(2).split(";",1)[0].strip()
+        if not (spec.startswith(("==","===")) and len(spec)>2 and spec[2].isalnum()): unpinned.append((line_no,name))
+    duplicates={name:lines for name,lines in seen.items() if len(lines)>1}
+    lines=["Python requirements audit",f"Requirement entries: {sum(len(v) for v in seen.values())}",f"Unique package names: {len(seen)}",f"Duplicate packages: {len(duplicates)}",f"Not exactly pinned: {len(unpinned)}",f"Direct URL/VCS references: {len(direct)}",f"Invalid lines: {len(invalid)}"]
+    for name,locations in sorted(duplicates.items())[:80]: lines.append(f"DUPLICATE {name}: lines "+", ".join(map(str,locations)))
+    for line_no,name in unpinned[:100]: lines.append(f"UNPINNED line {line_no}: {name}")
+    if direct: lines.append("Direct URL/VCS line numbers: "+", ".join(map(str,direct[:100])))
+    if invalid: lines.append("Invalid line numbers: "+", ".join(map(str,invalid[:100])))
+    lines.append("Static review only; no package index, CVE database or dependency resolver was queried.")
+    return _write_text_artifact(p,"requirements-audit","\n".join(lines)+"\n","requirements audit")
+
+
+def package_json_audit(p):
+    raw=_read_text_source(p)
+    try: package=json.loads(raw)
+    except Exception as exc: raise RuntimeError("Invalid package.json: "+str(exc)[:300]) from exc
+    if not isinstance(package,dict): raise RuntimeError("package.json root must be an object.")
+    findings=[]
+    name=package.get("name")
+    if not isinstance(name,str) or not name.strip(): findings.append("WARN: package name is missing")
+    version=package.get("version")
+    if not isinstance(version,str) or not version.strip(): findings.append("INFO: package version is not declared")
+    groups=("dependencies","devDependencies","peerDependencies","optionalDependencies")
+    total=0;wildcards=[];external=[];unpinned=[]
+    for group in groups:
+        values=package.get(group,{})
+        if not isinstance(values,dict): findings.append(f"ERROR: {group} must be an object");continue
+        for dep,spec in values.items():
+            total+=1;value=str(spec).strip()
+            if value in ("*","latest"): wildcards.append((group,dep))
+            elif re.match(r"^(?:git[+]|https?://|github:|file:|link:|workspace:)",value,re.I): external.append((group,dep))
+            elif not (value.startswith(("^","~","=",">","<","npm:")) or bool(value[:1].isdigit())): unpinned.append((group,dep))
+    for group,dep in wildcards[:100]: findings.append(f"HIGH {group}: {dep} uses {package.get(group,{}).get(dep)}")
+    for group,dep in external[:100]: findings.append(f"INFO {group}: {dep} uses a non-registry or workspace spec")
+    for group,dep in unpinned[:100]: findings.append(f"WARN {group}: {dep} has an unrecognized version spec")
+    scripts=package.get("scripts",{})
+    dangerous=[]
+    if isinstance(scripts,dict):
+        for script,command in scripts.items():
+            if isinstance(command,str) and re.search(r"(?:curl|wget)[^|;]*\|\s*(?:sh|bash)|\beval\s*\(",command,re.I):
+                dangerous.append(script)
+    for script in dangerous: findings.append(f"HIGH script {script}: download-to-shell or eval pattern")
+    lines=["package.json static audit",f"Package: {name if isinstance(name,str) else '(missing)'}",f"Dependency entries: {total}",f"Wildcard/latest specs: {len(wildcards)}",f"Non-registry/workspace specs: {len(external)}",f"Unrecognized specs: {len(unpinned)}",f"Script patterns for review: {len(dangerous)}",f"Findings: {len(findings)}"]
+    lines.extend(findings or ["No baseline findings."])
+    lines.append("Static manifest inspection only; package scripts were not executed and no registry/CVE lookup was made.")
+    return _write_text_artifact(p,"package-json-audit","\n".join(lines)+"\n","package.json audit")
+
+
+def gitignore_audit(p):
+    import fnmatch
+    raw=_read_text_source(p)
+    patterns=[line.strip() for line in raw.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    samples=[".env",".env.production",".dev.vars","id_rsa","server.pem",".npmrc"]
+    def ignored(path):
+        result=False
+        for raw_pattern in patterns:
+            negate=raw_pattern.startswith("!")
+            pattern=raw_pattern[1:] if negate else raw_pattern
+            pattern=pattern.lstrip("/")
+            if not pattern: continue
+            candidate=path
+            matched=fnmatch.fnmatchcase(candidate,pattern)
+            if "/" not in pattern:
+                matched=matched or any(fnmatch.fnmatchcase(part,pattern) for part in candidate.split("/"))
+            if matched: result=not negate
+        return result
+    missing=[path for path in samples if not ignored(path)]
+    lines=["Git ignore baseline audit",f"Active non-comment rules: {len(patterns)}",f"Secret/config examples checked: {len(samples)}",f"Not ignored: {len(missing)}"]
+    if missing: lines.extend("MISSING protection: "+name for name in missing)
+    else: lines.append("All checked secret/config examples appear to be ignored.")
+    lines.append("Approximate static matcher only; this is not Git's complete ignore evaluation or a check of the current index.")
+    return _write_text_artifact(p,"gitignore-audit","\n".join(lines)+"\n","gitignore audit")
+
+
+def env_reference_report(p):
+    raw=_read_text_source(p)
+    patterns=[
+        re.compile(r"\bprocess\.env\.([A-Za-z_][A-Za-z0-9_]*)"),
+        re.compile(r"\bimport\.meta\.env\.([A-Za-z_][A-Za-z0-9_]*)"),
+        re.compile(r"\bos\.environ(?:\.get)?\s*\[\s*['\"]([A-Za-z_][A-Za-z0-9_]*)['\"]\s*\]"),
+        re.compile(r"\bos\.getenv\s*\(\s*['\"]([A-Za-z_][A-Za-z0-9_]*)['\"]"),
+        re.compile(r"\benv\.([A-Z][A-Z0-9_]*)\b"),
+        re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
+    ]
+    counts={}
+    for pattern in patterns:
+        for match in pattern.finditer(raw):
+            name=next((value for value in match.groups() if value),None)
+            if name: counts[name]=counts.get(name,0)+1
+    lines=["Environment variable reference report",f"Unique names: {len(counts)}",f"Occurrences: {sum(counts.values())}"]
+    lines.extend(f"{name}\t{count}" for name,count in sorted(counts.items())[:500])
+    lines.append("Names and occurrence counts only; environment values are not read.")
+    return _write_text_artifact(p,"env-references","\n".join(lines)+"\n","Environment variable references")
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -6387,6 +6795,11 @@ TOOLS={
   "text-escape-shell-argument":text_escape_shell_argument,"text-sort-unique-lines":text_sort_unique_lines,"text-normalize-unicode-nfkc":text_normalize_unicode_nfkc,
   "csv-to-sql-inserts":csv_to_sql_inserts,"csv-to-yaml":csv_to_yaml,"csv-empty-row-report":csv_empty_row_report,"csv-row-width-report":csv_row_width_report,
   "json-remove-empty-values":json_remove_empty_values,"json-to-typescript":json_to_typescript,"json-nesting-report":json_nesting_report,
+ "env-audit":env_audit,"env-redact":env_redact,"env-to-example":env_to_example,
+ "ini-to-json":ini_to_json,"ini-validate":ini_validate,"toml-to-json":toml_to_json,"toml-validate":toml_validate,"properties-to-json":properties_to_json,
+ "dockerfile-audit":dockerfile_audit,"docker-compose-audit":docker_compose_audit,"requirements-audit":requirements_audit,
+ "package-json-audit":package_json_audit,"gitignore-audit":gitignore_audit,"env-reference-report":env_reference_report,
+
 }
 
 

