@@ -6,7 +6,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `70ac5ed5a646beeeda6a6842c299cc06c9153fc7`
+- Latest production source commit: `c6bdde7a39382f832ff129ff6199f65d3c1fd80a`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -18,7 +18,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `8835dad6-86ba-485f-a4b5-86b995c50631` (100% traffic; deployment `9ebe527f-a873-4f45-9347-14ad6658c5ca`, created 2026-11-21T13:14:43Z).
+- Cloudflare Worker version ID: `cc4a124a-aa79-4631-bd0e-187bd0bac8e5` (100% traffic; deployment `eb5d8517-0401-48e6-a309-65303d14dbdc`, created 2026-11-21T13:21:38Z).
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
@@ -430,3 +430,15 @@ The registry expands from 17 to 23 implemented tools.
 - Deploy #112 and Export/Smoke #105 succeeded. Worker health smoke test passed; Telegram webhook and command registration succeeded. No D1 migration was required.
 - Current production Worker version: `8835dad6-86ba-485f-a4b5-86b995c50631`, receiving 100% traffic (deployment `9ebe527f-a873-4f45-9347-14ad6658c5ca`, created 2026-11-21T13:14:43Z).
 - The repository analyzers are heuristic static reviews. Test mapping is not coverage; test quality is not test execution; API detection is not a complete OpenAPI spec; migration/runtime signals do not prove exploitability or impact; i18n compares keys but not translation quality.
+
+
+## Direct GitHub repository tool command — deployed 2026-11-21
+
+- PR #60 merged: https://github.com/Nolane-x/Nolane-search/pull/60
+- Main commit: `c6bdde7a39382f832ff129ff6199f65d3c1fd80a`.
+- Added `/repo_tool TOOL_ID https://github.com/owner/repo` (also accepts safe `/tree/branch` refs) to run one ready tool from the Repository category directly on a public GitHub snapshot.
+- The command requires an authorized private Telegram chat, validates the tool ID/category and reuses the existing strict GitHub URL parser and repository snapshot job flow. `/repo` composite intelligence and `/repo_compare` continue to work unchanged.
+- Added parser tests for an existing repo tool, Wave 10 tools, slash-containing branch refs, non-repository IDs, unknown IDs, malformed/non-GitHub URLs, credentials, path traversal, extra arguments and oversized input.
+- PR CI #271 and main CI #272 passed: 25 test files / 210 unit tests, TypeScript, deployment-script checks, 97 Python runner tests and Worker build.
+- Deploy #113 and Export/Smoke #106 succeeded. Worker health smoke passed and Telegram webhook/commands were registered. No D1 migration was required.
+- Current production Worker version: `cc4a124a-aa79-4631-bd0e-187bd0bac8e5`, receiving 100% traffic (deployment `eb5d8517-0401-48e6-a309-65303d14dbdc`, created 2026-11-21T13:21:38Z).
