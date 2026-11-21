@@ -61,6 +61,14 @@ RUNNERS = {
     "package-json-audit",
     "gitignore-audit",
     "env-reference-report",
+    "github-actions-audit",
+    "kubernetes-manifest-audit",
+    "terraform-audit",
+    "nginx-config-audit",
+    "apache-config-audit",
+    "caddy-config-audit",
+    "systemd-unit-audit",
+    "shell-script-audit",
 }
 
 PIPELINE_TRANSITIONS = {
@@ -309,6 +317,14 @@ PIPELINE_TRANSITIONS = {
     "gitignore-audit": {"text-clean", "text-stats"},
     "env-reference-report": {"text-clean", "text-stats"},
 
+    "github-actions-audit": {"text-clean", "text-stats"},
+    "kubernetes-manifest-audit": {"text-clean", "text-stats"},
+    "terraform-audit": {"text-clean", "text-stats"},
+    "nginx-config-audit": {"text-clean", "text-stats"},
+    "apache-config-audit": {"text-clean", "text-stats"},
+    "caddy-config-audit": {"text-clean", "text-stats"},
+    "systemd-unit-audit": {"text-clean", "text-stats"},
+    "shell-script-audit": {"text-clean", "text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
@@ -6710,6 +6726,252 @@ def env_reference_report(p):
     return _write_text_artifact(p,"env-references","\n".join(lines)+"\n","Environment variable references")
 
 
+
+
+
+def _audit_write(p, tool_id, title, findings, summary=None):
+    lines=[title]
+    if summary: lines.extend(summary)
+    lines.append("Findings: "+str(len(findings)))
+    lines.extend(findings or ["No baseline findings."])
+    lines.append("Static inspection only. No workflow, container, service or script was executed.")
+    return _write_text_artifact(p,tool_id,"\n".join(lines)+"\n",title)
+
+
+def github_actions_audit(p):
+    import yaml
+    raw=_read_text_source(p)
+    try: workflow=yaml.load(raw,Loader=yaml.BaseLoader)
+    except Exception as exc: raise RuntimeError("Invalid GitHub Actions YAML: "+str(exc)[:300]) from exc
+    if not isinstance(workflow,dict): raise RuntimeError("GitHub Actions workflow root must be a mapping.")
+    findings=[];jobs=workflow.get("jobs",{})
+    if not isinstance(jobs,dict): raise RuntimeError("GitHub Actions workflow jobs must be a mapping.")
+    perms=workflow.get("permissions")
+    if perms in (None,"write-all"): findings.append("HIGH: workflow permissions are absent or write-all; set least privilege explicitly")
+    elif isinstance(perms,dict) and any(str(v).lower()=="write-all" for v in perms.values()): findings.append("HIGH: workflow permissions include write-all")
+    triggers=workflow.get("on",workflow.get(True,{}))
+    if isinstance(triggers,dict) and "pull_request_target" in triggers: findings.append("HIGH: pull_request_target needs manual review for untrusted PR code")
+    action_count=0;secret_runs=0;untrusted_runs=0
+    for job_name,job in jobs.items():
+        if not isinstance(job,dict): findings.append(f"ERROR: job {job_name} is not a mapping");continue
+        if job.get("permissions")=="write-all": findings.append(f"HIGH job {job_name}: permissions are write-all")
+        steps=job.get("steps",[])
+        if not isinstance(steps,list): findings.append(f"ERROR job {job_name}: steps is not a list");continue
+        for index,step in enumerate(steps,1):
+            if not isinstance(step,dict): continue
+            prefix=f"{job_name} step {index}";uses=step.get("uses")
+            if isinstance(uses,str):
+                action_count+=1
+                if uses.startswith("docker://"):
+                    image=uses[9:]
+                    if (":" not in image and "@" not in image) or image.endswith(":latest"): findings.append(f"WARN {prefix}: Docker action image is not pinned")
+                elif "@" in uses and not re.search(r"@[0-9a-f]{40}$",uses,re.I): findings.append(f"WARN {prefix}: action is not pinned to a full commit SHA")
+                elif "@" not in uses: findings.append(f"WARN {prefix}: action reference has no immutable SHA")
+            if str(step.get("persist-credentials","")).lower()=="true": findings.append(f"WARN {prefix}: checkout persist-credentials is enabled")
+            command=step.get("run")
+            if isinstance(command,str):
+                if re.search(r"\$\{\{\s*secrets\.[^}]+\}\}",command,re.I):
+                    secret_runs+=1;findings.append(f"HIGH {prefix}: secret context is interpolated directly into a shell run block")
+                if re.search(r"\$\{\{\s*github\.event\.(?:issue|pull_request)\.(?:title|body|head\.ref)",command,re.I):
+                    untrusted_runs+=1;findings.append(f"HIGH {prefix}: untrusted event text is interpolated into a shell run block")
+    return _audit_write(p,"gha-audit","GitHub Actions static audit",findings,
+        [f"Jobs: {len(jobs)}",f"Action references: {action_count}",f"Run blocks with secret interpolation: {secret_runs}",f"Run blocks with untrusted event interpolation: {untrusted_runs}"])
+
+
+def kubernetes_manifest_audit(p):
+    import yaml
+    raw=_read_text_source(p)
+    try: docs=list(yaml.safe_load_all(raw))
+    except Exception as exc: raise RuntimeError("Invalid Kubernetes YAML: "+str(exc)[:300]) from exc
+    findings=[];objects=0;containers=0;secret_keys=0
+    workloads={"Deployment","StatefulSet","DaemonSet","Job","ReplicaSet","ReplicationController"}
+    for doc_no,doc in enumerate(docs,1):
+        if doc is None: continue
+        if not isinstance(doc,dict): findings.append(f"ERROR document {doc_no}: root is not a mapping");continue
+        objects+=1;kind=str(doc.get("kind","unknown"))
+        meta=doc.get("metadata") if isinstance(doc.get("metadata"),dict) else {}
+        name=str(meta.get("name",f"document-{doc_no}"));spec=doc.get("spec") if isinstance(doc.get("spec"),dict) else {}
+        pod={}
+        if kind=="Pod": pod=spec
+        elif kind in workloads:
+            tmpl=spec.get("template",{})
+            if isinstance(tmpl,dict) and isinstance(tmpl.get("spec"),dict): pod=tmpl["spec"]
+        elif kind=="CronJob":
+            job=spec.get("jobTemplate",{});job_spec=job.get("spec",{}) if isinstance(job,dict) else {}
+            tmpl=job_spec.get("template",{}) if isinstance(job_spec,dict) else {}
+            if isinstance(tmpl,dict) and isinstance(tmpl.get("spec"),dict): pod=tmpl["spec"]
+        if kind=="Secret":
+            data=doc.get("data",{});strings=doc.get("stringData",{})
+            secret_keys+=len(data) if isinstance(data,dict) else 0
+            secret_keys+=len(strings) if isinstance(strings,dict) else 0
+            if data or strings: findings.append(f"WARN {name}: Secret contains values; verify encryption at rest/RBAC (values omitted)")
+        if not isinstance(pod,dict) or not pod: continue
+        pod_sec=pod.get("securityContext",{})
+        if not isinstance(pod_sec,dict): pod_sec={}
+        for field in ("hostNetwork","hostPID","hostIPC"):
+            if pod.get(field) is True: findings.append(f"HIGH {name}: {field} is enabled")
+        if pod_sec.get("runAsNonRoot") is not True: findings.append(f"WARN {name}: pod does not require runAsNonRoot")
+        if pod_sec.get("seccompProfile") is None: findings.append(f"INFO {name}: seccompProfile is not explicit")
+        for volume in pod.get("volumes",[]) if isinstance(pod.get("volumes",[]),list) else []:
+            if isinstance(volume,dict) and isinstance(volume.get("hostPath"),dict):
+                findings.append(f"HIGH {name}: hostPath volume is mounted ({volume['hostPath'].get('path','')})")
+        items=[]
+        for key in ("containers","initContainers","ephemeralContainers"):
+            value=pod.get(key,[])
+            if isinstance(value,list): items.extend(x for x in value if isinstance(x,dict))
+        for container in items:
+            containers+=1;prefix=f"{name}/{container.get('name','unnamed')}"
+            image=str(container.get("image",""));last=image.rsplit("/",1)[-1]
+            if image and (image.endswith(":latest") or (":" not in last and "@" not in image)): findings.append(f"WARN {prefix}: image is not pinned to a version or digest")
+            sec=container.get("securityContext",{})
+            if not isinstance(sec,dict): sec={}
+            if sec.get("privileged") is True: findings.append(f"HIGH {prefix}: privileged container")
+            if sec.get("allowPrivilegeEscalation") is not False: findings.append(f"WARN {prefix}: allowPrivilegeEscalation is not false")
+            if sec.get("runAsNonRoot") is not True and pod_sec.get("runAsNonRoot") is not True: findings.append(f"WARN {prefix}: container does not require non-root execution")
+            if sec.get("readOnlyRootFilesystem") is not True: findings.append(f"WARN {prefix}: root filesystem is not read-only")
+            caps=sec.get("capabilities",{});added=caps.get("add",[]) if isinstance(caps,dict) else []
+            if added: findings.append(f"HIGH {prefix}: Linux capabilities added: "+", ".join(map(str,added[:20])))
+            resources=container.get("resources",{});limits=resources.get("limits",{}) if isinstance(resources,dict) else {}
+            if not isinstance(limits,dict) or not {"cpu","memory"}.issubset(limits.keys()): findings.append(f"WARN {prefix}: CPU and memory limits are not both defined")
+    return _audit_write(p,"k8s-audit","Kubernetes manifest static audit",findings,
+        [f"YAML documents: {sum(1 for d in docs if d is not None)}",f"Objects: {objects}",f"Containers: {containers}",f"Secret keys counted (values omitted): {secret_keys}"])
+
+
+def terraform_audit(p):
+    raw=_read_text_source(p);findings=[]
+    checks=[
+        (r"\b(?:access_key|secret_key|password|client_secret|api_token)\s*=\s*['\"][^'\"]+['\"]","HIGH","credential-looking literal assignment; value omitted"),
+        (r"\bcidr_blocks\s*=\s*\[[^\]]*['\"]0\.0\.0\.0/0['\"]","HIGH","public ingress CIDR 0.0.0.0/0"),
+        (r"\bacl\s*=\s*['\"]public-(?:read|read-write)['\"]","HIGH","public S3 ACL"),
+        (r"\b(?:storage_encrypted|encrypted)\s*=\s*false\b","HIGH","storage encryption explicitly disabled"),
+        (r"\bpublicly_accessible\s*=\s*true\b","HIGH","database/service is publicly accessible"),
+        (r"\bskip_final_snapshot\s*=\s*true\b","WARN","final database snapshot is skipped"),
+        (r"\b(?:Action|actions)\s*=\s*\[[^\]]*['\"]\*['\"]","HIGH","wildcard IAM action"),
+        (r"\bPrincipal\s*=\s*\{[^}]*AWS\s*=\s*['\"]\*['\"]","HIGH","wildcard IAM principal")
+    ]
+    for pattern,severity,label in checks:
+        for match in re.finditer(pattern,raw,re.I|re.S if "Principal" in pattern else re.I):
+            n=raw.count("\n",0,match.start())+1;findings.append(f"{severity} line {n}: {label}")
+    if re.search(r"\bprovider\s+['\"][^'\"]+['\"]\s*\{",raw) and not re.search(r"\bversion\s*=\s*['\"][^'\"]+['\"]",raw):
+        findings.append("WARN: provider version constraint was not found in this file; inspect required_providers")
+    if not re.search(r"\bterraform\s*\{",raw): findings.append("INFO: terraform settings block is not present in this file")
+    return _audit_write(p,"terraform-audit","Terraform static audit",findings,[f"Lines: {len(raw.splitlines())}"])
+
+
+def nginx_config_audit(p):
+    raw=_read_text_source(p);active=[]
+    for n,line in enumerate(raw.splitlines(),1):
+        value=line.split("#",1)[0].strip()
+        if value: active.append((n,value))
+    text="\n".join(v for _,v in active);findings=[]
+    checks=[
+        (r"^\s*server_tokens\s+on\b","WARN","server_tokens is enabled"),
+        (r"^\s*autoindex\s+on\b","HIGH","directory autoindex is enabled"),
+        (r"^\s*proxy_ssl_verify\s+off\b","HIGH","upstream TLS verification is disabled"),
+        (r"^\s*ssl_protocols\b.*\b(?:SSLv3|TLSv1(?:\.0)?|TLSv1\.1)\b","HIGH","weak TLS protocol is enabled")
+    ]
+    for n,value in active:
+        for pattern,severity,label in checks:
+            if re.search(pattern,value,re.I): findings.append(f"{severity} line {n}: {label}")
+    https=bool(re.search(r"^\s*listen\s+[^;]*(?:443|ssl)",text,re.I|re.M))
+    if https and not re.search(r"^\s*ssl_certificate\s+",text,re.I|re.M): findings.append("HIGH: HTTPS listener has no ssl_certificate directive in this file")
+    if https and not re.search(r"^\s*ssl_certificate_key\s+",text,re.I|re.M): findings.append("HIGH: HTTPS listener has no ssl_certificate_key directive in this file")
+    if https and not re.search(r"^\s*add_header\s+Strict-Transport-Security\b",text,re.I|re.M): findings.append("INFO: HSTS header was not found")
+    if not https: findings.append("WARN: no HTTPS listener was detected")
+    if not re.search(r"^\s*client_max_body_size\s+",text,re.I|re.M): findings.append("INFO: client_max_body_size is not explicitly configured")
+    return _audit_write(p,"nginx-audit","Nginx static audit",findings,[f"Active directives: {len(active)}",f"HTTPS listener: {str(https).lower()}"])
+
+
+def apache_config_audit(p):
+    raw=_read_text_source(p);active=[]
+    for n,line in enumerate(raw.splitlines(),1):
+        value=line.split("#",1)[0].strip()
+        if value: active.append((n,value))
+    text="\n".join(v for _,v in active);findings=[]
+    checks=[
+        (r"^\s*ServerTokens\s+(?:Full|OS)\b","WARN","ServerTokens exposes detailed server information"),
+        (r"^\s*ServerSignature\s+On\b","WARN","ServerSignature is enabled"),
+        (r"^\s*Options\b.*\bIndexes\b","HIGH","directory listing Indexes is enabled"),
+        (r"^\s*AllowOverride\s+All\b","INFO","AllowOverride All increases per-directory configuration surface"),
+        (r"^\s*TraceEnable\s+On\b","WARN","TRACE method is enabled"),
+        (r"^\s*SSLProtocol\b.*(?<!-)\b(?:SSLv3|TLSv1(?:\.0)?|TLSv1\.1)\b","HIGH","weak TLS protocol is enabled")
+    ]
+    for n,value in active:
+        for pattern,severity,label in checks:
+            if re.search(pattern,value,re.I): findings.append(f"{severity} line {n}: {label}")
+    tls=bool(re.search(r"^\s*SSLEngine\s+on\b",text,re.I|re.M))
+    if tls and not re.search(r"^\s*Header\s+always\s+set\s+Strict-Transport-Security\b",text,re.I|re.M): findings.append("INFO: HSTS header was not found")
+    if not re.search(r"^\s*ServerRoot\b",text,re.I|re.M): findings.append("INFO: ServerRoot is not defined in this file")
+    return _audit_write(p,"apache-audit","Apache HTTPD static audit",findings,[f"Active directives: {len(active)}",f"TLS enabled: {str(tls).lower()}"])
+
+
+def caddy_config_audit(p):
+    raw=_read_text_source(p);active=[]
+    for n,line in enumerate(raw.splitlines(),1):
+        value=line.split("#",1)[0].strip()
+        if value: active.append((n,value))
+    text="\n".join(v for _,v in active);findings=[]
+    for n,value in active:
+        if re.search(r"^\s*auto_https\s+off\b",value,re.I): findings.append(f"HIGH line {n}: automatic HTTPS is disabled")
+        if re.search(r"(?:tls_)?insecure_skip_verify\b",value,re.I): findings.append(f"HIGH line {n}: upstream TLS verification is disabled")
+        if re.search(r"^\s*debug\b",value,re.I): findings.append(f"INFO line {n}: debug mode is enabled")
+        if re.search(r"^\s*protocols?\s+.*\b(?:tls1\.0|tls1\.1)\b",value,re.I): findings.append(f"HIGH line {n}: weak TLS protocol is enabled")
+    if re.search(r"\b:80\b",text) and not re.search(r"\b:443\b",text) and not re.search(r"^\s*auto_https\s+on\b",text,re.I|re.M):
+        findings.append("WARN: HTTP listener detected without explicit HTTPS site/automatic HTTPS")
+    if not re.search(r"\bStrict-Transport-Security\b",text,re.I): findings.append("INFO: HSTS header was not found")
+    return _audit_write(p,"caddy-audit","Caddyfile static audit",findings,[f"Active lines: {len(active)}"])
+
+
+def systemd_unit_audit(p):
+    raw=_read_text_source(p);values={};sections=set();section=""
+    for n,line in enumerate(raw.splitlines(),1):
+        value=line.strip()
+        if not value or value.startswith(("#",";")): continue
+        if value.startswith("[") and value.endswith("]"):
+            section=value[1:-1].strip();sections.add(section);continue
+        if "=" not in value: continue
+        key,val=value.split("=",1);values.setdefault((section,key.strip()),[]).append((n,val.strip()))
+    service={key:items[-1] for (sec,key),items in values.items() if sec=="Service"};findings=[]
+    def current(key): return service.get(key,(0,None))[1]
+    def line_no(key): return service.get(key,(0,None))[0]
+    user=current("User")
+    if not user or user=="root": findings.append(f"WARN line {line_no('User') or 1}: service runs as root or does not specify User")
+    if current("NoNewPrivileges")!="yes": findings.append(f"WARN line {line_no('NoNewPrivileges') or 1}: NoNewPrivileges=yes is not set")
+    if current("ProtectSystem") not in ("strict","full"): findings.append(f"WARN line {line_no('ProtectSystem') or 1}: ProtectSystem=strict/full is not set")
+    if current("ProtectHome") not in ("yes","read-only","tmpfs"): findings.append(f"INFO line {line_no('ProtectHome') or 1}: ProtectHome restriction is not set")
+    if current("PrivateTmp")!="yes": findings.append(f"INFO line {line_no('PrivateTmp') or 1}: PrivateTmp=yes is not set")
+    caps=current("CapabilityBoundingSet")
+    if caps and re.search(r"\b(?:CAP_SYS_ADMIN|CAP_SYS_MODULE|CAP_SYS_RAWIO|ALL)\b",caps): findings.append(f"HIGH line {line_no('CapabilityBoundingSet')}: broad capability is granted")
+    if re.search(r"(?:/bin/)?(?:ba)?sh\s+-c\b",current("ExecStart") or ""): findings.append(f"WARN line {line_no('ExecStart')}: ExecStart uses a shell -c wrapper")
+    umask=current("UMask")
+    if umask in ("000","0000","0002"): findings.append(f"WARN line {line_no('UMask')}: permissive UMask {umask}")
+    return _audit_write(p,"systemd-audit","systemd unit static audit",findings,
+        [f"Sections: {len(sections)}",f"Service directives: {len(service)}",f"User: {user or '(default root)'}"])
+
+
+def shell_script_audit(p):
+    raw=_read_text_source(p);findings=[]
+    checks=[
+        (r"\beval\s+","HIGH","eval executes dynamically constructed shell code"),
+        (r"(?:curl|wget)[^\n;|]*\|\s*(?:sh|bash)\b","HIGH","download piped directly to a shell"),
+        (r"\brm\s+-[^\n]*r[^\n]*f\s+/(?:\s|$)","HIGH","recursive deletion of filesystem root"),
+        (r"\bchmod\s+(?:-R\s+)?777\b","HIGH","world-writable permissions granted"),
+        (r"\bsource\s+<\(\s*(?:curl|wget)\b","HIGH","remote process substitution is sourced"),
+        (r"\bsudo\b","INFO","script invokes sudo; review privilege boundary")
+    ]
+    for pattern,severity,label in checks:
+        for match in re.finditer(pattern,raw,re.I):
+            n=raw.count("\n",0,match.start())+1;findings.append(f"{severity} line {n}: {label}")
+    secret_pattern=r"^\s*(?:export\s+)?([A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z0-9_]*)\s*=\s*(['\"])[^'\"]+\2"
+    for match in re.finditer(secret_pattern,raw,re.M|re.I):
+        n=raw.count("\n",0,match.start())+1;findings.append(f"HIGH line {n}: credential-like variable {match.group(1)} has a literal value (value omitted)")
+    if not re.search(r"^\s*set\s+-[^#\n]*[eE][^#\n]*[uU][^#\n]*[oO]",raw,re.M):
+        findings.append("WARN: strict flags were not found; for Bash consider set -euo pipefail")
+    if not re.search(r"^\s*trap\s+",raw,re.M) and re.search(r"\bmktemp\b",raw):
+        findings.append("INFO: mktemp is used but no trap cleanup handler was found")
+    return _audit_write(p,"shell-audit","Shell script static audit",findings,[f"Lines: {len(raw.splitlines())}",f"Shebang: {str(raw.startswith('#!')).lower()}"])
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -6799,6 +7061,10 @@ TOOLS={
  "ini-to-json":ini_to_json,"ini-validate":ini_validate,"toml-to-json":toml_to_json,"toml-validate":toml_validate,"properties-to-json":properties_to_json,
  "dockerfile-audit":dockerfile_audit,"docker-compose-audit":docker_compose_audit,"requirements-audit":requirements_audit,
  "package-json-audit":package_json_audit,"gitignore-audit":gitignore_audit,"env-reference-report":env_reference_report,
+
+ "github-actions-audit":github_actions_audit,"kubernetes-manifest-audit":kubernetes_manifest_audit,
+ "terraform-audit":terraform_audit,"nginx-config-audit":nginx_config_audit,"apache-config-audit":apache_config_audit,
+ "caddy-config-audit":caddy_config_audit,"systemd-unit-audit":systemd_unit_audit,"shell-script-audit":shell_script_audit,
 
 }
 

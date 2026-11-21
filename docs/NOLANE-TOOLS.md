@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **275 công cụ đã được tích hợp và triển khai trên production**. Wave 7 đưa catalog lên 261 công cụ; Wave 8 bổ sung 14 công cụ cấu hình/DevOps và đã được merge, kiểm thử, triển khai trên Cloudflare Worker version 57. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **283 công cụ trong catalog phát triển**. Wave 7 và Wave 8 (275 công cụ) đã được triển khai production; Wave 9 bổ sung 8 auditor hạ tầng/CI/CD đang được kiểm thử trên nhánh phát triển. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -419,6 +419,23 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 | /tool env-reference-report | Trích tên biến từ JS/TS/Python/Shell; không đọc giá trị. | Báo cáo TXT |
 
 **Giới hạn và an toàn:** đây là kiểm tra cấu hình tĩnh. Không build Docker image, không chạy Compose, shell, package scripts, không cài dependency và không truy cập registry/CVE database. Báo cáo ENV chỉ hiển thị tên biến và số lượng, không hiển thị giá trị. gitignore-audit là matcher gần đúng, không thay thế Git's complete ignore engine. Các bộ phân tích TOML/Properties/Compose chạy trên runner khi tải file; AI direct mode chỉ bật cho các phép xử lý văn bản có thể thực hiện an toàn.
+
+
+
+### Hạ tầng, CI/CD và hardening hệ thống — đợt chín
+
+| Lệnh | Chức năng | Đầu ra |
+|---|---|---|
+| /tool github-actions-audit | Kiểm tra action chưa pin SHA, permissions quá rộng, pull_request_target, persist-credentials và secret/event expression trong run. | Báo cáo TXT |
+| /tool kubernetes-manifest-audit | Kiểm tra privileged, host namespace/hostPath, image tag, securityContext, capabilities và CPU/memory limits. | Báo cáo TXT |
+| /tool terraform-audit | Tìm credential literal, public ingress, public ACL, encryption tắt, public database và IAM wildcard. | Báo cáo TXT |
+| /tool nginx-config-audit | Kiểm tra TLS yếu, autoindex, server_tokens, proxy SSL verification, certificate và HSTS. | Báo cáo TXT |
+| /tool apache-config-audit | Kiểm tra ServerTokens, ServerSignature, Indexes, AllowOverride, TRACE và TLS protocol. | Báo cáo TXT |
+| /tool caddy-config-audit | Kiểm tra auto_https, upstream TLS verification, TLS protocol, debug và HSTS. | Báo cáo TXT |
+| /tool systemd-unit-audit | Kiểm tra User, NoNewPrivileges, ProtectSystem/Home, PrivateTmp, capabilities, ExecStart và UMask. | Báo cáo TXT |
+| /tool shell-script-audit | Kiểm tra eval, download-to-shell, xóa root, chmod 777, sudo, literal credential và strict flags. | Báo cáo TXT |
+
+**Giới hạn và an toàn:** đây là static heuristics, không thay thế công cụ chuyên dụng hoặc review thủ công. GitHub Actions/Kubernetes YAML được parse trên runner; Terraform HCL, Nginx, Apache, Caddy, systemd và shell là phân tích văn bản theo pattern được hỗ trợ. Không chạy workflow, không truy cập cluster, không chạy terraform init/plan/apply, không khởi động web server/service, không chạy shell script và không in giá trị credential.
 
 
 ## AI Agent
