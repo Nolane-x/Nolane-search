@@ -1160,9 +1160,13 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
   }
   if (toolId === "text-normalize-path-separators") return content.replace(/\\/g,"/");
   if (toolId === "text-extract-file-extensions") {
-    const matches=content.match(/(?<![A-Za-z0-9])(?:[A-Za-z0-9_.-]+)\.([A-Za-z0-9]{1,12})(?![A-Za-z0-9])/g)||[];
+    const pattern=/(?<![A-Za-z0-9])(?:[A-Za-z0-9_.-]+)\.([A-Za-z0-9]{1,12})(?![A-Za-z0-9])/g;
     const seen=new Set<string>(),output:string[]=[];
-    for(const match of matches){const ext=match.slice(match.lastIndexOf(".")+1).toLowerCase();if(!seen.has(ext)){seen.add(ext);output.push(ext);}}
+    for(const match of content.matchAll(pattern)){
+      const prefix=content.slice(Math.max(0,(match.index??0)-64),match.index??0);
+      if(/https?:\/\/[^/\s:]*$/i.test(prefix))continue;
+      const ext=match[1]!.toLowerCase();if(!seen.has(ext)){seen.add(ext);output.push(ext);}
+    }
     return output.join("\n")+(output.length?"\n":"");
   }
   if (toolId === "text-escape-shell-argument") return "'" + content.replace(/'/g,"'\"'\"'") + "'";

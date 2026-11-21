@@ -32,7 +32,7 @@ RUNNERS = {
     "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv",
     "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "html-sanitize", "xml-tree-report", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values",
     "text-sentence-case", "text-normalize-quotes", "text-normalize-dashes", "text-reverse-word-order", "text-extract-words", "text-extract-sentences", "text-dedupe-sentences", "text-remove-markdown-formatting", "text-markdown-toc", "text-markdown-code-blocks", "text-markdown-table-extract", "text-extract-numbered-lists", "text-join-hyphenated-lines", "text-strip-bom", "text-normalize-paragraph-spacing", "csv-schema-infer", "csv-duplicates-report", "csv-sample-rows", "json-array-stats", "json-canonicalize",
-    "text-extract-todo-comments", "text-extract-markdown-images", "text-strip-markdown-frontmatter", "text-markdown-to-plain", "text-sort-unique-words", "text-word-to-lines", "text-join-lines", "text-extract-domains", "text-extract-uuids", "text-extract-semver", "text-extract-ipv6", "text-redact-secrets", "text-extract-comment-lines", "text-tabs-to-spaces", "text-escape-regex", "text-unescape-regex", "json-merge-objects", "json-array-dedupe", "json-array-to-lines", "csv-trim-cells", "csv-remove-empty-columns", "csv-empty-cell-report"
+    "text-extract-todo-comments", "text-extract-markdown-images", "text-strip-markdown-frontmatter", "text-markdown-to-plain", "text-sort-unique-words", "text-word-to-lines", "text-join-lines", "text-extract-domains", "text-extract-uuids", "text-extract-semver", "text-extract-ipv6", "text-redact-secrets", "text-extract-comment-lines", "text-tabs-to-spaces", "text-escape-regex", "text-unescape-regex", "json-merge-objects", "json-array-dedupe", "json-array-to-lines", "csv-trim-cells", "csv-remove-empty-columns", "csv-empty-cell-report",
     "text-extract-mac-addresses",
     "text-extract-port-numbers",
     "text-normalize-path-separators",
@@ -6079,7 +6079,12 @@ def text_normalize_path_separators(p):
 
 def text_extract_file_extensions(p):
     raw=_read_text_source(p)
-    candidates=re.findall(r"(?<![A-Za-z0-9])(?:[A-Za-z0-9_.-]+)\.([A-Za-z0-9]{1,12})(?![A-Za-z0-9])",raw)
+    candidates=[]
+    pattern=r"(?<![A-Za-z0-9])(?:[A-Za-z0-9_.-]+)\.([A-Za-z0-9]{1,12})(?![A-Za-z0-9])"
+    for match in re.finditer(pattern,raw):
+        prefix=raw[max(0,match.start()-64):match.start()]
+        if re.search(r"https?://[^/\s:]*$",prefix,re.I): continue
+        candidates.append(match.group(1))
     values=[]
     seen=set()
     for value in candidates:
@@ -6224,7 +6229,7 @@ def json_remove_empty_values(p):
         if isinstance(item,list):
             result=[]
             for child in item:
-                cleaned=clean(child)
+                cleaned=clean(child,depth+1)
                 if cleaned is None or cleaned=="" or cleaned==[] or cleaned=={}: continue
                 result.append(cleaned)
             return result
