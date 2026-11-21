@@ -426,7 +426,13 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
           `Watch ID: <code>${watch.id}</code>\n` +
           `Detected: ${now}\n\n` +
           `Trang đã thay đổi so với lần kiểm tra trước. Bản snapshot mới đã được lưu trong archive.`;
-        await sendTelegram(env, watch.chat_id, message);
+        try {
+          await sendTelegram(env, watch.chat_id, message);
+        } catch (notificationError) {
+          // A failed alert must not roll back a snapshot that is already archived
+          // and indexed. Keep notification delivery separate from capture state.
+          console.error("Watch change notification failed:", notificationError instanceof Error ? notificationError.message : "unknown error");
+        }
         await sendToArchive(env, message);
         changed += 1;
       }
