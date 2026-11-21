@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **297 công cụ đã được triển khai trên production**. Wave 7 và Wave 8 đưa catalog lên 275 công cụ; Wave 9 thêm 8 auditor hạ tầng/CI/CD; Wave 10 thêm 8 repository engineering analyzers, đã được kiểm thử và triển khai trên Cloudflare Worker. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **297 công cụ đã được triển khai trên production**. Wave 7 và Wave 8 đưa catalog lên 275 công cụ; Wave 9 thêm 8 auditor hạ tầng/CI/CD; Wave 10 thêm 8 repository engineering analyzers và Wave 11 thêm 6 analyzer cho environment contracts, architecture cycles, change impact, OpenAPI, container và CI reliability. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -21,7 +21,7 @@ Dùng trực tiếp URL GitHub công khai, không cần tải ZIP về máy:
 - `/repo_tool repo-runtime-risk https://github.com/owner/repository/tree/main` — chạy riêng một Repository tool trên snapshot GitHub; dùng bất kỳ ID nào thuộc danh mục Repository, chẳng hạn `repo-test-map`, `repo-api-surface` hoặc `repo-migration-audit`.
 - `/tool_jobs`, `/tool_job ID`, `/tool_retry ID` — theo dõi, xem trace và chạy lại job.
 
-Kết quả là ZIP gồm báo cáo Markdown, module/import graph JSON, metadata GitHub và 18 nhóm báo cáo: inventory, dependencies, license evidence, secret scan, TODO scan, code statistics, config audit, duplicates, security/supply-chain, test mapping/quality, complexity, API surface, docs links, migration risk, runtime risk và i18n. Import graph hiện dùng Python AST và heuristic cho relative imports của JS/TS; đây không phải call graph hoàn chỉnh. Commit messages có marker fix/bug chỉ là tín hiệu tìm kiếm, không phải defect rate.
+Kết quả là ZIP gồm báo cáo Markdown, module/import graph JSON, metadata GitHub và 24 nhóm báo cáo: inventory, dependencies, license evidence, secret scan, TODO scan, code statistics, config audit, duplicates, security/supply-chain, test mapping/quality, complexity, API surface, docs links, migration risk, runtime risk, i18n, environment contract, architecture cycles, change impact, OpenAPI contract, container audit và CI reliability. Import graph hiện dùng Python AST và heuristic cho relative imports của JS/TS; đây không phải call graph hoàn chỉnh. Commit messages có marker fix/bug chỉ là tín hiệu tìm kiếm, không phải defect rate.
 
 Chỉ nhận repository công khai. Runner tải ZIP snapshot qua GitHub API và codeload.github.com, giới hạn 100 MB tải xuống / 100 MB dữ liệu giải nén / 500 entries. Không giải nén đường dẫn ra filesystem, không chạy mã, GitHub Actions workflow hoặc build script trong repository, không cài dependency và không truy vấn CVE/advisory. Secret scan chỉ báo file, dòng và loại pattern, không tiết lộ giá trị. Báo cáo license là bằng chứng văn bản, không phải tư vấn pháp lý.
 
@@ -172,8 +172,8 @@ Các processor văn bản này giới hạn đầu vào 5 MB và yêu cầu UTF-
 | `/tool repo-code-stats` | Thống kê codebase | Gom số file, dòng trống, dòng nội dung và dung lượng theo phần mở rộng. | TXT |
 | `/tool repo-config-audit` | Kiểm kê cấu hình dự án | Kiểm tra hiện diện của README, license, manifest, lockfile, test, CI, container và lint config. | TXT |
 | `/tool repo-duplicates` | Tìm file trùng repository | Hash SHA-256 các member và gom nhóm file có nội dung giống nhau. | CSV |
-| `/tool repo-intelligence` | Tổng hợp phân tích repository ZIP | Tạo import graph và gói 18 nhóm báo cáo gồm dependencies, license, secrets (ẩn giá trị), TODO, codebase, cấu hình, duplicates, security/supply-chain, test mapping/quality, complexity, API surface, docs links, migration risk, runtime risk và i18n. | ZIP gồm Markdown, JSON và các báo cáo |
-| `/repo URL` / `/repo_compare URL base...head` | GitHub Repository Intelligence | Tải snapshot repository GitHub công khai, phân tích import graph, metadata, tối đa 20 commit gần nhất và thông tin files changed của hai ref; đóng gói 18 nhóm báo cáo kiểm toán. | ZIP gồm Markdown, JSON và báo cáo audit |
+| `/tool repo-intelligence` | Tổng hợp phân tích repository ZIP | Tạo import graph và gói 24 nhóm báo cáo gồm dependencies, license, secrets (ẩn giá trị), TODO, codebase, cấu hình, duplicates, security/supply-chain, test mapping/quality, complexity, API surface, docs links, migration risk, runtime risk, i18n, environment contract, import cycles, change impact, OpenAPI contract, container audit và CI reliability. | ZIP gồm Markdown, JSON và các báo cáo |
+| `/repo URL` / `/repo_compare URL base...head` | GitHub Repository Intelligence | Tải snapshot repository GitHub công khai, phân tích import graph, metadata, tối đa 20 commit gần nhất và thông tin files changed của hai ref; đóng gói 24 nhóm báo cáo kiểm toán. | ZIP gồm Markdown, JSON và báo cáo audit |
 | `/tool repo-security-audit` | Kiểm toán bảo mật repository | Quét tĩnh GitHub Actions, Dockerfile/Containerfile, Kubernetes YAML và Terraform; phát hiện shell injection trong workflow, action chưa pin SHA, cấu hình container đặc quyền, host namespace/hostPath, wildcard IAM và ingress SSH/RDP công khai. | ZIP gồm Markdown, JSON findings và SARIF 2.1.0 |
 | `/tool repo-supply-chain` | Kiểm toán dependency & supply chain | Kiểm kê package manifest/lockfile, đối chiếu lockfile gần nhất, phân loại version range/floating, nguồn Git/URL và npm lifecycle hooks; không resolve hay cài package. | ZIP gồm Markdown và JSON inventory |
 
@@ -546,3 +546,8 @@ Tám processor mới chỉ đọc snapshot ZIP trong runner tạm thời. Chúng
 ### Wave 11 — Repository Architecture & Delivery Checks
 
 Sáu processor mới đọc static ZIP/GitHub metadata. Environment contract chỉ liệt kê tên biến, không tiết lộ giá trị. Import cycles và change impact dùng đồ thị local imports hiện có. Change impact chỉ có ý nghĩa với snapshot được tạo bởi `/repo_compare`; snapshot đơn lẻ sẽ báo thiếu compare metadata. OpenAPI audit không fetch remote refs; container/CI checks là heuristic, không chạy Docker, Compose, Actions hay cluster. Không có code của repository nào được thực thi.
+
+
+### Wave 11 — Repository Architecture & Delivery Checks
+
+Sáu processor mới đọc static ZIP/GitHub metadata. Environment contract chỉ liệt kê tên biến, không tiết lộ giá trị. Import cycles và change impact dùng đồ thị local imports hiện có. Change impact chỉ có kết quả đầy đủ khi snapshot được tạo bởi `/repo_compare`; ZIP đơn lẻ sẽ báo thiếu compare metadata. OpenAPI audit không fetch remote refs; container/CI checks là heuristic, không chạy Docker, Compose, Actions hay cluster. Không có code của repository nào được thực thi.
