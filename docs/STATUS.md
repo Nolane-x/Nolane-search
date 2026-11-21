@@ -1,12 +1,12 @@
 # Verified Project Status
 
-Last verified: 2026-11-18. This document distinguishes production deployment and configuration checks from user-level behavior that still requires a real Telegram interaction.
+Last verified: 2026-11-21. This document distinguishes production deployment and configuration checks from user-level behavior that still requires a real Telegram interaction.
 
 ## Repository and production release
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `b12aa461af2bb8f366671edc07821ef5549ccf90`
+- Latest production source commit: `35a33c5b52901e3b3dc1e8471dae18fb9ba4a5c8`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -18,9 +18,22 @@ Last verified: 2026-11-18. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `26f16ed2-8133-457b-a77c-59c93b269a47`
+- Cloudflare Worker version ID: `4f33b8bb-47db-4645-b58d-46899021030e` (version 56)
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
+
+## Latest production release — 2026-11-21
+
+- PR #45 ([261-tool Wave 7](https://github.com/Nolane-x/Nolane-search/pull/45)) was merged into `main`.
+- Main commit: `35a33c5b52901e3b3dc1e8471dae18fb9ba4a5c8`.
+- Production Worker version 56: `4f33b8bb-47db-4645-b58d-46899021030e`; deployment run [44873192198](https://github.com/Nolane-x/Nolane-search/actions/runs/44873192198) succeeded.
+- Main CI [44873192204](https://github.com/Nolane-x/Nolane-search/actions/runs/44873192204) passed type-check, unit tests, deployment-script checks, Python runner tests and Worker build.
+- Worker bundle export and production smoke test [44873192195](https://github.com/Nolane-x/Nolane-search/actions/runs/44873192195) passed.
+- Telegram deployment verification confirmed both `message` and `callback_query` webhook updates and successful command-menu registration.
+- Wave 7 adds 14 processors and raises the catalog from 247 to 261: developer/network text, CSV-to-SQL/YAML, CSV reports and JSON cleanup/type/nesting utilities.
+- D1 migrations verified in `schema_migrations`: `0001_core.sql`, `0002_deep_search_jobs.sql`, `0003_web_portal.sql`, `0004_remove_request_rate_limits.sql`. No new migration was needed for Wave 7.
+- Read-only D1 inspection confirmed `indexed_pages` (1 row), `watches` (2 rows), `telegram_updates` (55 rows), and the existing tool/search/job tables. Cloudflare's D1 metadata `num_tables` field returned 0 even though `sqlite_master` lists the existing tables; direct SQLite inspection is the authoritative check here.
+- Still pending owner-level verification: send a real small text/CSV/JSON file to the Telegram bot, receive the processed output, exercise a safe retry, and confirm optional archive-channel delivery. CI and webhook registration do not prove the full user interaction.
 
 ## CI and deployment verification
 
