@@ -34,7 +34,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Personal index | /crawl https://example.com [1-20], /crawls, /local words | Queue-based same-origin site crawl, sitemap seed, robots.txt checks and D1 FTS5 index |
 | Website monitoring | /watch https://example.com | Scheduled HTTP checks and change alerts |
 | Watch management | /watches, /unwatch ID | List and disable watches |
-| Telegram snapshot archive | /archive [query], /archive_restore ID | Search indexed snapshot metadata and copy the original Telegram document back to the private chat |
+| Telegram snapshot archive | /archive [query], /archive_page PAGE [query], /archive_restore ID | Search paginated snapshot metadata and copy the original Telegram document back to the private chat |
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Personal memory | /remember, /memories, /forget | Explicit owner-controlled memories shared by Telegram and Web AI chat |
 | Status | /status | Provider configuration and compact index counters |

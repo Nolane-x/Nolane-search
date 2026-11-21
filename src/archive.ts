@@ -39,6 +39,20 @@ export interface SaveArchiveSnapshotInput {
   capturedAt: string;
 }
 
+/** Telegram message size remains bounded by keeping archive pages compact. */
+export const ARCHIVE_PAGE_SIZE = 5;
+export const MAX_ARCHIVE_PAGE = 1001; // listArchiveSnapshots deliberately caps offset at 5,000.
+
+/** Parse: /archive_page PAGE [query]. Invalid or out-of-range input returns null. */
+export function parseArchivePageArguments(input: string): { page: number; query: string } | null {
+  const match = input.trim().match(/^(\d{1,4})(?:\s+([\s\S]*))?$/);
+  if (!match) return null;
+  const page = Number(match[1]);
+  const query = (match[2] || "").trim().replace(/\s+/g, " ");
+  if (!Number.isSafeInteger(page) || page < 1 || page > MAX_ARCHIVE_PAGE || query.length > 120) return null;
+  return { page, query };
+}
+
 interface ArchiveSnapshotRow {
   id: number;
   watch_id: number;
@@ -209,22 +223,29 @@ export function formatArchiveSnapshotList(
   snapshots: ArchiveSnapshot[],
   total: number,
   query = "",
+  page = 1,
+  pageSize = ARCHIVE_PAGE_SIZE,
 ): string {
+  const safePage = Math.max(1, Math.floor(page) || 1);
+  const safePageSize = Math.max(1, Math.min(20, Math.floor(pageSize) || ARCHIVE_PAGE_SIZE));
+  const safeTotal = Math.max(0, Math.floor(total) || 0);
+  const pageCount = Math.max(1, Math.ceil(safeTotal / safePageSize));
   if (!snapshots.length) {
     return query
       ? "<b>Nolane Archive</b>\nKhông tìm thấy snapshot khớp với <code>" + htmlEscape(query.slice(0, 120)) + "</code>."
       : "<b>Nolane Archive</b>\nChưa có snapshot website nào được lưu. Hãy cấu hình <code>TELEGRAM_ARCHIVE_CHAT_ID</code> và tạo một watch bằng <code>/watch URL</code>.";
   }
   const lines = [
-    "<b>Nolane Archive</b> · " + total + " snapshot" + (query ? " phù hợp" : ""),
+    "<b>Nolane Archive</b> · " + safeTotal + " snapshot" + (query ? " phù hợp" : ""),
     query ? "Từ khóa: <code>" + htmlEscape(query.slice(0, 120)) + "</code>" : "Các snapshot mới nhất",
+    "Trang " + safePage + " / " + pageCount,
     "",
   ];
   for (const snapshot of snapshots) {
-    const title = htmlEscape(snapshot.title.slice(0, 135));
-    const url = htmlEscape(snapshot.url.slice(0, 220));
+    const title = htmlEscape(snapshot.title.slice(0, 100));
+    const url = htmlEscape(snapshot.url.slice(0, 180));
     const captured = htmlEscape(snapshot.capturedAt.replace("T", " ").replace(/\.\d{3}Z$/, " UTC"));
-    const fileName = htmlEscape(snapshot.fileName.slice(0, 100));
+    const fileName = htmlEscape(snapshot.fileName.slice(0, 90));
     const fileSize = formatArchiveFileSize(snapshot.fileSize);
     const hashPrefix = htmlEscape(snapshot.contentHash.slice(0, 16));
     const kind = snapshot.captureKind === "initial" ? "bản đầu tiên" : "phát hiện thay đổi";
@@ -236,7 +257,17 @@ export function formatArchiveSnapshotList(
       "",
     );
   }
-  if (total > snapshots.length) lines.push("Hiển thị " + snapshots.length + " / " + total + " mục gần nhất.");
+  if (safeTotal > snapshots.length) {
+    const first = (safePage - 1) * safePageSize + 1;
+    lines.push("Hiển thị " + first + "–" + (first + snapshots.length - 1) + " / " + safeTotal + " mục.");
+  }
+  if (pageCount > 1) {
+    const querySuffix = query ? " " + htmlEscape(query.slice(0, 120)) : "";
+    const navigation: string[] = [];
+    if (safePage > 1) navigation.push("← Trước: <code>/archive_page " + (safePage - 1) + querySuffix + "</code>");
+    if (safePage < pageCount) navigation.push("Tiếp: <code>/archive_page " + (safePage + 1) + querySuffix + "</code> →");
+    if (navigation.length) lines.push(navigation.join("  ·  "));
+  }
   lines.push("Tệp gốc nằm trong Telegram archive channel; D1 chỉ giữ chỉ mục và tham chiếu khôi phục.");
   return lines.join("\n");
 }

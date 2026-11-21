@@ -8,8 +8,10 @@ The page text and document bytes are not copied into D1. D1 is a searchable cata
 
 ## Commands
 
-- /archive lists the 10 most recent snapshots belonging to the current owner.
-- /archive query searches the owner's snapshot titles and URLs.
+- /archive lists the five most recent snapshots belonging to the current owner (page 1).
+- /archive query searches the owner's snapshot titles and URLs; results are shown five per page.
+- /archive_page PAGE [query] opens another page and can carry the same optional search query. The command supports pages 1–1001 (the query layer caps offset at 5,000 rows).
+- Each non-final page shows previous/next commands. Query text is HTML-escaped before it is shown in Telegram.
 - /archive_restore ID copies the original channel document back into the private bot chat using Telegram copyMessage.
 
 The archive index is owner-scoped and commands require the private chat. A snapshot cannot be restored after its source message is deleted from Telegram or the bot loses access to the source channel. The D1 index does not independently reconstruct or download the file.
