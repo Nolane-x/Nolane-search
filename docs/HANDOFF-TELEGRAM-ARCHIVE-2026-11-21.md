@@ -97,3 +97,15 @@ The production database currently has migration `0005` applied, but the GitHub A
 - Cloudflare Worker version `d0e64bf3-7b72-44bf-98fa-1fb35b520a33` receives 100% production traffic.
 - No D1 schema migration was required. Telegram webhook and slash-command registration succeeded.
 - Owner-level Telegram E2E remains outstanding: real first/change capture, archive search/page navigation, restore, and behavior after deleting an original archive message.
+
+
+## Follow-up release: truthful archive-state notifications — 2026-11-21
+
+- PR #57 merged: https://github.com/Nolane-x/Nolane-search/pull/57
+- Release commit: `019abadd9a36cf8599e9e0b9bdc6ebab81876fe1`.
+- Watch change alerts now distinguish between a saved snapshot and a notification-only change when Telegram archive is not configured. The Worker no longer tells the owner that the snapshot was archived if no archive channel exists.
+- Regression test covers archive-disabled behavior: update the local indexed hash, send only the change notification, do not call `sendDocument`, and do not claim that a snapshot exists.
+- PR CI #262 and main CI #263 passed (24 test files / 207 unit tests, TypeScript, deployment checks, 96 Python runner tests and Worker build). Deploy #110 and Export/Smoke #103 passed.
+- Cloudflare Worker version `09d9e4ab-dc2b-4084-ac29-e81e61f27449` receives 100% production traffic.
+- No D1 migration was required. The deployment registered the Telegram webhook and command list successfully.
+- Owner-side Telegram E2E remains outstanding: real first/change capture, archive search/page navigation, restore and deleted-source-message behavior.
