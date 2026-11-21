@@ -45,10 +45,10 @@ export const MAX_ARCHIVE_PAGE = 1001; // listArchiveSnapshots deliberately caps 
 
 /** Parse: /archive_page PAGE [query]. Invalid or out-of-range input returns null. */
 export function parseArchivePageArguments(input: string): { page: number; query: string } | null {
-  const match = input.trim().match(/^(\\d{1,4})(?:\\s+([\\s\\S]*))?$/);
+  const match = input.trim().match(/^(\d{1,4})(?:\s+([\s\S]*))?$/);
   if (!match) return null;
   const page = Number(match[1]);
-  const query = (match[2] || "").trim().replace(/\\s+/g, " ");
+  const query = (match[2] || "").trim().replace(/\s+/g, " ");
   if (!Number.isSafeInteger(page) || page < 1 || page > MAX_ARCHIVE_PAGE || query.length > 120) return null;
   return { page, query };
 }
