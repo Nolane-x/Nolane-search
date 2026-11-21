@@ -51,3 +51,14 @@ CI, D1 schema verification, Worker deployment and Telegram command registration 
 ## Future migration requirement
 
 The production database currently has migration `0005` applied, but the GitHub Actions secret `CLOUDFLARE_D1_API_TOKEN` is still required for any future migration-changing push. Configure it in repository Settings → Secrets and variables → Actions with Account > D1 > Edit permission; never put the token in source control or chat.
+
+## Follow-up release: archive pagination — 2026-11-21
+
+- PR #53 merged: https://github.com/Nolane-x/Nolane-search/pull/53
+- Release commit: `69c131775570a2bdb93653d4576c1ef3801ae6ac`.
+- New command: `/archive_page PAGE [query]`. Pages contain five snapshots; previous/next commands are printed and preserve the search query.
+- Page numbers are restricted to 1–1001 (D1 query offset 0–5000); search text is limited to 120 characters and HTML-escaped.
+- CI run #252 passed on the PR, main CI run #253 passed, deployment #106 passed, and Worker export/smoke test #99 passed.
+- Cloudflare now routes 100% traffic to Worker version `8c8cbfb8-15dc-4ec8-98ee-adabb0c0133c`. Telegram webhook and command registration completed successfully.
+- No schema migration was needed. Existing `archive_snapshots` D1 table is reused.
+- The owner-level Telegram E2E check remains outstanding: create initial/change captures, search across pages, restore a document and test behavior after deleting an archive source message.
