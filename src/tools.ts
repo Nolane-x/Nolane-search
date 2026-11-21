@@ -283,6 +283,22 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "json-remove-empty-values", name: "Xóa giá trị rỗng trong JSON", category: "data", description: "Xóa null, chuỗi rỗng, object rỗng và array rỗng theo đệ quy; giữ nguyên false và số 0.", accepts: ["application/json", "text/json", ".json"], output: "JSON đã làm sạch", ready: true },
   { id: "json-to-typescript", name: "JSON sang TypeScript types", category: "developer", description: "Suy luận interface và union type từ một mẫu JSON; kết quả là gợi ý kiểu dữ liệu, không phải schema đầy đủ.", accepts: ["application/json", "text/json", ".json"], output: "Tệp TypeScript .ts", ready: true },
   { id: "json-nesting-report", name: "Báo cáo độ sâu JSON", category: "data", description: "Thống kê độ sâu tối đa, object, array, key, item và số lượng giá trị theo kiểu JSON.", accepts: ["application/json", "text/json", ".json"], output: "Báo cáo JSON TXT", ready: true },
+
+  { id: "env-audit", name: "Kiểm tra tệp biến môi trường", category: "developer", description: "Kiểm tra cú pháp dotenv, khóa trùng, giá trị rỗng và tên biến có khả năng chứa secret; không hiển thị giá trị.", accepts: ["text/plain", ".env", ".txt"], output: "Báo cáo ENV TXT", ready: true },
+  { id: "env-redact", name: "Che giá trị trong tệp ENV", category: "developer", description: "Che toàn bộ giá trị phép gán dotenv thành [REDACTED], giữ tên biến và comment; không tiết lộ secret.", accepts: ["text/plain", ".env", ".txt"], output: "Tệp ENV đã che", ready: true },
+  { id: "env-to-example", name: "Tạo .env.example", category: "developer", description: "Tạo mẫu dotenv bằng cách xóa giá trị, giữ lại tên biến và comment để chia sẻ cấu hình an toàn.", accepts: ["text/plain", ".env", ".txt"], output: "Tệp ENV example", ready: true },
+  { id: "ini-to-json", name: "INI sang JSON", category: "data", description: "Chuyển cấu hình INI sang JSON, giữ tên section và key; tắt interpolation để không diễn giải nội dung.", accepts: ["text/plain", ".ini", ".cfg"], output: "Tệp JSON", ready: true },
+  { id: "ini-validate", name: "Kiểm tra INI", category: "data", description: "Parse INI ở chế độ strict, phát hiện section/key trùng và báo số section, option.", accepts: ["text/plain", ".ini", ".cfg"], output: "Báo cáo INI TXT", ready: true },
+  { id: "toml-to-json", name: "TOML sang JSON", category: "data", description: "Parse TOML bằng thư viện chuẩn, chuyển date/time sang ISO-8601 và xuất JSON.", accepts: ["text/plain", ".toml"], output: "Tệp JSON", ready: true },
+  { id: "toml-validate", name: "Kiểm tra TOML", category: "data", description: "Parse TOML theo chuẩn, báo top-level keys và số bảng; không thực thi bất kỳ cấu hình nào.", accepts: ["text/plain", ".toml"], output: "Báo cáo TOML TXT", ready: true },
+  { id: "properties-to-json", name: "Java Properties sang JSON", category: "data", description: "Chuyển tệp .properties sang JSON, xử lý escape và continuation cơ bản, báo số key trùng.", accepts: ["text/plain", ".properties"], output: "Tệp JSON", ready: true },
+  { id: "dockerfile-audit", name: "Kiểm tra Dockerfile", category: "developer", description: "Audit tĩnh Dockerfile: base image latest, ADD, thiếu USER/HEALTHCHECK và secret trong ARG/ENV; không build image.", accepts: ["text/plain", ".txt", ".dockerfile"], output: "Báo cáo Dockerfile TXT", ready: true },
+  { id: "docker-compose-audit", name: "Kiểm tra Docker Compose", category: "developer", description: "Audit YAML Compose: privileged, host network, cổng public, Docker socket, image latest và secret hard-code; không khởi chạy container.", accepts: ["application/yaml", "text/yaml", ".yaml", ".yml"], output: "Báo cáo Compose TXT", ready: true },
+  { id: "requirements-audit", name: "Kiểm tra Python requirements", category: "developer", description: "Audit requirements.txt: package trùng, dependency không pin version, URL/VCS trực tiếp và dòng không hợp lệ; không cài package.", accepts: ["text/plain", ".txt"], output: "Báo cáo requirements TXT", ready: true },
+  { id: "package-json-audit", name: "Kiểm tra package.json", category: "developer", description: "Audit package metadata và dependencies: wildcard/latest, Git/file/workspace spec và script có mẫu download-pipe-shell; không chạy script.", accepts: ["application/json", ".json"], output: "Báo cáo package.json TXT", ready: true },
+  { id: "gitignore-audit", name: "Kiểm tra quy tắc gitignore", category: "developer", description: "Kiểm tra sơ bộ các quy tắc bảo vệ .env, dev vars, private key và npmrc; không thay thế Git's full ignore matcher.", accepts: ["text/plain", ".txt"], output: "Báo cáo gitignore TXT", ready: true },
+  { id: "env-reference-report", name: "Tìm tham chiếu biến môi trường", category: "developer", description: "Trích tên biến từ process.env, import.meta.env, os.environ, getenv và shell references; không đọc giá trị.", accepts: ["text/plain", ".txt", ".md", ".js", ".ts", ".py", ".sh"], output: "Báo cáo biến môi trường TXT", ready: true },
+
 ];
 
 
@@ -536,6 +552,21 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "json-remove-empty-values": ["json-format", "json-canonicalize", "json-schema"],
   "json-to-typescript": ["code-check", "text-clean"],
   "json-nesting-report": ["text-clean", "text-stats"],
+  "env-audit": ["env-redact", "env-to-example", "text-stats"],
+  "env-redact": ["env-audit", "text-clean", "text-stats"],
+  "env-to-example": ["env-audit", "env-redact", "text-clean"],
+  "ini-to-json": ["json-format", "json-schema"],
+  "ini-validate": ["text-clean", "text-stats"],
+  "toml-to-json": ["json-format", "json-schema"],
+  "toml-validate": ["text-clean", "text-stats"],
+  "properties-to-json": ["json-format", "json-schema"],
+  "dockerfile-audit": ["text-clean", "text-stats"],
+  "docker-compose-audit": ["text-clean", "text-stats"],
+  "requirements-audit": ["text-clean", "text-stats"],
+  "package-json-audit": ["json-format", "json-schema"],
+  "gitignore-audit": ["text-clean", "text-stats"],
+  "env-reference-report": ["text-clean", "text-stats"],
+
 };
 
 export type ToolPipelineValidation =
@@ -714,6 +745,16 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (mime === "application/x-ndjson" || mime === "application/jsonl" || name.endsWith(".jsonl")) return "jsonl-format";
   if (mime === "application/pdf" || name.endsWith(".pdf")) return "pdf-text";
   if (name.endsWith(".epub") || mime === "application/epub+zip") return "epub-text";
+
+  if (/^(?:docker-)?compose(?:\.[^/]*)?\.(?:yml|yaml)$/i.test(name)) return "docker-compose-audit";
+  if (/^dockerfile(?:\..*)?$/i.test(name)) return "dockerfile-audit";
+  if (/^\.gitignore$/i.test(name) || /^\.dockerignore$/i.test(name)) return "gitignore-audit";
+  if (/^package\.json$/i.test(name)) return "package-json-audit";
+  if (/^requirements(?:[-_.].+)?\.txt$/i.test(name)) return "requirements-audit";
+  if (/^\.env(?:\..+)?$/i.test(name) || /^\.dev\.vars(?:\..+)?$/i.test(name)) return "env-audit";
+  if (/\.(ini|cfg)$/i.test(name)) return "ini-validate";
+  if (/\.toml$/i.test(name)) return "toml-validate";
+  if (/\.properties$/i.test(name)) return "properties-to-json";
   if (/\.(sqlite|sqlite3|db)$/i.test(name)) return "sqlite-inspect";
   if (/\.xlsx$/i.test(name)) return "xlsx-profile";
   if (/\.(yaml|yml)$/i.test(name) || mime.includes("yaml")) return "yaml-format";

