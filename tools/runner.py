@@ -367,6 +367,7 @@ PIPELINE_TRANSITIONS = {
     "repo-api-spec-audit": {"text-clean", "text-stats"},
     "repo-container-audit": {"text-clean", "text-stats"},
     "repo-ci-reliability": {"text-clean", "text-stats"},
+    "csv-to-sql-inserts": {"text-clean", "text-stats"},
 
 }
 
