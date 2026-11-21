@@ -64,3 +64,10 @@ Wave 8 adds 14 processors, increasing the TypeScript catalog from 261 to 275 uni
 - Owner-level Telegram file upload → runner → returned artifact and safe retry remain unverified. CI, webhook status and command-menu registration are not proof of this full interaction.
 
 **Production status:** Wave 8 is merged and deployed. 275 is the current production catalog count, not merely a feature-branch count.
+
+## Wave 9 follow-up — 2026-11-21
+
+- Feature branch `feat/iac-cicd-security-audit-wave-nine` adds 8 infrastructure/CI auditors and raises the development catalog from 275 to 283.
+- GitHub Actions and Kubernetes YAML audits use safe YAML parsing on the isolated file runner. Terraform, Nginx, Apache, Caddy, systemd and shell use static text heuristics.
+- Six text-only auditors are enabled in direct AI processing (Terraform, Nginx, Apache, Caddy, systemd and shell); no source is executed and credential values are omitted from reports.
+- CI is pending. Wave 9 is not merged or deployed; production remains Wave 8 / 275 tools / Worker version 57 until separate CI, merge and deployment succeed.
