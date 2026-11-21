@@ -72,3 +72,15 @@ The production database currently has migration `0005` applied, but the GitHub A
 - PR CI #254 and main CI #255 passed. Deployment #107 and build/smoke #100 passed. No schema changes.
 - Cloudflare production version: `508f7849-fefc-4592-b93a-f871ec1ed27a`, 100% traffic.
 - Owner-level end-to-end Telegram validation is still outstanding (first capture, change capture, page navigation, restore, deleted source message).
+
+## Follow-up release: reliable watch archive retries — 2026-11-21
+
+- PR #55 merged: https://github.com/Nolane-x/Nolane-search/pull/55
+- Release commit: `9e36d4bbb99fab28f7532d97cc8f5e0f9e556639`.
+- Root cause fixed: the previous watch implementation committed the new page hash and validators before sending/indexing the Telegram snapshot. If sendDocument failed, the next request could receive 304 and the capture was silently lost.
+- The Worker now pre-arms `last_status=-4`, keeps the prior content hash and clears ETag/Last-Modified while the archive operation is pending. On the next Cron check it fetches without conditional headers, then advances hash/validators only after both the Telegram document and D1 index succeed.
+- /watches describes -4 as `archive pending · retry scheduled`. The failure warning is sent once per initial failure; a normal changed-site alert follows only after success.
+- No schema changes. Reuses `watches.last_status`.
+- PR CI #258, main CI #259, deployment #108 and build/smoke #101 passed.
+- Cloudflare version `cb1e062b-386e-4ed5-aae8-f8a8d5c1959c` receives 100% production traffic.
+- Remaining owner-side E2E still required: create a watch, cause archive upload to fail once (or observe naturally), verify `/watches` pending state, and confirm a later scheduled check archives/indexes it. Also re-run initial capture/change/search/pagination/restore checks.
