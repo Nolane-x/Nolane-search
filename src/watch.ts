@@ -1,5 +1,5 @@
 import { htmlEscape, sha256Hex, isSafePublicUrl, normalizeUrl } from "./security";
-import { sendArchiveDocument, sendTelegram, sendToArchive } from "./telegram";
+import { sendArchiveDocument, sendTelegram, sendToArchive, telegramApi } from "./telegram";
 import { saveArchiveSnapshot } from "./archive";
 import type { Env } from "./types";
 
@@ -348,6 +348,33 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
               });
             } catch (error) {
               console.error("Snapshot metadata index failed:", error instanceof Error ? error.message : "unknown error");
+              // The Telegram upload already succeeded. Recover the file directly to the owner's
+              // private chat so a transient D1 failure does not strand the only indexed copy.
+              let copiedToOwner = false;
+              try {
+                await telegramApi(env, "copyMessage", {
+                  chat_id: watch.chat_id,
+                  from_chat_id: env.TELEGRAM_ARCHIVE_CHAT_ID,
+                  message_id: archived.messageId,
+                });
+                copiedToOwner = true;
+              } catch (recoveryError) {
+                console.error("Snapshot direct recovery failed:", recoveryError instanceof Error ? recoveryError.message : "unknown error");
+              }
+              try {
+                const recoveryMessage = copiedToOwner
+                  ? "<b>Đã cứu hộ snapshot nhưng chưa lập chỉ mục được.</b>\n" +
+                    "Tệp vừa lưu đã được sao chép trực tiếp vào chat này để bạn không bị mất bản lưu. " +
+                    "Snapshot chưa xuất hiện trong <code>/archive</code> vì D1 tạm thời không ghi được.\n" +
+                    "<code>" + htmlEscape(archived.fileName) + "</code>"
+                  : "<b>Cảnh báo: snapshot chưa được lập chỉ mục.</b>\n" +
+                    "Telegram đã nhận tệp nhưng D1 không lưu được metadata và bot cũng chưa sao chép được tệp về chat này. " +
+                    "Tệp vẫn nằm trong kênh archive; hãy giữ nguyên tin gốc để có thể xử lý thủ công.\n" +
+                    "<code>" + htmlEscape(archived.fileName) + "</code> · message <code>" + archived.messageId + "</code>";
+                await sendTelegram(env, watch.chat_id, recoveryMessage);
+              } catch (notifyError) {
+                console.error("Snapshot recovery notification failed:", notifyError instanceof Error ? notifyError.message : "unknown error");
+              }
             }
           }
         } catch (error) {
