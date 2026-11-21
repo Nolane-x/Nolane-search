@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **291 công cụ đã được triển khai trên production**. Wave 7 và Wave 8 đưa catalog lên 275 công cụ; Wave 9 thêm 8 auditor hạ tầng/CI/CD; Wave 10 thêm 8 repository engineering analyzers, đã được kiểm thử và triển khai trên Cloudflare Worker. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **297 công cụ đã được triển khai trên production**. Wave 7 và Wave 8 đưa catalog lên 275 công cụ; Wave 9 thêm 8 auditor hạ tầng/CI/CD; Wave 10 thêm 8 repository engineering analyzers, đã được kiểm thử và triển khai trên Cloudflare Worker. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -185,6 +185,13 @@ Các processor văn bản này giới hạn đầu vào 5 MB và yêu cầu UTF-
 | `/tool repo-migration-audit` | Migration risk audit | Phát hiện DDL/DML nguy hiểm: DROP, TRUNCATE, DELETE thiếu WHERE, đổi kiểu và NOT NULL mới. | TXT |
 | `/tool repo-runtime-risk` | Runtime risk scan | Static scan eval/exec, pickle, YAML load, shell=True, HTML sinks, TLS verify và dynamic SQL clues. | TXT |
 | `/tool repo-i18n-audit` | i18n key consistency | So sánh key trong JSON locale catalogs theo thư mục, liệt kê key thiếu/thừa. | TXT |
+
+| `/tool repo-env-contract` | Environment contract | Đối chiếu code env references với .env examples, Docker ARG/ENV và GitHub Actions names; không đọc/hiển thị giá trị. | TXT |
+| `/tool repo-architecture-cycles` | Import cycles | Tìm strongly connected components trong local import graph Python AST và relative JS/TS. | TXT |
+| `/tool repo-change-impact` | Change impact | Trên snapshot từ /repo_compare, tìm reverse-import dependents của file đổi; ZIP đơn lẻ không có compare metadata. | TXT |
+| `/tool repo-api-spec-audit` | OpenAPI contract | Kiểm tra OpenAPI/Swagger JSON/YAML: operationId trùng, responses thiếu, path params và local $ref lỗi. | TXT |
+| `/tool repo-container-audit` | Container configuration | Kiểm tra Dockerfile/Compose: root user, healthcheck, floating tag, credential ARG/ENV, privileged và docker.sock. | TXT |
+| `/tool repo-ci-reliability` | CI reliability | Kiểm tra GitHub Actions thiếu timeout/concurrency, continue-on-error, lệnh che lỗi và moving action tags. | TXT |
 
 `repo-security-audit` phát hành findings theo rule ID, mức độ, file/dòng và hướng khắc phục, kèm SARIF 2.1.0. `repo-supply-chain` xuất danh mục dependency và bằng chứng lockfile ở JSON; URL nguồn có thể chứa user/password được lược bỏ khỏi output. `/repo` và `/repo_compare` tự chạy cả hai audit này và đưa report vào ZIP tổng hợp. Đây là phân tích tĩnh heuristic, có thể false positive/false negative; không thực thi workflow, Docker build, Terraform hay package code, không cài dependency và không truy vấn CVE/advisory. Việc ghép manifest-lockfile chỉ là heuristic theo đường dẫn, không phải dependency resolver hoặc SBOM đầy đủ.
 
@@ -534,3 +541,8 @@ The runner executes DAG nodes in topological dependency layers, with a hard maxi
 ### Wave 10 — Repository Engineering Intelligence
 
 Tám processor mới chỉ đọc snapshot ZIP trong runner tạm thời. Chúng không chạy code, test, build scripts, migrations, workflows hay cài dependency của repository. Kết quả có giới hạn được gắn nhãn heuristic: test map không phải code coverage; test quality không thay thế test execution; JS/TS complexity và API routes là pattern signals; API inventory không phải OpenAPI đầy đủ; docs audit chỉ xác thực relative links trong ZIP; migration audit không kết nối database; runtime risk không chứng minh exploitability; i18n audit so sánh key chứ không chấm chất lượng dịch.
+
+
+### Wave 11 — Repository Architecture & Delivery Checks
+
+Sáu processor mới đọc static ZIP/GitHub metadata. Environment contract chỉ liệt kê tên biến, không tiết lộ giá trị. Import cycles và change impact dùng đồ thị local imports hiện có. Change impact chỉ có ý nghĩa với snapshot được tạo bởi `/repo_compare`; snapshot đơn lẻ sẽ báo thiếu compare metadata. OpenAPI audit không fetch remote refs; container/CI checks là heuristic, không chạy Docker, Compose, Actions hay cluster. Không có code của repository nào được thực thi.
