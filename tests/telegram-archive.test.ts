@@ -6,7 +6,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("Telegram archive document delivery", () => {
   it("returns the channel message and document references after a successful upload", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify({
       ok: true,
       result: {
         message_id: 91,
