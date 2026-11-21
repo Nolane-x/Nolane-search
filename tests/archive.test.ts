@@ -123,5 +123,9 @@ describe("Telegram archive index", () => {
     expect(output).toContain("&lt;archive&gt;");
     expect(output).not.toContain("<script>");
     expect(output).toContain("/archive_restore 17");
+    expect(output).toContain("snapshot.txt");
+    expect(output).toContain("2.0 KB");
+    expect(output).toContain("SHA-256");
+    expect(output).toContain("aaaaaaaaaaaaaaaa…");
   });
 });
