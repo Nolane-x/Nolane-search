@@ -316,6 +316,12 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "repo-migration-audit", name: "Kiểm toán database migrations", category: "repository", description: "Tìm DDL/DML có nguy cơ phá hủy dữ liệu như DROP, TRUNCATE, DELETE thiếu WHERE, đổi kiểu và NOT NULL mới.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
   { id: "repo-runtime-risk", name: "Quét rủi ro runtime", category: "repository", description: "Quét static patterns như eval, pickle, YAML load không an toàn, shell=True, raw HTML và tắt TLS verify; không thực thi code.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
   { id: "repo-i18n-audit", name: "Kiểm tra tính nhất quán i18n", category: "repository", description: "So sánh key trong JSON locale catalogs theo cấu trúc thư mục, báo key thiếu/thừa; không chấm chất lượng dịch.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "repo-env-contract", name: "Kiểm tra hợp đồng biến môi trường", category: "repository", description: "Đối chiếu tham chiếu process.env/os.getenv, Docker ARG/ENV và GitHub Actions secrets/vars với example declarations; không đọc/hiển thị giá trị.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "repo-architecture-cycles", name: "Phát hiện chu trình import", category: "repository", description: "Tìm strongly connected components trong đồ thị local import Python AST và relative JS/TS; liệt kê module có kết nối cao.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "repo-change-impact", name: "Phân tích tác động thay đổi", category: "repository", description: "Dùng GitHub Compare metadata và reverse-import graph để tìm module có thể bị ảnh hưởng; chỉ có kết quả đầy đủ với /repo_compare.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "repo-api-spec-audit", name: "Kiểm tra hợp đồng OpenAPI", category: "repository", description: "Kiểm tra OpenAPI/Swagger JSON/YAML: operationId trùng, responses thiếu, path parameter, local $ref không tồn tại; không fetch remote refs.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "repo-container-audit", name: "Kiểm toán Docker/Container", category: "repository", description: "Kiểm tra Dockerfile/Compose: base image floating, USER, HEALTHCHECK, ARG/ENV credential, copy .env, privileged, host network và Docker socket.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "repo-ci-reliability", name: "Kiểm tra độ tin cậy CI", category: "repository", description: "Kiểm tra GitHub Actions: job thiếu timeout, concurrency, continue-on-error, lệnh che lỗi và action dùng moving tag; chỉ static YAML.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
 ];
 
 
@@ -601,6 +607,12 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "repo-migration-audit": ["text-clean", "text-stats"],
   "repo-runtime-risk": ["text-clean", "text-stats"],
   "repo-i18n-audit": ["text-clean", "text-stats"],
+  "repo-env-contract": ["text-clean", "text-stats"],
+  "repo-architecture-cycles": ["text-clean", "text-stats"],
+  "repo-change-impact": ["text-clean", "text-stats"],
+  "repo-api-spec-audit": ["text-clean", "text-stats"],
+  "repo-container-audit": ["text-clean", "text-stats"],
+  "repo-ci-reliability": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
