@@ -48,6 +48,8 @@ Examples: `/search cloudflare site:developers.cloudflare.com`, `/search workers 
 - If TELEGRAM_ARCHIVE_CHAT_ID is configured, search and Deep Search results are copied to the archive channel.
 - Page snapshots are sent as TXT documents on first capture and detected content changes.
 - Every successful snapshot upload records its Telegram channel/message and file references plus URL, title, watch ID, capture time and SHA-256 in D1. The original content remains a Telegram document; D1 stores metadata only.
+- A watch only advances its `content_hash` and HTTP validators after the configured Telegram archive upload and D1 metadata index succeed. On failure, it keeps the old hash, clears ETag/Last-Modified, sets status `archive pending` and retries with a full fetch on the next scheduled check. This prevents a later HTTP 304 from silently skipping a snapshot that failed to upload.
+- `/watches` labels these records as `archive pending · retry scheduled`. The user receives one warning for the initial failure; a normal change alert is sent once the snapshot is successfully indexed.
 - `/archive [query]` searches the signed-in owner's snapshots by title or URL, showing five items per page. Use `/archive_page PAGE [query]` to move between pages; the next/previous commands preserve the current search query. The archive query API currently caps its offset at 5,000 rows. `/archive_restore ID` uses Telegram `copyMessage` to resend the original archived document; it does not rebuild content from D1.
 - The archive index is owner-scoped. A snapshot can be restored only while the source channel message still exists and the bot retains channel access. Deleting a watch does not delete its historical snapshots.
 - Change alerts go to the requesting chat and archive.

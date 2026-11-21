@@ -2054,6 +2054,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     for (const row of rows.results) {
       const status = row.last_status === -2 ? "robots disallow"
         : row.last_status === -3 ? "robots unavailable · deferred"
+        : row.last_status === -4 ? "archive pending · retry scheduled"
         : row.last_status === -1 ? "fetch error"
         : row.last_status === 304 ? "unchanged"
         : row.last_status === null ? "not checked yet"
