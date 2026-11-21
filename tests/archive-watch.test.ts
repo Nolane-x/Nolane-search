@@ -429,4 +429,75 @@ describe("watch snapshot archive indexing", () => {
     expect(runSql.some(sql => sql.includes("SET last_checked_at = ?, last_status = ?"))).toBe(false);
   });
 
+
+  it("does not claim a changed snapshot was archived when no archive channel is configured", async () => {
+    const watch = {
+      id: 21,
+      chat_id: "42",
+      user_id: "42",
+      url: "https://example.com/no-archive",
+      normalized_url: "https://example.com/no-archive",
+      interval_minutes: 30,
+      etag: null,
+      last_modified: null,
+      content_hash: "c".repeat(64),
+      last_status: 200,
+    };
+    const telegramMessages: Array<Record<string, unknown>> = [];
+    const prepared: Array<{ sql: string; values: unknown[] }> = [];
+    const prepare = vi.fn((sql: string) => ({
+      sql,
+      values: [] as unknown[],
+      bind(...values: unknown[]) {
+        this.values = values;
+        prepared.push({ sql, values });
+        return this;
+      },
+      all: async () => ({ results: sql.includes("FROM watches") ? [watch] : [] }),
+      first: async () => sql.includes("SELECT id FROM indexed_pages") ? { id: 21 } : null,
+      run: async () => ({ meta: { changes: 1 } }),
+    }));
+    const batch = vi.fn(async () => []);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/robots.txt")) {
+        return new Response("User-agent: *\\nAllow: /", {
+          status: 200, headers: { "content-type": "text/plain" },
+        });
+      }
+      if (url === "https://example.com/no-archive") {
+        return new Response(
+          "<html><head><title>Unarchived changed page</title></head><body><main>This monitored page has changed while the owner has not configured a Telegram archive channel for storing snapshots.</main></body></html>",
+          { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
+        );
+      }
+      if (url.includes("/sendDocument")) {
+        throw new Error("sendDocument must not be called without an archive channel");
+      }
+      if (url.includes("/sendMessage")) {
+        const body = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+        telegramMessages.push(body);
+        return new Response(JSON.stringify({ ok: true, result: { message_id: 122 } }), {
+          status: 200, headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error("Unexpected request " + url);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = {
+      DB: { prepare, batch },
+      TELEGRAM_BOT_TOKEN: "test-token",
+    } as unknown as Env;
+
+    const result = await checkWatchTargets(env);
+
+    expect(result).toEqual({ checked: 1, changed: 1 });
+    expect(telegramMessages).toHaveLength(1);
+    expect(String(telegramMessages[0]?.text)).toContain("Archive chưa được cấu hình");
+    expect(String(telegramMessages[0]?.text)).not.toContain("Bản snapshot mới đã được lưu trong archive.");
+    expect(fetchMock.mock.calls.some(call => String(call[0]).includes("/sendDocument"))).toBe(false);
+    expect(prepared.some(entry => entry.sql.includes("content_hash = ?"))).toBe(true);
+  });
+
 });
