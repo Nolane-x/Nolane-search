@@ -198,6 +198,13 @@ export async function getArchiveSnapshot(
   return row ? mapSnapshot(row) : null;
 }
 
+function formatArchiveFileSize(size: number | null): string {
+  if (size === null || !Number.isSafeInteger(size) || size < 0) return "không rõ dung lượng";
+  if (size < 1024) return size + " B";
+  if (size < 1024 * 1024) return (size / 1024).toFixed(1) + " KB";
+  return (size / (1024 * 1024)).toFixed(2) + " MB";
+}
+
 export function formatArchiveSnapshotList(
   snapshots: ArchiveSnapshot[],
   total: number,
@@ -217,10 +224,14 @@ export function formatArchiveSnapshotList(
     const title = htmlEscape(snapshot.title.slice(0, 135));
     const url = htmlEscape(snapshot.url.slice(0, 220));
     const captured = htmlEscape(snapshot.capturedAt.replace("T", " ").replace(/\.\d{3}Z$/, " UTC"));
+    const fileName = htmlEscape(snapshot.fileName.slice(0, 100));
+    const fileSize = formatArchiveFileSize(snapshot.fileSize);
+    const hashPrefix = htmlEscape(snapshot.contentHash.slice(0, 16));
     const kind = snapshot.captureKind === "initial" ? "bản đầu tiên" : "phát hiện thay đổi";
     lines.push(
       "<b>" + snapshot.id + ". <a href=\"" + url + "\">" + title + "</a></b>",
       "<code>Watch " + snapshot.watchId + "</code> · " + captured + " · " + kind,
+      "<code>" + fileName + "</code> · " + fileSize + " · SHA-256 <code>" + hashPrefix + "…</code>",
       "<code>/archive_restore " + snapshot.id + "</code>",
       "",
     );
