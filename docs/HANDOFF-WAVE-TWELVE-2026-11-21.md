@@ -2,12 +2,13 @@
 
 Date: 2026-11-21  
 Repository: https://github.com/Nolane-x/Nolane-search  
-Branch: `feat/wave-twelve-html-quality-auditors`  
-Baseline main commit: `1dec4c3b2f087f0d5285b11169eb82d497d16809`
+Feature branch: `feat/wave-twelve-html-quality-auditors` (merged)  
+PR: https://github.com/Nolane-x/Nolane-search/pull/62  
+Production main commit: `a0919d77a76e3077aad485b4f621f4206ff6e24d`
 
 ## Recovery context
 
-The earlier ChatGPT conversation “Giải thích lưu trữ Telegram (6)” was not available in connected conversation search. Durable state was reconstructed from the repository's README, STATUS, HANDOFF files, catalog, source, tests and commit history. The previous production baseline is Wave 11 with 297 catalog tools; this Wave 12 branch adds five new processors. Do not describe branch-only changes as production until PR CI, merge and deployment are verified.
+The earlier ChatGPT conversation “Giải thích lưu trữ Telegram (6)” was not available in connected conversation search. Durable state was reconstructed from the repository's README, STATUS, HANDOFF files, catalog, source, tests and commit history. Wave 11 was the 297-tool production baseline. Wave 12 has now merged and deployed five additional processors; the verified production catalog is 302 tools.
 
 ## Added processors
 
@@ -27,16 +28,30 @@ The five IDs are integrated into:
 - TypeScript registry/pipeline tests, Telegram Tool Center count test and Python runner tests.
 - `docs/NOLANE-TOOLS.md` and README catalog references.
 
-Branch catalog target: **302 unique IDs**. Python allowlist, handler map and documentation are expected to match the catalog exactly. Each HTML report may feed `text-clean` or `text-stats`.
+Production catalog: **302 unique IDs**. Python allowlist, handler map and documentation match the catalog exactly. Each HTML report may feed `text-clean` or `text-stats`.
 
 ## Acceptance gates
 
-1. TypeScript type-check and all Vitest tests pass.
-2. Python runner compiles and all unittest cases pass, including Wave 12 HTML fixtures.
-3. Python test verifies catalog/runner/handler/docs ID parity and identical Worker/Python pipeline transition graphs.
-4. Worker build succeeds.
-5. PR CI passes before merge; main deployment and Worker health/webhook verification must be checked separately.
-6. Telegram upload → runner → returned TXT artifact and retry still require a real owner-side end-to-end test. CI does not prove that interaction.
+1. TypeScript type-check and all Vitest tests passed.
+2. Python runner compilation and all 99 runner tests passed, including Wave 12 fixtures.
+3. Catalog/runner/handler/docs ID parity and Worker/Python transition parity passed in CI.
+4. Cloudflare Worker build passed.
+5. PR #62 merged; main CI #281, export/smoke #108 and deploy #115 all passed.
+6. Cloudflare Worker version 69 is live at 100% traffic; fresh `/health` returned `ok: true` and `database: reachable`.
+7. Telegram upload → runner → returned TXT artifact and retry still require a real owner-side end-to-end test. CI does not prove that interaction.
+
+
+## Production release — 2026-11-21
+
+- PR #62 was squash-merged into `main` at `a0919d77a76e3077aad485b4f621f4206ff6e24d`.
+- Main CI #281: 25 test files / 223 Vitest tests, 99 Python runner tests, type-check, deployment script checks and Worker build all passed. Run: https://github.com/Nolane-x/Nolane-search/actions/runs/44919157392
+- Cloudflare export and Worker smoke test #108 passed: https://github.com/Nolane-x/Nolane-search/actions/runs/44919157432
+- Cloudflare deployment #115 passed: https://github.com/Nolane-x/Nolane-search/actions/runs/44919157401
+- Production Worker version 69: `741a6df7-916b-4f19-a75f-f8ea95863960`, 100% traffic; deployment `93ac3038-31bd-4a4b-9360-95e19c063827`.
+- Fresh production health response: `ok: true`, `database: reachable`, four AI key routes, nine model routes and archive enabled. This does not prove every upstream key can currently complete inference.
+- Deployment re-uploaded runtime secrets and registered Telegram webhook updates/commands. No D1 migration was needed.
+- The five tools remain static HTML heuristics. They do not fetch URLs/assets, execute scripts, submit forms or provide browser/WCAG certification.
+- Remaining owner-side E2E: send an HTML file to the live Telegram bot, inspect the TXT result and test a retry.
 
 ## Storage and security boundaries
 
