@@ -2282,6 +2282,38 @@ dependencies = ["requests>=2.0", "httpx"]
 
 
 
+
+    def test_wave_twelve_static_html_quality_auditors(self):
+        page=self.write("quality.html",
+            '<!doctype html><html><head><title>Tiny</title>'
+            '<meta name="description" content="short">'
+            '<meta property="og:title" content="Demo"></head><body>'
+            '<h1>Main</h1><h3>Skipped level</h3><main>'
+            '<img src="hero.jpg"><img src="decorative.png" alt="">'
+            '<a href="javascript:alert(1)" target="_blank">Bad</a>'
+            '<a href="#missing">Jump</a><a target="_blank" href="/new">New tab</a>'
+            '<form method="get"><input type="password" id="pw">'
+            '<input type="text" name="email"><button></button></form>'
+            '<form method="post"><input type="password" name="safe" autocomplete="current-password"></form>'
+            '</main></body></html>')
+        seo=Path(runner.html_seo_audit(page)["output_path"]).read_text(encoding="utf-8")
+        accessibility=Path(runner.html_accessibility_audit(page)["output_path"]).read_text(encoding="utf-8")
+        links=Path(runner.html_link_audit(page)["output_path"]).read_text(encoding="utf-8")
+        forms=Path(runner.html_form_audit(page)["output_path"]).read_text(encoding="utf-8")
+        images=Path(runner.html_image_audit(page)["output_path"]).read_text(encoding="utf-8")
+
+        self.assertIn("meta description length is outside",seo.lower())
+        self.assertIn("HTML language",seo)
+        self.assertIn("Heading level jumps",accessibility)
+        self.assertIn("Image missing alt",accessibility)
+        self.assertIn("Potentially unsafe href scheme",links)
+        self.assertIn("Unresolved local fragment",links)
+        self.assertIn("target=_blank without rel",links)
+        self.assertEqual(forms.count("Password field is inside a GET form"),1)
+        self.assertIn("control has no associated label",forms)
+        self.assertIn("Missing alt attribute: 1",images)
+        self.assertIn("Missing width or height",images)
+
     def test_wave_eleven_repository_contract_and_architecture_analyzers(self):
         import json
         import zipfile

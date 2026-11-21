@@ -30,7 +30,7 @@ RUNNERS = {
     "text-slugify", "text-word-frequency", "text-extract-numbers", "text-extract-dates", "text-reverse-characters", "text-snake-case", "text-kebab-case", "text-camel-case", "text-swap-case", "text-extract-ipv4", "text-mask-emails", "text-mask-phones", "json-to-jsonl", "jsonl-to-json", "csv-to-tsv", "tsv-to-csv", "csv-to-markdown", "html-minify", "xml-minify", "text-remove-emoji",
     "text-collapse-whitespace", "text-remove-punctuation", "text-to-ascii", "text-html-escape", "text-html-unescape", "text-extract-mentions", "text-extract-hex-colors", "text-extract-phones", "text-dedupe-lines", "text-count-report", "text-quote-lines", "text-unquote-lines", "csv-transpose", "csv-sort-rows", "csv-dedupe-rows", "csv-to-xml", "csv-to-html", "json-sort-array", "json-remove-nulls", "json-to-html-table",
     "text-pascal-case", "text-constant-case", "text-dot-case", "text-initials", "text-normalize-unicode", "text-remove-control-chars", "text-remove-duplicate-words", "text-extract-markdown-links", "text-extract-markdown-headings", "text-extract-quotes", "text-paragraph-report", "json-flatten", "json-unflatten", "json-keys-report", "csv-remove-empty-rows", "csv-add-row-numbers", "csv-column-stats", "csv-normalize-headers", "csv-to-jsonl", "jsonl-to-csv",
-    "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "html-sanitize", "xml-tree-report", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values",
+    "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "html-sanitize", "html-seo-audit", "html-accessibility-audit", "html-link-audit", "html-form-audit", "html-image-audit", "xml-tree-report", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values",
     "text-sentence-case", "text-normalize-quotes", "text-normalize-dashes", "text-reverse-word-order", "text-extract-words", "text-extract-sentences", "text-dedupe-sentences", "text-remove-markdown-formatting", "text-markdown-toc", "text-markdown-code-blocks", "text-markdown-table-extract", "text-extract-numbered-lists", "text-join-hyphenated-lines", "text-strip-bom", "text-normalize-paragraph-spacing", "csv-schema-infer", "csv-duplicates-report", "csv-sample-rows", "json-array-stats", "json-canonicalize",
     "text-extract-todo-comments", "text-extract-markdown-images", "text-strip-markdown-frontmatter", "text-markdown-to-plain", "text-sort-unique-words", "text-word-to-lines", "text-join-lines", "text-extract-domains", "text-extract-uuids", "text-extract-semver", "text-extract-ipv6", "text-redact-secrets", "text-extract-comment-lines", "text-tabs-to-spaces", "text-escape-regex", "text-unescape-regex", "json-merge-objects", "json-array-dedupe", "json-array-to-lines", "csv-trim-cells", "csv-remove-empty-columns", "csv-empty-cell-report",
     "text-extract-mac-addresses",
@@ -266,6 +266,11 @@ PIPELINE_TRANSITIONS = {
     "html-extract-images": {"html-text","text-clean"},
     "html-extract-title": {"text-clean","text-stats"},
     "html-sanitize": {"html-minify","html-text"},
+    "html-seo-audit": {"text-clean","text-stats"},
+    "html-accessibility-audit": {"text-clean","text-stats"},
+    "html-link-audit": {"text-clean","text-stats"},
+    "html-form-audit": {"text-clean","text-stats"},
+    "html-image-audit": {"text-clean","text-stats"},
     "xml-tree-report": {"text-clean","text-stats"},
     "json-to-xml": {"xml-minify","xml-format","xml-to-json"},
     "json-type-report": {"json-format","json-sort-keys"},
@@ -1961,6 +1966,297 @@ def html_extract_title(p):
     except Exception as exc: raise RuntimeError("Invalid HTML: "+str(exc)) from exc
     title=re.sub(r"\s+"," "," ".join(parser.parts)).strip()
     return _write_text_artifact_ext(p,"html-title",".txt",title+"\n" if title else "","HTML title extraction")
+
+
+
+
+class _HTMLAuditParser(HTMLParser):
+    """Bounded static HTML collector. It never fetches or executes page resources."""
+    VOID = {"area","base","br","col","embed","hr","img","input","link","meta","param","source","track","wbr"}
+    TRACKED = {
+        "html","title","meta","link","h1","h2","h3","h4","h5","h6","img","a",
+        "form","input","select","textarea","button","label","main","nav",
+    }
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.nodes = {}
+        self.stack = []
+        self.ids = set()
+        self.id_counts = {}
+        self.html_attrs = {}
+        self.form_sequence = 0
+
+    def _finish(self, node):
+        if node["tracked"]:
+            self.nodes.setdefault(node["tag"], []).append(node)
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        values = {str(key).lower(): (value or "") for key, value in attrs}
+        if tag == "html" and not self.html_attrs:
+            self.html_attrs = values
+        element_id = values.get("id", "").strip()
+        if element_id:
+            self.ids.add(element_id)
+            self.id_counts[element_id] = self.id_counts.get(element_id, 0) + 1
+        line = self.getpos()[0]
+        parent_form = next((item for item in reversed(self.stack) if item["tag"] == "form"), None)
+        if tag == "form":
+            self.form_sequence += 1
+            form_id = self.form_sequence
+        else:
+            form_id = parent_form.get("form_id") if parent_form else None
+        wrapped_label = any(item["tag"] == "label" for item in self.stack)
+        role = values.get("role", "").lower()
+        node = {
+            "tag": tag, "attrs": values, "text": "", "line": line,
+            "tracked": tag in self.TRACKED or role in {"main","navigation","banner","contentinfo"},
+            "form_id": form_id, "wrapped_label": wrapped_label,
+        }
+        if tag in self.VOID:
+            self._finish(node)
+        else:
+            self.stack.append(node)
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        if tag.lower() not in self.VOID:
+            self.handle_endtag(tag)
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        match = next((index for index in range(len(self.stack)-1, -1, -1) if self.stack[index]["tag"] == tag), None)
+        if match is None:
+            return
+        closed = self.stack[match:]
+        del self.stack[match:]
+        for node in reversed(closed):
+            self._finish(node)
+
+    def handle_data(self, data):
+        if not data:
+            return
+        for node in self.stack:
+            if node["tracked"]:
+                node["text"] += data
+
+    def close(self):
+        super().close()
+        for node in reversed(self.stack):
+            self._finish(node)
+        self.stack.clear()
+
+
+def _html_audit_data(path):
+    raw = _read_text_source(path, max_chars=5_000_000)
+    parser = _HTMLAuditParser()
+    try:
+        parser.feed(raw)
+        parser.close()
+    except Exception as exc:
+        raise RuntimeError("Unable to parse HTML for static audit: " + str(exc)) from exc
+    return parser
+
+
+def _html_audit_report(path, suffix, heading, lines, finding_count):
+    content = "\n".join([heading, *lines, "", "Static heuristic only; no remote URLs, scripts, forms or images were requested or executed."])
+    return _write_text_artifact_ext(path, suffix, ".txt", content + "\n", heading, str(finding_count) + " finding(s)")
+
+
+def html_seo_audit(p):
+    data = _html_audit_data(p)
+    titles = [node["text"].strip() for node in data.nodes.get("title", []) if node["text"].strip()]
+    metas = data.nodes.get("meta", [])
+    links = data.nodes.get("link", [])
+    description = next((node["attrs"].get("content", "").strip() for node in metas if node["attrs"].get("name", "").lower() == "description"), "")
+    robots = next((node["attrs"].get("content", "").strip() for node in metas if node["attrs"].get("name", "").lower() == "robots"), "")
+    og_title = next((node["attrs"].get("content", "").strip() for node in metas if node["attrs"].get("property", "").lower() == "og:title"), "")
+    og_description = next((node["attrs"].get("content", "").strip() for node in metas if node["attrs"].get("property", "").lower() == "og:description"), "")
+    canonical = any("canonical" in node["attrs"].get("rel", "").lower().split() and node["attrs"].get("href", "").strip() for node in links)
+    title = titles[0] if titles else ""
+    h1_count = len(data.nodes.get("h1", []))
+    images = data.nodes.get("img", [])
+    missing_alt = sum("alt" not in node["attrs"] for node in images)
+    findings = []
+    if not title: findings.append("HIGH: missing document title")
+    elif not 30 <= len(title) <= 60: findings.append("INFO: title length is outside the common 30–60 character guide")
+    if not description: findings.append("WARN: missing meta description")
+    elif not 70 <= len(description) <= 160: findings.append("INFO: meta description length is outside the common 70–160 character guide")
+    if not canonical: findings.append("INFO: no canonical link was found")
+    if not data.html_attrs.get("lang", "").strip(): findings.append("WARN: html lang attribute is missing")
+    if h1_count == 0: findings.append("WARN: no H1 heading was found")
+    elif h1_count > 1: findings.append("INFO: multiple H1 headings were found")
+    if not og_title: findings.append("INFO: Open Graph og:title is missing")
+    if not og_description: findings.append("INFO: Open Graph og:description is missing")
+    if missing_alt: findings.append("WARN: " + str(missing_alt) + " image(s) have no alt attribute")
+    lines = [
+        "Title characters: " + str(len(title)),
+        "Meta description characters: " + str(len(description)),
+        "Canonical link: " + ("present" if canonical else "missing"),
+        "Robots directive: " + ("present" if robots else "not declared"),
+        "HTML language: " + (data.html_attrs.get("lang", "").strip() or "missing"),
+        "H1 headings: " + str(h1_count),
+        "Open Graph title/description: " + ("present" if og_title else "missing") + " / " + ("present" if og_description else "missing"),
+        "Images missing alt: " + str(missing_alt) + " of " + str(len(images)),
+        "Findings:",
+    ]
+    lines.extend(findings or ["No obvious baseline SEO findings."])
+    return _html_audit_report(p, "seo-audit", "HTML SEO audit", lines, len(findings))
+
+
+def html_accessibility_audit(p):
+    data = _html_audit_data(p)
+    labels_for = {node["attrs"].get("for", "").strip() for node in data.nodes.get("label", []) if node["attrs"].get("for", "").strip()}
+    issues = []
+    missing_alt = [node for node in data.nodes.get("img", []) if "alt" not in node["attrs"]]
+    for node in missing_alt[:20]:
+        issues.append("Image missing alt at line " + str(node["line"]))
+    for tag in ("a", "button"):
+        for node in data.nodes.get(tag, []):
+            attrs = node["attrs"]
+            accessible = bool(node["text"].strip() or attrs.get("aria-label", "").strip() or attrs.get("aria-labelledby", "").strip() or attrs.get("title", "").strip())
+            if not accessible:
+                issues.append(tag + " has no static accessible name at line " + str(node["line"]))
+    controls = []
+    for tag in ("input", "select", "textarea"):
+        controls.extend(data.nodes.get(tag, []))
+    for node in controls:
+        attrs = node["attrs"]
+        kind = attrs.get("type", "text").lower()
+        if node["tag"] == "input" and kind in {"hidden","submit","reset","button","image"}:
+            continue
+        labelled = bool(attrs.get("aria-label", "").strip() or attrs.get("aria-labelledby", "").strip() or attrs.get("title", "").strip() or node["wrapped_label"])
+        if attrs.get("id", "").strip() in labels_for:
+            labelled = True
+        if not labelled:
+            issues.append(node["tag"] + " control has no associated label at line " + str(node["line"]))
+    if not data.html_attrs.get("lang", "").strip():
+        issues.append("Document html element has no lang attribute")
+    if not any(node["tag"] == "main" or node["attrs"].get("role", "").lower() == "main" for tag_nodes in data.nodes.values() for node in tag_nodes):
+        issues.append("No main landmark was found")
+    headings = []
+    for level in range(1, 7):
+        headings.extend((int(node["tag"][1]), node["line"]) for node in data.nodes.get("h" + str(level), []))
+    headings.sort(key=lambda item: item[1])
+    previous = None
+    for level, line in headings:
+        if previous is not None and level > previous + 1:
+            issues.append("Heading level jumps from H" + str(previous) + " to H" + str(level) + " at line " + str(line))
+        previous = level
+    lines = [
+        "Images without alt: " + str(len(missing_alt)),
+        "Links: " + str(len(data.nodes.get("a", []))),
+        "Buttons: " + str(len(data.nodes.get("button", []))),
+        "Form controls inspected: " + str(len(controls)),
+        "Findings:",
+    ]
+    lines.extend(issues[:60] or ["No obvious baseline accessibility findings."])
+    if len(issues) > 60:
+        lines.append("Additional findings omitted: " + str(len(issues) - 60))
+    return _html_audit_report(p, "accessibility-audit", "HTML accessibility audit", lines, len(issues))
+
+
+def html_link_audit(p):
+    data = _html_audit_data(p)
+    issues = []
+    links = data.nodes.get("a", [])
+    for node in links:
+        attrs = node["attrs"]
+        href = attrs.get("href")
+        if href is None:
+            issues.append("Anchor without href at line " + str(node["line"]))
+            continue
+        compact = re.sub(r"[\x00-\x20]+", "", href).lower()
+        if not compact:
+            issues.append("Empty href at line " + str(node["line"]))
+        elif compact.startswith(("javascript:","vbscript:","data:")):
+            issues.append("Potentially unsafe href scheme at line " + str(node["line"]))
+        target = attrs.get("target", "").lower()
+        rel = set(attrs.get("rel", "").lower().split())
+        if target == "_blank" and not {"noopener","noreferrer"}.intersection(rel):
+            issues.append("target=_blank without rel=noopener/noreferrer at line " + str(node["line"]))
+        if href.startswith("#") and len(href) > 1 and href[1:] not in data.ids:
+            issues.append("Unresolved local fragment at line " + str(node["line"]))
+    lines = [
+        "Anchors: " + str(len(links)),
+        "IDs declared: " + str(len(data.ids)),
+        "Unique IDs duplicated: " + str(sum(1 for count in data.id_counts.values() if count > 1)),
+        "Findings:",
+    ]
+    lines.extend(issues[:80] or ["No obvious baseline link findings."])
+    if len(issues) > 80:
+        lines.append("Additional findings omitted: " + str(len(issues) - 80))
+    return _html_audit_report(p, "link-audit", "HTML link audit", lines, len(issues))
+
+
+def html_form_audit(p):
+    data = _html_audit_data(p)
+    labels_for = {node["attrs"].get("for", "").strip() for node in data.nodes.get("label", []) if node["attrs"].get("for", "").strip()}
+    forms = data.nodes.get("form", [])
+    controls = []
+    for tag in ("input", "select", "textarea"):
+        controls.extend(data.nodes.get(tag, []))
+    issues = []
+    for form in forms:
+        attrs = form["attrs"]
+        method = attrs.get("method", "get").strip().lower() or "get"
+        action = attrs.get("action", "").strip()
+        normalized = re.sub(r"[\x00-\x20]+", "", action).lower()
+        if normalized.startswith(("javascript:","vbscript:","data:")):
+            issues.append("Form has a potentially unsafe action scheme at line " + str(form["line"]))
+        if not attrs.get("method", "").strip():
+            issues.append("Form uses the browser default GET method at line " + str(form["line"]))
+        owned = [node for node in controls if node.get("form_id") == form["form_id"]]
+        if method == "get" and any(node["tag"] == "input" and node["attrs"].get("type", "text").lower() == "password" for node in owned):
+            issues.append("Password field is inside a GET form at line " + str(form["line"]))
+    for node in controls:
+        attrs = node["attrs"]
+        kind = attrs.get("type", "text").lower()
+        if node["tag"] == "input" and kind in {"button","submit","reset","image"}:
+            continue
+        if not attrs.get("name", "").strip():
+            issues.append(node["tag"] + " control has no name at line " + str(node["line"]))
+        labelled = bool(attrs.get("aria-label", "").strip() or attrs.get("aria-labelledby", "").strip() or attrs.get("title", "").strip() or node["wrapped_label"])
+        if attrs.get("id", "").strip() in labels_for:
+            labelled = True
+        if not labelled:
+            issues.append(node["tag"] + " control has no associated label at line " + str(node["line"]))
+        if node["tag"] == "input" and kind == "password" and not attrs.get("autocomplete", "").strip():
+            issues.append("Password input has no autocomplete hint at line " + str(node["line"]))
+    lines = [
+        "Forms: " + str(len(forms)),
+        "Controls: " + str(len(controls)),
+        "Findings:",
+    ]
+    lines.extend(issues[:80] or ["No obvious baseline form findings."])
+    if len(issues) > 80:
+        lines.append("Additional findings omitted: " + str(len(issues) - 80))
+    return _html_audit_report(p, "form-audit", "HTML form audit", lines, len(issues))
+
+
+def html_image_audit(p):
+    data = _html_audit_data(p)
+    images = data.nodes.get("img", [])
+    missing_alt = [node for node in images if "alt" not in node["attrs"]]
+    empty_alt = [node for node in images if "alt" in node["attrs"] and not node["attrs"].get("alt", "").strip()]
+    missing_dimensions = [node for node in images if not node["attrs"].get("width", "").strip() or not node["attrs"].get("height", "").strip()]
+    not_lazy = [node for node in images if node["attrs"].get("loading", "").lower() != "lazy"]
+    issues = []
+    for node in missing_alt[:30]:
+        issues.append("Missing alt at line " + str(node["line"]))
+    for node in missing_dimensions[:30]:
+        issues.append("Missing width or height at line " + str(node["line"]))
+    lines = [
+        "Images: " + str(len(images)),
+        "Missing alt attribute: " + str(len(missing_alt)),
+        "Empty alt (may be decorative): " + str(len(empty_alt)),
+        "Missing width or height: " + str(len(missing_dimensions)),
+        "Not marked loading=lazy: " + str(len(not_lazy)) + " (informational; eager loading can be intentional)",
+        "Findings:",
+    ]
+    lines.extend(issues or ["No obvious baseline image findings."])
+    return _html_audit_report(p, "image-audit", "HTML image audit", lines, len(issues))
 
 
 def html_sanitize(p):
@@ -7738,7 +8034,9 @@ TOOLS={
  "text-tokenize-words":text_tokenize_words,"text-sentence-report":text_sentence_report,"text-line-length-report":text_line_length_report,
  "text-normalize-newlines":text_normalize_newlines,"text-remove-zero-width":text_remove_zero_width,"text-extract-file-paths":text_extract_file_paths,
  "text-sort-words":text_sort_words,"html-extract-links":html_extract_links,"html-extract-images":html_extract_images,
- "html-extract-title":html_extract_title,"html-sanitize":html_sanitize,"xml-tree-report":xml_tree_report,"json-to-xml":json_to_xml,
+ "html-extract-title":html_extract_title,"html-sanitize":html_sanitize,
+ "html-seo-audit":html_seo_audit,"html-accessibility-audit":html_accessibility_audit,
+ "html-link-audit":html_link_audit,"html-form-audit":html_form_audit,"html-image-audit":html_image_audit,"xml-tree-report":xml_tree_report,"json-to-xml":json_to_xml,
  "json-type-report":json_type_report,"json-escape-string":json_escape_string,"json-unescape-string":json_unescape_string,
  "csv-unique-values":csv_unique_values,
  "text-sentence-case":text_sentence_case,"text-normalize-quotes":text_normalize_quotes,"text-normalize-dashes":text_normalize_dashes,

@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **297 công cụ đã được triển khai trên production**. Wave 7 và Wave 8 đưa catalog lên 275 công cụ; Wave 9 thêm 8 auditor hạ tầng/CI/CD; Wave 10 thêm 8 repository engineering analyzers và Wave 11 thêm 6 analyzer cho environment contracts, architecture cycles, change impact, OpenAPI, container và CI reliability. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **302 công cụ đã được triển khai trên production**. Wave 7 và Wave 8 đưa catalog lên 275 công cụ; Wave 9 thêm 8 auditor hạ tầng/CI/CD; Wave 10 thêm 8 repository engineering analyzers, Wave 11 thêm 6 analyzer cho environment contracts, architecture cycles, change impact, OpenAPI, container và CI reliability, Wave 12 thêm 5 HTML quality auditors cho SEO, accessibility, links, forms và images. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 
@@ -313,6 +313,11 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 | \`/tool csv-to-jsonl\` | Chuyển mỗi hàng CSV thành một JSON object line. | JSONL |
 | \`/tool jsonl-to-csv\` | Chuyển object JSONL thành CSV theo thứ tự key xuất hiện. | CSV |
 
+### HTML quality auditors — Wave 12
+
+Các auditor dưới đây đọc HTML như dữ liệu, không fetch `href`/`src`, không chạy script và không submit form. SEO, accessibility và hiệu năng được đánh giá theo heuristic; kết quả không phải điểm Google, chứng nhận WCAG hay kiểm thử trình duyệt thật.
+
+
 ### HTML, XML, JSON và thống kê văn bản — đợt thứ năm
 
 | Lệnh | Chức năng | Đầu ra |
@@ -331,6 +336,11 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 | \`/tool html-extract-images\` | Trích src/alt/title của ảnh HTML. | JSONL |
 | \`/tool html-extract-title\` | Trích tiêu đề trang HTML. | TXT |
 | \`/tool html-sanitize\` | Lọc script/style/iframe, event handlers và URL nguy hiểm phổ biến. Không thay thế sanitizer theo ngữ cảnh ứng dụng. | HTML |
+| \`/tool html-seo-audit\` | Kiểm tra title, description, canonical, robots, Open Graph, lang, H1 và alt ảnh bằng heuristic tĩnh. | Báo cáo TXT |
+| \`/tool html-accessibility-audit\` | Tìm ảnh thiếu alt, link/button thiếu tên, control thiếu label, landmark và heading jumps; không chứng nhận WCAG. | Báo cáo TXT |
+| \`/tool html-link-audit\` | Tìm href thiếu/rỗng, scheme nguy hiểm, fragment không có đích và target blank thiếu rel bảo vệ. | Báo cáo TXT |
+| \`/tool html-form-audit\` | Tìm control thiếu name/label, password trong GET form, autocomplete thiếu và action nguy hiểm. | Báo cáo TXT |
+| \`/tool html-image-audit\` | Báo cáo alt, width/height và loading lazy của ảnh; không tải ảnh hay in URL nguồn. | Báo cáo TXT |
 | \`/tool xml-tree-report\` | Báo cáo element, attribute, text node, depth và tag counts; từ chối DTD/ENTITY. | Báo cáo TXT |
 | \`/tool json-to-xml\` | Chuyển object JSON thành XML, hỗ trợ nested object, list, @attributes và #text. | XML |
 | \`/tool json-type-report\` | Đếm kiểu JSON và độ sâu cây. | Báo cáo TXT |
