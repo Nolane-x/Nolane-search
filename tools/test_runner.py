@@ -2281,5 +2281,78 @@ dependencies = ["requests>=2.0", "httpx"]
                 self.assertIn(name,names)
 
 
+
+    def test_wave_eleven_repository_contract_and_architecture_analyzers(self):
+        import json
+        import zipfile
+
+        archive_path=self.input_dir/"wave-eleven-project.zip"
+        with zipfile.ZipFile(archive_path,"w",compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("project/.env.example","DATABASE_URL=sqlite:///local.db\n")
+            archive.writestr("project/src/a.py",
+                "import os\nfrom .b import do_b\n"
+                "def read_database():\n    return os.getenv('DATABASE_URL')\n")
+            archive.writestr("project/src/b.py","from .a import read_database\ndef do_b(): return read_database()\n")
+            archive.writestr("project/src/c.py","from .b import do_b\ndef call(): return do_b()\n")
+            archive.writestr("project/openapi.json",json.dumps({
+                "openapi":"3.0.3",
+                "info":{"title":"Fixture API","version":"1.0.0"},
+                "paths":{
+                    "/items/{itemId}":{
+                        "get":{"operationId":"readItem","responses":{"200":{"$ref":"#/components/schemas/Missing"}},"parameters":[]},
+                        "post":{"operationId":"readItem","responses":{"200":{"description":"ok"}}},
+                    }
+                },
+                "components":{"schemas":{"Item":{"type":"object"}}}
+            }))
+            archive.writestr("project/Dockerfile",
+                "FROM python\nARG API_TOKEN\nCOPY .env .env\n")
+            archive.writestr("project/docker-compose.yml",
+                "services:\n  app:\n    image: nginx:latest\n    privileged: true\n"
+                "    network_mode: host\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock\n")
+            archive.writestr("project/.github/workflows/ci.yml",
+                "name: CI\non: [push]\njobs:\n  build:\n    continue-on-error: true\n"
+                "    steps:\n      - run: pytest || true\n")
+        metadata_dir=self.input_dir
+        (metadata_dir/"github-source-metadata.json").write_text(json.dumps({
+            "compare":{
+                "base":"main","head":"feature/wave11","status":"ahead",
+                "files":[
+                    {"filename":"project/src/b.py","status":"modified","additions":2,"deletions":1},
+                    {"filename":"project/docs/removed.md","status":"removed","additions":0,"deletions":8}
+                ]
+            }
+        }),encoding="utf-8")
+
+        results={
+            "env":runner.repo_env_contract(archive_path),
+            "cycles":runner.repo_architecture_cycles(archive_path),
+            "impact":runner.repo_change_impact(archive_path),
+            "api":runner.repo_api_spec_audit(archive_path),
+            "container":runner.repo_container_audit(archive_path),
+            "ci":runner.repo_ci_reliability(archive_path),
+        }
+        reports={name:Path(value["output_path"]).read_text(encoding="utf-8") for name,value in results.items()}
+        self.assertIn("DATABASE_URL",reports["env"])
+        self.assertIn("project/src/a.py",reports["cycles"])
+        self.assertIn("project/src/b.py",reports["cycles"])
+        self.assertIn("project/src/c.py",reports["impact"])
+        self.assertIn("Duplicate operationId",reports["api"])
+        self.assertIn("Unresolved local $ref",reports["api"])
+        self.assertIn("Credential-like variable",reports["container"])
+        self.assertIn("privileged",reports["container"])
+        self.assertIn("timeout-minutes",reports["ci"])
+
+        aggregate=runner.repo_intelligence(archive_path)
+        with zipfile.ZipFile(aggregate["output_path"]) as archive:
+            names=set(archive.namelist())
+            for name in (
+                "reports/env-contract.txt","reports/architecture-cycles.txt",
+                "reports/change-impact.txt","reports/api-spec-audit.txt",
+                "reports/container-audit.txt","reports/ci-reliability.txt",
+            ):
+                self.assertIn(name,names)
+
+
 if __name__ == "__main__":
     unittest.main()
