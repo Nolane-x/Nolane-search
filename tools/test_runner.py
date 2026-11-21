@@ -2034,7 +2034,7 @@ dependencies = ["requests>=2.0", "httpx"]
         self.assertIn("Empty row numbers (excluding header): 2",empty_report)
         width=Path(runner.csv_row_width_report(self.write("width.csv","a,b\n1,2\n3\n4,5,6\n"))["output_path"]).read_text(encoding="utf-8")
         self.assertIn("Mismatched rows: 2",width)
-        self.assertIn('"line":3',width)
+        self.assertIn('"line": 3',width)
         new_ids=[
             "text-extract-mac-addresses","text-extract-port-numbers","text-normalize-path-separators",
             "text-extract-file-extensions","text-escape-shell-argument","text-sort-unique-lines",

@@ -272,7 +272,7 @@ PIPELINE_TRANSITIONS = {
     "text-escape-shell-argument": {"text-clean", "text-stats"},
     "text-sort-unique-lines": {"text-clean", "text-stats"},
     "text-normalize-unicode-nfkc": {"text-clean", "text-stats"},
-    "csv-to-sql-inserts": {},
+    "csv-to-sql-inserts": set(),
     "yaml-format": {"yaml-to-json", "code-check"},
     "csv-to-yaml": {"yaml-format", "yaml-to-json"},
     "csv-empty-row-report": {"text-clean", "text-stats"},
