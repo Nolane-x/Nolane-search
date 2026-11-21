@@ -1,5 +1,6 @@
 import { constantTimeEqual, htmlEscape, normalizeUrl } from "./security";
 import { parseGitHubRepositoryUrl, parseGitHubCompareCommand } from "./github-intelligence";
+import { parseRepositoryToolCommand } from "./repo-tools";
 import {
   deletePersonalMemory, getRelevantPersonalMemoryContext, listPersonalMemories, savePersonalMemory,
 } from "./memory";
@@ -1603,6 +1604,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/tool_retry ID</code> — chạy lại job lỗi từ file gốc\n" +
       "<code>/repo https://github.com/owner/repo</code> — phân tích repository GitHub công khai\n" +
       "<code>/repo_compare https://github.com/owner/repo branchA...branchB</code> — so sánh hai branch/version\n" +
+      "<code>/repo_tool TOOL_ID https://github.com/owner/repo</code> — chạy một tool Repository trực tiếp trên GitHub URL công khai\n" +
       "<code>/workflow_plan mục tiêu</code> — AI thiết kế pipeline/DAG, chỉ tạo bản xem trước\n" +
       "<code>/workflow_plan_save ID Tên</code> — lưu bản nháp AI sau khi xem lại\n" +
       "<code>/workflow_plan_discard ID</code> — xóa bản nháp AI\n" +
@@ -1752,6 +1754,42 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     } catch (error) {
       console.error("TinyFish read failed:", error instanceof Error ? error.message : "unknown");
       await reply(env, chatId, "TinyFish không thể đọc trang này. Trang có thể chặn truy cập, hết quota hoặc API key chưa hợp lệ.");
+    }
+    return;
+  }
+
+  if (command === "repo_tool") {
+    if (chatId !== userId || !allowedUser(env, userId)) {
+      await reply(env, chatId, "GitHub Repository Tools chỉ khả dụng trong chat riêng được cấp quyền.");
+      return;
+    }
+    const request = parseRepositoryToolCommand(args);
+    if (!request) {
+      await reply(env, chatId,
+        "Cú pháp: <code>/repo_tool TOOL_ID https://github.com/owner/repository</code> hoặc URL /tree/branch. " +
+        "Chỉ nhận tool thuộc danh mục Repository và GitHub HTTPS công khai. Dùng /tools để xem danh mục.");
+      return;
+    }
+    const tool = getTool(request.toolId)!;
+    try {
+      const job = await createToolJob(env, {
+        userId, chatId, toolId: request.toolId, fileId: "",
+        fileName: request.source.owner + "-" + request.source.repo + "-" + request.toolId + ".zip",
+        mimeType: "application/zip", fileSize: 0,
+        githubSource: request.source,
+        pipeline: [{ toolId: request.toolId }],
+      });
+      const refLabel = request.source.ref || "default branch";
+      await reply(env, chatId,
+        "⏳ <b>Repository tool đã được xếp hàng</b>\n" +
+        "Tool: <b>" + htmlEscape(tool.name) + "</b> · <code>" + htmlEscape(request.toolId) + "</code>\n" +
+        "Repository: <a href=\"https://github.com/" + htmlEscape(request.source.owner) + "/" + htmlEscape(request.source.repo) + "\">" +
+        htmlEscape(request.source.owner + "/" + request.source.repo) + "</a>\n" +
+        "Ref: <code>" + htmlEscape(refLabel) + "</code>\n" +
+        "Job: <code>" + job.id + "</code>\n\n" +
+        "Runner chỉ đọc snapshot công khai để chạy tool đã chọn; không thực thi code, workflow, test hay build script của repository. Dùng /tool_jobs để theo dõi.");
+    } catch (error) {
+      await reply(env, chatId, "Không thể khởi chạy Repository tool: " + htmlEscape(error instanceof Error ? error.message : "unknown error"));
     }
     return;
   }
