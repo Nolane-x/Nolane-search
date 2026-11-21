@@ -268,6 +268,21 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "csv-remove-empty-columns", name: "Xóa cột CSV rỗng", category: "data", description: "Loại cột có toàn bộ giá trị data rỗng, giữ nguyên header và thứ tự các cột còn lại.", accepts: ["text/csv", ".csv"], output: "CSV đã bỏ cột rỗng", ready: true },
   { id: "csv-empty-cell-report", name: "Báo cáo ô CSV trống", category: "data", description: "Thống kê ô rỗng theo từng cột, tỷ lệ phần trăm và tổng số ô dữ liệu thiếu.", accepts: ["text/csv", ".csv"], output: "Báo cáo missing cells TXT", ready: true },
 
+
+  { id: "text-extract-mac-addresses", name: "Trích địa chỉ MAC", category: "developer", description: "Trích địa chỉ MAC dạng dấu hai chấm hoặc gạch ngang, chuẩn hóa chữ hoa và khử trùng.", accepts: ["text/plain", ".txt", ".md", ".log"], output: "Danh sách MAC TXT", ready: true },
+  { id: "text-extract-port-numbers", name: "Trích cổng mạng", category: "developer", description: "Trích port được ghi rõ trong cấu hình, localhost hoặc URL; chỉ giữ giá trị hợp lệ 1–65535.", accepts: ["text/plain", ".txt", ".md", ".log", ".conf", ".env"], output: "Danh sách port TXT", ready: true },
+  { id: "text-normalize-path-separators", name: "Chuẩn hóa dấu phân cách đường dẫn", category: "developer", description: "Chuyển dấu gạch chéo ngược thành dấu gạch chéo xuôi trong văn bản đường dẫn.", accepts: ["text/plain", ".txt", ".md", ".log", ".conf"], output: "Đường dẫn đã chuẩn hóa", ready: true },
+  { id: "text-extract-file-extensions", name: "Trích phần mở rộng tệp", category: "developer", description: "Tìm phần mở rộng tệp từ tên đường dẫn, chuẩn hóa chữ thường và loại giá trị trùng.", accepts: ["text/plain", ".txt", ".md", ".log"], output: "Danh sách extension TXT", ready: true },
+  { id: "text-escape-shell-argument", name: "Quote một đối số POSIX shell", category: "developer", description: "Quote nội dung thành đúng một đối số POSIX shell bằng single quotes; chỉ tạo văn bản, không thực thi lệnh.", accepts: ["text/plain", ".txt"], output: "Một đối số shell đã quote", ready: true },
+  { id: "text-sort-unique-lines", name: "Sắp xếp dòng duy nhất", category: "utility", description: "Loại dòng trống và dòng trùng không phân biệt hoa thường, sau đó sắp xếp ổn định theo nội dung.", accepts: ["text/plain", ".txt", ".md", ".log", ".csv"], output: "TXT các dòng duy nhất", ready: true },
+  { id: "text-normalize-unicode-nfkc", name: "Chuẩn hóa Unicode NFKC", category: "utility", description: "Chuẩn hóa ký tự tương thích Unicode về NFKC, hữu ích với full-width text và ký tự presentation.", accepts: ["text/plain", ".txt", ".md", ".log", ".csv"], output: "Văn bản Unicode NFKC", ready: true },
+  { id: "csv-to-sql-inserts", name: "CSV sang SQL INSERT", category: "data", description: "Sinh câu lệnh INSERT cho bảng records, quote identifier và escape literal; không kết nối hay thực thi SQL.", accepts: ["text/csv", ".csv"], output: "Tệp SQL .sql", ready: true },
+  { id: "csv-to-yaml", name: "CSV sang YAML", category: "data", description: "Chuyển từng dòng CSV thành mapping YAML; giữ giá trị ô dưới dạng chuỗi và tạo header duy nhất.", accepts: ["text/csv", ".csv"], output: "Tệp YAML .yaml", ready: true },
+  { id: "csv-empty-row-report", name: "Báo cáo hàng CSV rỗng", category: "data", description: "Đếm các hàng dữ liệu không có ô nào chứa nội dung và liệt kê số hàng tương ứng.", accepts: ["text/csv", ".csv"], output: "Báo cáo TXT", ready: true },
+  { id: "csv-row-width-report", name: "Kiểm tra độ rộng hàng CSV", category: "data", description: "So sánh số cột mỗi hàng với header, phát hiện hàng thiếu hoặc thừa trường.", accepts: ["text/csv", ".csv"], output: "Báo cáo độ rộng hàng TXT", ready: true },
+  { id: "json-remove-empty-values", name: "Xóa giá trị rỗng trong JSON", category: "data", description: "Xóa null, chuỗi rỗng, object rỗng và array rỗng theo đệ quy; giữ nguyên false và số 0.", accepts: ["application/json", "text/json", ".json"], output: "JSON đã làm sạch", ready: true },
+  { id: "json-to-typescript", name: "JSON sang TypeScript types", category: "developer", description: "Suy luận interface và union type từ một mẫu JSON; kết quả là gợi ý kiểu dữ liệu, không phải schema đầy đủ.", accepts: ["application/json", "text/json", ".json"], output: "Tệp TypeScript .ts", ready: true },
+  { id: "json-nesting-report", name: "Báo cáo độ sâu JSON", category: "data", description: "Thống kê độ sâu tối đa, object, array, key, item và số lượng giá trị theo kiểu JSON.", accepts: ["application/json", "text/json", ".json"], output: "Báo cáo JSON TXT", ready: true },
 ];
 
 
@@ -506,6 +521,21 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "csv-trim-cells": ["csv-profile","csv-clean","csv-schema-infer"],
   "csv-remove-empty-columns": ["csv-profile","csv-schema-infer","csv-clean"],
   "csv-empty-cell-report": ["csv-profile","csv-schema-infer"],
+  "text-extract-mac-addresses": ["text-deduplicate", "text-stats"],
+  "text-extract-port-numbers": ["text-deduplicate", "text-stats"],
+  "text-normalize-path-separators": ["text-clean", "text-stats"],
+  "text-extract-file-extensions": ["text-deduplicate", "text-stats"],
+  "text-escape-shell-argument": ["text-clean", "text-stats"],
+  "text-sort-unique-lines": ["text-clean", "text-stats"],
+  "text-normalize-unicode-nfkc": ["text-clean", "text-stats"],
+  "csv-to-sql-inserts": [],
+  "yaml-format": ["yaml-to-json", "code-check"],
+  "csv-to-yaml": ["yaml-format", "yaml-to-json"],
+  "csv-empty-row-report": ["text-clean", "text-stats"],
+  "csv-row-width-report": ["text-clean", "text-stats"],
+  "json-remove-empty-values": ["json-format", "json-canonicalize", "json-schema"],
+  "json-to-typescript": ["code-check", "text-clean"],
+  "json-nesting-report": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =

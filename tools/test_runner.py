@@ -1195,7 +1195,13 @@ class ToolRunnerUnitTests(unittest.TestCase):
             previous:set(re.findall(r'"([a-z][a-z0-9-]*)"',targets))
             for previous,targets in re.findall(r'"([a-z][a-z0-9-]*)":\s*\[([^\]]*)\]',transition_block)
         }
-        self.assertEqual(ts_transitions,runner.PIPELINE_TRANSITIONS,"Worker and runner pipeline transition graphs differ.")
+        worker_only={key: sorted(targets-runner.PIPELINE_TRANSITIONS.get(key,set())) for key,targets in ts_transitions.items() if targets-runner.PIPELINE_TRANSITIONS.get(key,set())}
+        runner_only={key: sorted(targets-ts_transitions.get(key,set())) for key,targets in runner.PIPELINE_TRANSITIONS.items() if targets-ts_transitions.get(key,set())}
+        self.assertEqual(ts_transitions,runner.PIPELINE_TRANSITIONS,
+            "Worker and runner pipeline transition graphs differ. "
+            f"Worker-only keys: {sorted(set(ts_transitions)-set(runner.PIPELINE_TRANSITIONS))}; "
+            f"Runner-only keys: {sorted(set(runner.PIPELINE_TRANSITIONS)-set(ts_transitions))}; "
+            f"Worker-only edges: {worker_only}; Runner-only edges: {runner_only}")
         self.assertTrue(set(ts_transitions).issubset(runner.RUNNERS))
         self.assertTrue(all(target in runner.RUNNERS for targets in ts_transitions.values() for target in targets))
 
@@ -1990,6 +1996,73 @@ dependencies = ["requests>=2.0", "httpx"]
             runner.jsonl_to_csv(malformed)
 
 
+
+
+
+    def test_wave_seven_processors(self):
+        source=self.write("developer.txt",
+            "notes.txt MAC aa:bb:cc:dd:ee:ff and AA-BB-CC-DD-EE-FF\n"
+            "port=80 localhost:3000 https://example.com:443/path port=70000\n"
+            + r"C:\Users\Ada\project\README.md /var/log/app.log file.tar.gz"
+            + "\nzeta\nAlpha\nalpha\nbeta\n")
+        self.assertEqual(Path(runner.text_extract_mac_addresses(source)["output_path"]).read_text(encoding="utf-8"),"AA:BB:CC:DD:EE:FF\n")
+        self.assertEqual(Path(runner.text_extract_port_numbers(source)["output_path"]).read_text(encoding="utf-8"),"80\n3000\n443\n")
+        self.assertIn("C:/Users/Ada/project/README.md",Path(runner.text_normalize_path_separators(source)["output_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(Path(runner.text_extract_file_extensions(source)["output_path"]).read_text(encoding="utf-8").splitlines(),["txt","md","log","gz"])
+        shell=self.write("shell.txt","a'b $(not-a-command)")
+        self.assertEqual(Path(runner.text_escape_shell_argument(shell)["output_path"]).read_text(encoding="utf-8"),"'a'\"'\"'b $(not-a-command)'")
+        lines=Path(runner.text_sort_unique_lines(source)["output_path"]).read_text(encoding="utf-8").splitlines()
+        self.assertEqual(lines,[
+            "Alpha","beta",
+            r"C:\Users\Ada\project\README.md /var/log/app.log file.tar.gz",
+            "notes.txt MAC aa:bb:cc:dd:ee:ff and AA-BB-CC-DD-EE-FF",
+            "port=80 localhost:3000 https://example.com:443/path port=70000","zeta"
+        ])
+        nfkc=self.write("nfkc.txt","ＡＢＣ ① ﬁ")
+        self.assertEqual(Path(runner.text_normalize_unicode_nfkc(nfkc)["output_path"]).read_text(encoding="utf-8"),"ABC 1 fi")
+
+        csv_source=self.write("wave7.csv","Name,Name,Note\nAn,one,\"O'Reilly\"\n,,\nB,two,\"# heading\"\n")
+        sql=Path(runner.csv_to_sql_inserts(csv_source)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn('INSERT INTO "records" ("Name", "Name_2", "Note")',sql)
+        self.assertIn("'O''Reilly'",sql)
+        import yaml
+        yaml_path=Path(runner.csv_to_yaml(csv_source)["output_path"])
+        self.assertTrue(yaml_path.name.endswith(".yaml"))
+        self.assertEqual(yaml.safe_load(yaml_path.read_text(encoding="utf-8"))[0],{"Name":"An","Name_2":"one","Note":"O'Reilly"})
+        empty_report=Path(runner.csv_empty_row_report(csv_source)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Empty rows: 1",empty_report)
+        self.assertIn("Empty row numbers (excluding header): 2",empty_report)
+        width=Path(runner.csv_row_width_report(self.write("width.csv","a,b\n1,2\n3\n4,5,6\n"))["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Mismatched rows: 2",width)
+        self.assertIn('"line": 3',width)
+        new_ids=[
+            "text-extract-mac-addresses","text-extract-port-numbers","text-normalize-path-separators",
+            "text-extract-file-extensions","text-escape-shell-argument","text-sort-unique-lines",
+            "text-normalize-unicode-nfkc","csv-to-sql-inserts","csv-to-yaml","csv-empty-row-report",
+            "csv-row-width-report","json-remove-empty-values","json-to-typescript","json-nesting-report"
+        ]
+        self.assertTrue(all(tool_id in runner.RUNNERS and tool_id in runner.TOOLS for tool_id in new_ids))
+
+    def test_wave_seven_json_processors_and_depth_guards(self):
+        source=self.write("empty-values.json",'{"zero":0,"flag":false,"empty":"", "nil":null,"array":[],"object":{},"nested":{"keep":"yes","drop":null}}')
+        cleaned=Path(runner.json_remove_empty_values(source)["output_path"]).read_text(encoding="utf-8")
+        self.assertEqual(json.loads(cleaned),{"zero":0,"flag":False,"nested":{"keep":"yes"}})
+        sample=self.write("sample.json",'{"name":"An","profile":{"age":17},"tags":["ai","python"]}')
+        types=Path(runner.json_to_typescript(sample)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("export interface RootProfile",types)
+        self.assertIn("export interface Root",types)
+        self.assertIn("export type RootType = Root;",types)
+        report=Path(runner.json_nesting_report(sample)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Maximum depth: 2",report)
+        self.assertIn("Objects: 2",report)
+        self.assertIn("Arrays: 1",report)
+        deep=self.write("deep.json","["*82+"0"+"]"*82)
+        with self.assertRaisesRegex(RuntimeError,"80-level"):
+            runner.json_nesting_report(deep)
+        with self.assertRaisesRegex(RuntimeError,"80-level"):
+            runner.json_remove_empty_values(deep)
+        with self.assertRaisesRegex(RuntimeError,"40 nested levels"):
+            runner.json_to_typescript(deep)
 
 if __name__ == "__main__":
     unittest.main()
