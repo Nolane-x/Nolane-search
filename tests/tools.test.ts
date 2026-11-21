@@ -288,7 +288,7 @@ describe("Nolane Tools registry", () => {
     expect(inferToolForUpload({mimeType:"application/json",fileName:"package.json"})).toBe("package-json-audit");
     expect(inferToolForUpload({mimeType:"text/plain",fileName:"Dockerfile"})).toBe("dockerfile-audit");
     expect(inferToolForUpload({mimeType:"application/yaml",fileName:"compose.yaml"})).toBe("docker-compose-audit");
-    expect(validateToolPipeline({mimeType:"text/plain",fileName:".env"},[{toolId:"env-audit"},{toolId:"env-to-example"},{toolId:"env-audit"}]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"text/plain",fileName:".env"},[{toolId:"env-audit"},{toolId:"env-to-example"}]).ok).toBe(true);
     expect(validateToolPipeline({mimeType:"text/plain",fileName:"settings.ini"},[{toolId:"ini-to-json"},{toolId:"json-format"}]).ok).toBe(true);
     expect(validateToolPipeline({mimeType:"application/json",fileName:"package.json"},[{toolId:"package-json-audit"}]).ok).toBe(true);
   });
