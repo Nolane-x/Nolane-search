@@ -308,6 +308,14 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "systemd-unit-audit", name: "Kiểm tra systemd service", category: "developer", description: "Audit tĩnh User, NoNewPrivileges, ProtectSystem/Home, PrivateTmp, capabilities, shell ExecStart và UMask; không chạy service.", accepts: ["text/plain", ".service"], output: "Báo cáo TXT", ready: true },
   { id: "shell-script-audit", name: "Kiểm tra shell script", category: "developer", description: "Audit tĩnh eval, download-to-shell, rm -rf /, chmod 777, sudo, secret assignment và safety flags; không chạy script.", accepts: ["text/plain", ".sh", ".bash"], output: "Báo cáo TXT", ready: true },
 
+  { id: "repo-test-map", name: "Ánh xạ source ↔ tests", category: "repository", description: "Tìm test file có khả năng bao phủ từng source file bằng heuristic tên và đường dẫn; không giả lập line coverage.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "repo-test-quality", name: "Kiểm tra chất lượng test", category: "repository", description: "Thống kê test declarations, assertion signals, skipped/focused tests, broad exception handling và TODO trong test files.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "repo-complexity-report", name: "Phân tích độ phức tạp code", category: "repository", description: "Đếm decision nodes Python bằng AST, thống kê file/LOC và branch-pattern JS/TS với nhãn heuristic rõ ràng.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "repo-api-surface", name: "Kiểm kê API surface", category: "repository", description: "Trích route/handler declarations từ Python, JS/TS, Java và Go; đây là danh sách ứng viên tĩnh, không phải OpenAPI đầy đủ.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "repo-docs-audit", name: "Kiểm tra tài liệu & liên kết", category: "repository", description: "Kiểm tra README/SECURITY/CONTRIBUTING và relative Markdown links trong ZIP; không gửi request tới external links.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "repo-migration-audit", name: "Kiểm toán database migrations", category: "repository", description: "Tìm DDL/DML có nguy cơ phá hủy dữ liệu như DROP, TRUNCATE, DELETE thiếu WHERE, đổi kiểu và NOT NULL mới.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "repo-runtime-risk", name: "Quét rủi ro runtime", category: "repository", description: "Quét static patterns như eval, pickle, YAML load không an toàn, shell=True, raw HTML và tắt TLS verify; không thực thi code.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "repo-i18n-audit", name: "Kiểm tra tính nhất quán i18n", category: "repository", description: "So sánh key trong JSON locale catalogs theo cấu trúc thư mục, báo key thiếu/thừa; không chấm chất lượng dịch.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
 ];
 
 
@@ -585,6 +593,14 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "systemd-unit-audit": ["text-clean", "text-stats"],
   "shell-script-audit": ["text-clean", "text-stats"],
 
+  "repo-test-map": ["text-clean", "text-stats"],
+  "repo-test-quality": ["text-clean", "text-stats"],
+  "repo-complexity-report": ["text-clean", "text-stats"],
+  "repo-api-surface": ["text-clean", "text-stats"],
+  "repo-docs-audit": ["text-clean", "text-stats"],
+  "repo-migration-audit": ["text-clean", "text-stats"],
+  "repo-runtime-risk": ["text-clean", "text-stats"],
+  "repo-i18n-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =

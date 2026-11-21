@@ -282,7 +282,8 @@ export async function createToolJob(env: Env, input: Omit<ToolJob, "id" | "statu
     throw new Error("Thiếu GitHub Actions token. Hãy thêm GitHub Secret NOLANE_GH_ACTIONS_TOKEN với quyền Actions: write cho repository Nolane-x/Nolane-search.");
   }
   if (input.githubSource) {
-    if (input.toolId !== "repo-intelligence" || !isValidGitHubRepositorySource(input.githubSource) ||
+    if (tool.category !== "repository" || normalizedPipeline.length !== 1 ||
+        normalizedPipeline[0]?.toolId !== input.toolId || !isValidGitHubRepositorySource(input.githubSource) ||
         input.mimeType !== "application/zip" || !input.fileName.toLowerCase().endsWith(".zip") ||
         input.fileId !== "" || input.fileSize !== 0 || input.workflowDag) {
       throw new Error("GitHub source job không hợp lệ hoặc không được hỗ trợ.");
