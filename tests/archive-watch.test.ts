@@ -340,4 +340,93 @@ describe("watch snapshot archive indexing", () => {
     expect(fetchMock.mock.calls.some(call => String(call[0]).includes("/sendDocument"))).toBe(true);
   });
 
+
+  it("does not re-arm archive retry when the owner change notification fails after capture succeeds", async () => {
+    const watch = {
+      id: 20,
+      chat_id: "42",
+      user_id: "42",
+      url: "https://example.com/notify-failure",
+      normalized_url: "https://example.com/notify-failure",
+      interval_minutes: 30,
+      etag: null,
+      last_modified: null,
+      content_hash: "b".repeat(64),
+      last_status: -4,
+    };
+    const runSql: string[] = [];
+    const telegramMessages: Array<Record<string, unknown>> = [];
+    const prepare = vi.fn((sql: string) => ({
+      sql,
+      values: [] as unknown[],
+      bind(...values: unknown[]) { this.values = values; return this; },
+      all: async () => ({ results: sql.includes("FROM watches") ? [watch] : [] }),
+      first: async () => {
+        if (sql.includes("SELECT id FROM indexed_pages")) return { id: 20 };
+        if (sql.includes("INSERT INTO archive_snapshots")) return { id: 120 };
+        return null;
+      },
+      run: async () => {
+        runSql.push(sql);
+        return { meta: { changes: 1 } };
+      },
+    }));
+    const batch = vi.fn(async () => []);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/robots.txt")) {
+        return new Response("User-agent: *\nAllow: /", {
+          status: 200, headers: { "content-type": "text/plain" },
+        });
+      }
+      if (url === "https://example.com/notify-failure") {
+        const headers = new Headers(init?.headers);
+        expect(headers.has("if-none-match")).toBe(false);
+        expect(headers.has("if-modified-since")).toBe(false);
+        return new Response(
+          "<html><head><title>Recovered changed page</title></head><body><main>This monitored page has changed and its snapshot must remain committed even if the private alert cannot be delivered.</main></body></html>",
+          { status: 200, headers: { "content-type": "text/html; charset=utf-8", etag: '"recovered-etag"' } },
+        );
+      }
+      if (url.includes("/sendDocument")) {
+        return new Response(JSON.stringify({
+          ok: true,
+          result: {
+            message_id: 120,
+            document: {
+              file_id: "notification-recovery-file",
+              file_unique_id: "notification-recovery-unique",
+              file_name: "recovered-change.txt",
+              file_size: 280,
+            },
+          },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("/sendMessage")) {
+        const body = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+        telegramMessages.push(body);
+        if (String(body.chat_id) === "42") throw new Error("private Telegram notification temporarily unavailable");
+        return new Response(JSON.stringify({ ok: true, result: { message_id: 121 } }), {
+          status: 200, headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error("Unexpected request " + url);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = {
+      DB: { prepare, batch },
+      TELEGRAM_BOT_TOKEN: "test-token",
+      TELEGRAM_ARCHIVE_CHAT_ID: "-1001234567890",
+    } as unknown as Env;
+
+    const result = await checkWatchTargets(env);
+
+    expect(result).toEqual({ checked: 1, changed: 1 });
+    expect(fetchMock.mock.calls.filter(call => String(call[0]).includes("/sendDocument"))).toHaveLength(1);
+    expect(telegramMessages.map(message => message.chat_id)).toEqual(["42", "-1001234567890"]);
+    expect(runSql.some(sql => sql.includes("UPDATE watches SET content_hash = ?"))).toBe(true);
+    expect(runSql.some(sql => sql.includes("SET last_checked_at = ?, last_status = ?"))).toBe(false);
+  });
+
 });
