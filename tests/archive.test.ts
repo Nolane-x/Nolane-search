@@ -3,6 +3,7 @@ import {
   formatArchiveSnapshotList,
   getArchiveSnapshot,
   listArchiveSnapshots,
+  parseArchivePageArguments,
   saveArchiveSnapshot,
 } from "../src/archive";
 import type { ArchiveSnapshot } from "../src/archive";
@@ -106,6 +107,39 @@ describe("Telegram archive index", () => {
     const env = envWithStatement(statement);
     await expect(getArchiveSnapshot(env, 17, "99")).resolves.toBeNull();
     expect(statement.bind).toHaveBeenCalledWith(17, "99");
+  });
+
+  it("parses safe archive page arguments and normalizes query whitespace", () => {
+    expect(parseArchivePageArguments("2   climate   policy")).toEqual({ page: 2, query: "climate policy" });
+    expect(parseArchivePageArguments("1")).toEqual({ page: 1, query: "" });
+    expect(parseArchivePageArguments("0")).toBeNull();
+    expect(parseArchivePageArguments("1002")).toBeNull();
+    expect(parseArchivePageArguments("page 2")).toBeNull();
+    expect(parseArchivePageArguments("2 " + "x".repeat(121))).toBeNull();
+  });
+
+  it("includes safe previous/next page commands and carries the search query forward", () => {
+    const snapshots = Array.from({ length: 5 }, (_, index): ArchiveSnapshot => ({
+      ...row,
+      id: 20 + index,
+      title: "Archive item " + (index + 1),
+    }));
+    const output = formatArchiveSnapshotList(snapshots, 12, "<climate>", 2, 5);
+    expect(output).toContain("Trang 2 / 3");
+    expect(output).toContain("Hiển thị 6–10 / 12 mục.");
+    expect(output).toContain("/archive_page 1 &lt;climate&gt;");
+    expect(output).toContain("/archive_page 3 &lt;climate&gt;");
+    expect(output).not.toContain("<climate>");
+  });
+
+  it("shows only the forward command on the first page", () => {
+    const snapshots = Array.from({ length: 5 }, (_, index): ArchiveSnapshot => ({
+      ...row,
+      id: 30 + index,
+    }));
+    const output = formatArchiveSnapshotList(snapshots, 8, "", 1, 5);
+    expect(output).toContain("/archive_page 2");
+    expect(output).not.toContain("/archive_page 0");
   });
 
   it("escapes titles, URLs and user queries in Telegram HTML", () => {
