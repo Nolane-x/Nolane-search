@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **275 công cụ trong catalog**; Wave 7 (261 công cụ) đã được triển khai production và Wave 8 (14 công cụ cấu hình/DevOps) đang được kiểm thử trên nhánh phát triển. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **275 công cụ đã được tích hợp và triển khai trên production**. Wave 7 đưa catalog lên 261 công cụ; Wave 8 bổ sung 14 công cụ cấu hình/DevOps và đã được merge, kiểm thử, triển khai trên Cloudflare Worker version 57. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ## Sử dụng
 

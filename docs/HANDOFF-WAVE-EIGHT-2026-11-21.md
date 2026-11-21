@@ -44,11 +44,23 @@ Wave 8 adds 14 processors, increasing the TypeScript catalog from 261 to 275 uni
 - [x] Add TypeScript registry/pipeline and Telegram tool-count tests.
 - [x] Add AI function-calling tests for the directly supported subset.
 - [x] Update README and Nolane Tools documentation.
-- [ ] CI typecheck/unit tests/Python runner/build must pass on the final branch head.
-- [ ] Merge and deploy only after CI passes.
-- [ ] After deployment, verify Worker version, webhook, command menu and D1 health.
+- [x] CI passed on final PR head `c633e433aab010586921c0fe2f7a008d7f97d80d`: type-check, 188 unit tests, deployment-script checks, 94 Python runner tests and Worker build.
+- [x] Merged by PR #47; production deployment completed.
+- [x] Verified Worker version 57 at 100% traffic; Telegram webhook `message` + `callback_query` and command-menu registration succeeded; D1 migrations/tables remain present.
 - [ ] Owner-level Telegram upload-to-result E2E remains a separate manual check.
 
 ## Current distinction
 
-The main branch and production remain at Wave 7 / 261 tools until this feature branch is merged and deployed. Wave 8's 275 count is the feature-branch catalog count, not yet a production claim.
+## Post-merge production verification — 2026-11-21
+
+- PR #47 merged: https://github.com/Nolane-x/Nolane-search/pull/47
+- Main commit: `4b7db4f7eaaae44810df68d43ae3c9486187dbb6`.
+- Production Cloudflare Worker version 57: `a86e4cb5-3747-4476-b87e-31abb6793062`; deployment percentage is 100%.
+- Main CI passed: https://github.com/Nolane-x/Nolane-search/actions/runs/44874848990
+- Cloudflare build/export and deployed Worker smoke test passed: https://github.com/Nolane-x/Nolane-search/actions/runs/44874849018
+- Worker deployment passed, with migration step skipped, runtime-secret upload successful, Telegram webhook verified for `message` and `callback_query`, and bot command registration successful: https://github.com/Nolane-x/Nolane-search/actions/runs/44874848974
+- Test totals: 188 TypeScript/Vitest unit tests and 94 Python runner tests passed. Type-check, deployment-script validation and Worker build passed.
+- D1 schema was unchanged. The deployment skipped migration application; read-only D1 inspection confirms migrations `0001_core.sql` through `0004_remove_request_rate_limits.sql` and the existing tables.
+- Owner-level Telegram file upload → runner → returned artifact and safe retry remain unverified. CI, webhook status and command-menu registration are not proof of this full interaction.
+
+**Production status:** Wave 8 is merged and deployed. 275 is the current production catalog count, not merely a feature-branch count.
