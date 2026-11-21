@@ -18,6 +18,7 @@ Dùng trực tiếp URL GitHub công khai, không cần tải ZIP về máy:
 - `/repo https://github.com/owner/repository` — phân tích default branch.
 - `/repo https://github.com/owner/repository/tree/feature/name` — phân tích branch/ref cụ thể.
 - `/repo_compare https://github.com/owner/repository main...feature/name` — phân tích snapshot branch đích và bổ sung metadata so sánh branch qua GitHub Compare API.
+- `/repo_tool repo-runtime-risk https://github.com/owner/repository/tree/main` — chạy riêng một Repository tool trên snapshot GitHub; dùng bất kỳ ID nào thuộc danh mục Repository, chẳng hạn `repo-test-map`, `repo-api-surface` hoặc `repo-migration-audit`.
 - `/tool_jobs`, `/tool_job ID`, `/tool_retry ID` — theo dõi, xem trace và chạy lại job.
 
 Kết quả là ZIP gồm báo cáo Markdown, module/import graph JSON, metadata GitHub và 18 nhóm báo cáo: inventory, dependencies, license evidence, secret scan, TODO scan, code statistics, config audit, duplicates, security/supply-chain, test mapping/quality, complexity, API surface, docs links, migration risk, runtime risk và i18n. Import graph hiện dùng Python AST và heuristic cho relative imports của JS/TS; đây không phải call graph hoàn chỉnh. Commit messages có marker fix/bug chỉ là tín hiệu tìm kiếm, không phải defect rate.
