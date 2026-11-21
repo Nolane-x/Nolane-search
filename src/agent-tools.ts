@@ -1392,7 +1392,7 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
   if (toolId === "gitignore-audit") {
     const patterns=content.split(/\r?\n/).map(x=>x.trim()).filter(x=>x&&!x.startsWith("#"));
     const candidates=[".env",".env.production",".dev.vars","id_rsa","server.pem",".npmrc"];
-    const escapedPattern=(pattern:string)=>pattern.replace(/[.+^{}()|[\]\\]/g,"\\  const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter(line => {").replace(/\*/g,".*").replace(/\?/g,".");
+    const escapedPattern=(pattern:string)=>pattern.replace(/[.+^{}()|[\]\\]/g,(char)=>"\\"+char).replace(/\*/g,".*").replace(/\?/g,".");
     const missing=candidates.filter(path=>{
       let ignored=false;
       for(const raw of patterns){const negative=raw.startsWith("!"),p=(negative?raw.slice(1):raw).replace(/^\//,"");const matcher=new RegExp("^(?:"+escapedPattern(p)+")(?:/.*)?$");
