@@ -1195,7 +1195,13 @@ class ToolRunnerUnitTests(unittest.TestCase):
             previous:set(re.findall(r'"([a-z][a-z0-9-]*)"',targets))
             for previous,targets in re.findall(r'"([a-z][a-z0-9-]*)":\s*\[([^\]]*)\]',transition_block)
         }
-        self.assertEqual(ts_transitions,runner.PIPELINE_TRANSITIONS,"Worker and runner pipeline transition graphs differ.")
+        worker_only={key: sorted(targets-runner.PIPELINE_TRANSITIONS.get(key,set())) for key,targets in ts_transitions.items() if targets-runner.PIPELINE_TRANSITIONS.get(key,set())}
+        runner_only={key: sorted(targets-ts_transitions.get(key,set())) for key,targets in runner.PIPELINE_TRANSITIONS.items() if targets-ts_transitions.get(key,set())}
+        self.assertEqual(ts_transitions,runner.PIPELINE_TRANSITIONS,
+            "Worker and runner pipeline transition graphs differ. "
+            f"Worker-only keys: {sorted(set(ts_transitions)-set(runner.PIPELINE_TRANSITIONS))}; "
+            f"Runner-only keys: {sorted(set(runner.PIPELINE_TRANSITIONS)-set(ts_transitions))}; "
+            f"Worker-only edges: {worker_only}; Runner-only edges: {runner_only}")
         self.assertTrue(set(ts_transitions).issubset(runner.RUNNERS))
         self.assertTrue(all(target in runner.RUNNERS for targets in ts_transitions.values() for target in targets))
 
@@ -2015,14 +2021,14 @@ dependencies = ["requests>=2.0", "httpx"]
         nfkc=self.write("nfkc.txt","ＡＢＣ ① ﬁ")
         self.assertEqual(Path(runner.text_normalize_unicode_nfkc(nfkc)["output_path"]).read_text(encoding="utf-8"),"ABC 1 fi")
 
-        csv_source=self.write("wave7.csv",'Name,Name,Note\nAn,one,"O''Reilly"\n,,\nB,two,"# heading"\n')
+        csv_source=self.write("wave7.csv","Name,Name,Note\nAn,one,\"O'Reilly\"\n,,\nB,two,\"# heading\"\n")
         sql=Path(runner.csv_to_sql_inserts(csv_source)["output_path"]).read_text(encoding="utf-8")
         self.assertIn('INSERT INTO "records" ("Name", "Name_2", "Note")',sql)
         self.assertIn("'O''Reilly'",sql)
         import yaml
         yaml_path=Path(runner.csv_to_yaml(csv_source)["output_path"])
         self.assertTrue(yaml_path.name.endswith(".yaml"))
-        self.assertEqual(yaml.safe_load(yaml_path.read_text(encoding="utf-8"))[0],{"Name":"An","Name_2":"one","Note":"O''Reilly"})
+        self.assertEqual(yaml.safe_load(yaml_path.read_text(encoding="utf-8"))[0],{"Name":"An","Name_2":"one","Note":"O'Reilly"})
         empty_report=Path(runner.csv_empty_row_report(csv_source)["output_path"]).read_text(encoding="utf-8")
         self.assertIn("Empty rows: 1",empty_report)
         self.assertIn("Empty row numbers (excluding header): 2",empty_report)
