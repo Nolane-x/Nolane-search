@@ -50,6 +50,7 @@ const commands = [
   { command: "watches", description: "Danh sách website theo dõi" },
   { command: "unwatch", description: "Ngừng theo dõi một website" },
   { command: "archive", description: "Tìm snapshot đã lưu trong Telegram archive" },
+  { command: "archive_page", description: "Xem trang tiếp theo trong Telegram archive" },
   { command: "archive_restore", description: "Gửi lại tệp snapshot từ archive" },
   { command: "jobs", description: "Xem lịch sử Deep Search" },
   { command: "status", description: "Trạng thái cấu hình bot" },
