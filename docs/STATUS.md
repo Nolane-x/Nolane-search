@@ -6,7 +6,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `35a33c5b52901e3b3dc1e8471dae18fb9ba4a5c8`
+- Latest production source commit: `4b7db4f7eaaae44810df68d43ae3c9486187dbb6`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -18,11 +18,11 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `4f33b8bb-47db-4645-b58d-46899021030e` (version 56)
+- Cloudflare Worker version ID: `a86e4cb5-3747-4476-b87e-31abb6793062` (version 57; 100% traffic)
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
-## Latest production release — 2026-11-21
+## Wave 7 production release — 2026-11-21 (superseded by Wave 8 below)
 
 - PR #45 ([261-tool Wave 7](https://github.com/Nolane-x/Nolane-search/pull/45)) was merged into `main`.
 - Main commit: `35a33c5b52901e3b3dc1e8471dae18fb9ba4a5c8`.
@@ -34,6 +34,20 @@ The release adds a private browser search portal, AI Overview, multi-turn chat, 
 - D1 migrations verified in `schema_migrations`: `0001_core.sql`, `0002_deep_search_jobs.sql`, `0003_web_portal.sql`, `0004_remove_request_rate_limits.sql`. No new migration was needed for Wave 7.
 - Read-only D1 inspection confirmed `indexed_pages` (1 row), `watches` (2 rows), `telegram_updates` (55 rows), and the existing tool/search/job tables. Cloudflare's D1 metadata `num_tables` field returned 0 even though `sqlite_master` lists the existing tables; direct SQLite inspection is the authoritative check here.
 - Still pending owner-level verification: send a real small text/CSV/JSON file to the Telegram bot, receive the processed output, exercise a safe retry, and confirm optional archive-channel delivery. CI and webhook registration do not prove the full user interaction.
+
+## Latest production release — Wave 8 — 2026-11-21
+
+- PR #47 ([Configuration and DevOps suite](https://github.com/Nolane-x/Nolane-search/pull/47)) was merged into `main`.
+- Main commit: `4b7db4f7eaaae44810df68d43ae3c9486187dbb6`.
+- Production Worker version 57: `a86e4cb5-3747-4476-b87e-31abb6793062`; Cloudflare deployment distribution is 100% on this version.
+- Main CI [44874848990](https://github.com/Nolane-x/Nolane-search/actions/runs/44874848990) passed type-check, 188 unit tests, deployment-script checks, 94 Python runner tests and Worker build.
+- Cloudflare build/export and production Worker smoke test [44874849018](https://github.com/Nolane-x/Nolane-search/actions/runs/44874849018) passed.
+- Production deployment [44874848974](https://github.com/Nolane-x/Nolane-search/actions/runs/44874848974) passed runtime-secret upload and Telegram webhook/command-menu registration. Webhook `message` and `callback_query` were verified with `getWebhookInfo`.
+- Wave 8 adds 14 tools to the 261-tool Wave 7 catalog, giving 275 unique catalog IDs. New groups cover dotenv safety, INI/TOML/Java Properties, Dockerfile/Compose, Python requirements, package.json, gitignore and environment-variable references.
+- Ten Wave 8 processors are enabled for bounded direct AI text processing. TOML, Java Properties and Docker Compose YAML parsing run in the isolated file runner; do not claim they are all direct chat parsers.
+- No D1 schema change was included. Deployment correctly skipped migration application; read-only `schema_migrations` inspection still shows `0001_core.sql` through `0004_remove_request_rate_limits.sql`, and the existing tables remain present.
+- ENV audit/reference reports expose names and counts, not secret values. Docker and dependency audits are static; they do not build/run containers, install packages, execute scripts or query vulnerability registries.
+- Remaining owner-level check: upload a small real `.env`, `.ini`, `.toml`, `compose.yaml` and `.properties` file through Telegram, inspect returned artifacts, and test a safe retry. This has not been exercised by CI, webhook checks or this deployment.
 
 ## CI and deployment verification
 
