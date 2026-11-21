@@ -419,13 +419,16 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
       }
 
       if (isChanged && archiveIndexed) {
+        const archiveNote = shouldArchive
+          ? "Bản snapshot mới đã được lưu trong archive."
+          : "Archive chưa được cấu hình; hiện chỉ gửi thông báo thay đổi, chưa có snapshot được lưu.";
         const message =
           `<b>Website changed · Nolane Search</b>\n` +
           `<a href="${htmlEscape(watch.url)}">${htmlEscape(page.title)}</a>\n` +
           `Domain: <code>${htmlEscape(hostname)}</code>\n` +
           `Watch ID: <code>${watch.id}</code>\n` +
           `Detected: ${now}\n\n` +
-          `Trang đã thay đổi so với lần kiểm tra trước. Bản snapshot mới đã được lưu trong archive.`;
+          `Trang đã thay đổi so với lần kiểm tra trước. ${archiveNote}`;
         try {
           await sendTelegram(env, watch.chat_id, message);
         } catch (notificationError) {
