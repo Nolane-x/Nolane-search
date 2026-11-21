@@ -2338,7 +2338,7 @@ dependencies = ["requests>=2.0", "httpx"]
         self.assertIn("project/src/b.py",reports["cycles"])
         self.assertIn("project/src/c.py",reports["impact"])
         self.assertIn("Duplicate operationId",reports["api"])
-        self.assertIn("API_TOKEN",reports["container"])
+        self.assertIn("Credential-like variable",reports["container"])
         self.assertIn("privileged",reports["container"])
         self.assertIn("timeout-minutes",reports["ci"])
 
