@@ -349,3 +349,13 @@ The registry expands from 17 to 23 implemented tools.
 - PR CI run #252 and main CI run #253 passed; both include type-check, unit tests, deployment-script checks, 96 Python tool-runner tests and Worker build.
 - Deployment run #106 and build-export run #99 succeeded. The D1 migration step was skipped because no schema change was required; Worker secrets and Telegram webhook/command registration succeeded.
 - Current production Worker version: `8c8cbfb8-15dc-4ec8-98ee-adabb0c0133c`, receiving 100% of traffic (Cloudflare deployment `643b4ef0-c98a-4eab-9649-47af2ea9bbb1`, created 2026-11-21T09:25:06Z).
+
+## Telegram archive index failure recovery — deployed 2026-11-21
+
+- PR #54 merged: https://github.com/Nolane-x/Nolane-search/pull/54
+- Main commit: `5f0744a6714c1a343dc4541b1b648e2f903dae25`.
+- If Telegram accepts a snapshot document but the following D1 metadata insert fails, the Worker now attempts to copy that exact Telegram message into the owner's private chat and sends a clear warning that the entry is not searchable in `/archive` yet.
+- If the direct copy also fails, the owner is notified with the filename and source Telegram message ID; errors are contained so a metadata outage does not turn into a failed watch check.
+- PR CI #254 and main CI #255 passed, including the new D1 failure/recovery integration test, type-check, all unit tests, deployment-script checks, 96 Python runner tests and Worker build.
+- Deployment #107 and export/smoke-test #100 succeeded; no D1 schema migration was required.
+- Current production Worker version: `508f7849-fefc-4592-b93a-f871ec1ed27a`, 100% traffic (deployment `05ab3e95-3f5e-43b1-b16d-af73ee6184a8`, created 2026-11-21T09:29:55Z).
