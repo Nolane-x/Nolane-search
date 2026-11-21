@@ -545,9 +545,4 @@ Tám processor mới chỉ đọc snapshot ZIP trong runner tạm thời. Chúng
 
 ### Wave 11 — Repository Architecture & Delivery Checks
 
-Sáu processor mới đọc static ZIP/GitHub metadata. Environment contract chỉ liệt kê tên biến, không tiết lộ giá trị. Import cycles và change impact dùng đồ thị local imports hiện có. Change impact chỉ có ý nghĩa với snapshot được tạo bởi `/repo_compare`; snapshot đơn lẻ sẽ báo thiếu compare metadata. OpenAPI audit không fetch remote refs; container/CI checks là heuristic, không chạy Docker, Compose, Actions hay cluster. Không có code của repository nào được thực thi.
-
-
-### Wave 11 — Repository Architecture & Delivery Checks
-
 Sáu processor mới đọc static ZIP/GitHub metadata. Environment contract chỉ liệt kê tên biến, không tiết lộ giá trị. Import cycles và change impact dùng đồ thị local imports hiện có. Change impact chỉ có kết quả đầy đủ khi snapshot được tạo bởi `/repo_compare`; ZIP đơn lẻ sẽ báo thiếu compare metadata. OpenAPI audit không fetch remote refs; container/CI checks là heuristic, không chạy Docker, Compose, Actions hay cluster. Không có code của repository nào được thực thi.
