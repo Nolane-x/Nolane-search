@@ -6,7 +6,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `f08257952cdebd7435daf59aec08c27254f9f9e0`
+- Latest production source commit: `019abadd9a36cf8599e9e0b9bdc6ebab81876fe1`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -18,7 +18,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `d0e64bf3-7b72-44bf-98fa-1fb35b520a33` (100% traffic; deployment `b6fac148-86ca-43aa-8008-060e240964c1`, created 2026-11-21T12:01:29Z).
+- Cloudflare Worker version ID: `09d9e4ab-dc2b-4084-ac29-e81e61f27449` (100% traffic; deployment `9dfd8640-15f9-4861-8a28-9b5f60e945ae`, created 2026-11-21T12:07:22Z).
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
@@ -384,3 +384,15 @@ The registry expands from 17 to 23 implemented tools.
 - Deploy #109 and Export/Smoke #102 succeeded. D1 migration was skipped because no schema changed; Worker upload and Telegram webhook/command registration succeeded.
 - Current production Worker version: `d0e64bf3-7b72-44bf-98fa-1fb35b520a33`, receiving 100% traffic (deployment `b6fac148-86ca-43aa-8008-060e240964c1`, created 2026-11-21T12:01:29Z).
 - Owner-side Telegram E2E validation remains separate and outstanding; CI and deployment do not prove real private-chat archive capture/search/restore behavior.
+
+
+## Watch archive-state messaging — deployed 2026-11-21
+
+- PR #57 merged: https://github.com/Nolane-x/Nolane-search/pull/57
+- Main commit: `019abadd9a36cf8599e9e0b9bdc6ebab81876fe1`.
+- Change alerts now state the actual archive outcome. When `TELEGRAM_ARCHIVE_CHAT_ID` is unset, Watch still reports changed content but explicitly says that no snapshot was saved; it no longer claims an archive upload occurred.
+- Added regression coverage: archive-disabled change alert sends one notification, never calls `sendDocument`, updates the latest page hash and does not claim archive success.
+- PR CI #262 passed: 24 test files / 207 unit tests, TypeScript typecheck, deployment-script checks, 96 Python runner tests and Worker build.
+- Main CI #263 passed; Deploy #110 and Export/Smoke #103 also succeeded. The Worker health smoke test passed, and Telegram webhook/command registration succeeded. No D1 schema migration was required.
+- Current production Worker version: `09d9e4ab-dc2b-4084-ac29-e81e61f27449`, receiving 100% traffic (deployment `9dfd8640-15f9-4861-8a28-9b5f60e945ae`, created 2026-11-21T12:07:22Z).
+- Owner-side Telegram E2E remains outstanding and must be tested separately from CI.
