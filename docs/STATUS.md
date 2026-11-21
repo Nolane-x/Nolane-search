@@ -359,3 +359,15 @@ The registry expands from 17 to 23 implemented tools.
 - PR CI #254 and main CI #255 passed, including the new D1 failure/recovery integration test, type-check, all unit tests, deployment-script checks, 96 Python runner tests and Worker build.
 - Deployment #107 and export/smoke-test #100 succeeded; no D1 schema migration was required.
 - Current production Worker version: `508f7849-fefc-4592-b93a-f871ec1ed27a`, 100% traffic (deployment `05ab3e95-3f5e-43b1-b16d-af73ee6184a8`, created 2026-11-21T09:29:55Z).
+
+## Watch archive retry reliability — deployed 2026-11-21
+
+- PR #55 merged: https://github.com/Nolane-x/Nolane-search/pull/55
+- Main commit: `9e36d4bbb99fab28f7532d97cc8f5e0f9e556639`.
+- Fixed a snapshot-loss race: a watch no longer advances `content_hash`, ETag or Last-Modified until its configured Telegram document upload and D1 archive index both succeed.
+- Failed initial/change captures keep the previous hash, clear HTTP validators and set `last_status = -4`. The next Cron check makes an unconditional full fetch and retries archive; pending state survives temporary HTTP/robots errors. No schema migration was needed.
+- `/watches` exposes `archive pending · retry scheduled`; the owner receives one initial warning, and the normal change alert is sent only after a successful archive index.
+- Regression tests cover Telegram upload failure, hash preservation, ETag clearing, and successful retry without conditional request headers.
+- PR CI #258 and main CI #259 passed; all unit tests (207), typecheck, deployment script checks, 96 Python runner tests and Worker build succeeded.
+- Deploy #108 and build/export smoke test #101 succeeded, including Worker/runtime-secret upload and Telegram webhook/command registration.
+- Current production Worker version: `cb1e062b-386e-4ed5-aae8-f8a8d5c1959c`, receiving 100% traffic (deployment `012484ba-8d33-4772-ad6e-3d03f075062f`, created 2026-11-21T10:07:13Z).
