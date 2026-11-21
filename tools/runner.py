@@ -78,10 +78,24 @@ RUNNERS = {
     "repo-runtime-risk",
     "repo-i18n-audit",
 
+    "repo-env-contract",
+    "repo-architecture-cycles",
+    "repo-change-impact",
+    "repo-api-spec-audit",
+    "repo-container-audit",
+    "repo-ci-reliability",
+
 }
 
 GITHUB_SOURCE_PROCESSORS = {
     "repo-intelligence", "repo-inventory", "repo-dependencies", "repo-license-report", "repo-secret-scan", "repo-todo-scan", "repo-code-stats", "repo-config-audit", "repo-duplicates", "repo-security-audit", "repo-supply-chain", "repo-test-map", "repo-test-quality", "repo-complexity-report", "repo-api-surface", "repo-docs-audit", "repo-migration-audit", "repo-runtime-risk", "repo-i18n-audit",
+    "repo-env-contract",
+    "repo-architecture-cycles",
+    "repo-change-impact",
+    "repo-api-spec-audit",
+    "repo-container-audit",
+    "repo-ci-reliability",
+
 }
 
 PIPELINE_TRANSITIONS = {
@@ -347,11 +361,18 @@ PIPELINE_TRANSITIONS = {
     "repo-runtime-risk": {"text-clean", "text-stats"},
     "repo-i18n-audit": {"text-clean", "text-stats"},
 
+    "repo-env-contract": {"text-clean", "text-stats"},
+    "repo-architecture-cycles": {"text-clean", "text-stats"},
+    "repo-change-impact": {"text-clean", "text-stats"},
+    "repo-api-spec-audit": {"text-clean", "text-stats"},
+    "repo-container-audit": {"text-clean", "text-stats"},
+    "repo-ci-reliability": {"text-clean", "text-stats"},
+
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -6094,6 +6115,12 @@ def repo_intelligence(p):
         ("migration-audit", repo_migration_audit),
         ("runtime-risk", repo_runtime_risk),
         ("i18n-audit", repo_i18n_audit),
+        ("env-contract", repo_env_contract),
+        ("architecture-cycles", repo_architecture_cycles),
+        ("change-impact", repo_change_impact),
+        ("api-spec-audit", repo_api_spec_audit),
+        ("container-audit", repo_container_audit),
+        ("ci-reliability", repo_ci_reliability),
     ]
     summaries = {}
     for name, processor in processors:
@@ -6151,7 +6178,7 @@ def repo_intelligence(p):
         "- Lockfiles indicate install reproducibility only. This runner does not install dependencies or query CVE/advisory databases.", "",
         "## Static audit results",
     ]
-    for name in ("inventory", "dependencies", "license", "secret-scan", "todo-scan", "code-stats", "config-audit", "duplicates", "security-audit", "supply-chain", "test-map", "test-quality", "complexity", "api-surface", "docs-audit", "migration-audit", "runtime-risk", "i18n-audit"):
+    for name in ("inventory", "dependencies", "license", "secret-scan", "todo-scan", "code-stats", "config-audit", "duplicates", "security-audit", "supply-chain", "test-map", "test-quality", "complexity", "api-surface", "docs-audit", "migration-audit", "runtime-risk", "i18n-audit", "env-contract", "architecture-cycles", "change-impact", "api-spec-audit", "container-audit", "ci-reliability"):
         report.append("- " + name + ": " + summaries.get(name, "not available"))
     report.extend([
         "", "## Git history and change signals",
@@ -7751,6 +7778,13 @@ TOOLS={
  "repo-migration-audit":repo_migration_audit,
  "repo-runtime-risk":repo_runtime_risk,
  "repo-i18n-audit":repo_i18n_audit,
+
+ "repo-env-contract":repo_env_contract,
+ "repo-architecture-cycles":repo_architecture_cycles,
+ "repo-change-impact":repo_change_impact,
+ "repo-api-spec-audit":repo_api_spec_audit,
+ "repo-container-audit":repo_container_audit,
+ "repo-ci-reliability":repo_ci_reliability,
 
 }
 
