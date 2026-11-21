@@ -389,7 +389,7 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
             try {
               const recoveryMessage = copiedToOwner
                 ? "<b>Đã cứu hộ snapshot nhưng chưa lập chỉ mục được.</b>\n" +
-                  "Tệp đã được sao chép vào chat này. Snapshot sẽ được thử lập chỉ mục lại ở lần kiểm tra tiếp theo.\n" +
+                  "Tệp đã được sao chép trực tiếp vào chat này. Snapshot sẽ được thử lập chỉ mục lại ở lần kiểm tra tiếp theo.\n" +
                   "<code>" + htmlEscape(archived.fileName) + "</code>"
                 : "<b>Cảnh báo: snapshot chưa được lập chỉ mục.</b>\n" +
                   "Tệp vẫn nằm trong kênh archive; hãy giữ nguyên tin gốc để có thể xử lý lại.\n" +
