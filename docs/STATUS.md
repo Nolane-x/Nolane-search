@@ -6,7 +6,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `b4558ecf74c95affd7d7e30c3feb48b0c190d5d3`
+- Latest production source commit: `70ac5ed5a646beeeda6a6842c299cc06c9153fc7`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -18,7 +18,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `32899f51-e00a-45e5-84c8-cba7e062035a` (100% traffic; deployment `0546742a-f0d3-4747-80ac-09447f48a776`, created 2026-11-21T12:11:17Z).
+- Cloudflare Worker version ID: `8835dad6-86ba-485f-a4b5-86b995c50631` (100% traffic; deployment `9ebe527f-a873-4f45-9347-14ad6658c5ca`, created 2026-11-21T13:14:43Z).
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
@@ -409,3 +409,24 @@ The registry expands from 17 to 23 implemented tools.
 - Deploy #111 and Export/Smoke #104 succeeded. Worker health smoke test passed; Telegram webhook/command registration succeeded. D1 migration was skipped because no schema changed.
 - Current production Worker version: `32899f51-e00a-45e5-84c8-cba7e062035a`, receiving 100% traffic (deployment `0546742a-f0d3-4747-80ac-09447f48a776`, created 2026-11-21T12:11:17Z).
 - Owner-side Telegram E2E remains outstanding and separate from CI validation.
+
+
+## Wave 10 — Repository Engineering Intelligence — deployed 2026-11-21
+
+- PR #59 merged: https://github.com/Nolane-x/Nolane-search/pull/59
+- Main commit: `70ac5ed5a646beeeda6a6842c299cc06c9153fc7`.
+- Tool catalog expanded from 283 to **291 executable tools**. Wave 10 adds eight static repository analyzers:
+  - `repo-test-map`: filename/path-based source-to-test candidates; not line coverage.
+  - `repo-test-quality`: test declarations, assertion signals, skip/focus markers, broad exception and TODO signals.
+  - `repo-complexity-report`: Python AST decision counts and explicitly heuristic JS/TS branch signals.
+  - `repo-api-surface`: route/handler candidates for Python, JS/TS, Java and Go.
+  - `repo-docs-audit`: required documentation and relative Markdown links.
+  - `repo-migration-audit`: destructive DDL/DML review signals.
+  - `repo-runtime-risk`: risky runtime/API patterns, without echoing matched source values.
+  - `repo-i18n-audit`: JSON locale key parity.
+- All eight tools are in the TypeScript catalog, Python allowlist/handler map, matching pipeline transition graphs and user documentation. The `repo-intelligence` composite now bundles 18 report groups.
+- GitHub public snapshot jobs are allowed only for tools in the `repository` category, one processor per job; Python runner also enforces an explicit allowlist. All processors inspect ZIP data only: they do not execute repository code/workflows/tests/migrations/build scripts, install dependencies or access databases.
+- PR CI #269 and main CI #270 passed: 24 test files / 209 unit tests, TypeScript typecheck, deployment-script checks, 97 Python runner tests and Worker build.
+- Deploy #112 and Export/Smoke #105 succeeded. Worker health smoke test passed; Telegram webhook and command registration succeeded. No D1 migration was required.
+- Current production Worker version: `8835dad6-86ba-485f-a4b5-86b995c50631`, receiving 100% traffic (deployment `9ebe527f-a873-4f45-9347-14ad6658c5ca`, created 2026-11-21T13:14:43Z).
+- The repository analyzers are heuristic static reviews. Test mapping is not coverage; test quality is not test execution; API detection is not a complete OpenAPI spec; migration/runtime signals do not prove exploitability or impact; i18n compares keys but not translation quality.
