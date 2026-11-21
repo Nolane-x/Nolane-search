@@ -15,6 +15,20 @@ const TEXT_TOOL_IDS = new Set([
   "text-indent-lines", "text-unindent-lines", "text-dedupe-paragraphs", "text-tokenize-words", "text-sentence-report", "text-line-length-report", "text-normalize-newlines", "text-remove-zero-width", "text-extract-file-paths", "text-sort-words", "html-extract-links", "html-extract-images", "html-extract-title", "json-to-xml", "json-type-report", "json-escape-string", "json-unescape-string", "csv-unique-values",
   "text-sentence-case", "text-normalize-quotes", "text-normalize-dashes", "text-reverse-word-order", "text-extract-words", "text-extract-sentences", "text-dedupe-sentences", "text-remove-markdown-formatting", "text-markdown-toc", "text-markdown-code-blocks", "text-markdown-table-extract", "text-extract-numbered-lists", "text-join-hyphenated-lines", "text-strip-bom", "text-normalize-paragraph-spacing", "csv-schema-infer", "csv-duplicates-report", "csv-sample-rows", "json-array-stats", "json-canonicalize",
   "text-extract-todo-comments", "text-extract-markdown-images", "text-strip-markdown-frontmatter", "text-markdown-to-plain", "text-sort-unique-words", "text-word-to-lines", "text-join-lines", "text-extract-domains", "text-extract-uuids", "text-extract-semver", "text-extract-ipv6", "text-redact-secrets", "text-extract-comment-lines", "text-tabs-to-spaces", "text-escape-regex", "text-unescape-regex", "json-merge-objects", "json-array-dedupe", "json-array-to-lines", "csv-trim-cells", "csv-remove-empty-columns", "csv-empty-cell-report",
+  "text-extract-mac-addresses",
+  "text-extract-port-numbers",
+  "text-normalize-path-separators",
+  "text-extract-file-extensions",
+  "text-escape-shell-argument",
+  "text-sort-unique-lines",
+  "text-normalize-unicode-nfkc",
+  "csv-to-sql-inserts",
+  "csv-to-yaml",
+  "csv-empty-row-report",
+  "csv-row-width-report",
+  "json-remove-empty-values",
+  "json-to-typescript",
+  "json-nesting-report",
 ]);
 
 export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
@@ -66,7 +80,7 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
     type: "function",
     function: {
       name: "process_text_content",
-      description: "Run bounded text/data processors on supplied content: translation, language detection, indentation/tokenization/statistics, Markdown and HTML extraction, Unicode/HTML conversion, slug/case conversion, extraction/masking, JSON/JSONL/XML conversion and CSV/TSV statistics. Does not execute uploaded code or arbitrary commands.",
+      description: "Run bounded text/data processors on supplied content: translation, language detection, developer text and network extraction, POSIX shell argument quoting (text only), Markdown/HTML extraction, JSON cleanup/type reports/TypeScript generation, CSV/JSONL/SQL/YAML conversions and statistics. Never executes SQL, shell commands, uploaded code or arbitrary commands.",
       parameters: {
         type: "object",
         properties: {
@@ -1131,6 +1145,153 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
       .replace(/<[^>]*>/g, " ");
     return decodeHtml(visible).replace(/[ \t\f\v]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   }
+
+  if (toolId === "text-extract-mac-addresses") {
+    const matches=content.match(/(?<![0-9A-Fa-f])(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}(?![0-9A-Fa-f])/g)||[];
+    const seen=new Set<string>(),output:string[]=[];
+    for(const value of matches){const canonical=value.replace(/-/g,":").toUpperCase();if(!seen.has(canonical)){seen.add(canonical);output.push(canonical);}}
+    return output.join("\n")+(output.length?"\n":"");
+  }
+  if (toolId === "text-extract-port-numbers") {
+    const patterns=[/\bport\s*[:=]\s*(\d{1,5})\b/gi,/\blocalhost:(\d{1,5})\b/gi,/https?:\/\/[^/\s:]+:(\d{1,5})(?:[\/\s?#]|$)/gi];
+    const seen=new Set<number>(),output:number[]=[];
+    for(const pattern of patterns)for(const match of content.matchAll(pattern)){const port=Number(match[1]);if(port>=1&&port<=65535&&!seen.has(port)){seen.add(port);output.push(port);}}
+    return output.map(String).join("\n")+(output.length?"\n":"");
+  }
+  if (toolId === "text-normalize-path-separators") return content.replace(/\\/g,"/");
+  if (toolId === "text-extract-file-extensions") {
+    const matches=content.match(/(?<![A-Za-z0-9])(?:[A-Za-z0-9_.-]+)\.([A-Za-z0-9]{1,12})(?![A-Za-z0-9])/g)||[];
+    const seen=new Set<string>(),output:string[]=[];
+    for(const match of matches){const ext=match.slice(match.lastIndexOf(".")+1).toLowerCase();if(!seen.has(ext)){seen.add(ext);output.push(ext);}}
+    return output.join("\n")+(output.length?"\n":"");
+  }
+  if (toolId === "text-escape-shell-argument") return "'" + content.replace(/'/g,"'\"'\"'") + "'";
+  if (toolId === "text-sort-unique-lines") {
+    const seen=new Set<string>(),output:string[]=[];
+    for(const line of content.split(/\r?\n/)){const key=line.trim().toLocaleLowerCase();if(key&&!seen.has(key)){seen.add(key);output.push(line);}}
+    output.sort((a,b)=>a.toLocaleLowerCase().localeCompare(b.toLocaleLowerCase())||a.localeCompare(b));
+    return output.join("\n")+(output.length?"\n":"");
+  }
+  if (toolId === "text-normalize-unicode-nfkc") return content.normalize("NFKC");
+  if (toolId === "csv-to-sql-inserts") {
+    const rows=csvRows(content);
+    if(!rows.length)throw new Error("CSV is empty.");
+    const headers=rows[0]!;
+    if(!headers.length||headers.length>200||rows.length>10_001)throw new Error("CSV-to-SQL is limited to 10,000 data rows and 200 columns.");
+    const used=new Set<string>();
+    const names=headers.map((value,index)=>{
+      let base=value.trim().replace(/[^A-Za-z0-9_]/g,"_")||"column_"+(index+1);
+      if(/^\d/.test(base))base="_"+base;
+      let name=base,suffix=2;
+      while(used.has(name.toLowerCase())){name=base+"_"+suffix;suffix++;}
+      used.add(name.toLowerCase());
+      return '"'+name+'"';
+    });
+    const lines=["-- Review the target table and column types before executing."];
+    for(const row of rows.slice(1)){
+      const values=headers.map((_header,index)=>{const value=row[index]||"";return value===""?"NULL":"'"+value.replace(/'/g,"''")+"'";});
+      lines.push('INSERT INTO "records" ('+names.join(", ")+") VALUES ("+values.join(", ")+");");
+    }
+    if(rows.length===1)lines.push("-- No data rows were present.");
+    return lines.join("\n")+"\n";
+  }
+  if (toolId === "csv-to-yaml") {
+    const rows=csvRows(content);
+    if(!rows.length)throw new Error("CSV is empty.");
+    const headers=rows[0]!;
+    if(rows.length>10_001||headers.length>200)throw new Error("CSV-to-YAML is limited to 10,000 data rows and 200 columns.");
+    const used=new Set<string>();
+    const names=headers.map((value,index)=>{
+      const base=value.trim()||"column_"+(index+1);let name=base,suffix=2;
+      while(used.has(name)){name=base+"_"+suffix;suffix++;}
+      used.add(name);return name;
+    });
+    const records=rows.slice(1).map(row=>names.map((key,index)=>[key,row[index]||""] as const));
+    if(!records.length)return "[]\n";
+    return records.map(record=>"- "+JSON.stringify(record[0]![0])+": "+JSON.stringify(record[0]![1])+
+      record.slice(1).map(([key,value])=>"\n  "+JSON.stringify(key)+": "+JSON.stringify(value)).join("")).join("\n")+"\n";
+  }
+  if (toolId === "csv-empty-row-report") {
+    const rows=csvRows(content);
+    if(!rows.length)throw new Error("CSV is empty.");
+    const empty=rows.slice(1).flatMap((row,index)=>row.some(cell=>cell.trim())?[]:[index+1]);
+    return ["CSV empty-row report","Header columns: "+rows[0]!.length,"Data rows: "+(rows.length-1),"Empty rows: "+empty.length,
+      "Empty row numbers (excluding header): "+(empty.length?empty.join(", "):"none")].join("\n")+"\n";
+  }
+  if (toolId === "csv-row-width-report") {
+    const rows=csvRows(content);
+    if(!rows.length)throw new Error("CSV is empty.");
+    const expected=rows[0]!.length;
+    const mismatches=rows.slice(1).flatMap((row,index)=>row.length===expected?[]:[{line:index+2,actual_columns:row.length,expected_columns:expected,difference:row.length-expected}]);
+    return ["CSV row-width report","Expected columns: "+expected,"Data rows: "+(rows.length-1),"Mismatched rows: "+mismatches.length,
+      ...mismatches.slice(0,5000).map(item=>JSON.stringify(item))].join("\n")+"\n";
+  }
+  if (toolId === "json-remove-empty-values") {
+    const value:unknown=JSON.parse(content);
+    const clean=(item:unknown,depth=0):unknown=>{
+      if(depth>80)throw new Error("JSON nesting exceeds the 80-level processor limit.");
+      if(Array.isArray(item))return item.map(child=>clean(child,depth+1)).filter(child=>child!==null&&child!==""&&
+        !(Array.isArray(child)&&child.length===0)&&!(child&&typeof child==="object"&&!Array.isArray(child)&&Object.keys(child as object).length===0));
+      if(item&&typeof item==="object"){
+        const result:Record<string,unknown>={};
+        for(const [key,child] of Object.entries(item as Record<string,unknown>)){
+          const cleaned=clean(child,depth+1);
+          if(cleaned===null||cleaned===""||(Array.isArray(cleaned)&&cleaned.length===0)||
+            (cleaned&&typeof cleaned==="object"&&!Array.isArray(cleaned)&&Object.keys(cleaned as object).length===0))continue;
+          result[key]=cleaned;
+        }
+        return result;
+      }
+      return item;
+    };
+    return JSON.stringify(clean(value),null,2)+"\n";
+  }
+  if (toolId === "json-to-typescript") {
+    const value:unknown=JSON.parse(content),declarations:string[]=[],nameCounts=new Map<string,number>();
+    const safeName=(raw:string)=>raw.match(/[A-Za-z0-9]+/g)?.map(word=>word[0]!.toUpperCase()+word.slice(1)).join("")||"Field";
+    const typeOf=(item:unknown,name:string,depth=0):string=>{
+      if(depth>40)throw new Error("JSON-to-TypeScript is limited to 40 nested levels.");
+      if(item===null)return "null";
+      if(typeof item==="boolean")return "boolean";
+      if(typeof item==="number")return "number";
+      if(typeof item==="string")return "string";
+      if(Array.isArray(item)){
+        if(!item.length)return "unknown[]";
+        const types=[...new Set(item.map(child=>typeOf(child,name+"Item",depth+1)))].sort();
+        return "("+types.join(" | ")+")[]";
+      }
+      if(item&&typeof item==="object"){
+        let base=safeName(name);if(/^\d/.test(base))base="T"+base;
+        const count=(nameCounts.get(base)||0)+1;nameCounts.set(base,count);
+        const interfaceName=count===1?base:base+count;
+        const members=Object.entries(item as Record<string,unknown>).map(([key,child])=>
+          "  "+JSON.stringify(key)+": "+typeOf(child,interfaceName+safeName(key),depth+1)+";");
+        declarations.push("export interface "+interfaceName+" {\n"+members.join("\n")+"\n}");
+        return interfaceName;
+      }
+      return "unknown";
+    };
+    const rootType=typeOf(value,"Root");
+    return declarations.join("\n\n")+"\n\nexport type RootType = "+rootType+";\n";
+  }
+  if (toolId === "json-nesting-report") {
+    const value:unknown=JSON.parse(content);
+    const counts:Record<string,number>={objects:0,arrays:0,strings:0,numbers:0,booleans:0,nulls:0,keys:0,items:0};let maximum=0;
+    const visit=(item:unknown,depth:number):void=>{
+      if(depth>80)throw new Error("JSON nesting exceeds the 80-level processor limit.");
+      maximum=Math.max(maximum,depth);
+      if(Array.isArray(item)){counts.arrays++;counts.items+=item.length;for(const child of item)visit(child,depth+1);}
+      else if(item&&typeof item==="object"){counts.objects++;const entries=Object.entries(item as Record<string,unknown>);counts.keys+=entries.length;for(const [,child] of entries)visit(child,depth+1);}
+      else if(item===null)counts.nulls++;
+      else if(typeof item==="string")counts.strings++;
+      else if(typeof item==="boolean")counts.booleans++;
+      else if(typeof item==="number")counts.numbers++;
+    };
+    visit(value,0);
+    return ["JSON nesting report","Maximum depth: "+maximum,...Object.entries(counts).map(([key,count])=>
+      key.replace(/_/g," ").replace(/\b\w/g,char=>char.toUpperCase())+": "+count)].join("\n")+"\n";
+  }
+
   const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter(line => {
     const value = line.trim();
     return value && !/^WEBVTT$/i.test(value) && !/^\d+$/.test(value) &&

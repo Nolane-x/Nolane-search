@@ -353,4 +353,35 @@ describe("Nolane AI callable tools", () => {
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"jsonl-to-csv",content:'{"amount":-7,"formula":"=1+1"}'})).toBe("amount,formula\n-7,'=1+1");
   });
 
+
+
+  it("runs Wave 7 processors via bounded AI function calls", async () => {
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-mac-addresses",content:"aa-bb-cc-dd-ee-ff AA:BB:CC:DD:EE:FF"})).toBe("AA:BB:CC:DD:EE:FF\n");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-port-numbers",content:"port=80 localhost:3000 https://a.test:443/ port=70000"})).toBe("80\n3000\n443\n");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-normalize-path-separators",content:"C:\\Users\\Ada\\project"})).toBe("C:/Users/Ada/project");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-extract-file-extensions",content:"a.txt b.README.md c.tar.gz"})).toBe("txt\nmd\ngz\n");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-escape-shell-argument",content:"a'b $(not-a-command)"})).toBe("'a'\"'\"'b $(not-a-command)'");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-sort-unique-lines",content:"zeta\nAlpha\nalpha\nbeta\n"})).toBe("Alpha\nbeta\nzeta\n");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-normalize-unicode-nfkc",content:"ＡＢＣ ① ﬁ"})).toBe("ABC 1 fi");
+
+    const csv='Name,Name,Note\nAn,one,"O''Reilly"\n,,\nB,two,"# heading"';
+    const sql=await executeAgentTool(env,"process_text_content",{tool_id:"csv-to-sql-inserts",content:csv});
+    expect(sql).toContain('INSERT INTO "records" ("Name", "Name_2", "Note")');
+    expect(sql).toContain("'O''Reilly'");
+    const yaml=await executeAgentTool(env,"process_text_content",{tool_id:"csv-to-yaml",content:"name,flag\nAn,true"});
+    expect(yaml).toContain('"name": "An"');
+    expect(yaml).toContain('"flag": "true"');
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-empty-row-report",content:"a,b\n1,2\n,\n"})).toContain("Empty rows: 1");
+    expect(await executeAgentTool(env,"process_text_content",{tool_id:"csv-row-width-report",content:"a,b\n1,2\n3"})).toContain('"line":3');
+
+    const cleaned=JSON.parse(await executeAgentTool(env,"process_text_content",{tool_id:"json-remove-empty-values",content:'{"zero":0,"flag":false,"empty":"","nil":null,"items":[],"nested":{"keep":"yes","drop":null}}'}));
+    expect(cleaned).toEqual({zero:0,flag:false,nested:{keep:"yes"}});
+    const types=await executeAgentTool(env,"process_text_content",{tool_id:"json-to-typescript",content:'{"name":"An","profile":{"age":17}}'});
+    expect(types).toContain("export interface RootProfile");
+    expect(types).toContain("export type RootType = Root;");
+    const report=await executeAgentTool(env,"process_text_content",{tool_id:"json-nesting-report",content:'{"items":[{"name":"An"}]}'});
+    expect(report).toContain("Maximum depth: 3");
+    expect(report).toContain("Objects: 2");
+  });
+
 });

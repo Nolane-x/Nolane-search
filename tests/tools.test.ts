@@ -258,4 +258,21 @@ describe("Nolane Tools registry", () => {
     expect(isToolCompatible(getTool("jsonl-to-csv")!,jsonlFile.mimeType,jsonlFile.fileName)).toBe(true);
   });
 
+
+
+  it("registers and validates the fourteen Wave 7 processors", () => {
+    const ids=[
+      "text-extract-mac-addresses","text-extract-port-numbers","text-normalize-path-separators",
+      "text-extract-file-extensions","text-escape-shell-argument","text-sort-unique-lines",
+      "text-normalize-unicode-nfkc","csv-to-sql-inserts","csv-to-yaml","csv-empty-row-report",
+      "csv-row-width-report","json-remove-empty-values","json-to-typescript","json-nesting-report",
+    ];
+    expect(TOOL_CATALOG).toHaveLength(261);
+    for(const id of ids)expect(getTool(id)?.ready).toBe(true);
+    expect(validateToolPipeline({mimeType:"text/plain",fileName:"macs.txt"},[{toolId:"text-extract-mac-addresses"},{toolId:"text-deduplicate"}]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"text/csv",fileName:"rows.csv"},[{toolId:"csv-to-yaml"},{toolId:"yaml-format"},{toolId:"yaml-to-json"}]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"text/csv",fileName:"rows.csv"},[{toolId:"csv-to-sql-inserts"}]).ok).toBe(true);
+    expect(validateToolPipeline({mimeType:"application/json",fileName:"sample.json"},[{toolId:"json-to-typescript"},{toolId:"code-check"}]).ok).toBe(true);
+  });
+
 });

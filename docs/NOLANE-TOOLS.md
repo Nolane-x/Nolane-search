@@ -375,6 +375,29 @@ Các công cụ này phục vụ tác vụ nhỏ, thường dùng và chạy tr�
 
 **Lưu ý bảo mật:** \`text-redact-secrets\` chỉ nhận diện các định dạng phổ biến và một số tên trường; không thay thế secret scanner chuyên dụng. Hãy kiểm tra kết quả trước khi chia sẻ dữ liệu nhạy cảm.
 
+
+### Developer text, SQL/YAML export và JSON inspection — đợt bảy
+
+| Lệnh | Chức năng | Đầu ra |
+|---|---|---|
+| \`/tool text-extract-mac-addresses\` | Trích MAC colon/hyphen, chuẩn hóa uppercase và khử trùng. | TXT |
+| \`/tool text-extract-port-numbers\` | Trích port trong cấu hình, localhost hoặc URL; loại giá trị ngoài 1–65535. | TXT |
+| \`/tool text-normalize-path-separators\` | Chuyển dấu phân cách đường dẫn \`\\\` thành \`/\`. | TXT |
+| \`/tool text-extract-file-extensions\` | Trích extension từ path/name và chuẩn hóa chữ thường. | TXT |
+| \`/tool text-escape-shell-argument\` | Quote một đối số POSIX shell; chỉ tạo văn bản, không chạy shell. | TXT |
+| \`/tool text-sort-unique-lines\` | Bỏ dòng trống/trùng không phân biệt hoa thường rồi sắp xếp. | TXT |
+| \`/tool text-normalize-unicode-nfkc\` | Chuẩn hóa ký tự tương thích theo Unicode NFKC. | TXT |
+| \`/tool csv-to-sql-inserts\` | Sinh INSERT vào bảng \`records\`, escape SQL literal và quote cột. | SQL |
+| \`/tool csv-to-yaml\` | Chuyển CSV sang mapping YAML, giữ cell dưới dạng chuỗi. | YAML |
+| \`/tool csv-empty-row-report\` | Liệt kê hàng dữ liệu hoàn toàn rỗng. | Báo cáo TXT |
+| \`/tool csv-row-width-report\` | Phát hiện hàng có số trường khác header. | Báo cáo TXT |
+| \`/tool json-remove-empty-values\` | Xóa null/chuỗi rỗng/object rỗng/array rỗng; giữ false và 0. | JSON |
+| \`/tool json-to-typescript\` | Sinh interface/type suy luận từ một mẫu JSON. | TypeScript |
+| \`/tool json-nesting-report\` | Báo cáo độ sâu và phân bố object/array/key/value theo kiểu. | Báo cáo TXT |
+
+**Giới hạn và an toàn:** JSON cleanup/nesting report dừng ở 80 cấp; JSON-to-TypeScript dừng ở 40 cấp. CSV direct AI giới hạn 10.000 dòng và 200 cột. SQL chỉ là mã để xem lại, không kết nối database hoặc thực thi SQL. Shell quoting chỉ quote một đối số POSIX; runner không thực thi shell command. TypeScript được suy luận từ một mẫu JSON, không thay thế schema/runtime validation.
+
+
 ## AI Agent
 
 ### Pipeline orchestration
