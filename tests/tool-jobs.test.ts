@@ -340,7 +340,7 @@ describe("GitHub Actions tool dispatch", () => {
       githubSource: { owner: "acme", repo: "project", ref: "../private" },
     })).rejects.toThrow("GitHub source job");
     await expect(createToolJob(env, {
-      userId: 42, chatId: 42, toolId: "repo-inventory", fileId: "",
+      userId: 42, chatId: 42, toolId: "pdf-text", fileId: "",
       fileName: "repo.zip", mimeType: "application/zip", fileSize: 0,
       githubSource: { owner: "acme", repo: "project", ref: "main" },
     })).rejects.toThrow("GitHub source job");
