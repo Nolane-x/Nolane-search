@@ -66,6 +66,10 @@ Examples: `/search cloudflare site:developers.cloudflare.com`, `/search workers 
 - Non-2xx or unsupported content types are recorded as status, not indexed as page content.
 - Before fetching a watched page, the Worker reads the origin's robots.txt and applies the NolaneSearchBot/wildcard rules. Disallowed pages are skipped. 401/403/429, 5xx or robots-fetch failures defer the watch; /watches labels these as robots disallow or robots unavailable. The parser handles core Allow/Disallow, wildcard and end-anchor rules; it does not implement every robots.txt extension such as Crawl-delay. Do not add sources that forbid automated access or require login.
 
+- When Telegram snapshot archiving is configured, the watch's prior content hash remains authoritative and HTTP validators are cleared until both the Telegram document upload and D1 archive index succeed. Failures retain `last_status = -4`; a later scheduled check performs a full fetch and retries.
+- A private change-alert delivery failure after the archive/index has succeeded is logged independently. It must not roll back the committed hash or mark the snapshot pending again; this avoids duplicate captures caused only by notification outages.
+- The channel announcement is a separate best-effort delivery. Searchable archive metadata is committed independently from that announcement.
+
 ## Search quotas and provider errors
 
 - /search tries Tavily first. If Tavily fails or returns fewer than four results, it queries configured Exa, TinyFish and Brave providers plus the free Wikipedia reference API in parallel and merges available results. A healthy Tavily response with at least four hits avoids this fallback fan-out.
