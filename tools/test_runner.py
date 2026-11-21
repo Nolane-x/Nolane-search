@@ -2267,7 +2267,7 @@ dependencies = ["requests>=2.0", "httpx"]
         self.assertIn("/health",reports["api-surface"])
         self.assertIn("missing.md",reports["docs-audit"])
         self.assertIn("DROP",reports["migration-audit"])
-        self.assertIn("eval",reports["runtime-risk"])
+        self.assertIn("EXEC-001",reports["runtime-risk"])
         self.assertIn("home.save",reports["i18n-audit"])
 
         aggregate=runner.repo_intelligence(path)
