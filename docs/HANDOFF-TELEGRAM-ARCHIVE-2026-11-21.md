@@ -109,3 +109,16 @@ The production database currently has migration `0005` applied, but the GitHub A
 - Cloudflare Worker version `09d9e4ab-dc2b-4084-ac29-e81e61f27449` receives 100% production traffic.
 - No D1 migration was required. The deployment registered the Telegram webhook and command list successfully.
 - Owner-side Telegram E2E remains outstanding: real first/change capture, archive search/page navigation, restore and deleted-source-message behavior.
+
+
+## Follow-up release: detect title-only Watch changes — 2026-11-21
+
+- PR #58 merged: https://github.com/Nolane-x/Nolane-search/pull/58
+- Release commit: `b4558ecf74c95affd7d7e30c3feb48b0c190d5d3`.
+- Watch now compares the previously indexed page title alongside the existing body-text SHA-256. Title changes with an unchanged body are captured as a `change` and generate a change alert.
+- Existing `watches.content_hash` remains a body-only hash, preserving all current records without a migration or one-time false-positive recapture.
+- Regression test uses identical body text with an altered title and verifies one Telegram document upload, a `change` metadata record and the owner-facing notification.
+- PR CI #264 and main CI #265 passed (24 test files / 208 unit tests, TypeScript, deploy-script checks, 96 Python runner tests and Worker build). Deploy #111 and Export/Smoke #104 passed.
+- Cloudflare Worker version `32899f51-e00a-45e5-84c8-cba7e062035a` receives 100% production traffic.
+- No D1 schema migration was required. Telegram webhook and slash-command registration succeeded.
+- Owner-side Telegram E2E remains outstanding: real first/change capture, archive search/page navigation, restore and deleted-source-message behavior.
