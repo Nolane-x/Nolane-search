@@ -316,10 +316,13 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
       const lastModified = response.headers.get("last-modified");
       const hostname = new URL(watch.url).hostname;
       const isFirstSnapshot = watch.content_hash === null;
-      const isChanged = !isFirstSnapshot && watch.content_hash !== hash;
+      const existing = await env.DB.prepare("SELECT id, title FROM indexed_pages WHERE normalized_url = ?")
+        .bind(watch.normalized_url).first<{ id: number; title: string }>();
+      // The body hash remains backward-compatible. Compare the last indexed title
+      // separately so title-only edits are not silently ignored.
+      const titleChanged = Boolean(existing && existing.title !== page.title);
+      const isChanged = !isFirstSnapshot && (watch.content_hash !== hash || titleChanged);
       const shouldArchive = archiveConfigured && (isFirstSnapshot || isChanged || wasArchivePending);
-      const existing = await env.DB.prepare("SELECT id FROM indexed_pages WHERE normalized_url = ?")
-        .bind(watch.normalized_url).first<{ id: number }>();
 
       // Arm retry state before Telegram. If upload/indexing fails, the old content
       // hash remains authoritative and validators stay empty for the next full fetch.
