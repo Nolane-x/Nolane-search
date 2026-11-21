@@ -28,7 +28,7 @@ import {
   sendSearchPage, sendTelegram, sendToArchive, telegramApi,
 } from "./telegram";
 import { crawlAndIndexSite, validateWatchUrl, checkWatchTargets } from "./watch";
-import { formatArchiveSnapshotList, getArchiveSnapshot, listArchiveSnapshots } from "./archive";
+import { ARCHIVE_PAGE_SIZE, formatArchiveSnapshotList, getArchiveSnapshot, listArchiveSnapshots, parseArchivePageArguments } from "./archive";
 import type {
   DeepSearchJob, Env, ExecutionContext, MessageBatch, SearchMode, SearchResult, SearchQueueJob, SiteCrawlJob,
   TelegramCallbackQuery, TelegramUpdate,
@@ -920,9 +920,33 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     if (!env.TELEGRAM_ARCHIVE_CHAT_ID) { await reply(env, chatId, "Chưa cấu hình kênh lưu trữ. Thêm secret <code>TELEGRAM_ARCHIVE_CHAT_ID</code> và triển khai lại."); return; }
     if (args.length > 120) { await reply(env, chatId, "Từ khóa archive tối đa 120 ký tự. Dùng <code>/archive [từ khóa]</code>."); return; }
     try {
-      const listing = await listArchiveSnapshots(env, String(userId), args, 10, 0);
-      await reply(env, chatId, formatArchiveSnapshotList(listing.snapshots, listing.total, args));
+      const listing = await listArchiveSnapshots(env, String(userId), args, ARCHIVE_PAGE_SIZE, 0);
+      await reply(env, chatId, formatArchiveSnapshotList(listing.snapshots, listing.total, args, 1, ARCHIVE_PAGE_SIZE));
     } catch (error) { console.error("Telegram archive index query failed:", error instanceof Error ? error.message : "unknown"); await reply(env, chatId, "Không thể tìm trong archive lúc này. Hãy kiểm tra migration D1 và cấu hình Telegram."); }
+    return;
+  }
+
+  if (command === "archive_page") {
+    if (chatId !== userId) { await reply(env, chatId, "Telegram Archive chỉ khả dụng trong chat riêng được cấp quyền."); return; }
+    if (!env.TELEGRAM_ARCHIVE_CHAT_ID) { await reply(env, chatId, "Chưa cấu hình kênh lưu trữ. Thêm secret <code>TELEGRAM_ARCHIVE_CHAT_ID</code> và triển khai lại."); return; }
+    const parsed = parseArchivePageArguments(args);
+    if (!parsed) {
+      await reply(env, chatId, "Cú pháp: <code>/archive_page TRANG [từ khóa]</code>. Trang tối đa 1001, từ khóa tối đa 120 ký tự. Mở trang đầu bằng <code>/archive</code>.");
+      return;
+    }
+    try {
+      const offset = (parsed.page - 1) * ARCHIVE_PAGE_SIZE;
+      const listing = await listArchiveSnapshots(env, String(userId), parsed.query, ARCHIVE_PAGE_SIZE, offset);
+      const pageCount = Math.max(1, Math.ceil(listing.total / ARCHIVE_PAGE_SIZE));
+      if (parsed.page > pageCount) {
+        await reply(env, chatId, "Archive chỉ có " + pageCount + " trang cho truy vấn này. Dùng <code>/archive_page " + pageCount + (parsed.query ? " " + htmlEscape(parsed.query) : "") + "</code> để mở trang cuối.");
+        return;
+      }
+      await reply(env, chatId, formatArchiveSnapshotList(listing.snapshots, listing.total, parsed.query, parsed.page, ARCHIVE_PAGE_SIZE));
+    } catch (error) {
+      console.error("Telegram archive page query failed:", error instanceof Error ? error.message : "unknown");
+      await reply(env, chatId, "Không thể mở trang archive lúc này. Hãy kiểm tra migration D1 và cấu hình Telegram.");
+    }
     return;
   }
 
