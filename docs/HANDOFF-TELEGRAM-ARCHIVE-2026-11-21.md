@@ -29,3 +29,25 @@ Make Telegram website snapshots discoverable and restorable without storing snap
 ## Claim boundary
 
 A successful CI run verifies code and D1 migration construction, not live Telegram channel permissions or owner-level restore. Production is not updated by this branch until the PR is merged and deployment succeeds.
+
+
+## Production rollout — 2026-11-21
+
+- PR #51 merged: https://github.com/Nolane-x/Nolane-search/pull/51
+- Main commit: `4c822d8e779d468b304c1ed504b481ddd0d0e7a8`.
+- CI run #247 (`44887163239`) passed TypeScript type-check, 199 unit tests, deployment-script checks, 96 Python runner tests and Worker build.
+- The first deploy run #104 (`44887246691`) stopped at D1 migrations because GitHub Actions secret `CLOUDFLARE_D1_API_TOKEN` was not configured. The exact log says to add that repository secret with Account > D1 > Edit permission. It did not fail due to the migration SQL or source build.
+- To avoid leaving production schema behind, migration `0005_archive_snapshots.sql` was applied through the authenticated Cloudflare D1 session. Readback confirmed migrations `0001`–`0005` and table `archive_snapshots`. The migration only creates a metadata table/indexes; no website snapshot bodies or file bytes were copied into D1.
+- PR #52 merged the follow-up archive-list integrity display: https://github.com/Nolane-x/Nolane-search/pull/52
+- Latest main commit: `6ab8b45e6c85e9b861bbe481eae439f1874fe381`.
+- CI run #249 (`44888520208`) passed. Source-only deployment run #105 (`44888609517`) succeeded; migration step was skipped because this commit did not change migration files, Worker secrets uploaded successfully and Telegram webhook/command registration succeeded.
+- Production Worker version `c8a21659-d0f0-47eb-aa9e-941e4b94a748` receives 100% of traffic (deployment created 2026-11-21T09:14:49Z).
+- The bot archive commands are deployed: `/archive [query]` and `/archive_restore ID`. Archive list rows now show filename, size and a SHA-256 prefix.
+
+## Owner E2E still required
+
+CI, D1 schema verification, Worker deployment and Telegram command registration do not prove a real archive interaction. In the private Telegram chat, verify: create a watch; receive and index its initial snapshot; cause a page change and receive/index a second snapshot; search by title/URL with `/archive`; restore both with `/archive_restore ID`; and test a source message deleted from the archive channel. A restore is only possible while the original archive message exists and the bot retains source-channel access.
+
+## Future migration requirement
+
+The production database currently has migration `0005` applied, but the GitHub Actions secret `CLOUDFLARE_D1_API_TOKEN` is still required for any future migration-changing push. Configure it in repository Settings → Secrets and variables → Actions with Account > D1 > Edit permission; never put the token in source control or chat.
