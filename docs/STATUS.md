@@ -6,7 +6,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `c6bdde7a39382f832ff129ff6199f65d3c1fd80a`
+- Latest production source commit: `be239c42c3464faceb84194aea8af4f88b0b4046`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -18,7 +18,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `cc4a124a-aa79-4631-bd0e-187bd0bac8e5` (100% traffic; deployment `eb5d8517-0401-48e6-a309-65303d14dbdc`, created 2026-11-21T13:21:38Z).
+- Cloudflare Worker version ID: `07f9fee8-37be-4630-ae76-8febfebfa614` (100% traffic; deployment `a4cd587b-e343-4c45-af19-15fde499930a`, created 2026-11-21T14:27:41Z).
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
@@ -442,3 +442,21 @@ The registry expands from 17 to 23 implemented tools.
 - PR CI #271 and main CI #272 passed: 25 test files / 210 unit tests, TypeScript, deployment-script checks, 97 Python runner tests and Worker build.
 - Deploy #113 and Export/Smoke #106 succeeded. Worker health smoke passed and Telegram webhook/commands were registered. No D1 migration was required.
 - Current production Worker version: `cc4a124a-aa79-4631-bd0e-187bd0bac8e5`, receiving 100% traffic (deployment `eb5d8517-0401-48e6-a309-65303d14dbdc`, created 2026-11-21T13:21:38Z).
+
+
+## Wave 11 — Repository Architecture & Delivery Checks — deployed 2026-11-21
+
+- PR #61 merged: https://github.com/Nolane-x/Nolane-search/pull/61
+- Main commit: `be239c42c3464faceb84194aea8af4f88b0b4046`.
+- Tool catalog expanded from 291 to **297 executable tools** with six new Repository analyzers:
+  - `repo-env-contract`: maps environment-variable names referenced in source against tracked examples, container ARG/ENV and GitHub Actions names; never prints values.
+  - `repo-architecture-cycles`: detects cyclic strongly connected components in the extracted local-import graph.
+  - `repo-change-impact`: uses GitHub Compare changed-file metadata and reverse local-import edges to identify possible dependent modules; full results require `/repo_compare`.
+  - `repo-api-spec-audit`: checks OpenAPI/Swagger JSON/YAML for duplicate operation IDs, missing responses/path parameters and unresolved local refs; does not fetch remote refs.
+  - `repo-container-audit`: reviews Dockerfile/Compose signals including base-image tags, USER/HEALTHCHECK, credential ARG/ENV, privileged mode, host networking and Docker socket.
+  - `repo-ci-reliability`: checks GitHub Actions timeout/concurrency, `continue-on-error`, failure masking and moving action refs.
+- All six tools are registered in TypeScript catalog, Python runner handlers/allowlist and matching pipeline transition maps. The `repo-intelligence` composite now packages 24 report groups. `docs/NOLANE-TOOLS.md` records the 297-tool count and one Wave 11 guide section.
+- PR CI #276 and main CI #278 passed: 25 test files / 222 unit tests, TypeScript typecheck, deployment-script checks, 98 Python runner tests and Worker build.
+- Deploy #114 and Export/Smoke #107 succeeded. Worker health smoke passed; Telegram webhook and command registration succeeded. No D1 migration was required.
+- Current production Worker version: `07f9fee8-37be-4630-ae76-8febfebfa614`, receiving 100% traffic (deployment `a4cd587b-e343-4c45-af19-15fde499930a`, created 2026-11-21T14:27:41Z).
+- All Wave 11 analyzers inspect repository ZIP and bounded GitHub Compare metadata as data. They do not run repository code, workflows, tests, migrations, Docker/Compose commands, package installs or database connections. Environment values are not included in reports; the other checks are static heuristics with stated scope limitations.
