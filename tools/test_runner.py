@@ -2299,8 +2299,8 @@ dependencies = ["requests>=2.0", "httpx"]
                 "info":{"title":"Fixture API","version":"1.0.0"},
                 "paths":{
                     "/items/{itemId}":{
-                        "get":{"operationId":"readItem","responses":{"200":{"description":"ok"}},"parameters":[]},
-                        "post":{"operationId":"readItem","responses":{"200":{"description":"ok"}},"responsesRef":{"$ref":"#/components/schemas/Missing"}},
+                        "get":{"operationId":"readItem","responses":{"200":{"$ref":"#/components/schemas/Missing"}},"parameters":[]},
+                        "post":{"operationId":"readItem","responses":{"200":{"description":"ok"}}},
                     }
                 },
                 "components":{"schemas":{"Item":{"type":"object"}}}
@@ -2338,6 +2338,7 @@ dependencies = ["requests>=2.0", "httpx"]
         self.assertIn("project/src/b.py",reports["cycles"])
         self.assertIn("project/src/c.py",reports["impact"])
         self.assertIn("Duplicate operationId",reports["api"])
+        self.assertIn("Unresolved local $ref",reports["api"])
         self.assertIn("Credential-like variable",reports["container"])
         self.assertIn("privileged",reports["container"])
         self.assertIn("timeout-minutes",reports["ci"])
