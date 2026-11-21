@@ -6767,7 +6767,9 @@ def github_actions_audit(p):
                     if (":" not in image and "@" not in image) or image.endswith(":latest"): findings.append(f"WARN {prefix}: Docker action image is not pinned")
                 elif "@" in uses and not re.search(r"@[0-9a-f]{40}$",uses,re.I): findings.append(f"WARN {prefix}: action is not pinned to a full commit SHA")
                 elif "@" not in uses: findings.append(f"WARN {prefix}: action reference has no immutable SHA")
-            if str(step.get("persist-credentials","")).lower()=="true": findings.append(f"WARN {prefix}: checkout persist-credentials is enabled")
+            with_values=step.get("with",{})
+            persisted=with_values.get("persist-credentials",step.get("persist-credentials","")) if isinstance(with_values,dict) else step.get("persist-credentials","")
+            if str(persisted).lower()=="true": findings.append(f"WARN {prefix}: checkout persist-credentials is enabled")
             command=step.get("run")
             if isinstance(command,str):
                 if re.search(r"\$\{\{\s*secrets\.[^}]+\}\}",command,re.I):
