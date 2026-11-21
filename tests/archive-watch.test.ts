@@ -274,7 +274,6 @@ describe("watch snapshot archive indexing", () => {
       last_status: -4,
     };
     const batchSql: string[] = [];
-    const runSql: Array<{ sql: string; values: unknown[] }> = [];
     const prepare = vi.fn((sql: string) => ({
       sql,
       values: [] as unknown[],
@@ -285,10 +284,7 @@ describe("watch snapshot archive indexing", () => {
         if (sql.includes("INSERT INTO archive_snapshots")) return { id: 88 };
         return null;
       },
-      run: async () => {
-        runSql.push({ sql, values: (prepare as unknown as { latestValues?: unknown[] }).latestValues || [] });
-        return { meta: { changes: 1 } };
-      },
+      run: async () => ({ meta: { changes: 1 } }),
     }));
     const batch = vi.fn(async (statements: Array<{ sql: string }>) => {
       batchSql.push(...statements.map(statement => statement.sql));
