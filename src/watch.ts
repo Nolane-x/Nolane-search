@@ -99,6 +99,7 @@ interface WatchRow {
   etag: string | null;
   last_modified: string | null;
   content_hash: string | null;
+  last_status: number | null;
 }
 
 async function fetchSafe(urlInput: string, etag?: string | null, lastModified?: string | null): Promise<Response> {
@@ -247,7 +248,7 @@ export function extractPage(html: string): { title: string; text: string } {
 
 export async function checkWatchTargets(env: Env): Promise<{ checked: number; changed: number }> {
   const rows = await env.DB.prepare(
-    `SELECT id, chat_id, user_id, url, normalized_url, interval_minutes, etag, last_modified, content_hash
+    `SELECT id, chat_id, user_id, url, normalized_url, interval_minutes, etag, last_modified, content_hash, last_status
        FROM watches
       WHERE active = 1
         AND (last_checked_at IS NULL OR datetime(last_checked_at, '+' || interval_minutes || ' minutes') <= datetime('now'))
@@ -256,9 +257,12 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
   ).all<WatchRow>();
   let checked = 0;
   let changed = 0;
+  const archiveConfigured = Boolean(env.TELEGRAM_ARCHIVE_CHAT_ID);
   // Fetch robots.txt once per origin for this scheduled invocation.
   const robotsPolicies = new Map<string, Promise<RobotsRule[] | null>>();
+
   for (const watch of rows.results) {
+    const wasArchivePending = watch.last_status === -4;
     try {
       const origin = new URL(watch.url).origin;
       let policyPromise = robotsPolicies.get(origin);
@@ -268,33 +272,43 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
       }
       const robotsRules = await policyPromise;
       if (robotsRules === null || !isAllowedByRobots(watch.url, robotsRules)) {
-        // -2 = disallowed by robots.txt; -3 = policy unavailable, so the check is deferred.
+        // Preserve archive-pending state while access is deferred. Validators were
+        // cleared before the failed archive attempt, so a later allowed fetch is full.
+        const status = wasArchivePending ? -4 : robotsRules === null ? -3 : -2;
         await env.DB.prepare("UPDATE watches SET last_checked_at = ?, last_status = ? WHERE id = ?")
-          .bind(new Date().toISOString(), robotsRules === null ? -3 : -2, watch.id).run();
+          .bind(new Date().toISOString(), status, watch.id).run();
         checked += 1;
         continue;
       }
-      const response = await fetchSafe(watch.url, watch.etag, watch.last_modified);
+
+      // A failed capture clears validators and keeps the previous content hash.
+      // On retry, force a full body fetch instead of accepting a 304 without a snapshot.
+      const response = await fetchSafe(
+        watch.url,
+        wasArchivePending ? null : watch.etag,
+        wasArchivePending ? null : watch.last_modified,
+      );
       const now = new Date().toISOString();
       if (response.status === 304) {
-        await env.DB.prepare("UPDATE watches SET last_checked_at = ?, last_status = 304 WHERE id = ?")
-          .bind(now, watch.id).run();
+        await env.DB.prepare("UPDATE watches SET last_checked_at = ?, last_status = ? WHERE id = ?")
+          .bind(now, wasArchivePending ? -4 : 304, watch.id).run();
         checked += 1;
         continue;
       }
       if (!response.ok) {
         await env.DB.prepare("UPDATE watches SET last_checked_at = ?, last_status = ? WHERE id = ?")
-          .bind(now, response.status, watch.id).run();
+          .bind(now, wasArchivePending ? -4 : response.status, watch.id).run();
         checked += 1;
         continue;
       }
       const contentType = response.headers.get("content-type") || "";
       if (!/(text\/html|text\/plain|application\/xhtml\+xml|application\/xml)/i.test(contentType)) {
         await env.DB.prepare("UPDATE watches SET last_checked_at = ?, last_status = ? WHERE id = ?")
-          .bind(now, response.status, watch.id).run();
+          .bind(now, wasArchivePending ? -4 : response.status, watch.id).run();
         checked += 1;
         continue;
       }
+
       const body = await readLimited(response);
       const page = extractPage(body);
       const hash = await sha256Hex(page.text);
@@ -303,14 +317,20 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
       const hostname = new URL(watch.url).hostname;
       const isFirstSnapshot = watch.content_hash === null;
       const isChanged = !isFirstSnapshot && watch.content_hash !== hash;
-
+      const shouldArchive = archiveConfigured && (isFirstSnapshot || isChanged || wasArchivePending);
       const existing = await env.DB.prepare("SELECT id FROM indexed_pages WHERE normalized_url = ?")
         .bind(watch.normalized_url).first<{ id: number }>();
+
+      // Arm retry state before Telegram. If upload/indexing fails, the old content
+      // hash remains authoritative and validators stay empty for the next full fetch.
       const statements = [
-        env.DB.prepare(
-          `UPDATE watches SET last_checked_at = ?, last_status = ?, etag = ?, last_modified = ?, content_hash = ?
-            WHERE id = ?`,
-        ).bind(now, response.status, etag, lastModified, hash, watch.id),
+        shouldArchive
+          ? env.DB.prepare(
+              "UPDATE watches SET last_checked_at = ?, last_status = -4, etag = NULL, last_modified = NULL WHERE id = ?",
+            ).bind(now, watch.id)
+          : env.DB.prepare(
+              "UPDATE watches SET last_checked_at = ?, last_status = ?, etag = ?, last_modified = ?, content_hash = ? WHERE id = ?",
+            ).bind(now, response.status, etag, lastModified, hash, watch.id),
         env.DB.prepare(
           `INSERT INTO indexed_pages (url, normalized_url, domain, title, content, content_hash, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -326,69 +346,86 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
       ).bind(watch.normalized_url));
       await env.DB.batch(statements);
 
-      if (isFirstSnapshot || isChanged) {
-        const caption = `Nolane Search snapshot · ${isFirstSnapshot ? "initial capture" : "detected change"} · ${hostname} · ${now}`;
+      let archiveIndexed = !shouldArchive;
+      let recoveryNotified = false;
+      if (shouldArchive) {
+        const captureKind = isFirstSnapshot ? "initial" : "change";
+        const caption = `Nolane Search snapshot · ${captureKind === "initial" ? "initial capture" : "detected change"} · ${hostname} · ${now}`;
+        let archived: Awaited<ReturnType<typeof sendArchiveDocument>> = null;
         try {
-          const archived = await sendArchiveDocument(
+          archived = await sendArchiveDocument(
             env,
             "nolane-" + watch.id + "-" + Date.now() + ".txt",
             "TITLE: " + page.title + "\nURL: " + watch.url + "\nCAPTURED: " + now +
               "\nCONTENT HASH: " + hash + "\n\n" + page.text,
             caption,
           );
-          if (archived && env.TELEGRAM_ARCHIVE_CHAT_ID) {
+          if (!archived) throw new Error("Telegram archive is configured but no document was uploaded.");
+          await saveArchiveSnapshot(env, {
+            watchId: watch.id, userId: watch.user_id, chatId: watch.chat_id,
+            archiveChatId: env.TELEGRAM_ARCHIVE_CHAT_ID!, archiveMessageId: archived.messageId,
+            telegramFileId: archived.fileId, telegramFileUniqueId: archived.fileUniqueId || null,
+            fileName: archived.fileName, fileSize: archived.fileSize ?? null,
+            url: watch.url, normalizedUrl: watch.normalized_url, title: page.title,
+            contentHash: hash, captureKind, capturedAt: now,
+          });
+          archiveIndexed = true;
+        } catch (error) {
+          console.error("Snapshot archive/index failed; retaining pending retry:", error instanceof Error ? error.message : "unknown error");
+          if (archived) {
+            // Upload succeeded but metadata indexing failed. Return the file directly
+            // to the owner while retaining the pending marker for a later index retry.
+            let copiedToOwner = false;
             try {
-              await saveArchiveSnapshot(env, {
-                watchId: watch.id, userId: watch.user_id, chatId: watch.chat_id,
-                archiveChatId: env.TELEGRAM_ARCHIVE_CHAT_ID, archiveMessageId: archived.messageId,
-                telegramFileId: archived.fileId, telegramFileUniqueId: archived.fileUniqueId || null,
-                fileName: archived.fileName, fileSize: archived.fileSize ?? null,
-                url: watch.url, normalizedUrl: watch.normalized_url, title: page.title,
-                contentHash: hash, captureKind: isFirstSnapshot ? "initial" : "change", capturedAt: now,
+              await telegramApi(env, "copyMessage", {
+                chat_id: watch.chat_id,
+                from_chat_id: env.TELEGRAM_ARCHIVE_CHAT_ID,
+                message_id: archived.messageId,
               });
-            } catch (error) {
-              console.error("Snapshot metadata index failed:", error instanceof Error ? error.message : "unknown error");
-              // The Telegram upload already succeeded. Recover the file directly to the owner's
-              // private chat so a transient D1 failure does not strand the only indexed copy.
-              let copiedToOwner = false;
-              try {
-                await telegramApi(env, "copyMessage", {
-                  chat_id: watch.chat_id,
-                  from_chat_id: env.TELEGRAM_ARCHIVE_CHAT_ID,
-                  message_id: archived.messageId,
-                });
-                copiedToOwner = true;
-              } catch (recoveryError) {
-                console.error("Snapshot direct recovery failed:", recoveryError instanceof Error ? recoveryError.message : "unknown error");
-              }
-              try {
-                const recoveryMessage = copiedToOwner
-                  ? "<b>Đã cứu hộ snapshot nhưng chưa lập chỉ mục được.</b>\n" +
-                    "Tệp vừa lưu đã được sao chép trực tiếp vào chat này để bạn không bị mất bản lưu. " +
-                    "Snapshot chưa xuất hiện trong <code>/archive</code> vì D1 tạm thời không ghi được.\n" +
-                    "<code>" + htmlEscape(archived.fileName) + "</code>"
-                  : "<b>Cảnh báo: snapshot chưa được lập chỉ mục.</b>\n" +
-                    "Telegram đã nhận tệp nhưng D1 không lưu được metadata và bot cũng chưa sao chép được tệp về chat này. " +
-                    "Tệp vẫn nằm trong kênh archive; hãy giữ nguyên tin gốc để có thể xử lý thủ công.\n" +
-                    "<code>" + htmlEscape(archived.fileName) + "</code> · message <code>" + archived.messageId + "</code>";
-                await sendTelegram(env, watch.chat_id, recoveryMessage);
-              } catch (notifyError) {
-                console.error("Snapshot recovery notification failed:", notifyError instanceof Error ? notifyError.message : "unknown error");
-              }
+              copiedToOwner = true;
+            } catch (recoveryError) {
+              console.error("Snapshot direct recovery failed:", recoveryError instanceof Error ? recoveryError.message : "unknown error");
+            }
+            try {
+              const recoveryMessage = copiedToOwner
+                ? "<b>Đã cứu hộ snapshot nhưng chưa lập chỉ mục được.</b>\n" +
+                  "Tệp đã được sao chép vào chat này. Snapshot sẽ được thử lập chỉ mục lại ở lần kiểm tra tiếp theo.\n" +
+                  "<code>" + htmlEscape(archived.fileName) + "</code>"
+                : "<b>Cảnh báo: snapshot chưa được lập chỉ mục.</b>\n" +
+                  "Tệp vẫn nằm trong kênh archive; hãy giữ nguyên tin gốc để có thể xử lý lại.\n" +
+                  "<code>" + htmlEscape(archived.fileName) + "</code> · message <code>" + archived.messageId + "</code>";
+              await sendTelegram(env, watch.chat_id, recoveryMessage);
+              recoveryNotified = true;
+            } catch (notifyError) {
+              console.error("Snapshot recovery notification failed:", notifyError instanceof Error ? notifyError.message : "unknown error");
             }
           }
-        } catch (error) {
-          console.error("Snapshot archive upload failed:", error instanceof Error ? error.message : "unknown error");
+        }
+
+        if (archiveIndexed) {
+          await env.DB.prepare(
+            "UPDATE watches SET content_hash = ?, etag = ?, last_modified = ?, last_status = ? WHERE id = ?",
+          ).bind(hash, etag, lastModified, response.status, watch.id).run();
+        } else if (!wasArchivePending && !recoveryNotified) {
+          try {
+            await sendTelegram(env, watch.chat_id,
+              "<b>Snapshot đang chờ lưu vào archive.</b>\n" +
+              "Lần gửi hoặc lập chỉ mục vừa thất bại. Nolane Search giữ hash cũ, tạm bỏ HTTP validators và sẽ tự thử lại ở lần kiểm tra tiếp theo.\n" +
+              "<a href=\"" + htmlEscape(watch.url) + "\">" + htmlEscape(page.title) + "</a>");
+          } catch (notifyError) {
+            console.error("Snapshot retry notification failed:", notifyError instanceof Error ? notifyError.message : "unknown error");
+          }
         }
       }
-      if (isChanged) {
+
+      if (isChanged && archiveIndexed) {
         const message =
           `<b>Website changed · Nolane Search</b>\n` +
           `<a href="${htmlEscape(watch.url)}">${htmlEscape(page.title)}</a>\n` +
           `Domain: <code>${htmlEscape(hostname)}</code>\n` +
           `Watch ID: <code>${watch.id}</code>\n` +
           `Detected: ${now}\n\n` +
-          `Trang đã thay đổi so với lần kiểm tra trước. Bản snapshot mới đã được gửi vào kênh lưu trữ nếu bạn đã cấu hình.`;
+          `Trang đã thay đổi so với lần kiểm tra trước. Bản snapshot mới đã được lưu trong archive.`;
         await sendTelegram(env, watch.chat_id, message);
         await sendToArchive(env, message);
         changed += 1;
@@ -396,8 +433,8 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
       checked += 1;
     } catch (error) {
       console.error("Watch check failed", watch.id, error instanceof Error ? error.message : "unknown");
-      await env.DB.prepare("UPDATE watches SET last_checked_at = ?, last_status = -1 WHERE id = ?")
-        .bind(new Date().toISOString(), watch.id).run();
+      await env.DB.prepare("UPDATE watches SET last_checked_at = ?, last_status = ? WHERE id = ?")
+        .bind(new Date().toISOString(), wasArchivePending ? -4 : -1, watch.id).run();
       checked += 1;
     }
   }
