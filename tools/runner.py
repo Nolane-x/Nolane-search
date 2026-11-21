@@ -69,6 +69,19 @@ RUNNERS = {
     "caddy-config-audit",
     "systemd-unit-audit",
     "shell-script-audit",
+    "repo-test-map",
+    "repo-test-quality",
+    "repo-complexity-report",
+    "repo-api-surface",
+    "repo-docs-audit",
+    "repo-migration-audit",
+    "repo-runtime-risk",
+    "repo-i18n-audit",
+
+}
+
+GITHUB_SOURCE_PROCESSORS = {
+    "repo-intelligence", "repo-inventory", "repo-dependencies", "repo-license-report", "repo-secret-scan", "repo-todo-scan", "repo-code-stats", "repo-config-audit", "repo-duplicates", "repo-security-audit", "repo-supply-chain", "repo-test-map", "repo-test-quality", "repo-complexity-report", "repo-api-surface", "repo-docs-audit", "repo-migration-audit", "repo-runtime-risk", "repo-i18n-audit",
 }
 
 PIPELINE_TRANSITIONS = {
@@ -325,11 +338,20 @@ PIPELINE_TRANSITIONS = {
     "caddy-config-audit": {"text-clean", "text-stats"},
     "systemd-unit-audit": {"text-clean", "text-stats"},
     "shell-script-audit": {"text-clean", "text-stats"},
+    "repo-test-map": {"text-clean", "text-stats"},
+    "repo-test-quality": {"text-clean", "text-stats"},
+    "repo-complexity-report": {"text-clean", "text-stats"},
+    "repo-api-surface": {"text-clean", "text-stats"},
+    "repo-docs-audit": {"text-clean", "text-stats"},
+    "repo-migration-audit": {"text-clean", "text-stats"},
+    "repo-runtime-risk": {"text-clean", "text-stats"},
+    "repo-i18n-audit": {"text-clean", "text-stats"},
+
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit"},"repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit"
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -5397,6 +5419,292 @@ def _repo_architecture_graph(p):
     }
 
 
+
+def _repo_report_text(p, suffix, title, lines, summary):
+    out=p.with_name(p.stem+suffix)
+    out.write_text("\n".join([title, "="*min(len(title),100), ""]+list(lines)).rstrip()+"\n",encoding="utf-8")
+    return {"summary":str(summary)[:500],"output_path":str(out)}
+
+
+def _repo_is_test_path(path):
+    name=Path(path).name.casefold()
+    parts={part.casefold() for part in path.split("/")}
+    return bool(parts & {"test","tests","spec","specs","__tests__"}) or name.startswith(("test_","tests_")) or ".test." in name or ".spec." in name or name.endswith(("_test.go","_spec.rb")) or (name.startswith("test") and Path(name).suffix in {".java",".kt",".cs"})
+
+
+def repo_test_map(p):
+    source=[]; tests=[]
+    for item in _repo_text_candidates(p):
+        path=item["path"]
+        if item["data"] is None or Path(path).suffix.lower() not in _REPO_SOURCE_EXTENSIONS: continue
+        (tests if _repo_is_test_path(path) else source).append(path)
+    test_basenames={}
+    for path in tests:
+        stem=Path(path).stem.casefold()
+        for prefix in ("test_","tests_"):
+            if stem.startswith(prefix): stem=stem[len(prefix):]
+        if stem.endswith((".test",".spec")): stem=stem.rsplit(".",1)[0]
+        if stem.endswith(("_test","_spec")): stem=stem.rsplit("_",1)[0]
+        test_basenames.setdefault(stem,set()).add(path)
+    matched=[]; unmatched=[]
+    for path in source:
+        candidates=set(test_basenames.get(Path(path).stem.casefold(),set()))
+        if candidates: matched.append((path,sorted(candidates)))
+        else: unmatched.append(path)
+    source_stems={Path(path).stem.casefold() for path in source}
+    orphan=[path for stem,paths in test_basenames.items() if stem not in source_stems for path in paths]
+    lines=[f"Source files: {len(source):,}",f"Test files: {len(tests):,}",f"Source files with filename-based test candidates: {len(matched):,}",f"Source files without a filename-based test candidate: {len(unmatched):,}",f"Potential orphan test files: {len(orphan):,}","","Matched source files (filename/path heuristic):"]
+    for path,candidates in matched[:250]:
+        lines.append("- "+path)
+        lines.extend("    candidate: "+candidate for candidate in candidates[:5])
+    lines.extend(["","Source files with no matching test filename:"])
+    lines.extend("- "+path for path in unmatched[:250])
+    lines.extend(["","Potential orphan test files:"])
+    lines.extend("- "+path for path in sorted(set(orphan))[:150])
+    lines.append("Filename heuristics only; this is not line coverage, test execution or proof of behavioral coverage.")
+    return _repo_report_text(p,"-repo-test-map.txt","Repository test map",lines,f"Mapped {len(source)} source files and {len(tests)} likely test files; candidate tests found for {len(matched)} source files.")
+
+
+def repo_test_quality(p):
+    import collections
+    test_items=[item for item in _repo_text_candidates(p) if _repo_is_test_path(item["path"])]
+    declaration_patterns=[
+        ("Python test",re.compile(r"^\s*(?:async\s+)?def\s+test_[A-Za-z0-9_]+\s*\(",re.M)),
+        ("Python test class",re.compile(r"^\s*class\s+Test[A-Za-z0-9_]*\b",re.M)),
+        ("JavaScript/TypeScript test",re.compile(r"\b(?:it|test)\s*(?:\.\s*(?:skip|only|todo)\s*)?\(",re.I)),
+        ("Suite declaration",re.compile(r"\bdescribe\s*(?:\.\s*(?:skip|only)\s*)?\(",re.I)),
+        ("Go test",re.compile(r"^\s*func\s+Test[A-Z]\w*\s*\(",re.M)),
+        ("Java/JUnit test",re.compile(r"@\s*(?:Test|ParameterizedTest|RepeatedTest)\b")),
+    ]
+    assertion_patterns=[re.compile(r"\bassert(?:Equal|True|False|Raises|AlmostEqual|In|NotIn|IsNone|IsNotNone)?\s*\("),re.compile(r"\bexpect\s*\("),re.compile(r"\.to(?:Be|Equal|Contain|Throw|Match|HaveBeenCalled)\s*\("),re.compile(r"\bassert\s+")]
+    totals=collections.Counter(); findings=[]; declarations=[]
+    for item in test_items:
+        path=item["path"]; raw=item["data"] or ""
+        counts={label:len(pattern.findall(raw)) for label,pattern in declaration_patterns}
+        decl=sum(counts.values()); assertions=sum(len(pattern.findall(raw)) for pattern in assertion_patterns)
+        totals["files"]+=1; totals["declarations"]+=decl; totals["assertions"]+=assertions
+        for label,count in counts.items(): totals[label]+=count
+        if decl==0: findings.append(("WARN",path,"No recognizable test declaration found; framework may be unsupported."))
+        if decl>0 and assertions==0: findings.append(("WARN",path,"Test declarations detected but no common assertion pattern was found."))
+        if re.search(r"\b(?:it|test)\s*\.\s*only\s*\(",raw): findings.append(("HIGH",path,"Focused-only test marker (.only) may exclude other tests."))
+        if re.search(r"\b(?:it|test)\s*\.\s*skip\s*\(",raw) or re.search(r"@Disabled\b|pytest\.mark\.skip|unittest\.skip",raw): findings.append(("INFO",path,"Skipped test marker detected; verify it is intentional."))
+        if re.search(r"\b(?:except\s+Exception|catch\s*\(\s*(?:Exception|Throwable|Error)\b)",raw): findings.append(("INFO",path,"Broad exception handling appears in a test file; check whether failures are swallowed."))
+        for match in list(re.finditer(r"\b(?:TODO|FIXME|XXX)\b",raw,re.I))[:5]:
+            findings.append(("INFO",path+":"+str(raw.count("\n",0,match.start())+1),"Unresolved test TODO marker."))
+        declarations.append((decl,assertions,path))
+    if not test_items: findings.append(("WARN","[repository]","No likely test files detected by supported naming heuristics."))
+    lines=[f"Likely test files: {totals['files']:,}",f"Recognizable test declarations: {totals['declarations']:,}",f"Common assertion-pattern matches: {totals['assertions']:,}","","Declaration counts by pattern:"]
+    lines.extend(f"- {label}: {totals[label]:,}" for label,_ in declaration_patterns)
+    lines.extend(["","Files with the most recognizable test declarations:"])
+    lines.extend(f"- {path}: declarations={decl}, assertion-pattern matches={assertions}" for decl,assertions,path in sorted(declarations,reverse=True)[:40])
+    lines.extend(["","Review findings:"])
+    lines.extend(f"- {severity} · {path} · {message}" for severity,path,message in findings[:400])
+    lines.append("Regex heuristics only: not a test run, mutation score, branch coverage or assertion-quality score; matches may occur in comments or strings.")
+    return _repo_report_text(p,"-repo-test-quality.txt","Repository test quality signals",lines,f"Inspected {len(test_items)} likely test files: {totals['declarations']} recognizable declarations and {len(findings)} review signals.")
+
+
+def repo_complexity_report(p):
+    import ast
+    branch_nodes=(ast.If,ast.For,ast.AsyncFor,ast.While,ast.ExceptHandler,ast.IfExp,ast.Match)
+    def function_metrics(node):
+        decisions=1; depth=0
+        stack=[(child,1) for child in getattr(node,"body",[])]
+        while stack:
+            current,level=stack.pop()
+            if isinstance(current,(ast.FunctionDef,ast.AsyncFunctionDef,ast.Lambda,ast.ClassDef)): continue
+            if isinstance(current,branch_nodes): decisions+=1
+            elif isinstance(current,ast.BoolOp): decisions+=max(0,len(current.values)-1)
+            if isinstance(current,(ast.If,ast.For,ast.AsyncFor,ast.While,ast.Try,ast.With)): depth=max(depth,level)
+            stack.extend((child,level+1) for child in ast.iter_child_nodes(current))
+        return decisions,depth
+    rows=[]; totals={"files":0,"lines":0,"python_functions":0,"parse_failures":0,"branch_signals":0,"long_lines":0}
+    js_patterns=[re.compile(r"\bif\s*\("),re.compile(r"\b(?:for|while)\s*\("),re.compile(r"\bcatch\s*\("),re.compile(r"\?\s*[^?:\n]+\s*:"),re.compile(r"&&|\|\|")]
+    for item in _repo_text_candidates(p):
+        path=item["path"]; raw=item["data"] or ""; suffix=Path(path).suffix.lower()
+        if suffix not in _REPO_SOURCE_EXTENSIONS: continue
+        row_lines=raw.splitlines(); totals["files"]+=1; totals["lines"]+=len(row_lines); totals["long_lines"]+=sum(1 for line in row_lines if len(line)>120)
+        if suffix in {".py",".pyw"}:
+            try:
+                tree=ast.parse(raw)
+                for node in ast.walk(tree):
+                    if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef)):
+                        complexity,depth=function_metrics(node); end=getattr(node,"end_lineno",node.lineno)
+                        rows.append((complexity,max(1,end-node.lineno+1),path,node.name,node.lineno,depth)); totals["python_functions"]+=1
+            except (SyntaxError,ValueError): totals["parse_failures"]+=1
+        elif suffix in {".js",".mjs",".cjs",".ts",".tsx",".jsx",".vue",".svelte"}:
+            signals=sum(len(pattern.findall(raw)) for pattern in js_patterns); totals["branch_signals"]+=signals
+            rows.append((signals,len(row_lines),path,"[file-level JS/TS branch signals]",1,0))
+    lines=[f"Source files measured: {totals['files']:,}",f"Source lines: {totals['lines']:,}",f"Python functions/methods inspected: {totals['python_functions']:,}",f"Python parse failures: {totals['parse_failures']:,}",f"JS/TS branch-pattern matches (heuristic): {totals['branch_signals']:,}",f"Lines longer than 120 characters: {totals['long_lines']:,}","","Highest Python decision-count functions (AST approximation):"]
+    lines.extend(f"- {path}:{line} · {name} · decisions={complexity} · LOC={loc} · nested depth signal={depth}" for complexity,loc,path,name,line,depth in sorted([row for row in rows if not row[3].startswith("[")],reverse=True)[:100])
+    lines.extend(["","Highest JS/TS file-level branch signals (not cyclomatic complexity):"])
+    lines.extend(f"- {path} · {complexity} regex signals · {loc} lines" for complexity,loc,path,name,line,depth in sorted([row for row in rows if row[3].startswith("[")],reverse=True)[:60])
+    lines.append("Python values are lightweight AST decision counts; JS/TS values are file-level regex matches. Neither is a formal complexity or maintainability score.")
+    return _repo_report_text(p,"-repo-complexity.txt","Repository complexity signals",lines,f"Measured {totals['files']} source files, {totals['python_functions']} Python functions and {totals['branch_signals']} JS/TS branch-pattern signals.")
+
+
+def repo_api_surface(p):
+    patterns=[
+        re.compile(r"^\s*@(?:\w+\.)?(?:app|router|api|bp)\.(?:route|get|post|put|patch|delete|options|head)\s*\(([^)]*)\)",re.I),
+        re.compile(r"\b(?:app|router|server|fastify)\s*\.\s*(get|post|put|patch|delete|options|head)\s*\(\s*['\"\x60]([^'\"\x60]+)",re.I),
+        re.compile(r"^\s*export\s+(?:async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s*\(",re.M),
+        re.compile(r"^\s*@(GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping|RequestMapping)\s*(?:\(([^)]*)\))?",re.I),
+        re.compile(r"\b(?:http\.)?HandleFunc\s*\(\s*['\"\x60]([^'\"\x60]+)['\"\x60]"),
+    ]
+    entries=[]; scanned=0
+    for item in _repo_text_candidates(p):
+        path=item["path"]; raw=item["data"] or ""; suffix=Path(path).suffix.lower()
+        if suffix not in {".py",".pyw",".js",".mjs",".cjs",".ts",".tsx",".jsx",".java",".go"}: continue
+        scanned+=1
+        for line_no,line in enumerate(raw.splitlines(),1):
+            if suffix in {".py",".pyw"}:
+                match=patterns[0].search(line)
+                if match: entries.append((path,line_no,"Python route decorator",match.group(1).strip()[:150]))
+            elif suffix==".java":
+                match=patterns[3].search(line)
+                if match: entries.append((path,line_no,"Java route annotation",match.group(0).strip()[:150]))
+            elif suffix==".go":
+                match=patterns[4].search(line)
+                if match: entries.append((path,line_no,"Go HTTP handler",match.group(1)[:150]))
+            else:
+                match=patterns[1].search(line)
+                if match: entries.append((path,line_no,"JS/TS route call",match.group(1).upper()+" "+match.group(2)[:120]))
+                match=patterns[2].search(line)
+                if match: entries.append((path,line_no,"Next.js route export",match.group(1).upper()))
+    entries.sort(key=lambda row:(row[0],row[1],row[2]))
+    lines=[f"Source files scanned: {scanned:,}",f"Route/handler clues: {len(entries):,}","","Discovered API surface candidates:"]
+    lines.extend(f"- {path}:{line} · {kind} · {detail}" for path,line,kind,detail in entries[:600])
+    lines.append("Static route candidates only: dynamic prefixes, aliases, router composition, middleware rewrites, RPC/GraphQL and generated routes may be missed. This is not a complete OpenAPI specification.")
+    return _repo_report_text(p,"-repo-api-surface.txt","Repository API surface candidates",lines,f"Scanned {scanned} source files and found {len(entries)} API route/handler candidates.")
+
+
+def repo_docs_audit(p):
+    import posixpath
+    from urllib.parse import unquote,urlsplit
+    members=list(_repo_members(p)); paths={item["path"] for item in members}
+    markdown=[item for item in _repo_text_candidates(p) if Path(item["path"]).suffix.lower() in {".md",".mdx"}]
+    required=["README.md","CONTRIBUTING.md","SECURITY.md","CODE_OF_CONDUCT.md","CHANGELOG.md","LICENSE"]
+    root_names={Path(path).name.casefold() for path in paths if "/" not in path}
+    broken=[]; total_links=0; checked=0
+    link_pattern=re.compile(r"!?\[[^\]]*\]\((?:<([^>]+)>|([^)]+))\)")
+    for item in markdown:
+        path=item["path"]; raw=item["data"] or ""
+        raw=re.sub(r"(?ms)^\s*(?:~~~+|\x60{3,}).*$.*?^\s*(?:~~~+|\x60{3,})\s*$","",raw)
+        for match in link_pattern.finditer(raw):
+            target=(match.group(1) or match.group(2) or "").strip()
+            if not target or target.startswith("#"): continue
+            total_links+=1; parsed=urlsplit(target)
+            if parsed.scheme or parsed.netloc or target.startswith(("mailto:","data:")): continue
+            relative=unquote(parsed.path).replace("\\","/")
+            if not relative: continue
+            checked+=1; resolved=posixpath.normpath(posixpath.join(posixpath.dirname(path),relative))
+            candidates={resolved,resolved.rstrip("/")+"/README.md",resolved.rstrip("/")+"/index.md",resolved+".md"}
+            exists=False if resolved.startswith("../") or resolved==".." else bool(candidates & paths)
+            if not exists: broken.append((path,raw.count("\n",0,match.start())+1,target[:180]))
+    lines=[f"Markdown/MDX files inspected: {len(markdown):,}",f"Links detected: {total_links:,}",f"Relative links checked: {checked:,}",f"Broken relative link candidates: {len(broken):,}","","Root-level documentation files:"]
+    lines.extend("- "+name+": "+("found" if name.casefold() in root_names else "not found at repository root") for name in required)
+    lines.extend(["","Broken relative links (heuristic):"])
+    lines.extend(f"- {path}:{line} · {target}" for path,line,target in broken[:400])
+    lines.append("Only relative Markdown links are resolved against ZIP paths. External links and anchors are not requested or checked.")
+    return _repo_report_text(p,"-repo-docs-audit.txt","Repository documentation audit",lines,f"Inspected {len(markdown)} Markdown files and found {len(broken)} unresolved relative link candidates.")
+
+
+def repo_migration_audit(p):
+    rules=[
+        ("HIGH",re.compile(r"\bDROP\s+(?:TABLE|COLUMN|INDEX|SCHEMA)\b",re.I),"Destructive DROP operation; review rollback and data-retention requirements."),
+        ("HIGH",re.compile(r"\bTRUNCATE\s+(?:TABLE\s+)?",re.I),"TRUNCATE removes rows; verify intended scope and backup."),
+        ("HIGH",re.compile(r"\bDELETE\s+FROM\s+([\w\".]+)(?:\s*;|\s*$)",re.I),"DELETE without a visible WHERE clause may remove every row."),
+        ("WARN",re.compile(r"\bALTER\s+TABLE\b.*\bALTER\s+(?:COLUMN\s+)?\w+\s+TYPE\b",re.I),"Column type change may rewrite or truncate existing data."),
+        ("WARN",re.compile(r"\bALTER\s+TABLE\b.*\bALTER\s+(?:COLUMN\s+)?\w+\s+SET\s+NOT\s+NULL\b",re.I),"Adding NOT NULL can fail on existing NULL values."),
+        ("WARN",re.compile(r"\bRENAME\s+(?:TABLE|COLUMN)\b",re.I),"Rename operations may break older application versions during rolling deployments."),
+        ("WARN",re.compile(r"\bADD\s+COLUMN\b.*\bNOT\s+NULL\b",re.I),"Adding a non-null column may require a default or staged backfill."),
+    ]
+    findings=[]; inspected=0
+    migration_path=re.compile(r"(?:^|/)(?:migrations?|migrate|schema|prisma)(?:/|$)",re.I)
+    for item in _repo_text_candidates(p):
+        path=item["path"]; suffix=Path(path).suffix.lower()
+        if suffix not in {".sql",".prisma",".py",".ts",".js",".go",".rb"} or (not migration_path.search(path) and suffix!=".sql"): continue
+        inspected+=1
+        for line_no,line in enumerate((item["data"] or "").splitlines(),1):
+            stripped=re.sub(r"--.*$","",line); stripped=re.sub(r"/\*.*?\*/","",stripped)
+            for severity,pattern,message in rules:
+                if not pattern.search(stripped): continue
+                if "DELETE without" in message and re.search(r"\bWHERE\b",stripped,re.I): continue
+                findings.append((severity,path,line_no,message))
+    lines=[f"Migration/schema files inspected: {inspected:,}",f"Review signals: {len(findings):,}","","Findings:"]
+    lines.extend(f"- {severity} · {path}:{line} · {message}" for severity,path,line,message in findings[:500])
+    lines.append("Static pattern scan only. No database is connected; dialects, multi-line clauses, migration order and actual data impact are not evaluated.")
+    return _repo_report_text(p,"-repo-migration-audit.txt","Repository migration risk audit",lines,f"Inspected {inspected} migration/schema files and found {len(findings)} destructive-change review signals.")
+
+
+def repo_runtime_risk(p):
+    rules=[
+        ("HIGH","EXEC-001",re.compile(r"\b(?:eval|exec)\s*\("),"Dynamic code execution primitive."),
+        ("HIGH","PICKLE-001",re.compile(r"\bpickle\.(?:loads|load)\s*\("),"Pickle deserialization can execute code for untrusted data."),
+        ("HIGH","YAML-001",re.compile(r"\byaml\.load\s*\("),"YAML load should use a safe loader for untrusted documents."),
+        ("HIGH","SHELL-001",re.compile(r"\bsubprocess\.(?:run|Popen|call|check_output)\s*\([^)]*shell\s*=\s*True",re.S),"Subprocess shell=True requires strict command/input handling."),
+        ("HIGH","OS-001",re.compile(r"\bos\.system\s*\("),"os.system executes a command through a shell."),
+        ("HIGH","JS-FUNC-001",re.compile(r"\bnew\s+Function\s*\("),"Dynamic Function constructor."),
+        ("HIGH","HTML-001",re.compile(r"\.innerHTML\s*="),"HTML sink may require sanitization."),
+        ("HIGH","HTML-002",re.compile(r"dangerouslySetInnerHTML"),"React raw HTML sink; sanitize untrusted input."),
+        ("WARN","TLS-001",re.compile(r"\b(?:verify\s*=\s*False|rejectUnauthorized\s*:\s*false|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*['\"]?0)"),"TLS certificate verification appears disabled."),
+        ("WARN","SQL-001",re.compile(r"(?:execute|query)\s*\(\s*f['\"]|(?:execute|query)\s*\([^)]*\+\s*(?:req|request|params)\b",re.I),"Possible dynamic SQL construction; use parameterized queries."),
+        ("WARN","CRYPTO-001",re.compile(r"\b(?:md5|sha1)\s*\("),"Legacy hash algorithm detected; assess whether cryptographic integrity is required."),
+    ]
+    suffixes={".py",".pyw",".js",".mjs",".cjs",".ts",".tsx",".jsx",".java",".go",".rb",".php",".cs",".rs"}
+    findings=[]; inspected=0
+    for item in _repo_text_candidates(p):
+        path=item["path"]; raw=item["data"] or ""
+        if Path(path).suffix.lower() not in suffixes: continue
+        inspected+=1
+        for severity,rule,pattern,message in rules:
+            for match in list(pattern.finditer(raw))[:80]:
+                findings.append((severity,rule,path,raw.count("\n",0,match.start())+1,message))
+    lines=[f"Source files inspected: {inspected:,}",f"Runtime risk signals: {len(findings):,}","","Findings (matched code and values are intentionally omitted):"]
+    lines.extend(f"- {severity} · {rule} · {path}:{line} · {message}" for severity,rule,path,line,message in findings[:700])
+    lines.append("Static triage signals only: not exploitability, reachability or data-flow proof. Comments/tests may cause false positives; aliases and dynamic construction may cause false negatives. No code is executed.")
+    return _repo_report_text(p,"-repo-runtime-risk.txt","Repository runtime risk signals",lines,f"Scanned {inspected} source files and found {len(findings)} static runtime-risk signals.")
+
+
+def repo_i18n_audit(p):
+    import json
+    locale_file=re.compile(r"^(?:[a-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})?|messages|translations)(?:\.json)?$",re.I)
+    candidates=[]
+    for item in _repo_text_candidates(p):
+        path=item["path"]; parts={part.casefold() for part in path.split("/")}
+        likely=bool(parts & {"i18n","locales","locale","translations","messages"}) or bool(locale_file.match(Path(path).name))
+        if not likely or Path(path).suffix.lower()!=".json": continue
+        try: obj=json.loads(item["data"] or "")
+        except (ValueError,TypeError): continue
+        if not isinstance(obj,dict): continue
+        flattened=set()
+        def walk(value,prefix=""):
+            if isinstance(value,dict):
+                for key,child in value.items(): walk(child,(prefix+"."+str(key)).strip("."))
+            elif isinstance(value,list):
+                for index,child in enumerate(value): walk(child,prefix+"["+str(index)+"]")
+            else: flattened.add(prefix)
+        walk(obj); candidates.append((path,flattened))
+    groups={}
+    for path,keys in candidates: groups.setdefault(posixpath.dirname(path),[]).append((path,keys))
+    comparisons=[]
+    for parent,items in sorted(groups.items()):
+        if len(items)<2: continue
+        base_path,base_keys=max(items,key=lambda pair:len(pair[1]))
+        for path,keys in items:
+            if path==base_path: continue
+            comparisons.append((base_path,path,len(base_keys-keys),len(keys-base_keys),sorted(base_keys-keys),sorted(keys-base_keys)))
+    lines=[f"JSON locale candidates: {len(candidates):,}",f"Locale directories compared: {sum(1 for items in groups.values() if len(items)>1):,}",f"Pairwise comparisons: {len(comparisons):,}","","Locale files:"]
+    lines.extend(f"- {path}: {len(keys):,} leaf keys" for path,keys in candidates[:200])
+    lines.extend(["","Missing/extra key comparisons (largest locale in each directory is the reference):"])
+    for base,path,missing,extra,missing_keys,extra_keys in comparisons[:200]:
+        lines.append(f"- {path} vs {base}: {missing} missing, {extra} extra")
+        lines.extend("    missing: "+key for key in missing_keys[:20])
+        lines.extend("    extra: "+key for key in extra_keys[:20])
+    if not comparisons: lines.append("- No comparable locale JSON groups found using directory/name heuristics.")
+    lines.append("JSON key comparison only; it does not assess translation quality, plural rules, context or locale completeness.")
+    return _repo_report_text(p,"-repo-i18n-audit.txt","Repository localization audit",lines,f"Found {len(candidates)} JSON locale candidates and {len(comparisons)} pairwise key comparisons.")
+
+
 def repo_intelligence(p):
     import collections
     import zipfile
@@ -5419,6 +5727,14 @@ def repo_intelligence(p):
         ("duplicates", repo_duplicates),
         ("security-audit", repo_security_audit),
         ("supply-chain", repo_supply_chain),
+        ("test-map", repo_test_map),
+        ("test-quality", repo_test_quality),
+        ("complexity", repo_complexity_report),
+        ("api-surface", repo_api_surface),
+        ("docs-audit", repo_docs_audit),
+        ("migration-audit", repo_migration_audit),
+        ("runtime-risk", repo_runtime_risk),
+        ("i18n-audit", repo_i18n_audit),
     ]
     summaries = {}
     for name, processor in processors:
@@ -5476,7 +5792,7 @@ def repo_intelligence(p):
         "- Lockfiles indicate install reproducibility only. This runner does not install dependencies or query CVE/advisory databases.", "",
         "## Static audit results",
     ]
-    for name in ("inventory", "dependencies", "license", "secret-scan", "todo-scan", "code-stats", "config-audit", "duplicates", "security-audit", "supply-chain"):
+    for name in ("inventory", "dependencies", "license", "secret-scan", "todo-scan", "code-stats", "config-audit", "duplicates", "security-audit", "supply-chain", "test-map", "test-quality", "complexity", "api-surface", "docs-audit", "migration-audit", "runtime-risk", "i18n-audit"):
         report.append("- " + name + ": " + summaries.get(name, "not available"))
     report.extend([
         "", "## Git history and change signals",
@@ -7068,6 +7384,15 @@ TOOLS={
  "terraform-audit":terraform_audit,"nginx-config-audit":nginx_config_audit,"apache-config-audit":apache_config_audit,
  "caddy-config-audit":caddy_config_audit,"systemd-unit-audit":systemd_unit_audit,"shell-script-audit":shell_script_audit,
 
+ "repo-test-map":repo_test_map,
+ "repo-test-quality":repo_test_quality,
+ "repo-complexity-report":repo_complexity_report,
+ "repo-api-surface":repo_api_surface,
+ "repo-docs-audit":repo_docs_audit,
+ "repo-migration-audit":repo_migration_audit,
+ "repo-runtime-risk":repo_runtime_risk,
+ "repo-i18n-audit":repo_i18n_audit,
+
 }
 
 
@@ -7269,8 +7594,8 @@ def cmd_fetch(args):
 def cmd_download(args):
     job=load_job(Path(args.job_file))
     if job.get("githubSource"):
-        if job.get("toolId")!="repo-intelligence":
-            raise RuntimeError("GitHub source is only allowed for repo-intelligence jobs.")
+        if job.get("toolId") not in GITHUB_SOURCE_PROCESSORS:
+            raise RuntimeError("GitHub source is only allowed for reviewed repository-inspection processors.")
         download_github_source(job,args.output)
         return
     source=download_telegram(job["fileId"],job.get("fileName") or "upload.bin")
