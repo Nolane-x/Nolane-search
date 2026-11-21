@@ -327,3 +327,15 @@ The registry expands from 17 to 23 implemented tools.
 - Added audio loudness normalization to podcast-style -16 LUFS, video-to-MP3 audio extraction and a bounded six-second video-to-GIF preview.
 - Added MIME/extension inference and dispatch metadata for the new tools. FFmpeg is installed only for the relevant audio/video jobs.
 - CI now runs Python unit tests against the runner's text, subtitle and HTML transforms plus mocked FFmpeg command construction, in addition to Python compilation and the TypeScript suite.
+
+
+## Telegram Archive Index — deployed 2026-11-21
+
+- PR #51 adds the D1 metadata index and owner-scoped `/archive [query]` / `/archive_restore ID` commands; PR #52 adds filename, file size and SHA-256 prefix to each list item.
+- Latest source: `6ab8b45e6c85e9b861bbe481eae439f1874fe381`.
+- Production Worker version: `c8a21659-d0f0-47eb-aa9e-941e4b94a748`, 100% traffic.
+- CI run #249 (`44888520208`) passed; deployment run #105 (`44888609517`) succeeded, including Worker secret upload and Telegram webhook/command registration.
+- D1 readback confirms `0005_archive_snapshots.sql` and `archive_snapshots` are present alongside migrations 0001–0004.
+- Telegram channel stores snapshot documents; D1 stores owner-scoped message/file references, URL/title/time/hash metadata only. D1 does not store the snapshot body.
+- Real private Telegram watch → capture → archive search → restore testing remains owner-level E2E and has not been claimed as verified.
+- Configure `CLOUDFLARE_D1_API_TOKEN` with Account > D1 > Edit in GitHub Actions before future commits that add migration files. The first rollout required a direct D1 migration because this secret was absent; that migration was manually applied and verified before the successful source-only deployment.
