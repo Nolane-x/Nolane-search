@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { sha256Hex } from "../src/security";
 import { checkWatchTargets } from "../src/watch";
 import type { Env } from "../src/types";
 
@@ -498,6 +499,97 @@ describe("watch snapshot archive indexing", () => {
     expect(String(telegramMessages[0]?.text)).not.toContain("Bản snapshot mới đã được lưu trong archive.");
     expect(fetchMock.mock.calls.some(call => String(call[0]).includes("/sendDocument"))).toBe(false);
     expect(prepared.some(entry => entry.sql.includes("content_hash = ?"))).toBe(true);
+  });
+
+
+  it("archives and alerts on a title-only page change", async () => {
+    const unchangedBody = "This exact monitored page body remains the same while its document title changes, and the title itself is meaningful content worth preserving in a website snapshot.";
+    const watch = {
+      id: 22,
+      chat_id: "42",
+      user_id: "42",
+      url: "https://example.com/title-only",
+      normalized_url: "https://example.com/title-only",
+      interval_minutes: 30,
+      etag: null,
+      last_modified: null,
+      content_hash: await sha256Hex(unchangedBody),
+      last_status: 200,
+    };
+    const prepared: Array<{ sql: string; values: unknown[] }> = [];
+    const telegramCalls: Array<{ url: string; body?: Record<string, unknown> }> = [];
+    const prepare = vi.fn((sql: string) => ({
+      sql,
+      values: [] as unknown[],
+      bind(...values: unknown[]) {
+        this.values = values;
+        prepared.push({ sql, values });
+        return this;
+      },
+      all: async () => ({ results: sql.includes("FROM watches") ? [watch] : [] }),
+      first: async () => {
+        if (sql.includes("SELECT id, title FROM indexed_pages")) return { id: 22, title: "Old document title" };
+        if (sql.includes("INSERT INTO archive_snapshots")) return { id: 122 };
+        return null;
+      },
+      run: async () => ({ meta: { changes: 1 } }),
+    }));
+    const batch = vi.fn(async () => []);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/robots.txt")) {
+        return new Response("User-agent: *\\nAllow: /", {
+          status: 200, headers: { "content-type": "text/plain" },
+        });
+      }
+      if (url === "https://example.com/title-only") {
+        return new Response(
+          "<html><head><title>New document title</title></head><body><main>" + unchangedBody + "</main></body></html>",
+          { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
+        );
+      }
+      if (url.includes("/sendDocument") || url.includes("/sendMessage")) {
+        if (url.includes("/sendMessage")) {
+          telegramCalls.push({
+            url,
+            body: JSON.parse(String(init?.body || "{}")) as Record<string, unknown>,
+          });
+          return new Response(JSON.stringify({ ok: true, result: { message_id: 123 } }), {
+            status: 200, headers: { "content-type": "application/json" },
+          });
+        }
+        telegramCalls.push({ url });
+        return new Response(JSON.stringify({
+          ok: true,
+          result: {
+            message_id: 123,
+            document: {
+              file_id: "title-change-file",
+              file_unique_id: "title-change-unique",
+              file_name: "title-change.txt",
+              file_size: 300,
+            },
+          },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      throw new Error("Unexpected request " + url);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = {
+      DB: { prepare, batch },
+      TELEGRAM_BOT_TOKEN: "test-token",
+      TELEGRAM_ARCHIVE_CHAT_ID: "-1001234567890",
+    } as unknown as Env;
+
+    const result = await checkWatchTargets(env);
+
+    expect(result).toEqual({ checked: 1, changed: 1 });
+    expect(fetchMock.mock.calls.filter(call => String(call[0]).includes("/sendDocument"))).toHaveLength(1);
+    const archiveInsert = prepared.find(entry => entry.sql.includes("INSERT INTO archive_snapshots"));
+    expect(archiveInsert?.values).toContain("New document title");
+    expect(archiveInsert?.values).toContain("change");
+    expect(telegramCalls.some(call => call.body?.text && String(call.body.text).includes("Website changed"))).toBe(true);
   });
 
 });
