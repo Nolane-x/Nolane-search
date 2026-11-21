@@ -375,7 +375,7 @@ describe("watch snapshot archive indexing", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/robots.txt")) {
-        return new Response("User-agent: *\\nAllow: /", {
+        return new Response("User-agent: *\nAllow: /", {
           status: 200, headers: { "content-type": "text/plain" },
         });
       }
