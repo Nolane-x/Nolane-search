@@ -1871,6 +1871,14 @@ dependencies = ["requests>=2.0", "httpx"]
             self.assertIn("reports/dependencies.txt", names)
             self.assertIn("reports/security-audit.zip", names)
             self.assertIn("reports/supply-chain.zip", names)
+            self.assertIn("reports/test-map.txt", names)
+            self.assertIn("reports/test-quality.txt", names)
+            self.assertIn("reports/complexity.txt", names)
+            self.assertIn("reports/api-surface.txt", names)
+            self.assertIn("reports/docs-audit.txt", names)
+            self.assertIn("reports/migration-audit.txt", names)
+            self.assertIn("reports/runtime-risk.txt", names)
+            self.assertIn("reports/i18n-audit.txt", names)
             report = archive.read("report/repository-intelligence.md").decode("utf-8")
             graph = json_module.loads(archive.read("architecture/module-graph.json"))
             self.assertIn("acme/project", report)
@@ -2208,6 +2216,70 @@ dependencies = ["requests>=2.0", "httpx"]
         self.assertIn("recursive deletion of filesystem root",script_report)
         self.assertIn("credential-like variable API_TOKEN",script_report)
         self.assertNotIn("do-not-print-this",script_report)
+
+
+    def test_wave_ten_repository_engineering_intelligence_processors(self):
+        import json
+        import zipfile
+
+        path=self.input_dir/"engineering-project.zip"
+        with zipfile.ZipFile(path,"w",compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("project/README.md", "# Example\n\n[missing](./missing.md)\n[helper](./src/helper.py)\n")
+            archive.writestr("project/src/helper.py",
+                "import os\n"
+                "def compute(flag, items):\n"
+                "    if flag and items:\n"
+                "        return eval('1 + 1')\n"
+                "    return 0\n")
+            archive.writestr("project/src/api.py",
+                "from fastapi import FastAPI\napp = FastAPI()\n@app.get('/health')\ndef health(): return {'ok': True}\n")
+            archive.writestr("project/tests/test_helper.py",
+                "def test_compute():\n    assert True\n")
+            archive.writestr("project/tests/test_api.py",
+                "def test_health():\n    try:\n        assert True\n    except Exception:\n        pass\n")
+            archive.writestr("project/tests/test_skipped.py",
+                "import pytest\n@pytest.mark.skip\ndef test_pending(): pass\n")
+            archive.writestr("project/migrations/001_init.sql",
+                "DROP TABLE users;\nDELETE FROM sessions;\nALTER TABLE accounts ADD COLUMN state TEXT NOT NULL;\n")
+            archive.writestr("project/locales/en.json",
+                json.dumps({"home":{"title":"Home","save":"Save"},"errors":{"failed":"Failed"}}))
+            archive.writestr("project/locales/vi.json",
+                json.dumps({"home":{"title":"Trang chủ"},"errors":{"failed":"Lỗi","extra":"Thừa"}}))
+            archive.writestr("project/src/app.ts",
+                "export function route() { if (true) { return 1; } return 0; }\n"
+                "const html = element.innerHTML = userInput;\n"
+                "router.post('/items', handler);\n")
+
+        results = {
+            "test-map": runner.repo_test_map(path),
+            "test-quality": runner.repo_test_quality(path),
+            "complexity": runner.repo_complexity_report(path),
+            "api-surface": runner.repo_api_surface(path),
+            "docs-audit": runner.repo_docs_audit(path),
+            "migration-audit": runner.repo_migration_audit(path),
+            "runtime-risk": runner.repo_runtime_risk(path),
+            "i18n-audit": runner.repo_i18n_audit(path),
+        }
+        reports={name:Path(value["output_path"]).read_text(encoding="utf-8") for name,value in results.items()}
+        self.assertIn("test_helper.py",reports["test-map"])
+        self.assertIn("assertion-pattern matches",reports["test-quality"])
+        self.assertIn("compute",reports["complexity"])
+        self.assertIn("/health",reports["api-surface"])
+        self.assertIn("missing.md",reports["docs-audit"])
+        self.assertIn("DROP",reports["migration-audit"])
+        self.assertIn("eval",reports["runtime-risk"])
+        self.assertIn("home.save",reports["i18n-audit"])
+
+        aggregate=runner.repo_intelligence(path)
+        with zipfile.ZipFile(aggregate["output_path"]) as archive:
+            names=set(archive.namelist())
+            for name in (
+                "reports/test-map.txt","reports/test-quality.txt","reports/complexity.txt",
+                "reports/api-surface.txt","reports/docs-audit.txt","reports/migration-audit.txt",
+                "reports/runtime-risk.txt","reports/i18n-audit.txt",
+            ):
+                self.assertIn(name,names)
+
 
 if __name__ == "__main__":
     unittest.main()
