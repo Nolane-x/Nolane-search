@@ -364,7 +364,7 @@ describe("Nolane AI callable tools", () => {
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-sort-unique-lines",content:"zeta\nAlpha\nalpha\nbeta\n"})).toBe("Alpha\nbeta\nzeta\n");
     expect(await executeAgentTool(env,"process_text_content",{tool_id:"text-normalize-unicode-nfkc",content:"ＡＢＣ ① ﬁ"})).toBe("ABC 1 fi");
 
-    const csv='Name,Name,Note\nAn,one,"O''Reilly"\n,,\nB,two,"# heading"';
+    const csv=`Name,Name,Note\nAn,one,"O'Reilly"\n,,\nB,two,"# heading"`;
     const sql=await executeAgentTool(env,"process_text_content",{tool_id:"csv-to-sql-inserts",content:csv});
     expect(sql).toContain('INSERT INTO "records" ("Name", "Name_2", "Note")');
     expect(sql).toContain("'O''Reilly'");
