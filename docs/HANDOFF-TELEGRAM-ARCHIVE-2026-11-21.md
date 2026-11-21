@@ -84,3 +84,16 @@ The production database currently has migration `0005` applied, but the GitHub A
 - PR CI #258, main CI #259, deployment #108 and build/smoke #101 passed.
 - Cloudflare version `cb1e062b-386e-4ed5-aae8-f8a8d5c1959c` receives 100% production traffic.
 - Remaining owner-side E2E still required: create a watch, cause archive upload to fail once (or observe naturally), verify `/watches` pending state, and confirm a later scheduled check archives/indexes it. Also re-run initial capture/change/search/pagination/restore checks.
+
+
+## Follow-up release: isolate watch alert failures — 2026-11-21
+
+- PR #56 merged: https://github.com/Nolane-x/Nolane-search/pull/56
+- Release commit: `f08257952cdebd7435daf59aec08c27254f9f9e0`.
+- The private "Website changed" alert no longer shares the archive operation's failure boundary. If the archive document and D1 metadata have succeeded but the owner's chat cannot receive the alert, the Worker logs the delivery error and retains the committed snapshot/hash state. This prevents a false pending marker and duplicate archive upload on the next scheduled check.
+- The archive-channel change announcement is still attempted separately and its errors remain contained.
+- Added a regression test simulating Telegram private-chat sendMessage failure after successful sendDocument and `saveArchiveSnapshot`; expected behavior is one upload, successful watch-hash commit and no transition back to `last_status = -4`.
+- PR CI #260 and main CI #261 passed (24 test files / 206 unit tests, type-check, deployment scripts, 96 Python tool-runner tests and Worker build). Deploy #109 and Worker export/smoke #102 passed.
+- Cloudflare Worker version `d0e64bf3-7b72-44bf-98fa-1fb35b520a33` receives 100% production traffic.
+- No D1 schema migration was required. Telegram webhook and slash-command registration succeeded.
+- Owner-level Telegram E2E remains outstanding: real first/change capture, archive search/page navigation, restore, and behavior after deleting an original archive message.
