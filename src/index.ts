@@ -28,6 +28,7 @@ import {
   sendSearchPage, sendTelegram, sendToArchive, telegramApi,
 } from "./telegram";
 import { crawlAndIndexSite, validateWatchUrl, checkWatchTargets } from "./watch";
+import { formatArchiveSnapshotList, getArchiveSnapshot, listArchiveSnapshots } from "./archive";
 import type {
   DeepSearchJob, Env, ExecutionContext, MessageBatch, SearchMode, SearchResult, SearchQueueJob, SiteCrawlJob,
   TelegramCallbackQuery, TelegramUpdate,
@@ -914,6 +915,32 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   }
 
 
+  if (command === "archive") {
+    if (chatId !== userId) { await reply(env, chatId, "Telegram Archive chỉ khả dụng trong chat riêng được cấp quyền."); return; }
+    if (!env.TELEGRAM_ARCHIVE_CHAT_ID) { await reply(env, chatId, "Chưa cấu hình kênh lưu trữ. Thêm secret <code>TELEGRAM_ARCHIVE_CHAT_ID</code> và triển khai lại."); return; }
+    if (args.length > 120) { await reply(env, chatId, "Từ khóa archive tối đa 120 ký tự. Dùng <code>/archive [từ khóa]</code>."); return; }
+    try {
+      const listing = await listArchiveSnapshots(env, String(userId), args, 10, 0);
+      await reply(env, chatId, formatArchiveSnapshotList(listing.snapshots, listing.total, args));
+    } catch (error) { console.error("Telegram archive index query failed:", error instanceof Error ? error.message : "unknown"); await reply(env, chatId, "Không thể tìm trong archive lúc này. Hãy kiểm tra migration D1 và cấu hình Telegram."); }
+    return;
+  }
+
+  if (command === "archive_restore") {
+    if (chatId !== userId) { await reply(env, chatId, "Khôi phục snapshot chỉ khả dụng trong chat riêng được cấp quyền."); return; }
+    const id = args.trim();
+    if (!/^\d{1,12}$/.test(id) || !Number.isSafeInteger(Number(id)) || Number(id) <= 0) { await reply(env, chatId, "Cú pháp: <code>/archive_restore ID</code>. Xem ID bằng <code>/archive</code>."); return; }
+    try {
+      const snapshot = await getArchiveSnapshot(env, Number(id), String(userId));
+      if (!snapshot) { await reply(env, chatId, "Không tìm thấy snapshot thuộc tài khoản của bạn. Hãy tìm lại bằng <code>/archive</code>."); return; }
+      await telegramApi(env, "copyMessage", { chat_id: chatId, from_chat_id: snapshot.archiveChatId, message_id: snapshot.archiveMessageId });
+      await reply(env, chatId, "Đã gửi lại snapshot <b>" + htmlEscape(snapshot.title.slice(0, 150)) + "</b> · <code>" + snapshot.id + "</code>.");
+    } catch (error) {
+      console.error("Telegram archive restore failed:", error instanceof Error ? error.message : "unknown");
+      await reply(env, chatId, "Không thể khôi phục tệp. Tin gốc có thể đã bị xóa khỏi kênh archive hoặc bot thiếu quyền đọc/kết nối.");
+    }
+    return;
+  }
   if (command === "crawl") {
     const parts = args.split(/\s+/).filter(Boolean);
     const validated = parts[0] ? validateWatchUrl(parts[0]) : null;
@@ -1582,6 +1609,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/watch https://example.com</code> — theo dõi một trang\n" +
       "<code>/watches</code> — danh sách đang theo dõi\n" +
       "<code>/unwatch ID</code> — bỏ theo dõi\n" +
+      "<code>/archive [từ khóa]</code> — tìm snapshot trong Telegram archive\n" +
+      "<code>/archive_restore ID</code> — gửi lại tệp snapshot đã lưu\n" +
       "<code>/status</code> — trạng thái cấu hình bot\n" +
       "<code>/jobs</code> — lịch sử Deep Search gần đây\n" +
       "<code>/retry ID</code> — chạy lại job thất bại\n" +

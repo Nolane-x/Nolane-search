@@ -57,17 +57,46 @@ export async function sendToArchive(env: Env, text: string): Promise<void> {
   catch (error) { console.error("Telegram archive delivery failed:", error instanceof Error ? error.message : "unknown error"); }
 }
 
-export async function sendArchiveDocument(env: Env, filename: string, content: string, caption: string): Promise<void> {
-  if (!env.TELEGRAM_ARCHIVE_CHAT_ID || !env.TELEGRAM_BOT_TOKEN) return;
+export interface TelegramArchiveDocument {
+  messageId: number;
+  fileId: string;
+  fileUniqueId?: string;
+  fileName: string;
+  fileSize?: number;
+}
+
+export async function sendArchiveDocument(
+  env: Env, filename: string, content: string, caption: string,
+): Promise<TelegramArchiveDocument | null> {
+  if (!env.TELEGRAM_ARCHIVE_CHAT_ID || !env.TELEGRAM_BOT_TOKEN) return null;
   const form = new FormData();
   form.set("chat_id", env.TELEGRAM_ARCHIVE_CHAT_ID);
   form.set("caption", caption.slice(0, 900));
   form.set("document", new Blob([content], { type: "text/plain;charset=utf-8" }), filename);
-  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendDocument`, {
+  const response = await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/sendDocument", {
     method: "POST", body: form, signal: AbortSignal.timeout(20_000),
   });
-  const data = await readJsonResponse<{ ok?: boolean; description?: string }>(response, 1_000_000);
-  if (!response.ok || !data.ok) throw new Error(data.description || `Telegram sendDocument failed (${response.status})`);
+  const data = await readJsonResponse<{
+    ok?: boolean;
+    description?: string;
+    result?: {
+      message_id?: number;
+      document?: { file_id?: string; file_unique_id?: string; file_name?: string; file_size?: number };
+    };
+  }>(response, 1_000_000);
+  if (!response.ok || !data.ok) throw new Error(data.description || "Telegram sendDocument failed (" + response.status + ")");
+  const messageId = data.result?.message_id;
+  const document = data.result?.document;
+  if (typeof messageId !== "number" || !Number.isSafeInteger(messageId) || !document || typeof document.file_id !== "string" || !document.file_id) {
+    throw new Error("Telegram accepted the archive upload but returned no document reference.");
+  }
+  return {
+    messageId: Number(messageId),
+    fileId: document.file_id,
+    ...(typeof document.file_unique_id === "string" ? { fileUniqueId: document.file_unique_id } : {}),
+    fileName: typeof document.file_name === "string" ? document.file_name : filename,
+    ...(typeof document.file_size === "number" && Number.isSafeInteger(document.file_size) ? { fileSize: document.file_size } : {}),
+  };
 }
 
 export type TelegramInputMode = SearchMode | "ai" | "ask" | "deep";

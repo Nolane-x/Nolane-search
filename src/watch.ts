@@ -1,5 +1,6 @@
 import { htmlEscape, sha256Hex, isSafePublicUrl, normalizeUrl } from "./security";
 import { sendArchiveDocument, sendTelegram, sendToArchive } from "./telegram";
+import { saveArchiveSnapshot } from "./archive";
 import type { Env } from "./types";
 
 export interface RobotsRule {
@@ -328,14 +329,29 @@ export async function checkWatchTargets(env: Env): Promise<{ checked: number; ch
       if (isFirstSnapshot || isChanged) {
         const caption = `Nolane Search snapshot · ${isFirstSnapshot ? "initial capture" : "detected change"} · ${hostname} · ${now}`;
         try {
-          await sendArchiveDocument(
+          const archived = await sendArchiveDocument(
             env,
-            `nolane-${watch.id}-${Date.now()}.txt`,
-            `TITLE: ${page.title}\nURL: ${watch.url}\nCAPTURED: ${now}\nCONTENT HASH: ${hash}\n\n${page.text}`,
+            "nolane-" + watch.id + "-" + Date.now() + ".txt",
+            "TITLE: " + page.title + "\nURL: " + watch.url + "\nCAPTURED: " + now +
+              "\nCONTENT HASH: " + hash + "\n\n" + page.text,
             caption,
           );
+          if (archived && env.TELEGRAM_ARCHIVE_CHAT_ID) {
+            try {
+              await saveArchiveSnapshot(env, {
+                watchId: watch.id, userId: watch.user_id, chatId: watch.chat_id,
+                archiveChatId: env.TELEGRAM_ARCHIVE_CHAT_ID, archiveMessageId: archived.messageId,
+                telegramFileId: archived.fileId, telegramFileUniqueId: archived.fileUniqueId || null,
+                fileName: archived.fileName, fileSize: archived.fileSize ?? null,
+                url: watch.url, normalizedUrl: watch.normalized_url, title: page.title,
+                contentHash: hash, captureKind: isFirstSnapshot ? "initial" : "change", capturedAt: now,
+              });
+            } catch (error) {
+              console.error("Snapshot metadata index failed:", error instanceof Error ? error.message : "unknown error");
+            }
+          }
         } catch (error) {
-          console.error("Snapshot archive failed:", error instanceof Error ? error.message : "unknown");
+          console.error("Snapshot archive upload failed:", error instanceof Error ? error.message : "unknown error");
         }
       }
       if (isChanged) {
