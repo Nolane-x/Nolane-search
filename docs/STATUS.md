@@ -6,7 +6,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `a685b9853b86b196b29805f6490ebd37d0144033`
+- Latest production source commit: `f08257952cdebd7435daf59aec08c27254f9f9e0`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -18,7 +18,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `519bee0c-6f42-4c76-bcfb-d86c546040ac` (version 58; 100% traffic)
+- Cloudflare Worker version ID: `d0e64bf3-7b72-44bf-98fa-1fb35b520a33` (100% traffic; deployment `b6fac148-86ca-43aa-8008-060e240964c1`, created 2026-11-21T12:01:29Z).
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
@@ -371,3 +371,16 @@ The registry expands from 17 to 23 implemented tools.
 - PR CI #258 and main CI #259 passed; all unit tests (207), typecheck, deployment script checks, 96 Python runner tests and Worker build succeeded.
 - Deploy #108 and build/export smoke test #101 succeeded, including Worker/runtime-secret upload and Telegram webhook/command registration.
 - Current production Worker version: `cb1e062b-386e-4ed5-aae8-f8a8d5c1959c`, receiving 100% traffic (deployment `012484ba-8d33-4772-ad6e-3d03f075062f`, created 2026-11-21T10:07:13Z).
+
+
+## Watch alert isolation — deployed 2026-11-21
+
+- PR #56 merged: https://github.com/Nolane-x/Nolane-search/pull/56
+- Main commit: `f08257952cdebd7435daf59aec08c27254f9f9e0`.
+- A failed owner-facing "Website changed" Telegram notification is now isolated from archive state. Once the Telegram document and D1 snapshot index succeed, notification failure is logged locally and cannot re-arm `last_status = -4` or cause the next Cron run to capture the same page again.
+- The change alert is still attempted in the Telegram archive channel; archive-message delivery retains its own contained error handling.
+- Regression coverage simulates successful document upload + D1 indexing followed by private-chat notification failure. It verifies one document upload, committed watch hash and no retry-state rollback.
+- PR CI #260 passed: 24 test files / 206 unit tests, type-check, deployment-script checks, 96 Python tool-runner tests and Worker build. Main CI #261 passed the same checks.
+- Deploy #109 and Export/Smoke #102 succeeded. D1 migration was skipped because no schema changed; Worker upload and Telegram webhook/command registration succeeded.
+- Current production Worker version: `d0e64bf3-7b72-44bf-98fa-1fb35b520a33`, receiving 100% traffic (deployment `b6fac148-86ca-43aa-8008-060e240964c1`, created 2026-11-21T12:01:29Z).
+- Owner-side Telegram E2E validation remains separate and outstanding; CI and deployment do not prove real private-chat archive capture/search/restore behavior.
