@@ -339,3 +339,13 @@ The registry expands from 17 to 23 implemented tools.
 - Telegram channel stores snapshot documents; D1 stores owner-scoped message/file references, URL/title/time/hash metadata only. D1 does not store the snapshot body.
 - Real private Telegram watch → capture → archive search → restore testing remains owner-level E2E and has not been claimed as verified.
 - Configure `CLOUDFLARE_D1_API_TOKEN` with Account > D1 > Edit in GitHub Actions before future commits that add migration files. The first rollout required a direct D1 migration because this secret was absent; that migration was manually applied and verified before the successful source-only deployment.
+
+## Telegram archive pagination — deployed 2026-11-21
+
+- PR #53 merged: https://github.com/Nolane-x/Nolane-search/pull/53
+- Main commit: `69c131775570a2bdb93653d4576c1ef3801ae6ac`.
+- `/archive` and `/archive [query]` now show five snapshots per page; `/archive_page PAGE [query]` navigates to previous/next pages while preserving the query. The command is registered in Telegram.
+- Page input is bounded to 1–1001 and 120 query characters, matching the existing 5,000-row maximum offset. Query strings are escaped before being embedded in Telegram HTML.
+- PR CI run #252 and main CI run #253 passed; both include type-check, unit tests, deployment-script checks, 96 Python tool-runner tests and Worker build.
+- Deployment run #106 and build-export run #99 succeeded. The D1 migration step was skipped because no schema change was required; Worker secrets and Telegram webhook/command registration succeeded.
+- Current production Worker version: `8c8cbfb8-15dc-4ec8-98ee-adabb0c0133c`, receiving 100% of traffic (Cloudflare deployment `643b4ef0-c98a-4eab-9649-47af2ea9bbb1`, created 2026-11-21T09:25:06Z).
