@@ -24,6 +24,8 @@
 | /watch https://example.com | Monitor public HTTPS page |\n| /crawl https://example.com [1-20] | Crawl a bounded public website into the private FTS5 index |\n| /crawls | List recent site indexing jobs |
 | /watches | List active watches |
 | /unwatch 12 | Disable watch ID 12 |
+| /archive [query] | Search archived website snapshots by title or URL |
+| /archive_restore 12 | Copy an archived snapshot document back into the private chat |
 | /jobs | List the latest eight Deep Search jobs |
 | /retry JOB_ID | Re-enqueue a failed Deep Search query as a new job |
 
@@ -44,6 +46,9 @@ Examples: `/search cloudflare site:developers.cloudflare.com`, `/search workers 
 - Search results go to the conversation where the query was sent. Up to 12 ranked candidates are displayed five per page; inline Previous/Next buttons edit the same message. Sessions expire after 15 minutes and are bound to the requesting Telegram user and chat.
 - If TELEGRAM_ARCHIVE_CHAT_ID is configured, search and Deep Search results are copied to the archive channel.
 - Page snapshots are sent as TXT documents on first capture and detected content changes.
+- Every successful snapshot upload records its Telegram channel/message and file references plus URL, title, watch ID, capture time and SHA-256 in D1. The original content remains a Telegram document; D1 stores metadata only.
+- `/archive [query]` searches the signed-in owner's latest 10 snapshot entries by title or URL. `/archive_restore ID` uses Telegram `copyMessage` to resend the original archived document; it does not rebuild content from D1.
+- The archive index is owner-scoped. A snapshot can be restored only while the source channel message still exists and the bot retains channel access. Deleting a watch does not delete its historical snapshots.
 - Change alerts go to the requesting chat and archive.
 - Archive delivery failures are logged; direct search replies still go to the user.
 
