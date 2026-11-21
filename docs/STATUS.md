@@ -6,7 +6,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `4b7db4f7eaaae44810df68d43ae3c9486187dbb6`
+- Latest production source commit: `a685b9853b86b196b29805f6490ebd37d0144033`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -18,7 +18,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `a86e4cb5-3747-4476-b87e-31abb6793062` (version 57; 100% traffic)
+- Cloudflare Worker version ID: `519bee0c-6f42-4c76-bcfb-d86c546040ac` (version 58; 100% traffic)
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
@@ -35,7 +35,7 @@ The release adds a private browser search portal, AI Overview, multi-turn chat, 
 - Read-only D1 inspection confirmed `indexed_pages` (1 row), `watches` (2 rows), `telegram_updates` (55 rows), and the existing tool/search/job tables. Cloudflare's D1 metadata `num_tables` field returned 0 even though `sqlite_master` lists the existing tables; direct SQLite inspection is the authoritative check here.
 - Still pending owner-level verification: send a real small text/CSV/JSON file to the Telegram bot, receive the processed output, exercise a safe retry, and confirm optional archive-channel delivery. CI and webhook registration do not prove the full user interaction.
 
-## Latest production release — Wave 8 — 2026-11-21
+## Wave 8 production release — 2026-11-21 (superseded by Wave 9 below)
 
 - PR #47 ([Configuration and DevOps suite](https://github.com/Nolane-x/Nolane-search/pull/47)) was merged into `main`.
 - Main commit: `4b7db4f7eaaae44810df68d43ae3c9486187dbb6`.
@@ -48,6 +48,21 @@ The release adds a private browser search portal, AI Overview, multi-turn chat, 
 - No D1 schema change was included. Deployment correctly skipped migration application; read-only `schema_migrations` inspection still shows `0001_core.sql` through `0004_remove_request_rate_limits.sql`, and the existing tables remain present.
 - ENV audit/reference reports expose names and counts, not secret values. Docker and dependency audits are static; they do not build/run containers, install packages, execute scripts or query vulnerability registries.
 - Remaining owner-level check: upload a small real `.env`, `.ini`, `.toml`, `compose.yaml` and `.properties` file through Telegram, inspect returned artifacts, and test a safe retry. This has not been exercised by CI, webhook checks or this deployment.
+
+## Latest production release — Wave 9 — 2026-11-21
+
+- PR #49 ([Infrastructure and CI/CD security auditors](https://github.com/Nolane-x/Nolane-search/pull/49)) was merged into `main`.
+- Main commit: `a685b9853b86b196b29805f6490ebd37d0144033`.
+- Production Cloudflare Worker version 58: `519bee0c-6f42-4c76-bcfb-d86c546040ac`; latest deployment distribution is 100% on this version.
+- Main CI [44880518949](https://github.com/Nolane-x/Nolane-search/actions/runs/44880518949) passed TypeScript type-check, 21 test files / 190 unit tests, deployment-script checks, 96 Python runner tests and Worker build.
+- Cloudflare export/build and deployed Worker smoke test [44880518912](https://github.com/Nolane-x/Nolane-search/actions/runs/44880518912) passed.
+- Production deployment [44880519016](https://github.com/Nolane-x/Nolane-search/actions/runs/44880519016) passed bundle validation, runtime-secret upload and Telegram webhook/command registration. D1 migration step was skipped because Wave 9 changes no schema.
+- Telegram webhook was verified for `message` and `callback_query`; the bot command menu was registered successfully.
+- Wave 9 adds eight auditors to the 275-tool Wave 8 production catalog, bringing production to 283 unique tools: GitHub Actions, Kubernetes, Terraform, Nginx, Apache, Caddy, systemd and shell.
+- Six text-only auditors (Terraform, Nginx, Apache, Caddy, systemd and shell) are available through bounded direct AI processing. GitHub Actions and Kubernetes YAML audits remain runner-based and use YAML parsing.
+- Audits are static heuristics: no workflow dispatch, cluster access, terraform init/plan/apply, server/service startup or shell execution. Credential values are omitted from reports.
+- Read-only D1 inspection confirms migrations `0001_core.sql` through `0004_remove_request_rate_limits.sql` and the existing SQLite tables. Cloudflare's summary `num_tables` field may return 0; `sqlite_master` inspection is authoritative.
+- Still pending owner-level verification: send real `.tf`, `.yaml`, `.conf`, `.service` and `.sh` files through Telegram, inspect returned artifacts and test a safe retry. CI/webhook registration does not prove the complete user interaction.
 
 ## CI and deployment verification
 
