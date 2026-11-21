@@ -6,7 +6,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `be239c42c3464faceb84194aea8af4f88b0b4046`
+- Latest production source commit: `a0919d77a76e3077aad485b4f621f4206ff6e24d`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -18,7 +18,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `07f9fee8-37be-4630-ae76-8febfebfa614` (100% traffic; deployment `a4cd587b-e343-4c45-af19-15fde499930a`, created 2026-11-21T14:27:41Z).
+- Cloudflare Worker version ID: `741a6df7-916b-4f19-a75f-f8ea95863960` (version 69, 100% traffic; deployment `93ac3038-31bd-4a4b-9360-95e19c063827`, created 2026-11-21T15:26:33Z).
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
@@ -460,3 +460,23 @@ The registry expands from 17 to 23 implemented tools.
 - Deploy #114 and Export/Smoke #107 succeeded. Worker health smoke passed; Telegram webhook and command registration succeeded. No D1 migration was required.
 - Current production Worker version: `07f9fee8-37be-4630-ae76-8febfebfa614`, receiving 100% traffic (deployment `a4cd587b-e343-4c45-af19-15fde499930a`, created 2026-11-21T14:27:41Z).
 - All Wave 11 analyzers inspect repository ZIP and bounded GitHub Compare metadata as data. They do not run repository code, workflows, tests, migrations, Docker/Compose commands, package installs or database connections. Environment values are not included in reports; the other checks are static heuristics with stated scope limitations.
+
+
+## Wave 12 — Static HTML quality auditors — deployed 2026-11-21
+
+- PR #62 merged: https://github.com/Nolane-x/Nolane-search/pull/62
+- Main commit: `a0919d77a76e3077aad485b4f621f4206ff6e24d`.
+- The catalog expanded from 297 to **302 executable tools** with five HTML processors:
+  - `html-seo-audit`: static title/meta description, canonical, robots, Open Graph, language, H1 and image-alt checks.
+  - `html-accessibility-audit`: static accessible-name, label, alt, main-landmark, language and heading-level checks.
+  - `html-link-audit`: missing/empty href, unsafe schemes, unresolved local fragments and target-blank rel checks.
+  - `html-form-audit`: form method/action, control name/label, password-in-GET and autocomplete checks.
+  - `html-image-audit`: image alt, dimensions and loading hints.
+- Main CI #281 passed: 25 test files / 223 Vitest tests, TypeScript type-check, deployment-script checks, 99 Python runner tests and Worker build: https://github.com/Nolane-x/Nolane-search/actions/runs/44919157392
+- PR CI #280 also passed on the final PR head: https://github.com/Nolane-x/Nolane-search/actions/runs/44919056298
+- Cloudflare build/export and production Worker smoke test #108 passed: https://github.com/Nolane-x/Nolane-search/actions/runs/44919157432
+- Production deployment #115 passed: https://github.com/Nolane-x/Nolane-search/actions/runs/44919157401. It validated deployment secrets, uploaded the Worker/runtime secrets and registered Telegram webhook updates and command menu. D1 migration was skipped because Wave 12 adds no database schema.
+- Cloudflare deployment API confirms Worker version 69 `741a6df7-916b-4f19-a75f-f8ea95863960` receives 100% traffic.
+- Fresh production `GET /health` returned `ok: true` and `database: reachable`; it reported four AI provider-key routes, nine model routes and archive enabled. A health/configuration response confirms route loading, not the current quota or live inference health of every upstream key.
+- All five HTML processors are bounded static heuristics: they do not fetch remote URLs/images, execute scripts, submit forms or run browser-based checks. SEO/accessibility findings are not Google ranking predictions or WCAG certification.
+- Still pending owner-level verification: upload representative HTML files through the real Telegram bot, inspect delivered TXT reports, and test a retry. CI, webhook registration and health checks do not prove this complete user interaction.
