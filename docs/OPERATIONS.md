@@ -69,6 +69,7 @@ Examples: `/search cloudflare site:developers.cloudflare.com`, `/search workers 
 - When Telegram snapshot archiving is configured, the watch's prior content hash remains authoritative and HTTP validators are cleared until both the Telegram document upload and D1 archive index succeed. Failures retain `last_status = -4`; a later scheduled check performs a full fetch and retries.
 - A private change-alert delivery failure after the archive/index has succeeded is logged independently. It must not roll back the committed hash or mark the snapshot pending again; this avoids duplicate captures caused only by notification outages.
 - The channel announcement is a separate best-effort delivery. Searchable archive metadata is committed independently from that announcement.
+- When no archive channel is configured, a detected change still produces a private notification but explicitly says no snapshot was saved; the Worker must not imply that a Telegram archive document exists.
 
 ## Search quotas and provider errors
 
