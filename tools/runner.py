@@ -5705,6 +5705,365 @@ def repo_i18n_audit(p):
     return _repo_report_text(p,"-repo-i18n-audit.txt","Repository localization audit",lines,f"Found {len(candidates)} JSON locale candidates and {len(comparisons)} pairwise key comparisons.")
 
 
+
+def repo_env_contract(p):
+    references={}; declarations={}; secret_refs={}
+    suffixes={".py",".pyw",".js",".jsx",".mjs",".cjs",".ts",".tsx",".go",".rb",".php",".java",".cs",".rs"}
+    code_patterns=[
+        re.compile(r"\bprocess\.env\.([A-Z][A-Z0-9_]*)"),
+        re.compile(r"\bimport\.meta\.env\.([A-Z][A-Z0-9_]*)"),
+        re.compile(r"\bos\.(?:getenv|environ\.get)\s*\(\s*['\"]([A-Z][A-Z0-9_]*)['\"]"),
+        re.compile(r"\bos\.environ\s*\[\s*['\"]([A-Z][A-Z0-9_]*)['\"]\s*\]"),
+        re.compile(r"\bDeno\.env\.get\s*\(\s*['\"]([A-Z][A-Z0-9_]*)['\"]"),
+        re.compile(r"\bgetenv\s*\(\s*['\"]([A-Z][A-Z0-9_]*)['\"]"),
+        re.compile(r"\$_ENV\s*\[\s*['\"]([A-Z][A-Z0-9_]*)['\"]\s*\]"),
+    ]
+    ignored={"NODE_ENV","CI","PATH","HOME","PWD","SHELL","USER","PORT","HOST","LANG","TZ"}
+    inspected=0
+    for item in _repo_text_candidates(p):
+        path=item["path"]; raw=item.get("data")
+        if raw is None: continue
+        name=Path(path).name.casefold(); suffix=Path(path).suffix.lower()
+        if name.startswith((".env",".dev.vars")) or name in ("env.example","env.sample"):
+            for line_no,line in enumerate(raw.splitlines(),1):
+                match=re.match(r"^\s*(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=",line)
+                if match: declarations.setdefault(match.group(1),[]).append((path,line_no))
+        if suffix in suffixes:
+            inspected+=1
+            for pattern in code_patterns:
+                for match in pattern.finditer(raw[:2*1024*1024]):
+                    key=match.group(1)
+                    if key not in ignored:
+                        references.setdefault(key,[]).append((path,raw.count("\n",0,match.start())+1))
+        if ".github/workflows/" in path.lower():
+            for match in re.finditer(r"\$\{\{\s*(?:secrets|vars)\.([A-Za-z_][A-Za-z0-9_]*)",raw,re.I):
+                key=match.group(1)
+                secret_refs.setdefault(key,[]).append((path,raw.count("\n",0,match.start())+1))
+        if name=="dockerfile" or name.startswith("dockerfile.") or name=="containerfile":
+            for line_no,line in enumerate(raw.splitlines(),1):
+                match=re.match(r"^\s*(?:ARG|ENV)\s+([A-Z][A-Z0-9_]*)\b",line,re.I)
+                if match: declarations.setdefault(match.group(1),[]).append((path,line_no))
+    referenced=set(references); declared=set(declarations); secrets=set(secret_refs)
+    missing=sorted(referenced-declared-secrets)
+    unused=sorted(declared-referenced-secrets)
+    lines=[
+        f"Source files inspected: {inspected:,}",
+        f"Code environment names: {len(referenced):,}",
+        f"Tracked examples/container declarations: {len(declared):,}",
+        f"GitHub Actions secret/variable names: {len(secrets):,}",
+        f"References without tracked example/declaration: {len(missing):,}",
+        f"Declared names without detected code use: {len(unused):,}",
+        "",
+        "Missing example/declaration candidates:",
+    ]
+    lines.extend("- "+key for key in missing[:400])
+    lines.extend(["","Unused example/container declaration candidates:"])
+    lines.extend("- "+key for key in unused[:400])
+    lines.extend(["","Referenced names and first locations (values are never printed):"])
+    for key,locations in sorted(references.items()):
+        lines.append(f"- {key}: {len(locations)} reference(s), first at {locations[0][0]}:{locations[0][1]}")
+    lines.extend(["","GitHub Actions secret/variable references:"])
+    for key,locations in sorted(secret_refs.items()):
+        lines.append(f"- {key}: {len(locations)} reference(s), first at {locations[0][0]}:{locations[0][1]}")
+    lines.append("Static text scan only. Dynamic names and framework-specific configuration APIs may be missed. Absence from an example is not proof that a production secret is missing. Values are intentionally excluded.")
+    return _repo_report_text(p,"-repo-env-contract.txt","Repository environment contract",lines,
+        f"Found {len(referenced)} code references, {len(secrets)} Actions references and {len(missing)} names lacking tracked examples.")
+
+
+def repo_architecture_cycles(p):
+    import collections
+    graph=_repo_architecture_graph(p)
+    nodes=[item.get("path") for item in graph.get("nodes",[]) if isinstance(item,dict) and item.get("path")]
+    adjacency={node:[] for node in nodes}; reverse={node:[] for node in nodes}; self_loops=set()
+    for edge in graph.get("edges",[]):
+        if not isinstance(edge,dict): continue
+        source,target=edge.get("from"),edge.get("to")
+        if source not in adjacency or target not in reverse: continue
+        adjacency[source].append(target); reverse[target].append(source)
+        if source==target: self_loops.add(source)
+    visited=set(); order=[]
+    for start in nodes:
+        if start in visited: continue
+        visited.add(start); stack=[(start,iter(adjacency[start]))]
+        while stack:
+            node,children=stack[-1]
+            try: child=next(children)
+            except StopIteration:
+                order.append(node); stack.pop(); continue
+            if child not in visited:
+                visited.add(child); stack.append((child,iter(adjacency.get(child,[]))))
+    assigned=set(); components=[]
+    for start in reversed(order):
+        if start in assigned: continue
+        assigned.add(start); component=[]; stack=[start]
+        while stack:
+            node=stack.pop(); component.append(node)
+            for child in reverse.get(node,[]):
+                if child not in assigned:
+                    assigned.add(child); stack.append(child)
+        if len(component)>1 or (len(component)==1 and component[0] in self_loops):
+            components.append(sorted(component))
+    components.sort(key=lambda group:(-len(group),group))
+    indegree={node:len(reverse[node]) for node in nodes}; outdegree={node:len(adjacency[node]) for node in nodes}
+    lines=[
+        f"Graph nodes: {len(nodes):,}",f"Local import edges: {len(graph.get('edges',[])):,}",
+        f"Cyclic strongly connected components: {len(components):,}",
+        f"Files participating in cycles: {sum(len(group) for group in components):,}",
+        f"Python parse failures: {graph.get('python_parse_failures',0):,}",
+        f"Edges truncated by upstream extractor: {bool(graph.get('edges_truncated'))}","","Cycles:",
+    ]
+    for index,group in enumerate(components[:150],1):
+        lines.append(f"- Component {index}: {len(group)} file(s)")
+        lines.extend("    "+path for path in group[:50])
+        if len(group)>50: lines.append(f"    ... {len(group)-50} more")
+    if not components: lines.append("- No cycle detected in extracted local-import graph.")
+    lines.extend(["","Highest import-connectedness files:"])
+    hubs=sorted(nodes,key=lambda node:(-(indegree[node]+outdegree[node]),node))[:80]
+    lines.extend(f"- {node}: imports={outdegree[node]}, imported_by={indegree[node]}" for node in hubs)
+    lines.append("Static local-import graph only. Aliases, dynamic loading, dependency injection, runtime calls and cross-language edges may be missed. Cycles are architectural review signals, not automatically defects.")
+    return _repo_report_text(p,"-repo-architecture-cycles.txt","Repository architecture cycles",lines,
+        f"Analyzed {len(nodes)} nodes and found {len(components)} cyclic components.")
+
+
+def repo_change_impact(p):
+    import collections
+    graph=_repo_architecture_graph(p)
+    nodes={item.get("path") for item in graph.get("nodes",[]) if isinstance(item,dict) and item.get("path")}
+    reverse=collections.defaultdict(set)
+    for edge in graph.get("edges",[]):
+        if isinstance(edge,dict) and edge.get("from") in nodes and edge.get("to") in nodes:
+            reverse[edge["to"]].add(edge["from"])
+    metadata_path=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"nolane-inputs"/"github-source-metadata.json"
+    try: metadata=json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
+    except Exception: metadata={}
+    compare=metadata.get("compare") if isinstance(metadata,dict) else None
+    changed_files=compare.get("files",[]) if isinstance(compare,dict) else []
+    if not isinstance(changed_files,list): changed_files=[]
+    if not isinstance(compare,dict) or not compare.get("base") or not compare.get("head"):
+        lines=[
+            "No GitHub Compare metadata is attached to this snapshot.",
+            "Run /repo_compare https://github.com/owner/repository base...head to produce change-impact results.",
+            "A normal ZIP upload or single-ref repository analysis has no trusted changed-file list.",
+        ]
+        return _repo_report_text(p,"-repo-change-impact.txt","Repository change impact",lines,"No compare metadata; use /repo_compare to map changed files to reverse import dependents.")
+    known={path.casefold():path for path in nodes}; unresolved=[]; changed=[]; impacted={}
+    for item in changed_files[:100]:
+        if not isinstance(item,dict): continue
+        path=str(item.get("filename") or "").replace("\\","/")[:300]
+        if not path: continue
+        status=str(item.get("status") or "modified")
+        changed.append((path,status,int(item.get("additions") or 0),int(item.get("deletions") or 0)))
+        node=known.get(path.casefold())
+        if not node:
+            matches=[value for key,value in known.items() if key.endswith("/"+path.casefold()) or path.casefold().endswith("/"+key)]
+            node=matches[0] if len(matches)==1 else None
+        if not node:
+            unresolved.append(path); continue
+        seen={node}; queue=[node]; depth={node:0}
+        while queue:
+            current=queue.pop(0)
+            for dependent in reverse.get(current,()):
+                if dependent not in seen:
+                    seen.add(dependent); depth[dependent]=depth[current]+1; queue.append(dependent)
+        for dependent in seen:
+            if dependent==node: continue
+            value=impacted.setdefault(dependent,{"max_depth":0,"sources":set()})
+            value["max_depth"]=max(value["max_depth"],depth.get(dependent,0))
+            value["sources"].add(path)
+    lines=[
+        f"Compared refs: {compare.get('base')} -> {compare.get('head')}",
+        f"Compare status: {compare.get('status') or 'not supplied'}",
+        f"Changed file records: {len(changed):,}",
+        f"Changed files matched into local graph: {len(changed)-len(unresolved):,}",
+        f"Changed files not represented in graph: {len(unresolved):,}",
+        f"Potential transitive dependent modules: {len(impacted):,}","","Changed files:",
+    ]
+    lines.extend(f"- {path} [{status}] +{adds}/-{deletes}" for path,status,adds,deletes in changed[:100])
+    lines.extend(["","Potential reverse-import dependents:"])
+    for module,value in sorted(impacted.items(),key=lambda pair:(-len(pair[1]["sources"]),-pair[1]["max_depth"],pair[0]))[:300]:
+        lines.append(f"- {module}: {len(value['sources'])} changed source(s), max dependency distance {value['max_depth']}")
+        lines.extend("    affected by: "+path for path in sorted(value["sources"])[:10])
+    lines.extend(["","Changed files absent from the local graph:"])
+    lines.extend("- "+path for path in unresolved[:100])
+    lines.append("Static import approximation only. It omits dynamic imports, runtime reflection, external consumers, generated code, tests and semantic changes. Compare metadata is capped at 100 file records.")
+    return _repo_report_text(p,"-repo-change-impact.txt","Repository change impact",lines,
+        f"Compared {len(changed)} files and found {len(impacted)} potential reverse-import dependents.")
+
+
+def repo_api_spec_audit(p):
+    import json
+    try: import yaml
+    except ImportError: yaml=None
+    candidates=[]; findings=[]; operations=0; attempted=0
+    methods={"get","put","post","delete","options","head","patch","trace"}
+    def resolve_pointer(document,ref):
+        if not ref.startswith("#/"): return False
+        current=document
+        for part in ref[2:].split("/"):
+            key=part.replace("~1","/").replace("~0","~")
+            if isinstance(current,dict) and key in current: current=current[key]
+            elif isinstance(current,list) and key.isdigit() and int(key)<len(current): current=current[int(key)]
+            else: return False
+        return True
+    for item in _repo_text_candidates(p):
+        path=item["path"]; raw=item.get("data")
+        if raw is None or Path(path).suffix.casefold() not in (".json",".yaml",".yml"): continue
+        basename=Path(path).name.casefold()
+        if not (basename.startswith(("openapi","swagger","api-spec")) or re.search(r"(?m)^\s*(?:openapi|swagger)\s*:",raw[:12000]) or re.search(r'"(?:openapi|swagger)"\s*:',raw[:12000])): continue
+        attempted+=1
+        try:
+            document=json.loads(raw) if Path(path).suffix.casefold()==".json" else (yaml.safe_load(raw) if yaml else None)
+        except Exception as exc:
+            findings.append(("ERROR",path,1,"Cannot parse API description ("+type(exc).__name__+").")); continue
+        if document is None:
+            findings.append(("WARN",path,1,"YAML parser is unavailable; structural validation skipped.")); continue
+        if not isinstance(document,dict):
+            findings.append(("ERROR",path,1,"API description root must be an object/map.")); continue
+        candidates.append(path)
+        version=str(document.get("openapi") or document.get("swagger") or "")
+        if not (version.startswith("3.") or version.startswith("2.")):
+            findings.append(("WARN",path,1,"Missing or unsupported OpenAPI/Swagger version marker."))
+        info=document.get("info")
+        if not isinstance(info,dict) or not info.get("title") or not info.get("version"):
+            findings.append(("WARN",path,1,"Top-level info.title and info.version should be present."))
+        routes=document.get("paths")
+        if not isinstance(routes,dict) or not routes:
+            findings.append(("WARN",path,1,"No non-empty paths object was found.")); routes={}
+        operation_ids={}
+        for route,definition in routes.items():
+            if not isinstance(definition,dict): continue
+            for method,operation in definition.items():
+                method=str(method).casefold()
+                if method not in methods or not isinstance(operation,dict): continue
+                operations+=1
+                opid=str(operation.get("operationId") or "").strip()
+                if opid:
+                    if opid.casefold() in operation_ids:
+                        findings.append(("ERROR",path,1,"Duplicate operationId "+opid[:100]+" on "+str(route)[:120]+"."))
+                    else: operation_ids[opid.casefold()]=str(route)
+                else: findings.append(("INFO",path,1,"Missing operationId for "+method.upper()+" "+str(route)[:120]+"."))
+                if not isinstance(operation.get("responses"),dict) or not operation.get("responses"):
+                    findings.append(("WARN",path,1,"Missing responses map for "+method.upper()+" "+str(route)[:120]+"."))
+                params=operation.get("parameters",[])
+                params={(str(v.get("name")),str(v.get("in"))) for v in params if isinstance(v,dict)} if isinstance(params,list) else set()
+                for param in re.findall(r"\{([^{}]+)\}",str(route)):
+                    if (param,"path") not in params:
+                        findings.append(("WARN",path,1,"Path parameter "+param+" is not declared for "+method.upper()+" "+str(route)[:120]+"."))
+        def visit(value):
+            if isinstance(value,dict):
+                for key,child in value.items():
+                    if key=="$ref" and isinstance(child,str):
+                        if child.startswith("#/") and not resolve_pointer(document,child):
+                            findings.append(("ERROR",path,1,"Unresolved local $ref: "+child[:180]))
+                        elif child.startswith(("http://","https://")):
+                            findings.append(("INFO",path,1,"Remote $ref not dereferenced by offline audit."))
+                    visit(child)
+            elif isinstance(value,list):
+                for child in value: visit(child)
+        visit(document)
+    lines=[f"API spec candidates structurally inspected: {len(candidates):,}",f"Candidate files attempted: {attempted:,}",f"Operations detected: {operations:,}",f"Review findings: {len(findings):,}","","Findings:"]
+    lines.extend(f"- {level} · {path}:{line} · {message}" for level,path,line,message in findings[:600])
+    if not candidates: lines.append("- No OpenAPI/Swagger JSON/YAML documents were detected.")
+    lines.append("Offline structural heuristic only. Remote refs are not fetched; dialect extensions, callbacks, webhooks, discriminators and semantic constraints are not fully validated.")
+    return _repo_report_text(p,"-repo-api-spec-audit.txt","Repository OpenAPI contract audit",lines,
+        f"Inspected {len(candidates)} API specs, found {operations} operations and {len(findings)} review findings.")
+
+
+def repo_container_audit(p):
+    findings=[]; inspected=0
+    for item in _repo_text_candidates(p):
+        path=item["path"]; raw=item.get("data")
+        if raw is None: continue
+        name=Path(path).name.casefold(); suffix=Path(path).suffix.casefold()
+        dockerfile=name=="dockerfile" or name.startswith("dockerfile.") or name=="containerfile" or name.startswith("containerfile.")
+        compose=name in ("docker-compose.yml","docker-compose.yaml","compose.yml","compose.yaml") or ("compose" in name and suffix in (".yml",".yaml"))
+        if not dockerfile and not compose: continue
+        inspected+=1; lines=raw.splitlines()
+        if dockerfile:
+            base_lines=[(n,line) for n,line in enumerate(lines,1) if re.match(r"^\s*FROM\s+",line,re.I)]
+            if not any(re.match(r"^\s*USER\s+",line,re.I) for line in lines):
+                findings.append(("WARN",path,1,"No USER instruction detected; final image may run as root."))
+            for n,line in base_lines:
+                image=re.sub(r"^\s*FROM\s+","",line,flags=re.I).split()[0]
+                last=image.rsplit("/",1)[-1]
+                if ":" not in last and "@" not in image:
+                    findings.append(("WARN",path,n,"Base image has no explicit version tag or immutable digest."))
+                if last.endswith(":latest"):
+                    findings.append(("WARN",path,n,"Base image uses the floating latest tag."))
+            if not any(re.match(r"^\s*HEALTHCHECK\s+",line,re.I) for line in lines):
+                findings.append(("INFO",path,1,"No HEALTHCHECK instruction detected."))
+            for n,line in enumerate(lines,1):
+                if re.match(r"^\s*(?:ARG|ENV)\s+[A-Z0-9_]*(?:PASSWORD|TOKEN|SECRET|CREDENTIAL|PRIVATE_KEY)[A-Z0-9_]*\b",line,re.I):
+                    findings.append(("HIGH",path,n,"Credential-like variable declared via Docker ARG/ENV may persist in image metadata or layers."))
+                if re.match(r"^\s*(?:COPY|ADD)\s+.*(?:^|[\s/])\.env(?:\s|$)",line,re.I):
+                    findings.append(("HIGH",path,n,"Potential .env file copied into the image; verify .dockerignore and secret handling."))
+                if re.match(r"^\s*ADD\s+https?://",line,re.I):
+                    findings.append(("WARN",path,n,"Remote URL added directly to image; verify immutable source and checksum."))
+        if compose:
+            for n,line in enumerate(lines,1):
+                stripped=line.strip()
+                if re.match(r"privileged\s*:\s*true\b",stripped,re.I): findings.append(("HIGH",path,n,"Compose service enables privileged mode."))
+                if re.match(r"network_mode\s*:\s*host\b",stripped,re.I): findings.append(("WARN",path,n,"Compose service uses host network mode."))
+                if "/var/run/docker.sock" in line: findings.append(("HIGH",path,n,"Compose service mounts Docker socket."))
+                image=re.match(r"image\s*:\s*['\"]?([^'\"]+)",stripped,re.I)
+                if image:
+                    last=image.group(1).rsplit("/",1)[-1]
+                    if last.endswith(":latest") or (":" not in last and "@" not in image.group(1)):
+                        findings.append(("WARN",path,n,"Compose image uses latest or an implicit floating tag."))
+    lines=[f"Container configuration files inspected: {inspected:,}",f"Review signals: {len(findings):,}","","Findings:"]
+    lines.extend(f"- {level} · {path}:{line} · {message}" for level,path,line,message in findings[:500])
+    if not findings: lines.append("- No supported container configuration signals found.")
+    lines.append("Static line-pattern review only. Multi-stage inheritance, interpolation, runtime policy and the final effective USER are not fully evaluated.")
+    return _repo_report_text(p,"-repo-container-audit.txt","Repository container audit",lines,
+        f"Inspected {inspected} container files and found {len(findings)} review signals.")
+
+
+def repo_ci_reliability(p):
+    findings=[]; inspected=0
+    for item in _repo_text_candidates(p):
+        path=item["path"]; raw=item.get("data")
+        if raw is None or not re.search(r"(^|/)\.github/workflows/[^/]+\.(?:yml|yaml)$",path,re.I): continue
+        inspected+=1
+        try:
+            import yaml
+            data=yaml.safe_load(raw)
+        except Exception:
+            data=None
+        if not isinstance(data,dict):
+            findings.append(("ERROR",path,1,"Workflow YAML could not be parsed for reliability analysis.")); continue
+        jobs=data.get("jobs",{})
+        if not isinstance(jobs,dict) or not jobs:
+            findings.append(("WARN",path,1,"No recognizable jobs map found.")); continue
+        if "concurrency" not in data:
+            findings.append(("INFO",path,1,"No workflow-level concurrency group; duplicate runs may consume runner capacity."))
+        for job_id,job in jobs.items():
+            if not isinstance(job,dict): continue
+            timeout=job.get("timeout-minutes")
+            if not isinstance(timeout,int) or timeout<=0:
+                findings.append(("WARN",path,1,"Job "+str(job_id)[:80]+" has no positive timeout-minutes limit."))
+            if job.get("continue-on-error") is True:
+                findings.append(("WARN",path,1,"Job "+str(job_id)[:80]+" sets continue-on-error: true."))
+            steps=job.get("steps",[])
+            if isinstance(steps,list):
+                for step in steps:
+                    if not isinstance(step,dict): continue
+                    run=step.get("run")
+                    if isinstance(run,str) and re.search(r"(?:\|\|\s*true\b|;\s*true\s*$)",run):
+                        findings.append(("WARN",path,1,"A step in job "+str(job_id)[:80]+" may mask a command failure with || true or trailing true."))
+                    if isinstance(run,str) and "set +e" in run:
+                        findings.append(("INFO",path,1,"A step in job "+str(job_id)[:80]+" disables shell fail-fast; verify failures are checked explicitly."))
+                    uses=step.get("uses")
+                    if isinstance(uses,str) and re.search(r"@(?:main|master|v\d+|latest)$",uses,re.I):
+                        findings.append(("INFO",path,1,"A step in job "+str(job_id)[:80]+" uses a moving action tag; action pinning is covered by security audit."))
+    lines=[f"GitHub Actions workflow files inspected: {inspected:,}",f"Reliability review signals: {len(findings):,}","","Findings:"]
+    lines.extend(f"- {level} · {path}:{line} · {message}" for level,path,line,message in findings[:600])
+    if not findings: lines.append("- No supported CI reliability signals detected.")
+    lines.append("Static workflow review only. Matrix expansion, reusable workflows, composite actions, branch protection, org policy, runner availability and actual test outcomes are not evaluated.")
+    return _repo_report_text(p,"-repo-ci-reliability.txt","Repository CI reliability audit",lines,
+        f"Inspected {inspected} GitHub Actions workflow files and found {len(findings)} review signals.")
+
+
+
 def repo_intelligence(p):
     import collections
     import zipfile
