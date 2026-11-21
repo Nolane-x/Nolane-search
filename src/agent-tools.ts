@@ -39,6 +39,12 @@ const TEXT_TOOL_IDS = new Set([
   "package-json-audit",
   "gitignore-audit",
   "env-reference-report",
+  "terraform-audit",
+  "nginx-config-audit",
+  "apache-config-audit",
+  "caddy-config-audit",
+  "systemd-unit-audit",
+  "shell-script-audit",
 ]);
 
 export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
@@ -90,7 +96,7 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
     type: "function",
     function: {
       name: "process_text_content",
-      description: "Run bounded text/data processors on supplied content: environment-file auditing/redaction/template generation, INI inspection/conversion, Dockerfile/requirements/package manifest/gitignore static audits, environment-reference extraction, translation, developer text and network extraction, Markdown/HTML extraction, JSON/CSV/SQL/YAML conversions and statistics. Never executes shell commands, SQL, package scripts, uploaded code or arbitrary commands.",
+      description: "Run bounded text/data processors on supplied content: environment-file auditing/redaction/template generation, INI inspection/conversion, Dockerfile/requirements/package manifest/gitignore static audits, environment-reference extraction, Terraform/Nginx/Apache/Caddy/systemd/shell static audits, translation, developer text and network extraction, Markdown/HTML extraction, JSON/CSV/SQL/YAML conversions and statistics. Never executes shell commands, SQL, package scripts, uploaded code or arbitrary commands.",
       parameters: {
         type: "object",
         properties: {
@@ -1407,6 +1413,109 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
     const patterns=[/\bprocess\.env\.([A-Za-z_][A-Za-z0-9_]*)/g,/\bimport\.meta\.env\.([A-Za-z_][A-Za-z0-9_]*)/g,/\bos\.environ(?:\.get)?\s*\[\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]\s*\]/g,/\bos\.getenv\s*\(\s*['"]([A-Za-z_][A-Za-z0-9_]*)['"]/g,/(?<!process\.)\benv\.([A-Z][A-Z0-9_]*)\b/g,/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g];
     const counts=new Map<string,number>();for(const pattern of patterns)for(const match of content.matchAll(pattern)){const name=match.slice(1).find(Boolean);if(name)counts.set(name,(counts.get(name)||0)+1);}
     return ["Environment variable reference report","Unique names: "+counts.size,"Occurrences: "+[...counts.values()].reduce((a,b)=>a+b,0),...[...counts].sort(([a],[b])=>a.localeCompare(b)).slice(0,500).map(([name,count])=>name+"\t"+count),"Names and occurrence counts only; environment values are not read."].join("\n");
+  }
+
+
+  if (toolId === "terraform-audit") {
+    const checks:[RegExp,string,string][]=[
+      [/\b(?:access_key|secret_key|password|client_secret|api_token)\s*=\s*['"][^'"]+['"]/gi,"HIGH","credential-looking literal assignment; value omitted"],
+      [/\bcidr_blocks\s*=\s*\[[^\]]*['"]0\.0\.0\.0\/0['"]/gi,"HIGH","public ingress CIDR 0.0.0.0/0"],
+      [/\bacl\s*=\s*['"]public-(?:read|read-write)['"]/gi,"HIGH","public S3 ACL"],
+      [/\b(?:storage_encrypted|encrypted)\s*=\s*false\b/gi,"HIGH","storage encryption explicitly disabled"],
+      [/\bpublicly_accessible\s*=\s*true\b/gi,"HIGH","database/service is publicly accessible"],
+      [/\bskip_final_snapshot\s*=\s*true\b/gi,"WARN","final database snapshot is skipped"],
+      [/\b(?:Action|actions)\s*=\s*\[[^\]]*['"]\*['"]/gi,"HIGH","wildcard IAM action"],
+    ];
+    const findings:string[]=[];
+    for(const [pattern,severity,label] of checks)for(const match of content.matchAll(pattern)){
+      const line=content.slice(0,match.index??0).split("\n").length;findings.push(severity+" line "+line+": "+label);
+    }
+    if(!/\bterraform\s*\{/.test(content))findings.push("INFO: terraform settings block is not present in this file");
+    return ["Terraform static audit","Lines: "+content.split(/\r?\n/).length,"Findings: "+findings.length,...(findings.length?findings:["No baseline findings."]),"Static HCL inspection only; terraform init/plan/apply was not run."].join("\n");
+  }
+  if (toolId === "nginx-config-audit") {
+    const active=content.split(/\r?\n/).map((line,index)=>({line:index+1,value:line.split("#",1)[0]!.trim()})).filter(x=>x.value);
+    const findings:string[]=[];
+    for(const item of active){
+      if(/^\s*server_tokens\s+on\b/i.test(item.value))findings.push("WARN line "+item.line+": server_tokens is enabled");
+      if(/^\s*autoindex\s+on\b/i.test(item.value))findings.push("HIGH line "+item.line+": directory autoindex is enabled");
+      if(/^\s*proxy_ssl_verify\s+off\b/i.test(item.value))findings.push("HIGH line "+item.line+": upstream TLS verification is disabled");
+      if(/^\s*ssl_protocols\b.*\b(?:SSLv3|TLSv1(?:\.0)?|TLSv1\.1)\b/i.test(item.value))findings.push("HIGH line "+item.line+": weak TLS protocol is enabled");
+    }
+    const https=/^\s*listen\s+[^;]*(?:443|ssl)/im.test(content);
+    if(https&&!/^\s*ssl_certificate\s+/im.test(content))findings.push("HIGH: HTTPS listener has no ssl_certificate directive in this file");
+    if(https&&!/^\s*ssl_certificate_key\s+/im.test(content))findings.push("HIGH: HTTPS listener has no ssl_certificate_key directive in this file");
+    if(https&&!/^\s*add_header\s+Strict-Transport-Security\b/im.test(content))findings.push("INFO: HSTS header was not found");
+    if(!https)findings.push("WARN: no HTTPS listener was detected");
+    if(!/^\s*client_max_body_size\s+/im.test(content))findings.push("INFO: client_max_body_size is not explicitly configured");
+    return ["Nginx static audit","Active directives: "+active.length,"HTTPS listener: "+String(https),"Findings: "+findings.length,...(findings.length?findings:["No baseline findings."]),"Static inspection only; Nginx was not started."].join("\n");
+  }
+  if (toolId === "apache-config-audit") {
+    const active=content.split(/\r?\n/).map((line,index)=>({line:index+1,value:line.split("#",1)[0]!.trim()})).filter(x=>x.value);
+    const findings:string[]=[];
+    for(const item of active){
+      if(/^\s*ServerTokens\s+(?:Full|OS)\b/i.test(item.value))findings.push("WARN line "+item.line+": ServerTokens exposes detailed server information");
+      if(/^\s*ServerSignature\s+On\b/i.test(item.value))findings.push("WARN line "+item.line+": ServerSignature is enabled");
+      if(/^\s*Options\b.*\bIndexes\b/i.test(item.value))findings.push("HIGH line "+item.line+": directory listing Indexes is enabled");
+      if(/^\s*AllowOverride\s+All\b/i.test(item.value))findings.push("INFO line "+item.line+": AllowOverride All increases configuration surface");
+      if(/^\s*TraceEnable\s+On\b/i.test(item.value))findings.push("WARN line "+item.line+": TRACE method is enabled");
+      if(/^\s*SSLProtocol\b.*(?<!-)\b(?:SSLv3|TLSv1(?:\.0)?|TLSv1\.1)\b/i.test(item.value))findings.push("HIGH line "+item.line+": weak TLS protocol is enabled");
+    }
+    const tls=/^\s*SSLEngine\s+on\b/im.test(content);
+    if(tls&&!/^\s*Header\s+always\s+set\s+Strict-Transport-Security\b/im.test(content))findings.push("INFO: HSTS header was not found");
+    return ["Apache HTTPD static audit","Active directives: "+active.length,"TLS enabled: "+String(tls),"Findings: "+findings.length,...(findings.length?findings:["No baseline findings."]),"Static inspection only; Apache was not started."].join("\n");
+  }
+  if (toolId === "caddy-config-audit") {
+    const active=content.split(/\r?\n/).map((line,index)=>({line:index+1,value:line.split("#",1)[0]!.trim()})).filter(x=>x.value);
+    const findings:string[]=[];
+    for(const item of active){
+      if(/^\s*auto_https\s+off\b/i.test(item.value))findings.push("HIGH line "+item.line+": automatic HTTPS is disabled");
+      if(/(?:tls_)?insecure_skip_verify\b/i.test(item.value))findings.push("HIGH line "+item.line+": upstream TLS verification is disabled");
+      if(/^\s*debug\b/i.test(item.value))findings.push("INFO line "+item.line+": debug mode is enabled");
+      if(/^\s*protocols?\s+.*\b(?:tls1\.0|tls1\.1)\b/i.test(item.value))findings.push("HIGH line "+item.line+": weak TLS protocol is enabled");
+    }
+    const http=/\b:80\b/.test(content),https=/\b:443\b/.test(content)||/^\s*auto_https\s+on\b/im.test(content);
+    if(http&&!https)findings.push("WARN: HTTP listener detected without explicit HTTPS site/automatic HTTPS");
+    if(!/Strict-Transport-Security/i.test(content))findings.push("INFO: HSTS header was not found");
+    return ["Caddyfile static audit","Active lines: "+active.length,"Findings: "+findings.length,...(findings.length?findings:["No baseline findings."]),"Static inspection only; Caddy was not started."].join("\n");
+  }
+  if (toolId === "systemd-unit-audit") {
+    let section="";const values=new Map<string,{line:number,value:string}>();
+    for(const [index,line] of content.split(/\r?\n/).entries()){
+      const value=line.trim();if(!value||value.startsWith("#")||value.startsWith(";"))continue;
+      if(value.startsWith("[")&&value.endsWith("]")){section=value.slice(1,-1).trim();continue;}
+      const at=value.indexOf("=");if(at<0)continue;
+      values.set(section+"."+value.slice(0,at).trim(),{line:index+1,value:value.slice(at+1).trim()});
+    }
+    const get=(name:string)=>values.get("Service."+name),findings:string[]=[];
+    if(!get("User")||get("User")!.value==="root")findings.push("WARN: service runs as root or does not specify User");
+    if(get("NoNewPrivileges")?.value!=="yes")findings.push("WARN: NoNewPrivileges=yes is not set");
+    if(!["strict","full"].includes(get("ProtectSystem")?.value||""))findings.push("WARN: ProtectSystem=strict/full is not set");
+    if(!["yes","read-only","tmpfs"].includes(get("ProtectHome")?.value||""))findings.push("INFO: ProtectHome restriction is not set");
+    if(get("PrivateTmp")?.value!=="yes")findings.push("INFO: PrivateTmp=yes is not set");
+    const caps=get("CapabilityBoundingSet");if(caps&&/\b(?:CAP_SYS_ADMIN|CAP_SYS_MODULE|CAP_SYS_RAWIO|ALL)\b/.test(caps.value))findings.push("HIGH line "+caps.line+": broad capability is granted");
+    const execStart=get("ExecStart");if(execStart&&/(?:\/bin\/)?(?:ba)?sh\s+-c\b/.test(execStart.value))findings.push("WARN line "+execStart.line+": ExecStart uses a shell -c wrapper");
+    const umask=get("UMask");if(umask&&["000","0000","0002"].includes(umask.value))findings.push("WARN line "+umask.line+": permissive UMask "+umask.value);
+    return ["systemd unit static audit","Service directives: "+[...values.keys()].filter(x=>x.startsWith("Service.")).length,"Findings: "+findings.length,...(findings.length?findings:["No baseline findings."]),"Static inspection only; service was not started."].join("\n");
+  }
+  if (toolId === "shell-script-audit") {
+    const checks:[RegExp,string,string][]=[
+      [/\beval\s+/gi,"HIGH","eval executes dynamically constructed shell code"],
+      [/(?:curl|wget)[^\n;|]*\|\s*(?:sh|bash)\b/gi,"HIGH","download piped directly to a shell"],
+      [/\brm\s+-[^\n]*r[^\n]*f\s+\/(?:\s|$)/gi,"HIGH","recursive deletion of filesystem root"],
+      [/\bchmod\s+(?:-R\s+)?777\b/gi,"HIGH","world-writable permissions granted"],
+      [/\bsource\s+<\(\s*(?:curl|wget)\b/gi,"HIGH","remote process substitution is sourced"],
+      [/\bsudo\b/gi,"INFO","script invokes sudo; review privilege boundary"],
+      [/^\s*(?:export\s+)?([A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z0-9_]*)\s*=\s*(['"])[^'"]+\2/gim,"HIGH","credential-like variable assignment has a literal value (value omitted)"],
+    ];
+    const findings:string[]=[];
+    for(const [pattern,severity,label] of checks)for(const match of content.matchAll(pattern)){
+      const line=content.slice(0,match.index??0).split("\n").length;
+      findings.push(severity+" line "+line+": "+(match[1]?label.replace("credential-like variable assignment","credential-like variable "+match[1]):label));
+    }
+    if(!/^\s*set\s+-[^#\n]*[eE][^#\n]*[uU][^#\n]*[oO]/m.test(content))findings.push("WARN: strict flags not found; for Bash consider set -euo pipefail");
+    if(/\bmktemp\b/.test(content)&&! /^\s*trap\s+/m.test(content))findings.push("INFO: mktemp is used but no trap cleanup handler was found");
+    return ["Shell script static audit","Lines: "+content.split(/\r?\n/).length,"Shebang: "+String(content.startsWith("#!")),"Findings: "+findings.length,...(findings.length?findings:["No baseline findings."]),"Static inspection only; script was not executed."].join("\n");
   }
 
   const lines = content.replace(/^\uFEFF/, "").split(/\r?\n/).filter(line => {

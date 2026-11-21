@@ -299,6 +299,15 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "gitignore-audit", name: "Kiểm tra quy tắc gitignore", category: "developer", description: "Kiểm tra sơ bộ các quy tắc bảo vệ .env, dev vars, private key và npmrc; không thay thế Git's full ignore matcher.", accepts: ["text/plain", ".txt"], output: "Báo cáo gitignore TXT", ready: true },
   { id: "env-reference-report", name: "Tìm tham chiếu biến môi trường", category: "developer", description: "Trích tên biến từ process.env, import.meta.env, os.environ, getenv và shell references; không đọc giá trị.", accepts: ["text/plain", ".txt", ".md", ".js", ".ts", ".py", ".sh"], output: "Báo cáo biến môi trường TXT", ready: true },
 
+  { id: "github-actions-audit", name: "Kiểm tra GitHub Actions workflow", category: "developer", description: "Audit tĩnh workflow YAML: action không pin SHA, quyền token rộng, pull_request_target, persist-credentials và secret expression trong run; không chạy workflow.", accepts: ["application/yaml", "text/yaml", ".yml", ".yaml"], output: "Báo cáo TXT", ready: true },
+  { id: "kubernetes-manifest-audit", name: "Kiểm tra Kubernetes manifest", category: "developer", description: "Audit YAML Kubernetes: privileged, host namespace/hostPath, image tag, runAsNonRoot, readOnlyRootFilesystem, capabilities và resource limits; không kết nối cluster.", accepts: ["application/yaml", "text/yaml", ".yml", ".yaml"], output: "Báo cáo TXT", ready: true },
+  { id: "terraform-audit", name: "Kiểm tra Terraform HCL", category: "developer", description: "Audit tĩnh HCL: credential literal, public ingress, bucket public, storage encryption tắt và quyền IAM wildcard; không init/plan/apply.", accepts: ["text/plain", ".tf", ".tfvars"], output: "Báo cáo TXT", ready: true },
+  { id: "nginx-config-audit", name: "Kiểm tra cấu hình Nginx", category: "developer", description: "Audit tĩnh TLS, autoindex, server_tokens, proxy TLS verification, HSTS và listener; không khởi chạy Nginx.", accepts: ["text/plain", ".conf", ".nginx"], output: "Báo cáo TXT", ready: true },
+  { id: "apache-config-audit", name: "Kiểm tra cấu hình Apache HTTPD", category: "developer", description: "Audit tĩnh ServerTokens, ServerSignature, directory listing, AllowOverride, TRACE và TLS protocol; không khởi chạy Apache.", accepts: ["text/plain", ".conf", ".htaccess"], output: "Báo cáo TXT", ready: true },
+  { id: "caddy-config-audit", name: "Kiểm tra Caddyfile", category: "developer", description: "Audit tĩnh auto_https, TLS protocol, insecure_skip_verify, HSTS và debug mode; không khởi chạy Caddy.", accepts: ["text/plain", ".txt", "Caddyfile"], output: "Báo cáo TXT", ready: true },
+  { id: "systemd-unit-audit", name: "Kiểm tra systemd service", category: "developer", description: "Audit tĩnh User, NoNewPrivileges, ProtectSystem/Home, PrivateTmp, capabilities, shell ExecStart và UMask; không chạy service.", accepts: ["text/plain", ".service"], output: "Báo cáo TXT", ready: true },
+  { id: "shell-script-audit", name: "Kiểm tra shell script", category: "developer", description: "Audit tĩnh eval, download-to-shell, rm -rf /, chmod 777, sudo, secret assignment và safety flags; không chạy script.", accepts: ["text/plain", ".sh", ".bash"], output: "Báo cáo TXT", ready: true },
+
 ];
 
 
@@ -567,6 +576,15 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "gitignore-audit": ["text-clean", "text-stats"],
   "env-reference-report": ["text-clean", "text-stats"],
 
+  "github-actions-audit": ["text-clean", "text-stats"],
+  "kubernetes-manifest-audit": ["text-clean", "text-stats"],
+  "terraform-audit": ["text-clean", "text-stats"],
+  "nginx-config-audit": ["text-clean", "text-stats"],
+  "apache-config-audit": ["text-clean", "text-stats"],
+  "caddy-config-audit": ["text-clean", "text-stats"],
+  "systemd-unit-audit": ["text-clean", "text-stats"],
+  "shell-script-audit": ["text-clean", "text-stats"],
+
 };
 
 export type ToolPipelineValidation =
@@ -751,6 +769,16 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (/^\.gitignore$/i.test(name) || /^\.dockerignore$/i.test(name)) return "gitignore-audit";
   if (/^package\.json$/i.test(name)) return "package-json-audit";
   if (/^requirements(?:[-_.].+)?\.txt$/i.test(name)) return "requirements-audit";
+
+  if (/^(?:ci|deploy|release|codeql|security)\.(?:yml|yaml)$/i.test(name)) return "github-actions-audit";
+  if (/^(?:deployment|statefulset|daemonset|replicaset|pod|kustomization)\.(?:yml|yaml)$/i.test(name)) return "kubernetes-manifest-audit";
+  if (/\.tf(?:vars)?$/i.test(name)) return "terraform-audit";
+  if (/^nginx\.conf$/i.test(name)) return "nginx-config-audit";
+  if (/^(?:apache2|httpd)\.conf$/i.test(name) || name===".htaccess") return "apache-config-audit";
+  if (/^caddyfile$/i.test(name)) return "caddy-config-audit";
+  if (/\.service$/i.test(name)) return "systemd-unit-audit";
+  if (/\.(?:sh|bash)$/i.test(name)) return "shell-script-audit";
+
   if (/^\.env(?:\..+)?$/i.test(name) || /^\.dev\.vars(?:\..+)?$/i.test(name)) return "env-audit";
   if (/\.(ini|cfg)$/i.test(name)) return "ini-validate";
   if (/\.toml$/i.test(name)) return "toml-validate";
