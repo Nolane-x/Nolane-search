@@ -47,6 +47,29 @@ const input = {
   capturedAt: "2026-11-21T08:00:00.000Z",
 };
 
+function archiveSnapshot(overrides: Partial<ArchiveSnapshot> = {}): ArchiveSnapshot {
+  return {
+    id: row.id,
+    watchId: row.watch_id,
+    userId: row.user_id,
+    chatId: row.chat_id,
+    archiveChatId: row.archive_chat_id,
+    archiveMessageId: row.archive_message_id,
+    telegramFileId: row.telegram_file_id,
+    telegramFileUniqueId: row.telegram_file_unique_id,
+    fileName: row.file_name,
+    fileSize: row.file_size,
+    url: row.url,
+    normalizedUrl: row.normalized_url,
+    title: row.title,
+    contentHash: row.content_hash,
+    captureKind: row.capture_kind,
+    capturedAt: row.captured_at,
+    createdAt: row.created_at,
+    ...overrides,
+  };
+}
+
 function envWithStatement(statement: Record<string, unknown>): Env {
   return { DB: { prepare: () => statement } } as unknown as Env;
 }
@@ -119,11 +142,9 @@ describe("Telegram archive index", () => {
   });
 
   it("includes safe previous/next page commands and carries the search query forward", () => {
-    const snapshots = Array.from({ length: 5 }, (_, index): ArchiveSnapshot => ({
-      ...row,
-      id: 20 + index,
-      title: "Archive item " + (index + 1),
-    }));
+    const snapshots = Array.from({ length: 5 }, (_, index) =>
+      archiveSnapshot({ id: 20 + index, title: "Archive item " + (index + 1) }),
+    );
     const output = formatArchiveSnapshotList(snapshots, 12, "<climate>", 2, 5);
     expect(output).toContain("Trang 2 / 3");
     expect(output).toContain("Hiển thị 6–10 / 12 mục.");
@@ -133,10 +154,9 @@ describe("Telegram archive index", () => {
   });
 
   it("shows only the forward command on the first page", () => {
-    const snapshots = Array.from({ length: 5 }, (_, index): ArchiveSnapshot => ({
-      ...row,
-      id: 30 + index,
-    }));
+    const snapshots = Array.from({ length: 5 }, (_, index) =>
+      archiveSnapshot({ id: 30 + index }),
+    );
     const output = formatArchiveSnapshotList(snapshots, 8, "", 1, 5);
     expect(output).toContain("/archive_page 2");
     expect(output).not.toContain("/archive_page 0");
