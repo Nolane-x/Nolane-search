@@ -9,7 +9,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 - Source tree is committed and CI has passed type-checking, unit tests and Cloudflare build validation.
 - Cloudflare Worker `nolane-search` is deployed from `main`; its live `/health` endpoint returns `ok: true` and `database: reachable`.
 - D1 migrations `0001_core.sql` through `0004_remove_request_rate_limits.sql` are applied. The main Queue, dead-letter Queue, consumers and 30-minute Cron trigger are configured.
-- Latest production deployment: Worker version `519bee0c-6f42-4c76-bcfb-d86c546040ac` (version 58, 100% traffic), from main commit `a685b9853b86b196b29805f6490ebd37d0144033`; Telegram webhook (`message` + `callback_query`) and command menu were verified.
+- Latest production deployment: Worker version `741a6df7-916b-4f19-a75f-f8ea95863960` (version 69, 100% traffic; deployment `93ac3038-31bd-4a4b-9360-95e19c063827`), from main commit `a0919d77a76e3077aad485b4f621f4206ff6e24d`; Telegram webhook (`message` + `callback_query`) and command menu were registered successfully.
 - GitHub Actions deployment has succeeded, including runtime-secret upload, Telegram webhook registration and Telegram command-menu registration.
 - The AI Router accepts the owner's multi-provider `AI_ROUTER_CONFIG` secret plus the legacy OpenRouter fallback. A successful configuration check shows loaded routes, not proof that every upstream model key or quota is currently healthy.
 - CI, Worker build, deployment and health smoke checks passed. Real Telegram command execution and live provider-key acceptance still need owner-level end-to-end testing.
