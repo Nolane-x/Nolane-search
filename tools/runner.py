@@ -1985,6 +1985,7 @@ class _HTMLAuditParser(HTMLParser):
         self.ids = set()
         self.id_counts = {}
         self.html_attrs = {}
+        self.form_sequence = 0
 
     def _finish(self, node):
         if node["tracked"]:
@@ -2000,13 +2001,18 @@ class _HTMLAuditParser(HTMLParser):
             self.ids.add(element_id)
             self.id_counts[element_id] = self.id_counts.get(element_id, 0) + 1
         line = self.getpos()[0]
-        form_line = next((item["line"] for item in reversed(self.stack) if item["tag"] == "form"), None)
+        parent_form = next((item for item in reversed(self.stack) if item["tag"] == "form"), None)
+        if tag == "form":
+            self.form_sequence += 1
+            form_id = self.form_sequence
+        else:
+            form_id = parent_form.get("form_id") if parent_form else None
         wrapped_label = any(item["tag"] == "label" for item in self.stack)
         role = values.get("role", "").lower()
         node = {
             "tag": tag, "attrs": values, "text": "", "line": line,
             "tracked": tag in self.TRACKED or role in {"main","navigation","banner","contentinfo"},
-            "form_line": form_line, "wrapped_label": wrapped_label,
+            "form_id": form_id, "wrapped_label": wrapped_label,
         }
         if tag in self.VOID:
             self._finish(node)
@@ -2201,7 +2207,7 @@ def html_form_audit(p):
             issues.append("Form has a potentially unsafe action scheme at line " + str(form["line"]))
         if not attrs.get("method", "").strip():
             issues.append("Form uses the browser default GET method at line " + str(form["line"]))
-        owned = [node for node in controls if node.get("form_line") == form["line"]]
+        owned = [node for node in controls if node.get("form_id") == form["form_id"]]
         if method == "get" and any(node["tag"] == "input" and node["attrs"].get("type", "text").lower() == "password" for node in owned):
             issues.append("Password field is inside a GET form at line " + str(form["line"]))
     for node in controls:
