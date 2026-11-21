@@ -62,3 +62,13 @@ The production database currently has migration `0005` applied, but the GitHub A
 - Cloudflare now routes 100% traffic to Worker version `8c8cbfb8-15dc-4ec8-98ee-adabb0c0133c`. Telegram webhook and command registration completed successfully.
 - No schema migration was needed. Existing `archive_snapshots` D1 table is reused.
 - The owner-level Telegram E2E check remains outstanding: create initial/change captures, search across pages, restore a document and test behavior after deleting an archive source message.
+
+## Follow-up release: D1 index failure recovery — 2026-11-21
+
+- PR #54 merged: https://github.com/Nolane-x/Nolane-search/pull/54
+- Release commit: `5f0744a6714c1a343dc4541b1b648e2f903dae25`.
+- A successful `sendDocument` followed by a failed D1 index insert no longer leaves the owner without a direct copy: Worker calls Telegram `copyMessage` to the owner's private chat, then notifies that the snapshot is not indexed/searchable.
+- If copying also fails, a safe warning includes filename + original archive message ID for manual lookup. Recovery and notification exceptions are isolated from watch processing.
+- PR CI #254 and main CI #255 passed. Deployment #107 and build/smoke #100 passed. No schema changes.
+- Cloudflare production version: `508f7849-fefc-4592-b93a-f871ec1ed27a`, 100% traffic.
+- Owner-level end-to-end Telegram validation is still outstanding (first capture, change capture, page navigation, restore, deleted source message).
