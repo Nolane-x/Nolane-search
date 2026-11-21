@@ -87,7 +87,7 @@ export async function sendArchiveDocument(
   if (!response.ok || !data.ok) throw new Error(data.description || "Telegram sendDocument failed (" + response.status + ")");
   const messageId = data.result?.message_id;
   const document = data.result?.document;
-  if (!Number.isSafeInteger(messageId) || !document || typeof document.file_id !== "string" || !document.file_id) {
+  if (typeof messageId !== "number" || !Number.isSafeInteger(messageId) || !document || typeof document.file_id !== "string" || !document.file_id) {
     throw new Error("Telegram accepted the archive upload but returned no document reference.");
   }
   return {
@@ -95,7 +95,7 @@ export async function sendArchiveDocument(
     fileId: document.file_id,
     ...(typeof document.file_unique_id === "string" ? { fileUniqueId: document.file_unique_id } : {}),
     fileName: typeof document.file_name === "string" ? document.file_name : filename,
-    ...(Number.isSafeInteger(document.file_size) ? { fileSize: Number(document.file_size) } : {}),
+    ...(typeof document.file_size === "number" && Number.isSafeInteger(document.file_size) ? { fileSize: document.file_size } : {}),
   };
 }
 
