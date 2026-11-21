@@ -20,7 +20,7 @@ Dùng trực tiếp URL GitHub công khai, không cần tải ZIP về máy:
 - `/repo_compare https://github.com/owner/repository main...feature/name` — phân tích snapshot branch đích và bổ sung metadata so sánh branch qua GitHub Compare API.
 - `/tool_jobs`, `/tool_job ID`, `/tool_retry ID` — theo dõi, xem trace và chạy lại job.
 
-Kết quả là ZIP gồm báo cáo Markdown, module/import graph JSON, metadata GitHub và các báo cáo inventory, dependencies, license evidence, secret scan, TODO scan, code statistics, config audit và duplicate files. Import graph hiện dùng Python AST và heuristic cho relative imports của JS/TS; đây không phải call graph hoàn chỉnh. Commit messages có marker fix/bug chỉ là tín hiệu tìm kiếm, không phải defect rate.
+Kết quả là ZIP gồm báo cáo Markdown, module/import graph JSON, metadata GitHub và 18 nhóm báo cáo: inventory, dependencies, license evidence, secret scan, TODO scan, code statistics, config audit, duplicates, security/supply-chain, test mapping/quality, complexity, API surface, docs links, migration risk, runtime risk và i18n. Import graph hiện dùng Python AST và heuristic cho relative imports của JS/TS; đây không phải call graph hoàn chỉnh. Commit messages có marker fix/bug chỉ là tín hiệu tìm kiếm, không phải defect rate.
 
 Chỉ nhận repository công khai. Runner tải ZIP snapshot qua GitHub API và codeload.github.com, giới hạn 100 MB tải xuống / 100 MB dữ liệu giải nén / 500 entries. Không giải nén đường dẫn ra filesystem, không chạy mã, GitHub Actions workflow hoặc build script trong repository, không cài dependency và không truy vấn CVE/advisory. Secret scan chỉ báo file, dòng và loại pattern, không tiết lộ giá trị. Báo cáo license là bằng chứng văn bản, không phải tư vấn pháp lý.
 
@@ -172,9 +172,18 @@ Các processor văn bản này giới hạn đầu vào 5 MB và yêu cầu UTF-
 | `/tool repo-config-audit` | Kiểm kê cấu hình dự án | Kiểm tra hiện diện của README, license, manifest, lockfile, test, CI, container và lint config. | TXT |
 | `/tool repo-duplicates` | Tìm file trùng repository | Hash SHA-256 các member và gom nhóm file có nội dung giống nhau. | CSV |
 | `/tool repo-intelligence` | Tổng hợp phân tích repository ZIP | Tạo import graph và gói báo cáo về dependencies, license, secrets (ẩn giá trị), TODO, codebase, cấu hình và file trùng. | ZIP gồm Markdown, JSON và các báo cáo |
-| `/repo URL` / `/repo_compare URL base...head` | GitHub Repository Intelligence | Tải snapshot repository GitHub công khai, phân tích import graph, metadata, tối đa 20 commit gần nhất và thông tin files changed của hai ref; đóng gói 10 báo cáo kiểm toán. | ZIP gồm Markdown, JSON và báo cáo audit |
+| `/repo URL` / `/repo_compare URL base...head` | GitHub Repository Intelligence | Tải snapshot repository GitHub công khai, phân tích import graph, metadata, tối đa 20 commit gần nhất và thông tin files changed của hai ref; đóng gói 18 nhóm báo cáo kiểm toán. | ZIP gồm Markdown, JSON và báo cáo audit |
 | `/tool repo-security-audit` | Kiểm toán bảo mật repository | Quét tĩnh GitHub Actions, Dockerfile/Containerfile, Kubernetes YAML và Terraform; phát hiện shell injection trong workflow, action chưa pin SHA, cấu hình container đặc quyền, host namespace/hostPath, wildcard IAM và ingress SSH/RDP công khai. | ZIP gồm Markdown, JSON findings và SARIF 2.1.0 |
 | `/tool repo-supply-chain` | Kiểm toán dependency & supply chain | Kiểm kê package manifest/lockfile, đối chiếu lockfile gần nhất, phân loại version range/floating, nguồn Git/URL và npm lifecycle hooks; không resolve hay cài package. | ZIP gồm Markdown và JSON inventory |
+
+| `/tool repo-test-map` | Ánh xạ source ↔ tests | Tìm test files có thể liên quan từng source file qua basename/path; không suy diễn line coverage. | TXT |
+| `/tool repo-test-quality` | Chất lượng test | Đếm test declarations/assertion signals, skipped/focused tests, broad exception handling và TODO markers. | TXT |
+| `/tool repo-complexity-report` | Độ phức tạp code | Python decision-count qua AST; JS/TS branch signals ở cấp file được đánh dấu heuristic. | TXT |
+| `/tool repo-api-surface` | API surface inventory | Trích route/handler candidates từ Python, JS/TS, Java và Go. | TXT |
+| `/tool repo-docs-audit` | Tài liệu và broken links | Kiểm tra các file tài liệu chuẩn và relative Markdown links nội bộ, không fetch external URL. | TXT |
+| `/tool repo-migration-audit` | Migration risk audit | Phát hiện DDL/DML nguy hiểm: DROP, TRUNCATE, DELETE thiếu WHERE, đổi kiểu và NOT NULL mới. | TXT |
+| `/tool repo-runtime-risk` | Runtime risk scan | Static scan eval/exec, pickle, YAML load, shell=True, HTML sinks, TLS verify và dynamic SQL clues. | TXT |
+| `/tool repo-i18n-audit` | i18n key consistency | So sánh key trong JSON locale catalogs theo thư mục, liệt kê key thiếu/thừa. | TXT |
 
 `repo-security-audit` phát hành findings theo rule ID, mức độ, file/dòng và hướng khắc phục, kèm SARIF 2.1.0. `repo-supply-chain` xuất danh mục dependency và bằng chứng lockfile ở JSON; URL nguồn có thể chứa user/password được lược bỏ khỏi output. `/repo` và `/repo_compare` tự chạy cả hai audit này và đưa report vào ZIP tổng hợp. Đây là phân tích tĩnh heuristic, có thể false positive/false negative; không thực thi workflow, Docker build, Terraform hay package code, không cài dependency và không truy vấn CVE/advisory. Việc ghép manifest-lockfile chỉ là heuristic theo đường dẫn, không phải dependency resolver hoặc SBOM đầy đủ.
 
@@ -519,3 +528,8 @@ The runner executes DAG nodes in topological dependency layers, with a hard maxi
 - Successful jobs clear the Telegram file reference. Failed jobs retain that private reference so the owner can manually retry while the Telegram Bot API still makes the file available. Older failed jobs created before this change may not have a retained reference; re-upload the source file in that case.
 - Intermediate files remain on the ephemeral runner and are not persisted between attempts. This is whole-pipeline retry, not resume-from-step. Trace entries are validated against the exact stored pipeline before D1 persistence.
 - The progress checkpoint and trace contain bounded metadata and processor summaries only; they do not include file bytes, Telegram file IDs, tokens, or local filesystem paths. The authenticated Web Workspace Tools tab also displays live progress and trace counters from the same job record.
+
+
+### Wave 10 — Repository Engineering Intelligence
+
+Tám processor mới chỉ đọc snapshot ZIP trong runner tạm thời. Chúng không chạy code, test, build scripts, migrations, workflows hay cài dependency của repository. Kết quả có giới hạn được gắn nhãn heuristic: test map không phải code coverage; test quality không thay thế test execution; JS/TS complexity và API routes là pattern signals; API inventory không phải OpenAPI đầy đủ; docs audit chỉ xác thực relative links trong ZIP; migration audit không kết nối database; runtime risk không chứng minh exploitability; i18n audit so sánh key chứ không chấm chất lượng dịch.
