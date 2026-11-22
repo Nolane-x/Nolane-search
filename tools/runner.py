@@ -85,6 +85,7 @@ RUNNERS = {
     "repo-container-audit",
     "repo-ci-reliability",
     "docx-audit", "pptx-audit", "csv-privacy-audit", "archive-security-audit",
+    "xlsx-privacy-audit", "pdf-privacy-audit",
 
 }
 
@@ -383,13 +384,15 @@ PIPELINE_TRANSITIONS = {
     "pptx-audit": {"text-clean", "text-stats"},
     "csv-privacy-audit": {"text-clean", "text-stats"},
     "archive-security-audit": {"text-clean", "text-stats"},
+    "xlsx-privacy-audit": {"text-clean", "text-stats"},
+    "pdf-privacy-audit": {"text-clean", "text-stats"},
     "csv-to-sql-inserts": set(),
 
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -8425,6 +8428,166 @@ def archive_security_audit(p):
     return tool_text("\n".join(lines),"Archive security audit")
 
 
+def xlsx_privacy_audit(p):
+    from openpyxl import load_workbook
+    workbook=load_workbook(p,read_only=True,data_only=True,keep_links=False)
+    counts={}; samples={}; sensitive_columns=[]; hidden_sheets=[]; total_cells=0; scanned_cells=0
+    email_re=re.compile(r"(?i)(?<![\w.+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}(?![\w.-])")
+    card_re=re.compile(r"(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)")
+    ipv4_re=re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
+    phone_re=re.compile(r"(?:phone|mobile|telephone|tel|sdt|so_dien_thoai)",re.I)
+    sensitive_re=re.compile(r"(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|email|e[_-]?mail|phone|mobile|telephone|address|street|postal|date[_-]?of[_-]?birth|dob|birth|passport|national[_-]?id|citizen[_-]?id|ssn|credit[_-]?card|card[_-]?number|iban|bank[_-]?account|tax[_-]?id|full[_-]?name|first[_-]?name|last[_-]?name)",re.I)
+    credential_re=re.compile(r"(?:gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})")
+    def add(sheet,column,kind,coordinate):
+        key=(sheet,column,kind); counts[key]=counts.get(key,0)+1
+        locations=samples.setdefault(key,[])
+        if len(locations)<5 and coordinate not in locations: locations.append(coordinate)
+    try:
+        if len(workbook.worksheets)>100: raise RuntimeError("Workbook vượt giới hạn 100 sheet.")
+        for sheet in workbook.worksheets:
+            if sheet.sheet_state!="visible": hidden_sheets.append(sheet.title)
+            rows=sheet.max_row or 0; cols=sheet.max_column or 0
+            if rows>50000 or cols>200: raise RuntimeError(f"Sheet {sheet.title[:80]} vượt giới hạn 50.000 dòng hoặc 200 cột.")
+            declared=rows*cols
+            total_cells+=declared
+            if total_cells>2_000_000: raise RuntimeError("Workbook vượt giới hạn 2.000.000 ô khai báo.")
+            if rows==0 or cols==0: continue
+            iterator=sheet.iter_rows(min_row=1,max_row=rows,max_col=cols,values_only=False)
+            header_row=next(iterator,None)
+            if header_row is None: continue
+            headers=[]
+            for index,cell in enumerate(header_row,1):
+                label=str(cell.value or "").strip()[:80] or f"Column {index}"
+                headers.append(label)
+                if sensitive_re.search(re.sub(r"([a-z])([A-Z])",r"\1_\2",label)):
+                    sensitive_columns.append((sheet.title,index,label))
+            for row in iterator:
+                for index,cell in enumerate(row,1):
+                    scanned_cells+=1
+                    if scanned_cells>2_000_000: raise RuntimeError("Workbook vượt giới hạn 2.000.000 ô quét.")
+                    value=cell.value
+                    if value is None: continue
+                    candidate=str(value).strip()[:10000]
+                    if not candidate: continue
+                    header=headers[index-1] if index-1<len(headers) else f"Column {index}"
+                    if sensitive_re.search(re.sub(r"([a-z])([A-Z])",r"\1_\2",header)):
+                        add(sheet.title,index,"sensitive-column",cell.coordinate)
+                    if email_re.search(candidate): add(sheet.title,index,"email-like",cell.coordinate)
+                    if credential_re.search(candidate): add(sheet.title,index,"credential-like",cell.coordinate)
+                    for match in card_re.finditer(candidate):
+                        digits=re.sub(r"\D","",match.group(0))
+                        if not 13<=len(digits)<=19: continue
+                        total=0; parity=len(digits)%2
+                        for position,char in enumerate(digits):
+                            number=int(char)
+                            if position%2==parity:
+                                number*=2
+                                if number>9: number-=9
+                            total+=number
+                        if total%10==0: add(sheet.title,index,"payment-card-like (Luhn)",cell.coordinate)
+                    for match in ipv4_re.finditer(candidate):
+                        try:
+                            import ipaddress
+                            ipaddress.ip_address(match.group(0))
+                            add(sheet.title,index,"IPv4 address",cell.coordinate)
+                        except ValueError:
+                            pass
+                    if phone_re.search(header):
+                        digits=re.sub(r"\D","",candidate)
+                        if 9<=len(digits)<=15 and len(set(digits))>1: add(sheet.title,index,"phone-like",cell.coordinate)
+    finally:
+        workbook.close()
+    lines=[
+        "XLSX privacy / sensitive-data audit",
+        f"Sheets: {len(workbook.sheetnames):,}; non-empty cells scanned: {scanned_cells:,}; declared cell area: {total_cells:,}",
+        f"Hidden or very-hidden sheets: {len(hidden_sheets):,}",
+        "Only cached formula values are inspected; formula cells without cached results may be missed.",
+        "Raw cell values are never copied into this report.",
+        "",
+        "Findings by sheet and column:"
+    ]
+    if counts:
+        by_sheet={}
+        for (sheet,column,kind),count in counts.items():
+            by_sheet.setdefault((sheet,column),[]).append((kind,count))
+        for (sheet,column),items in sorted(by_sheet.items()):
+            label=next((name for s,index,name in sensitive_columns if s==sheet and index==column),"")
+            suffix=f" [{label}]" if label else ""
+            lines.append(f"- Sheet {sheet}; column {column}{suffix}: "+", ".join(f"{kind}={count:,} (cells {','.join(samples[(sheet,column,kind)])})" for kind,count in sorted(items)))
+    else:
+        lines.append("- No supported pattern or sensitive-header signal detected.")
+    lines.extend(["","Hidden sheet names: "+(", ".join(hidden_sheets[:50]) if hidden_sheets else "none"),
+        "Detection is heuristic: header and phone signals can produce false positives/negatives. Workbook formulas are not recalculated and raw cell content is omitted."])
+    return tool_text("\n".join(lines),"XLSX privacy audit")
+
+
+def pdf_privacy_audit(p):
+    import fitz
+    email_re=re.compile(r"(?i)(?<![\w.+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}(?![\w.-])")
+    card_re=re.compile(r"(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)")
+    ipv4_re=re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
+    phone_re=re.compile(r"(?i)(?:phone|mobile|telephone|tel|sdt|so dien thoai|điện thoại)\D{0,20}(\+?[\d][\d\s().-]{7,20})")
+    id_re=re.compile(r"(?i)(?:CCCD|CMND|passport|national\s*ID|tax\s*ID)\D{0,20}([A-Z0-9-]{8,16})")
+    credential_re=re.compile(r"(?:gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})")
+    counts={}; samples={}; total_chars=0
+    def add(page,kind):
+        key=(page,kind); counts[key]=counts.get(key,0)+1
+        if len(samples.setdefault(key,[]))<5: samples[key].append(page)
+    document=fitz.open(p)
+    try:
+        if document.page_count>300: raise RuntimeError("PDF vượt giới hạn 300 trang.")
+        for number,page in enumerate(document,1):
+            text_value=page.get_text("text") or ""
+            total_chars+=len(text_value)
+            if total_chars>2_000_000: raise RuntimeError("PDF vượt giới hạn 2.000.000 ký tự text layer.")
+            for _ in email_re.finditer(text_value): add(number,"email-like")
+            for _ in credential_re.finditer(text_value): add(number,"credential-like")
+            for match in card_re.finditer(text_value):
+                digits=re.sub(r"\D","",match.group(0))
+                if not 13<=len(digits)<=19: continue
+                total=0; parity=len(digits)%2
+                for position,char in enumerate(digits):
+                    digit=int(char)
+                    if position%2==parity:
+                        digit*=2
+                        if digit>9: digit-=9
+                    total+=digit
+                if total%10==0: add(number,"payment-card-like (Luhn)")
+            for match in ipv4_re.finditer(text_value):
+                try:
+                    import ipaddress
+                    ipaddress.ip_address(match.group(0))
+                    add(number,"IPv4 address")
+                except ValueError:
+                    pass
+            for match in phone_re.finditer(text_value):
+                digits=re.sub(r"\D","",match.group(1))
+                if 9<=len(digits)<=15 and len(set(digits))>1: add(number,"phone-like")
+            for _ in id_re.finditer(text_value): add(number,"identity-document-like")
+        page_count=document.page_count
+    finally:
+        document.close()
+    lines=[
+        "PDF privacy / sensitive-data audit",
+        f"Pages scanned: {page_count:,}; extracted text characters: {total_chars:,}",
+        "Only the existing PDF text layer is inspected; no OCR is performed.",
+        "Raw detected values and surrounding text are never included in this report.",
+        "",
+        "Findings by page:"
+    ]
+    if counts:
+        by_page={}
+        for (page,kind),count in counts.items(): by_page.setdefault(page,[]).append((kind,count))
+        for page,items in sorted(by_page.items()):
+            lines.append(f"- Page {page}: "+", ".join(f"{kind}={count:,}" for kind,count in sorted(items)))
+    else:
+        lines.append("- No supported pattern detected in the text layer.")
+    total_findings=sum(counts.values())
+    lines.extend(["",f"Total finding occurrences: {total_findings:,}",
+        "Heuristic findings are not proof of identity or payment data. Scanned/image-only pages and unsupported formats may contain undetected information."])
+    return tool_text("\n".join(lines),"PDF privacy audit")
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -8540,6 +8703,8 @@ TOOLS={
  "pptx-audit":pptx_audit,
  "csv-privacy-audit":csv_privacy_audit,
  "archive-security-audit":archive_security_audit,
+ "xlsx-privacy-audit":xlsx_privacy_audit,
+ "pdf-privacy-audit":pdf_privacy_audit,
 
 }
 

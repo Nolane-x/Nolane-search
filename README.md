@@ -38,7 +38,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Personal memory | /remember, /memories, /forget | Explicit owner-controlled memories shared by Telegram and Web AI chat |
 | Status | /status | Provider configuration and compact index counters |
-| Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | 312 production file processors (Wave 14 deployed 2026-11-22; Cloudflare Worker v71) including Markdown/code hygiene, secret redaction, SQL/YAML export, JSON structure analysis, configuration/DevOps, CI/CD and infrastructure audits, HTML SEO/accessibility/link/form/image audits, Excel formula/Markdown exports, PDF page audits, subtitle validation, favicon generation and Markdown TOC, interactive Telegram Tool Center and ephemeral GitHub Actions runners |
+| Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | 314 registered file processors (312 production; Wave 15 XLSX/PDF privacy auditors pending deployment) including Markdown/code hygiene, secret redaction, SQL/YAML export, JSON structure analysis, configuration/DevOps, CI/CD and infrastructure audits, HTML SEO/accessibility/link/form/image audits, Excel formula/Markdown exports, PDF page audits, subtitle validation, favicon generation and Markdown TOC, interactive Telegram Tool Center and ephemeral GitHub Actions runners |
 | Workflow Intelligence | /workflow_plan, /workflow_plan_save, /workflow_plan_discard | AI designs validated pipelines and parallel DAGs with controlled text fan-in; preview, save and execution are separate |
 | GitHub Repository Intelligence | /repo URL, /repo_compare URL base...head | Analyze a public repository directly: static module/import graph, commit/branch history, dependency and lockfile inventory, license evidence, secret-pattern scan with values withheld, TODO markers, plus static CI/CD, Docker, Kubernetes and Terraform security checks. Reports include SARIF findings and supply-chain metadata; source code and workflows are never executed. |
 
@@ -112,3 +112,6 @@ The command returns a preview with its assumptions, warnings, self-reported conf
 
 
 Latest release handoff: docs/HANDOFF-WAVE-FOURTEEN-2026-11-22.md.
+
+
+Current development handoff: docs/HANDOFF-WAVE-FIFTEEN-2026-11-22.md.

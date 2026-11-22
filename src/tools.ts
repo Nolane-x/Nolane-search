@@ -338,6 +338,8 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "pptx-audit", name: "Kiểm tra chất lượng PowerPoint", category: "document", description: "Audit từng slide: tiêu đề thiếu/lặp, slide trống, mật độ chữ, font nhỏ và ảnh thiếu alt text; chỉ phân tích tĩnh, không render slide.", accepts: ["application/vnd.openxmlformats-officedocument.presentationml.presentation", ".pptx"], output: "Báo cáo PPTX TXT", ready: true },
   { id: "csv-privacy-audit", name: "Kiểm toán dữ liệu nhạy cảm CSV", category: "data", description: "Phát hiện email, thẻ thanh toán hợp lệ theo Luhn, IPv4, số điện thoại dạng nghi vấn và cột nhạy cảm; chỉ xuất loại/cột/số dòng, tuyệt đối không in giá trị ô.", accepts: ["text/csv", ".csv"], output: "Báo cáo riêng tư CSV TXT", ready: true },
   { id: "archive-security-audit", name: "Kiểm toán an toàn ZIP/TAR", category: "utility", description: "Rà path traversal, tên trùng/collision, symlink/special file, tệp mã hóa, tỷ lệ nén, tệp quá lớn, archive lồng nhau và đuôi thực thi; không giải nén hay chạy nội dung.", accepts: [".zip", ".tar", ".tgz", ".tar.gz", ".gz"], output: "Báo cáo an toàn archive TXT", ready: true },
+  { id: "xlsx-privacy-audit", name: "Kiểm toán riêng tư Excel", category: "data", description: "Rà dữ liệu Excel theo mẫu email, thẻ thanh toán, IPv4, credential và header nhạy cảm; chỉ xuất sheet/cột/ô/loại/số lượng, không tiết lộ giá trị ô. Dùng giá trị cache của công thức.", accepts: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx"], output: "Báo cáo riêng tư XLSX TXT", ready: true },
+  { id: "pdf-privacy-audit", name: "Kiểm toán riêng tư PDF", category: "document", description: "Quét text layer PDF để tìm email, thẻ thanh toán, số điện thoại có nhãn, IPv4, giấy tờ/credential dạng nghi vấn; chỉ báo cáo trang/loại/số lượng, không OCR hay in giá trị nhạy cảm.", accepts: ["application/pdf", ".pdf"], output: "Báo cáo riêng tư PDF TXT", ready: true },
 ];
 
 
@@ -644,6 +646,8 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "pptx-audit": ["text-clean", "text-stats"],
   "csv-privacy-audit": ["text-clean", "text-stats"],
   "archive-security-audit": ["text-clean", "text-stats"],
+  "xlsx-privacy-audit": ["text-clean", "text-stats"],
+  "pdf-privacy-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
