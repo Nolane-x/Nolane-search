@@ -1,15 +1,15 @@
-# Wave 21 candidate handoff — Broader file, data and productivity tools
+# Wave 21 release handoff — Broader file, data and productivity tools
 
 Date: 2026-11-22  
 Repository: https://github.com/Nolane-x/Nolane-search  
 Branch: \`feat/wave-twenty-one-expanded-tool-suite\`  
-Status: implementation and tests added; awaiting GitHub Actions validation and production rollout.
+Status: merged and deployed to production on 2026-11-22.
 
 ## Goal
 
 Expand the catalog beyond another set of static auditors. Wave 21 adds new document extraction, structured-data querying, network planning, visual generation, similarity analysis and columnar data interchange capabilities.
 
-## Nine candidate processors
+## Nine released processors
 
 | ID | Capability | Input → output | Notes |
 |---|---|---|---|
@@ -55,7 +55,7 @@ Controls:
 - generated outputs are constrained to the runner input directory and existing 45 MiB intermediate-output cap;
 - fuzzy-match CSV contains user-supplied line text by design, so sensitive source files should not be uploaded to that operation.
 
-## Release gates
+## Release verification
 
 1. TypeScript catalog contains 354 unique IDs.
 2. Python \`RUNNERS\` and \`TOOLS\` contain exactly the same 354 IDs.
@@ -65,4 +65,15 @@ Controls:
 6. Only after main CI, Worker export/health smoke and Cloudflare deployment pass should the count be recorded as 354 production tools.
 7. Owner-level Telegram checks remain necessary for representative PDF/DOCX/PPTX/CSV/TXT uploads and retries.
 
-No production deployment is claimed by this candidate handoff.
+## Production release evidence
+
+- PR [#73](https://github.com/Nolane-x/Nolane-search/pull/73) merged into \`main\`.
+- Production commit: \`7709aac8173a90a661cea8ea99240ca34526ef8f\`.
+- Main CI: [run 44992164320](https://github.com/Nolane-x/Nolane-search/actions/runs/44992164320) — success; 144 Python runner tests, TypeScript tests, type-check, deployment-script validation and Worker build.
+- Worker export/smoke: [run 44992164270](https://github.com/Nolane-x/Nolane-search/actions/runs/44992164270) — success.
+- Cloudflare deployment: [run 44992164238](https://github.com/Nolane-x/Nolane-search/actions/runs/44992164238) — success; Worker upload, runtime-secret upload and Telegram webhook verification.
+- Worker Version ID: \`05af480c-6631-4402-8711-07bcba267bfe\`.
+- D1 migration was skipped because no schema changes were introduced.
+- Production catalog: 354 processors.
+
+The deployment and webhook checks are complete. Real owner-level Telegram E2E still needs the user to upload representative files and inspect outputs / retry behavior. This is intentionally not represented as having been performed by CI.

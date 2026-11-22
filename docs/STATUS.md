@@ -2,16 +2,18 @@
 
 Last verified: 2026-11-22. This document distinguishes production deployment and configuration checks from user-level behavior that still requires a real Telegram interaction.
 
-## In review — Wave 21 candidate (2026-11-22)
+## Latest production release — Wave 21 (2026-11-22)
 
-- Branch: \`feat/wave-twenty-one-expanded-tool-suite\`.
-- Nine new processors are registered in the branch TypeScript catalog, Python allowlist/handler map and mirrored pipeline transitions, raising the branch catalog from 345 to **354 candidate tools**.
-- Added capabilities: PDF table extraction, JMESPath JSON querying, IPv4/IPv6 CIDR analysis, Code 128 PNG generation, DOCX-to-Markdown, PPTX presenter-note extraction, fuzzy line matching and CSV ↔ Parquet conversion.
-- Added bounded Python fixtures for the new processors and conditional runner dependency installation. CI, Worker build and deployment have **not yet been reported as passing** for this branch.
-- Production remains on Wave 20 / 345 processors until the branch passes PR CI, Worker export/health smoke and a Cloudflare deployment.
-- After rollout, representative private Telegram uploads and retry behavior must still be checked by the owner; automated tests and successful deployment do not prove the complete Telegram user journey.
+- [PR #73](https://github.com/Nolane-x/Nolane-search/pull/73) merged into \`main\` as commit \`7709aac8173a90a661cea8ea99240ca34526ef8f\`; nine processors increase the catalog from 345 to **354 production tools**.
+- Main CI [44992164320](https://github.com/Nolane-x/Nolane-search/actions/runs/44992164320) passed TypeScript type-check, Vitest, deployment-script checks, all **144 Python runner tests** and Worker build.
+- Worker export and production smoke [44992164270](https://github.com/Nolane-x/Nolane-search/actions/runs/44992164270) passed, including build output publication and the deployed Worker smoke test.
+- Cloudflare deployment [44992164238](https://github.com/Nolane-x/Nolane-search/actions/runs/44992164238) passed source/bundle validation, Worker upload and runtime-secret upload. Telegram webhook registration was verified for \`message\` and \`callback_query\`.
+- Production Worker Version ID: \`05af480c-6631-4402-8711-07bcba267bfe\`.
+- D1 migration was skipped because Wave 21 introduced no schema changes.
+- Added PDF table extraction, JMESPath JSON queries, offline IPv4/IPv6 and CIDR reporting, Code 128 barcode generation, DOCX-to-Markdown, PPTX speaker notes extraction, fuzzy matching and CSV ↔ Parquet interchange.
+- Owner-level E2E remains: upload representative PDF, JSON, IP/CIDR TXT, barcode TXT, DOCX, PPTX, fuzzy-match TXT and Parquet/CSV files through the private Telegram bot; inspect the actual files and test \`/tool_retry\`. CI, webhook verification and deployment do not prove those real file-upload journeys.
 
-## Latest production release — Wave 20 (2026-11-22)
+## Previous production release — Wave 20 (2026-11-22)
 
 - Wave 20 landed directly on `main` as commit `32aede18727b75b2cef2a06b7d603615bedcdac0`; it adds nine processors and raises the production catalog from 336 to **345 tools**.
 - Main CI [44982433603](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433603) passed TypeScript type-check, Vitest, deployment-script checks, **136 Python runner tests**, and Worker build.
