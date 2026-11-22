@@ -11197,6 +11197,8 @@ def parquet_to_csv(p):
             if row_count > 1000000:
                 raise RuntimeError("Parquet vượt giới hạn 1.000.000 hàng.")
             connection.execute(f"COPY (SELECT * FROM {relation}) TO '{target}' (FORMAT CSV, HEADER, DELIMITER ',', QUOTE '\"', ESCAPE '\"')")
+            if raw_out.stat().st_size > MAX_PIPELINE_OUTPUT:
+                raise RuntimeError("CSV export từ Parquet vượt giới hạn 45 MiB.")
         finally:
             connection.close()
         with raw_out.open("r", encoding="utf-8", newline="") as source_handle:
