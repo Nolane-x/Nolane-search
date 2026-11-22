@@ -136,9 +136,10 @@ def ocfl_object_audit(path: Path) -> dict:
         if sidecar_name in members:
             sidecar = _read_bounded(archive, members[sidecar_name], 4096).decode("ascii", errors="replace").strip().split()
             expected = sidecar[0].lower() if sidecar else ""
+            filename = sidecar[1] if len(sidecar) > 1 else ""
             actual = hashlib.new(algorithm, raw).hexdigest().lower()
             sidecar_checked = 1
-            sidecar_mismatch = int(expected != actual)
+            sidecar_mismatch = int(expected != actual or filename != "inventory.json")
         else:
             sidecar_mismatch = 1
         manifest_digests = {}
@@ -377,8 +378,8 @@ def nifti_header_audit(path: Path) -> dict:
         format_name = "NIfTI-2"
     if rank < 1 or rank > 7 or any(value <= 0 for value in dims[:rank]):
         raise RuntimeError("NIfTI dimensionality or active dimension sizes are invalid.")
-    if bitpix <= 0 or bitpix % 8:
-        raise RuntimeError("NIfTI bitpix must be a positive multiple of eight.")
+    if bitpix <= 0 or (bitpix % 8 and not (datatype == 1 and bitpix == 1)):
+        raise RuntimeError("NIfTI bitpix must be byte-aligned, except for the one-bit binary datatype.")
     datatype_bits = {1: 1, 2: 8, 4: 16, 8: 32, 16: 32, 32: 64, 64: 64, 128: 24,
                      256: 8, 512: 16, 768: 32, 1024: 64, 1280: 64, 1536: 128,
                      1792: 128, 2048: 256, 2304: 32}
@@ -501,7 +502,7 @@ def jp2_box_audit(path: Path) -> dict:
     """Validate outer JP2 box framing and jp2h/ihdr metadata without decoding pixels."""
     _size_guard(path)
     raw = path.read_bytes()
-    if len(raw) < 12 or raw[4:8] != b"jP  " or raw[8:12] != b"\r\n\x87\n":
+    if len(raw) < 12 or struct.unpack(">I", raw[:4])[0] != 12 or raw[4:8] != b"jP  " or raw[8:12] != b"\r\n\x87\n":
         raise RuntimeError("JPEG 2000 JP2 signature box is missing or invalid.")
     boxes = 0
     malformed = 0
