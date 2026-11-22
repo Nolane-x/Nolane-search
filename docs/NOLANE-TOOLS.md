@@ -1,5 +1,18 @@
 Nolane Tools hiện có **345 công cụ đã triển khai trên production**; Wave 20 phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `8eeb9bd7-77f7-4205-898a-db49f35424ce`. Main CI, Worker export/production smoke và deployment đều đã thành công. Catalog TypeScript, Python runner allowlist, handler, text-output registry và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và các repository upstream đã xem được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
 
+### Wave 21 — Data science, spatial and schema utilities (in development)
+
+| ID | Công cụ | Nhóm | Chức năng |
+|---|---|---|---|
+| /tool sql-static-audit | SQL static audit | Developer/data | Parse SQL nhiều dialect, thống kê JOIN/wildcard và cảnh báo UPDATE/DELETE thiếu WHERE, DROP/TRUNCATE; không thực thi. |
+| /tool sql-format | SQL formatter | Developer/data | Format/indent nhiều SQL statements; giữ nguyên dialect mặc định, xuất tệp `.sql` mới. |
+| /tool graphql-schema-audit | GraphQL schema audit | Developer/API | Parse GraphQL SDL, validate schema, đếm type/field/deprecation; không gọi endpoint. |
+| /tool notebook-privacy-audit | Jupyter notebook audit | Data science | Kiểm tra nbformat, cell ID, execution counts, outputs/attachments và credential-like patterns; không chạy code. |
+| /tool kml-kmz-audit | KML/KMZ spatial audit | Geospatial | Đọc KML/KMZ offline, đếm Placemark/geometry và tọa độ ngoài miền; không giải nén tệp ra thư mục hoặc in tọa độ. |
+| /tool design-token-audit | W3C Design Tokens audit | Design system | Kiểm tra token groups/types, duplicate keys, `$type` thiếu, alias không resolve và alias cycles; không xuất giá trị style. |
+| /tool cron-schedule-audit | Cron schedule preview | Utility/DevOps | Kiểm tra cron 5-field và xem trước ba lần chạy UTC; không tạo schedule hay thực thi command. |
+
+Wave 21 đang chờ CI/deploy; không cộng 7 tool này vào production trước khi main CI, Worker export/smoke và Cloudflare deploy hoàn tất. Giới hạn: SQL/GraphQL 5 MiB; notebook 20 MiB/50.000 cells và bounded secret scan; KML/KMZ 20 MiB/1.000 entries/120 MiB uncompressed/1 triệu tọa độ; Design Tokens 10 MiB; cron 2 MiB/10.000 dòng. Parser chỉ đọc, không chạy SQL, GraphQL resolver, notebook code, network resource hay cron command.
 ### Wave 20 — Creator, publishing and content utilities — deployed 2026-11-22
 
 | ID | Công cụ | Nhóm | Chức năng |
