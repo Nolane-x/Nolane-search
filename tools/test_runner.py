@@ -2866,6 +2866,11 @@ paths:
       responses: {}
     post:
       operationId: getUser
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: {type: string}
       responses:
         '200': {description: OK}
       requestBody:
