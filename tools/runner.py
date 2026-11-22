@@ -11331,6 +11331,7 @@ def python_security_audit(p):
 
 
 def unit_convert(p):
+    import math
     try:
         import pint
     except ImportError as exc:
@@ -11370,6 +11371,7 @@ def unit_convert(p):
 
 
 def mesh_inspect(p):
+    import math
     try:
         import trimesh
     except ImportError as exc:
@@ -11449,6 +11451,7 @@ def dxf_audit(p):
 
 
 def shapefile_audit(p):
+    import struct
     try:
         import shapefile
         from io import BytesIO
@@ -11603,6 +11606,394 @@ def notebook_strip_outputs(p):
         raise RuntimeError("Clean Notebook output vượt 45 MiB.")
     out.write_text(content,encoding="utf-8")
     return {"summary":f"Đã xóa {removed_outputs:,} execution output và reset {removed_execution:,} execution count; giữ nguyên cell source và cấu trúc notebook.","output_path":str(out)}
+
+
+
+def subtitle_quality_audit(p):
+    if p.suffix.lower() not in (".srt",".vtt") or p.stat().st_size>10*1024*1024:
+        raise RuntimeError("Subtitle quality audit nhận SRT/VTT tối đa 10 MiB.")
+    raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
+    stamp=re.compile(r"^\s*(?:(\d{1,3}):)?(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(?:(\d{1,3}):)?(\d{2}):(\d{2})[,.](\d{1,3})(?:\s+.*)?$")
+    def parse(groups,offset):
+        hours=int(groups[offset] or 0); minutes=int(groups[offset+1]); seconds=int(groups[offset+2])
+        fraction=int(groups[offset+3].ljust(3,"0"))
+        if minutes>59 or seconds>59: raise ValueError()
+        return ((hours*60+minutes)*60+seconds)*1000+fraction
+    cues=[]
+    for block in re.split(r"\n[ \t]*\n",raw.strip()):
+        lines=block.splitlines()
+        index=next((i for i,line in enumerate(lines) if "-->" in line),None)
+        if index is None: continue
+        match=stamp.match(lines[index])
+        if not match: continue
+        try:
+            groups=match.groups(); start=parse(groups,0); end=parse(groups,4)
+        except (ValueError,TypeError): continue
+        text_content="\n".join(lines[index+1:])
+        text_content=re.sub(r"<[^>]{0,200}>","",text_content)
+        text_content=unescape(text_content)
+        visible=re.sub(r"\s+"," ",text_content).strip()
+        if end<=start or not visible: continue
+        longest=max((len(line.strip()) for line in text_content.splitlines()),default=0)
+        chars=len(re.sub(r"\s","",visible))
+        cps=chars/max((end-start)/1000,0.001)
+        cues.append({"line":index+1,"start":start,"end":end,"duration":end-start,"chars":chars,"cps":cps,"longest":longest,"overlap":False})
+        if len(cues)>20000: raise RuntimeError("Subtitle audit giới hạn 20.000 cue.")
+    if not cues: raise RuntimeError("Không tìm thấy cue SRT/VTT hợp lệ.")
+    chronological=sorted(cues,key=lambda cue:(cue["start"],cue["end"]))
+    max_end=-1
+    for cue in chronological:
+        cue["overlap"]=cue["start"]<max_end
+        max_end=max(max_end,cue["end"])
+    long_cues=sum(cue["longest"]>42 for cue in cues)
+    fast_cues=sum(cue["cps"]>20 for cue in cues)
+    overlap_cues=sum(cue["overlap"] for cue in cues)
+    short_cues=sum(cue["duration"]<500 for cue in cues)
+    out=p.with_name(p.stem+"-subtitle-quality.csv")
+    with out.open("w",encoding="utf-8-sig",newline="") as handle:
+        writer=csv.writer(handle,lineterminator="\n")
+        writer.writerow(["timestamp_line","start_ms","end_ms","duration_ms","visible_chars","chars_per_second","longest_line_chars","overlaps_previous"])
+        for cue in sorted(cues,key=lambda item:item["line"]):
+            writer.writerow([cue["line"],cue["start"],cue["end"],cue["duration"],cue["chars"],round(cue["cps"],2),cue["longest"],int(cue["overlap"])])
+    return {"summary":f"Đã phân tích {len(cues):,} cue; >20 CPS: {fast_cues:,}; dòng dài hơn 42 ký tự: {long_cues:,}; cue overlap: {overlap_cues:,}; cue ngắn hơn 0,5 giây: {short_cues:,}. CSV chỉ chứa timing và số liệu, không chứa lời thoại.","output_path":str(out)}
+
+
+def kml_to_geojson(p):
+    import xml.etree.ElementTree as ET
+    if p.suffix.lower() not in (".kml",".xml") or p.stat().st_size>20*1024*1024:
+        raise RuntimeError("KML converter nhận .kml/.xml tối đa 20 MiB.")
+    raw=p.read_bytes()
+    if re.search(rb"<!\s*(DOCTYPE|ENTITY)\b",raw,re.I):
+        raise RuntimeError("KML DTD/ENTITY bị chặn.")
+    try:
+        root=ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise RuntimeError("KML XML không hợp lệ.") from exc
+    def local(tag): return tag.rsplit("}",1)[-1]
+    coordinate_count=0
+    def coordinates(text_value):
+        nonlocal coordinate_count
+        result=[]
+        for token in (text_value or "").split():
+            parts=token.split(",")
+            if len(parts)<2: continue
+            try: values=[float(value) for value in parts[:3] if value!=""]
+            except ValueError: continue
+            if len(values)<2 or not all(math.isfinite(value) for value in values): continue
+            if not -180<=values[0]<=180 or not -90<=values[1]<=90: continue
+            result.append(values)
+            coordinate_count+=1
+            if coordinate_count>500000: raise RuntimeError("KML vượt giới hạn 500.000 tọa độ.")
+        return result
+    def find_child(node,name):
+        return next((child for child in node.iter() if child is not node and local(child.tag)==name),None)
+    def geometry(node):
+        kind=local(node.tag)
+        if kind=="Point":
+            item=find_child(node,"coordinates")
+            points=coordinates(item.text if item is not None else "")
+            return {"type":"Point","coordinates":points[0]} if points else None
+        if kind=="LineString":
+            item=find_child(node,"coordinates")
+            points=coordinates(item.text if item is not None else "")
+            return {"type":"LineString","coordinates":points} if len(points)>=2 else None
+        if kind=="LinearRing":
+            item=find_child(node,"coordinates")
+            points=coordinates(item.text if item is not None else "")
+            return {"type":"LinearRing","coordinates":points} if len(points)>=4 else None
+        if kind=="Polygon":
+            rings=[]
+            for boundary in node.iter():
+                if local(boundary.tag)!="LinearRing": continue
+                ring=geometry(boundary)
+                if ring: rings.append(ring["coordinates"])
+            if not rings: return None
+            if rings[0][0]!=rings[0][-1]: rings[0].append(rings[0][0])
+            return {"type":"Polygon","coordinates":rings}
+        if kind=="MultiGeometry":
+            members=[]
+            for child in list(node):
+                result=geometry(child)
+                if result: members.append(result)
+            return {"type":"GeometryCollection","geometries":members} if members else None
+        return None
+    features=[]
+    for placemark in (node for node in root.iter() if local(node.tag)=="Placemark"):
+        geometry_node=next((child for child in placemark.iter() if local(child.tag) in ("Point","LineString","Polygon","MultiGeometry")),None)
+        if geometry_node is None: continue
+        result=geometry(geometry_node)
+        if not result: continue
+        props={}
+        for child in list(placemark):
+            name=local(child.tag)
+            if name in ("name","description") and child.text:
+                props[name]=child.text[:2000]
+        features.append({"type":"Feature","geometry":result,"properties":props})
+        if len(features)>20000: raise RuntimeError("KML vượt giới hạn 20.000 Placemark feature.")
+    if not features: raise RuntimeError("Không tìm thấy Point/LineString/Polygon/MultiGeometry hợp lệ trong KML.")
+    output={"type":"FeatureCollection","features":features}
+    serialized=json.dumps(output,ensure_ascii=False,separators=(",",":"))
+    if len(serialized.encode("utf-8"))>MAX_PIPELINE_OUTPUT:
+        raise RuntimeError("GeoJSON output vượt 45 MiB.")
+    out=p.with_name(p.stem+".geojson")
+    out.write_text(json.dumps(output,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    return {"summary":f"Đã chuyển {len(features):,} Placemark và {coordinate_count:,} tọa độ KML sang GeoJSON; external NetworkLink không được tải.","output_path":str(out)}
+
+
+def coordinate_transform(p):
+    try:
+        import pyproj
+    except ImportError as exc:
+        raise RuntimeError("Thiếu pyproj để chuyển hệ tọa độ.") from exc
+    if p.stat().st_size>10*1024*1024:
+        raise RuntimeError("Coordinate transform giới hạn input 10 MiB.")
+    try: data=json.loads(p.read_text(encoding="utf-8-sig"))
+    except (UnicodeError,json.JSONDecodeError) as exc: raise RuntimeError("Input phải là JSON coordinate envelope hợp lệ.") from exc
+    if not isinstance(data,dict) or not isinstance(data.get("coordinates"),list):
+        raise RuntimeError('JSON cần source_crs, target_crs và coordinates: [[x,y], ...].')
+    source=str(data.get("source_crs","")).upper()
+    target=str(data.get("target_crs","")).upper()
+    if not re.fullmatch(r"EPSG:[0-9]{3,6}",source) or not re.fullmatch(r"EPSG:[0-9]{3,6}",target):
+        raise RuntimeError("Chỉ hỗ trợ CRS dạng EPSG:xxxx; CRS tùy chỉnh và URL bị chặn.")
+    coords=data["coordinates"]
+    if not 1<=len(coords)<=10000: raise RuntimeError("Cần từ 1 đến 10.000 coordinate.")
+    try:
+        pyproj.network.set_network_enabled(active=False)
+        transformer=pyproj.Transformer.from_crs(source,target,always_xy=True)
+        output=[]
+        for point in coords:
+            if not isinstance(point,list) or len(point) not in (2,3): raise ValueError("coordinate")
+            values=[float(item) for item in point]
+            if not all(math.isfinite(value) for value in values): raise ValueError("non-finite")
+            if len(values)==3:
+                x,y,z=transformer.transform(values[0],values[1],values[2],errcheck=True)
+                converted=[x,y,z]
+            else:
+                x,y=transformer.transform(values[0],values[1],errcheck=True)
+                converted=[x,y]
+            if not all(math.isfinite(value) for value in converted): raise ValueError("non-finite output")
+            output.append(converted)
+    except Exception as exc:
+        raise RuntimeError("Không thể chuyển tọa độ; CRS không tương thích hoặc coordinate nằm ngoài miền hợp lệ.") from exc
+    result={"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":point},"properties":{"index":index+1}} for index,point in enumerate(output)],"source_crs":source,"target_crs":target}
+    out=p.with_name(p.stem+"-transformed.geojson")
+    out.write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    return {"summary":f"Đã chuyển {len(output):,} coordinate từ {source} sang {target} bằng pyproj; truy cập mạng PROJ bị tắt.","output_path":str(out)}
+
+
+def html_seo_audit(p):
+    if p.suffix.lower() not in (".html",".htm") or p.stat().st_size>10*1024*1024:
+        raise RuntimeError("HTML SEO audit nhận .html/.htm tối đa 10 MiB.")
+    class Parser(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.title_count=0; self.title_text=""; self.in_title=False
+            self.h1_count=0; self.in_h1=False; self.h1_text=""
+            self.lang=""; self.meta_description=0; self.canonical=0
+            self.og_title=0; self.og_description=0; self.twitter=0
+            self.jsonld=0; self.images=0; self.images_missing_alt=0
+            self.empty_links=0; self.in_link=False; self.link_text=""
+            self.hreflang=0
+        def handle_starttag(self,tag,attrs):
+            values={key.lower():value for key,value in attrs if key}
+            tag=tag.lower()
+            if tag=="html": self.lang=values.get("lang","")
+            if tag=="title": self.title_count+=1; self.in_title=True
+            if tag=="h1": self.h1_count+=1; self.in_h1=True; self.h1_text=""
+            if tag=="meta":
+                name=(values.get("name") or "").lower()
+                prop=(values.get("property") or "").lower()
+                if name=="description" and values.get("content"): self.meta_description+=1
+                if prop=="og:title" and values.get("content"): self.og_title+=1
+                if prop=="og:description" and values.get("content"): self.og_description+=1
+                if name.startswith("twitter:") and values.get("content"): self.twitter+=1
+            if tag=="link":
+                rel=(values.get("rel") or "").lower().split()
+                if "canonical" in rel and values.get("href"): self.canonical+=1
+                if values.get("hreflang"): self.hreflang+=1
+            if tag=="script" and (values.get("type") or "").lower()=="application/ld+json": self.jsonld+=1
+            if tag=="img":
+                self.images+=1
+                if "alt" not in values: self.images_missing_alt+=1
+            if tag=="a": self.in_link=True; self.link_text=""
+        def handle_endtag(self,tag):
+            tag=tag.lower()
+            if tag=="title": self.in_title=False
+            if tag=="h1": self.in_h1=False
+            if tag=="a":
+                if not self.link_text.strip(): self.empty_links+=1
+                self.in_link=False
+        def handle_data(self,data):
+            if self.in_title: self.title_text+=data
+            if self.in_h1: self.h1_text+=data
+            if self.in_link: self.link_text+=data
+    parser=Parser()
+    try: parser.feed(p.read_text(encoding="utf-8-sig",errors="replace")); parser.close()
+    except Exception as exc: raise RuntimeError("Không thể parse HTML.") from exc
+    checks=[
+        ("Title",parser.title_count==1),
+        ("Meta description",parser.meta_description==1),
+        ("Canonical link",parser.canonical==1),
+        ("Exactly one H1",parser.h1_count==1),
+        ("HTML lang",bool(parser.lang)),
+        ("Open Graph title",parser.og_title>=1),
+        ("Open Graph description",parser.og_description>=1),
+        ("Structured data JSON-LD",parser.jsonld>=1)
+    ]
+    lines=[f"HTML lang present: {bool(parser.lang)}",f"Title tags: {parser.title_count}",f"Meta descriptions: {parser.meta_description}",f"Canonical links: {parser.canonical}",f"H1 count: {parser.h1_count}",f"Open Graph title/description: {parser.og_title}/{parser.og_description}",f"Twitter metadata tags: {parser.twitter}",f"JSON-LD blocks: {parser.jsonld}",f"Images missing alt attribute: {parser.images_missing_alt}/{parser.images}",f"Empty anchor elements: {parser.empty_links}",f"Hreflang links: {parser.hreflang}",""]
+    lines.extend(f"- {'PASS' if passed else 'WARN'} · {name}" for name,passed in checks)
+    lines.append("No page content, metadata values, or links are copied into this report; no network requests are made.")
+    return tool_text("\n".join(lines),"Static HTML SEO/accessibility audit")
+
+
+def html_local_link_audit(p):
+    from urllib.parse import unquote,urlsplit
+    if p.suffix.lower()!=".zip" or p.stat().st_size>20*1024*1024:
+        raise RuntimeError("HTML local link audit yêu cầu ZIP site bundle tối đa 20 MiB.")
+    class PageParser(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True); self.fragments=set(); self.links=[]
+        def handle_starttag(self,tag,attrs):
+            values={key.lower():value for key,value in attrs if key}
+            if values.get("id"): self.fragments.add(values["id"])
+            if tag.lower()=="a" and values.get("name"): self.fragments.add(values["name"])
+            for key in ("href","src","poster"):
+                value=values.get(key)
+                if value: self.links.append((self.getpos()[0],key,value))
+    pages={}; members={}; total=0
+    try:
+        with zipfile.ZipFile(p) as archive:
+            infos=[item for item in archive.infolist() if not item.is_dir()]
+            if len(infos)>500: raise RuntimeError("HTML site ZIP giới hạn 500 file.")
+            for item in infos:
+                parts=_safe_archive_parts(item.filename)
+                mode=(item.external_attr>>16)&0xFFFF
+                if stat.S_ISLNK(mode) or item.flag_bits&1: raise RuntimeError("HTML ZIP chứa symlink hoặc entry mã hóa.")
+                total+=item.file_size
+                if total>100*1024*1024: raise RuntimeError("HTML ZIP vượt 100 MiB dữ liệu giải nén.")
+                path="/".join(parts); members[path]=item
+            html_paths=[path for path in members if Path(path).suffix.lower() in (".html",".htm")]
+            if len(html_paths)>200: raise RuntimeError("HTML site ZIP giới hạn 200 trang HTML.")
+            for path in html_paths:
+                parser=PageParser()
+                try: parser.feed(archive.read(members[path]).decode("utf-8-sig","replace")); parser.close()
+                except Exception: pass
+                pages[path]=parser
+            findings=[]; skipped_external=0
+            for source_path,parser in pages.items():
+                for line,key,value in parser.links:
+                    if len(findings)>=5000: break
+                    raw_value=unescape(value.strip())
+                    try: parts=urlsplit(raw_value)
+                    except ValueError:
+                        findings.append((source_path,line,"malformed-url")); continue
+                    if parts.scheme or parts.netloc or raw_value.startswith("//"):
+                        skipped_external+=1; continue
+                    decoded=unquote(parts.path)
+                    if decoded.startswith("/"): target=posixpath.normpath(decoded.lstrip("/"))
+                    elif decoded: target=posixpath.normpath(posixpath.join(posixpath.dirname(source_path),decoded))
+                    else: target=source_path
+                    if target=="." : target=source_path
+                    if target==".." or target.startswith("../") or target.startswith("/"):
+                        findings.append((source_path,line,"path-escapes-site")); continue
+                    if target.endswith("/"): target=target+"index.html"
+                    if target not in members:
+                        if target in ("","./"): target=source_path
+                        if target not in members:
+                            findings.append((source_path,line,"missing-local-resource")); continue
+                    fragment=unquote(parts.fragment)
+                    if fragment and target in pages and fragment not in pages[target].fragments:
+                        findings.append((source_path,line,"missing-fragment"))
+        out=p.with_name(p.stem+"-local-link-audit.csv")
+        with out.open("w",encoding="utf-8-sig",newline="") as handle:
+            writer=csv.writer(handle,lineterminator="\n")
+            writer.writerow(["source_file","line","issue"])
+            for row in findings: writer.writerow([_spreadsheet_safe(row[0]),row[1],row[2]])
+    except RuntimeError:
+        raise
+    except (zipfile.BadZipFile,OSError) as exc: raise RuntimeError("HTML site ZIP hỏng hoặc không đọc được.") from exc
+    return {"summary":f"Đã kiểm tra {len(pages):,} HTML page; {sum(len(item.links) for item in pages.values()):,} local/external references; external refs skipped: {skipped_external:,}; internal issues: {len(findings):,}. CSV chỉ chứa source path, line và loại lỗi; không fetch URL.","output_path":str(out)}
+
+
+def css_quality_audit(p):
+    try:
+        import tinycss2
+    except ImportError as exc:
+        raise RuntimeError("Thiếu tinycss2 để parse CSS.") from exc
+    if p.suffix.lower()!=".css" or p.stat().st_size>10*1024*1024:
+        raise RuntimeError("CSS audit nhận .css tối đa 10 MiB.")
+    raw=p.read_text(encoding="utf-8-sig",errors="replace")
+    try:
+        rules=tinycss2.parse_stylesheet(raw,skip_comments=True,skip_whitespace=True)
+        errors=sum(rule.type=="error" for rule in rules)
+        selectors={}; duplicate_properties=0; important=0; declarations=0; imports=0
+        for rule in rules:
+            if rule.type=="at-rule":
+                if rule.lower_at_keyword=="import": imports+=1
+                continue
+            if rule.type!="qualified-rule": continue
+            selector=tinycss2.serialize(rule.prelude).strip()
+            selectors[selector]=selectors.get(selector,0)+1
+            parsed=tinycss2.parse_declaration_list(rule.content,skip_comments=True,skip_whitespace=True)
+            seen=set()
+            for item in parsed:
+                if item.type=="error": errors+=1
+                elif item.type=="declaration":
+                    declarations+=1
+                    if item.name.lower() in seen: duplicate_properties+=1
+                    seen.add(item.name.lower())
+                    if item.important: important+=1
+        duplicate_selectors=sum(count-1 for count in selectors.values() if count>1)
+        remote_refs=len(re.findall(r"url\(\s*['\"]?(?:https?:)?//",raw,re.I))
+        lines=[
+            f"Qualified rules: {sum(selectors.values()):,}",
+            f"Unique selectors: {len(selectors):,}",
+            f"Duplicate selector blocks: {duplicate_selectors:,}",
+            f"Declarations: {declarations:,}",
+            f"Repeated properties within a rule: {duplicate_properties:,}",
+            f"!important declarations: {important:,}",
+            f"@import rules: {imports:,}",
+            f"External URL references: {remote_refs:,}",
+            f"Parser errors: {errors:,}",
+            "Selector and declaration values are not copied into this report."
+        ]
+    except Exception as exc:
+        raise RuntimeError("CSS parser không thể hoàn thành audit.") from exc
+    return tool_text("\n".join(lines),"CSS quality audit")
+
+
+def heic_convert(p):
+    try:
+        import pillow_heif
+        from PIL import Image,ImageOps
+    except ImportError as exc:
+        raise RuntimeError("Thiếu pillow-heif/Pillow để chuyển HEIC/HEIF.") from exc
+    if p.suffix.lower() not in (".heic",".heif") or p.stat().st_size>20*1024*1024:
+        raise RuntimeError("HEIC converter nhận .heic/.heif tối đa 20 MiB.")
+    try:
+        pillow_heif.register_heif_opener()
+        with Image.open(p) as raw:
+            _guard_image_dimensions(raw)
+            frames=getattr(raw,"n_frames",1)
+            raw.seek(0)
+            oriented=ImageOps.exif_transpose(raw)
+            has_alpha=("A" in oriented.getbands()) or ("transparency" in oriented.info)
+            if has_alpha:
+                pixels=oriented.convert("RGBA")
+                clean=Image.new("RGBA",pixels.size); clean.paste(pixels)
+                out=p.with_name(p.stem+"-converted.png")
+                clean.save(out,"PNG",optimize=True)
+            else:
+                pixels=oriented.convert("RGB")
+                clean=Image.new("RGB",pixels.size); clean.paste(pixels)
+                out=p.with_name(p.stem+"-converted.jpg")
+                clean.save(out,"JPEG",quality=90,optimize=True,progressive=True)
+    except Exception as exc:
+        raise RuntimeError("Không thể giải mã HEIC/HEIF; tệp có thể hỏng hoặc codec không hỗ trợ.") from exc
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("Converted image vượt 45 MiB.")
+    return {"summary":f"Đã chuyển HEIC/HEIF thành {out.suffix.upper()[1:]}; {pixels.width}×{pixels.height}; chọn frame đầu tiên trong {frames} frame; metadata camera/GPS không được giữ.","output_path":str(out)}
 
 
 TOOLS={
