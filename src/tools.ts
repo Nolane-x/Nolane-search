@@ -416,7 +416,7 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "xlsx-to-markdown": ["markdown-outline","markdown-links","markdown-toc","text-clean"],
   "subtitle-audit": ["subtitle-text","text-clean","text-stats"],
   "image-favicon": ["image-info","file-hash"],
-  "pdf-page-audit": ["pdf-text","pdf-info","pdf-compress","pdf-remove-blank"],
+  "pdf-page-audit": ["text-clean","text-stats"],
   "markdown-toc": ["markdown-outline","markdown-links","text-clean"],
   "markdown-outline": ["text-clean","text-stats"],
   "markdown-links": ["csv-profile","csv-clean","csv-to-xlsx","csv-to-json"],
