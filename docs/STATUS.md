@@ -7,7 +7,7 @@ Last verified: 2026-11-22. Production deployment evidence is separated from owne
 - Branch: `feat/wave-twenty-five-build-observability-binary-tools`.
 - Eleven additional processors are registered in the candidate TypeScript catalog, Python RUNNERS allowlist, handler dispatch, mirrored pipeline transitions and upload inference. Candidate catalog: **406 tools**; production remains **395** until all release gates pass.
 - New domains: WebAssembly binary structure, SARIF static-analysis reports, CycloneDX/SPDX SBOMs, JUnit XML, Cobertura/JaCoCo coverage, NASA FITS astronomy, STEP Part 21 CAD, OpenTelemetry Collector configuration, Godot project settings, Unity packages and Unreal project descriptors.
-- Fourteen dedicated Python regression tests cover the new formats. They use Python standard library modules; PyYAML is reused conditionally for OpenTelemetry YAML.
+- Seventeen dedicated Python regression tests cover the new formats, including both CycloneDX and SPDX JSON/XML variants and WebAssembly's special section order. They use Python standard library modules; PyYAML is reused conditionally for OpenTelemetry YAML.
 - No uploaded WebAssembly module, collector, game-engine project, shell command, build script or CAD geometry is executed. Reports withhold finding messages, package names/IDs, test names/output, astronomy observation metadata, CAD strings/IDs and engine project identifiers/paths.
 - PR CI, Worker export/health smoke and Cloudflare deployment are pending for Wave 25.
 - Owner-level E2E after release: upload representative WASM, SARIF, CycloneDX/SPDX, JUnit, coverage, FITS, STEP, OTel YAML, Godot, Unity and Unreal files in private Telegram; inspect reports and test `/tool_retry`.
