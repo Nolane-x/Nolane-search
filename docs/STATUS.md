@@ -2,7 +2,18 @@
 
 Last verified: 2026-11-22. This document distinguishes production deployment and configuration checks from user-level behavior that still requires a real Telegram interaction.
 
-## Latest production release — Wave 17 (2026-11-22)
+## Latest production release — Wave 18 (2026-11-22)
+
+- [PR #68](https://github.com/Nolane-x/Nolane-search/pull/68) merged as commit `374f4c011a59e50e30ac0ace5891d458b32407ff`.
+- Production catalog: **328 processors**, up from 318 in Wave 17.
+- Added ten cross-domain processors for HAR privacy, iCalendar, vCard, GPX, GeoJSON, QR generation, font metadata, subtitle repair, OpenAPI contracts and color conversion.
+- Main CI [44980373517](https://github.com/Nolane-x/Nolane-search/actions/runs/44980373517), Worker export/production smoke [44980373519](https://github.com/Nolane-x/Nolane-search/actions/runs/44980373519) and Cloudflare deploy [44980373529](https://github.com/Nolane-x/Nolane-search/actions/runs/44980373529) passed.
+- CI passed TypeScript type-check, Vitest, deployment-script checks, all **119 Python runner tests** and Worker build.
+- Deployment verified Worker bundle, runtime-secret upload, Telegram webhook and command-menu registration. D1 migration step was skipped because Wave 18 introduced no schema change.
+- Production Worker Version ID: `1271380c-e118-4731-ad33-5f38adcd20c8`.
+- Remaining owner-level E2E: upload representative HAR, ICS, VCF, GPX, GeoJSON, TXT, font, SRT/VTT and OpenAPI files in private Telegram; inspect reports/output and exercise `/tool_retry`. CI and deployment do not prove these real Telegram interactions.
+
+## Previous production release — Wave 17 (2026-11-22)
 
 - [PR #67](https://github.com/Nolane-x/Nolane-search/pull/67) merged as commit `66aeb33c1319c161b224d8e65df1832e11bce4ac`.
 - Production catalog: **318 processors**, up from 316 in Wave 16.
@@ -15,7 +26,7 @@ Last verified: 2026-11-22. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `66aeb33c1319c161b224d8e65df1832e11bce4ac`
+- Latest production source commit: `374f4c011a59e50e30ac0ace5891d458b32407ff`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -27,7 +38,7 @@ Last verified: 2026-11-22. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker Version ID: `f3180bcc-896d-4fef-9887-c81146865265`, deployed by [GitHub Actions run 44977998189](https://github.com/Nolane-x/Nolane-search/actions/runs/44977998189) on 2026-11-22 at 02:52 UTC from main commit `66aeb33c1319c161b224d8e65df1832e11bce4ac`.
+- Cloudflare Worker Version ID: `1271380c-e118-4731-ad33-5f38adcd20c8`, deployed by [GitHub Actions run 44980373529](https://github.com/Nolane-x/Nolane-search/actions/runs/44980373529) on 2026-11-22 at 03:23 UTC from main commit `374f4c011a59e50e30ac0ace5891d458b32407ff`.
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
