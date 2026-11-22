@@ -426,6 +426,17 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "n8n-workflow-audit", name: "Kiểm tra workflow automation n8n", category: "developer", description: "Rà nodes, connections, duplicate/dangling references, credential links, execution-sensitive nodes và hardcoded-secret fields; không chạy workflow hoặc xuất secret.", accepts: ["application/json", ".n8n.json", ".workflow.json"], output: "Báo cáo n8n workflow TXT", ready: true },
   { id: "design-token-audit", name: "Kiểm tra Design Tokens DTCG 2025.10", category: "developer", description: "Rà group/token, $type/$value, token naming, alias/reference chưa resolve và circular paths; không in token names, values hoặc descriptions.", accepts: ["application/json", ".tokens.json"], output: "Báo cáo Design Tokens TXT", ready: true },
   { id: "warc-archive-audit", name: "Kiểm tra Web Archive WARC", category: "data", description: "Đọc WARC 1.0/1.1 hoặc gzip để đếm records/types/content-types và kiểm tra Content-Length/truncation; không in URL, headers hay archived payload.", accepts: ["application/warc", "application/warc+gzip", ".warc", ".warc.gz"], output: "Báo cáo WARC TXT", ready: true },
+  { id: "wasm-module-audit", name: "Kiểm tra WebAssembly Module", category: "developer", description: "Rà magic/version, section IDs, LEB128, section lengths, thứ tự, function/code counts và imports/exports counts; không decode hoặc chạy instruction.", accepts: ["application/wasm", ".wasm"], output: "Báo cáo WASM TXT", ready: true },
+  { id: "sarif-report-audit", name: "Kiểm tra báo cáo SARIF 2.1", category: "developer", description: "Phân tích runs/rules/results, severity, suppression, locations, fixes và rule references; không xuất message text, code paths, snippets hoặc fingerprints.", accepts: ["application/sarif+json", "application/json", ".sarif"], output: "Báo cáo SARIF TXT", ready: true },
+  { id: "sbom-audit", name: "Kiểm tra SBOM CycloneDX/SPDX", category: "developer", description: "Đếm components/packages/files, licenses, services, vulnerabilities, relationships và dangling refs trong CycloneDX 1.7 hoặc SPDX 2.x; không tiết lộ package URLs/IDs.", accepts: ["application/vnd.cyclonedx+json", "application/spdx+json", "application/json", "application/xml", ".cdx.json", ".spdx.json", ".cdx.xml", ".spdx.xml", "bom.json", "bom.xml"], output: "Báo cáo SBOM TXT", ready: true },
+  { id: "junit-xml-audit", name: "Kiểm tra báo cáo JUnit XML", category: "developer", description: "Đếm testsuite/testcase, failure/error/skipped/flaky, declared-count mismatches và durations; không xuất testcase names, stack traces hay stdout/stderr.", accepts: ["application/xml", "text/xml", ".xml"], output: "Báo cáo JUnit TXT", ready: true },
+  { id: "coverage-xml-audit", name: "Kiểm tra báo cáo Coverage Cobertura/JaCoCo", category: "developer", description: "Đọc line/branch rates và aggregate counters từ Cobertura hoặc JaCoCo XML; không xuất class/method/source names, paths hoặc per-line hits.", accepts: ["application/xml", "text/xml", ".xml"], output: "Báo cáo coverage TXT", ready: true },
+  { id: "fits-audit", name: "Kiểm tra dữ liệu thiên văn FITS", category: "data", description: "Kiểm tra FITS 2880-byte blocks, 80-character cards, END, HDUs, BITPIX, NAXIS và data-unit bounds; không giải mã pixels hoặc tiết lộ observation metadata.", accepts: ["application/fits", "image/fits", ".fits", ".fit", ".fts"], output: "Báo cáo FITS TXT", ready: true },
+  { id: "step-cad-audit", name: "Kiểm tra bản vẽ CAD STEP Part 21", category: "developer", description: "Rà ISO-10303-21 HEADER/DATA/ENDSEC, entity IDs, references, duplicate IDs và delimiter balance; không tính hình học hoặc in design metadata.", accepts: ["model/step", "application/step", ".step", ".stp"], output: "Báo cáo STEP TXT", ready: true },
+  { id: "otel-collector-audit", name: "Kiểm tra OpenTelemetry Collector Config", category: "developer", description: "Rà receivers/processors/exporters/connectors/extensions, service pipelines, undefined/unused references, public bind và literal secret fields; không khởi chạy collector.", accepts: ["application/yaml", "text/yaml", ".yaml", ".yml"], output: "Báo cáo OpenTelemetry TXT", ready: true },
+  { id: "godot-project-audit", name: "Kiểm tra dự án Godot project.godot", category: "developer", description: "Thống kê project settings, autoloads, enabled editor plugins, res:///remote URI refs và secret-bearing keys; không load scenes, scripts hoặc addons.", accepts: ["text/plain", ".godot"], output: "Báo cáo Godot TXT", ready: true },
+  { id: "unity-package-audit", name: "Kiểm tra Unity .unitypackage", category: "developer", description: "Kiểm tra gzip/tar, GUID groups, asset/asset.meta/pathname, missing members, duplicates và unsafe paths; không extract project files ra filesystem.", accepts: ["application/gzip", ".unitypackage"], output: "Báo cáo Unity package TXT", ready: true },
+  { id: "unreal-project-audit", name: "Kiểm tra Unreal Engine .uproject", category: "developer", description: "Rà JSON FileVersion, module/plugin declarations, duplicate names, enabled state, target platform và secret-bearing fields; không load project/plugins.", accepts: ["application/json", ".uproject"], output: "Báo cáo Unreal project TXT", ready: true },
 
 ];
 
@@ -806,6 +817,17 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "n8n-workflow-audit": ["text-clean", "text-stats"],
   "design-token-audit": ["text-clean", "text-stats"],
   "warc-archive-audit": ["text-clean", "text-stats"],
+  "wasm-module-audit": ["text-clean", "text-stats"],
+  "sarif-report-audit": ["text-clean", "text-stats"],
+  "sbom-audit": ["text-clean", "text-stats"],
+  "junit-xml-audit": ["text-clean", "text-stats"],
+  "coverage-xml-audit": ["text-clean", "text-stats"],
+  "fits-audit": ["text-clean", "text-stats"],
+  "step-cad-audit": ["text-clean", "text-stats"],
+  "otel-collector-audit": ["text-clean", "text-stats"],
+  "godot-project-audit": ["text-clean", "text-stats"],
+  "unity-package-audit": ["text-clean", "text-stats"],
+  "unreal-project-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
@@ -1004,6 +1026,18 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (name === "workflow.json" || name === "n8n.json" || name.endsWith(".n8n.json") || name.endsWith(".workflow.json")) return "n8n-workflow-audit";
   if (/(?:design[_.-]?tokens|tokens)\.json$/i.test(name)) return "design-token-audit";
   if (/\.warc(?:\.gz)?$/i.test(name) || mime.includes("warc")) return "warc-archive-audit";
+  if (name.endsWith(".wasm") || mime === "application/wasm") return "wasm-module-audit";
+  if (name.endsWith(".sarif") || mime === "application/sarif+json") return "sarif-report-audit";
+  if (/\.(?:cdx|spdx)\.json$/i.test(name) || /^(?:bom|sbom)\.json$/i.test(name)) return "sbom-audit";
+  if (/\.(?:cdx|spdx)\.xml$/i.test(name) || /^(?:bom|sbom)\.xml$/i.test(name)) return "sbom-audit";
+  if (/^(?:junit|test-results|test-results\.trx|TEST-).*\.xml$/i.test(name) || name === "junit.xml") return "junit-xml-audit";
+  if (/^(?:coverage|cobertura|jacoco)(?:[-_.].*)?\.xml$/i.test(name)) return "coverage-xml-audit";
+  if (/\.(?:fits|fit|fts)$/i.test(name) || mime === "application/fits" || mime === "image/fits") return "fits-audit";
+  if (/\.(?:step|stp)$/i.test(name) || mime === "model/step" || mime === "application/step") return "step-cad-audit";
+  if (/^(?:otel|opentelemetry|collector)(?:[-_.].*)?\.ya?ml$/i.test(name)) return "otel-collector-audit";
+  if (name === "project.godot" || name.endsWith(".godot")) return "godot-project-audit";
+  if (name.endsWith(".unitypackage")) return "unity-package-audit";
+  if (name.endsWith(".uproject")) return "unreal-project-audit";
   if (name.endsWith(".svg") || mime === "image/svg+xml") return "svg-safety-audit";
   if (mime.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(name)) return "image-ocr";
   if (mime === "application/x-ndjson" || mime === "application/jsonl" || name.endsWith(".jsonl")) return "jsonl-format";

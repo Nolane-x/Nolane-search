@@ -140,7 +140,7 @@ jobs:
         if: contains(steps.job.outputs.tool_ids, 'audio-transcribe') || contains(steps.job.outputs.tool_ids, 'audio-subtitles')
         run: python -m pip install --disable-pip-version-check faster-whisper
       - name: Install YAML parser
-        if: contains(steps.job.outputs.tool_ids, 'yaml-format') || contains(steps.job.outputs.tool_ids, 'code-check') || contains(steps.job.outputs.tool_ids, 'yaml-to-json') || contains(steps.job.outputs.tool_ids, 'json-to-yaml') || contains(steps.job.outputs.tool_ids, 'openapi-contract-audit') || contains(steps.job.outputs.tool_ids, 'ansible-playbook-audit') || contains(steps.job.outputs.tool_ids, 'prometheus-rules-audit')
+        if: contains(steps.job.outputs.tool_ids, 'yaml-format') || contains(steps.job.outputs.tool_ids, 'code-check') || contains(steps.job.outputs.tool_ids, 'yaml-to-json') || contains(steps.job.outputs.tool_ids, 'json-to-yaml') || contains(steps.job.outputs.tool_ids, 'openapi-contract-audit') || contains(steps.job.outputs.tool_ids, 'ansible-playbook-audit') || contains(steps.job.outputs.tool_ids, 'prometheus-rules-audit') || contains(steps.job.outputs.tool_ids, 'otel-collector-audit')
         run: python -m pip install --disable-pip-version-check pyyaml
       - name: Install PCAP parser
         if: contains(steps.job.outputs.tool_ids, 'pcap-network-audit')

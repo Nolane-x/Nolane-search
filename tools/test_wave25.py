@@ -124,7 +124,7 @@ class Wave25BuildObservabilityBinaryTests(unittest.TestCase):
         self.assert_report(result)
         self.assertIn("Coverage format: Cobertura", result["summary"])
         self.assertIn("line rate: 75.000%", result["summary"])
-        self.assertIn("2 covered", result["summary"])
+        self.assertIn("1/2 covered", result["summary"])
         self.assertNotIn("PrivateClass", result["summary"])
         self.assertNotIn("secret.py", result["summary"])
 
