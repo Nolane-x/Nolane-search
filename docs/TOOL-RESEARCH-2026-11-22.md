@@ -121,7 +121,7 @@ The integrations call upstream libraries through their public APIs; they do not 
 
 ### Standard-library processors
 
-KML-to-GeoJSON, subtitle timing QA, HTML metadata audit and local-site link checking use Python's standard library (ElementTree, HTMLParser, csv, zipfile, urllib.parse and regular expressions). KML rejects DTD/entity declarations; HTML and local-link tools do not fetch external URLs; archive members are inspected in memory under explicit count/expanded-size limits.
+KML-to-GeoJSON, subtitle timing QA, JSON-LD structured-data auditing, HTML local-link checking and CSS-free HTML parsing use Python's standard library (ElementTree, HTMLParser, json, csv, zipfile, urllib.parse and regular expressions). KML rejects DTD/entity declarations; HTML and local-link tools do not fetch external URLs; archive members are inspected in memory under explicit count/expanded-size limits.
 
 ### Wave 22 exclusions and selection notes
 
