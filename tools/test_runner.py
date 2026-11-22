@@ -2470,7 +2470,8 @@ dependencies = ["requests>=2.0", "httpx"]
         table=document.add_table(rows=2,cols=2)
         table.cell(1,0).text="value"
         document.save(doc_path)
-        docx_report=Path(runner.docx_audit(doc_path)["output_path"]).read_text(encoding="utf-8")
+        docx_result=runner.docx_audit(doc_path)
+        docx_report=Path(docx_result["output_path"]).read_text(encoding="utf-8") if docx_result.get("output_path") else docx_result["summary"]
         self.assertIn("First heading is not Heading 1",docx_report)
         self.assertIn("Heading hierarchy jumps",docx_report)
         self.assertIn("empty first row",docx_report)
@@ -2485,7 +2486,8 @@ dependencies = ["requests>=2.0", "httpx"]
         run.font.size=Pt(9)
         presentation.slides.add_slide(presentation.slide_layouts[6])
         presentation.save(pptx_path)
-        pptx_report=Path(runner.pptx_audit(pptx_path)["output_path"]).read_text(encoding="utf-8")
+        pptx_result=runner.pptx_audit(pptx_path)
+        pptx_report=Path(pptx_result["output_path"]).read_text(encoding="utf-8") if pptx_result.get("output_path") else pptx_result["summary"]
         self.assertIn("Slides without a title",pptx_report)
         self.assertIn("smaller than 12 pt: 1",pptx_report)
         self.assertIn("no detected text or picture content: 1",pptx_report)
@@ -2495,7 +2497,8 @@ dependencies = ["requests>=2.0", "httpx"]
             "id,email,credit_card,api_token,phone_number\n"
             "1,person@example.test,4111111111111111,super-secret-value,+84901234567\n"
             "2,not-an-email,123,another-secret,+84987654321\n")
-        csv_report=Path(runner.csv_privacy_audit(csv_path)["output_path"]).read_text(encoding="utf-8")
+        csv_result=runner.csv_privacy_audit(csv_path)
+        csv_report=Path(csv_result["output_path"]).read_text(encoding="utf-8") if csv_result.get("output_path") else csv_result["summary"]
         self.assertIn("email-like",csv_report)
         self.assertIn("payment-card-like (Luhn)",csv_report)
         self.assertIn("sensitive-column",csv_report)
@@ -2512,7 +2515,8 @@ dependencies = ["requests>=2.0", "httpx"]
             archive.writestr("run.exe","binary-placeholder")
             archive.writestr("nested.zip","placeholder")
             archive.writestr("large.txt","A"*(2*1024*1024))
-        archive_report=Path(runner.archive_security_audit(archive_path)["output_path"]).read_text(encoding="utf-8")
+        archive_result=runner.archive_security_audit(archive_path)
+        archive_report=Path(archive_result["output_path"]).read_text(encoding="utf-8") if archive_result.get("output_path") else archive_result["summary"]
         self.assertIn("path traversal segment",archive_report)
         self.assertIn("case-insensitive path collision",archive_report)
         self.assertIn("executable or script file",archive_report)
