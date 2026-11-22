@@ -15,7 +15,7 @@ Last verified: 2026-11-22. Production deployment evidence is separated from owne
 
 ## Latest production release — Wave 27 (2026-11-22)
 
-- [PR #79](https://github.com/Nolane-x/Nolane-search/pull/79) merged into `main` as commit `408beb47bf3eeceeb4f0bb5a33f8e3bb23d9ad1d); nine processors raised production from 417 to **426 tools**.
+- [PR #79](https://github.com/Nolane-x/Nolane-search/pull/79) merged into `main` as commit `408beb47bf3eeceeb4f0bb5a33f8e3bb23d9ad1d`; nine processors raised production from 417 to **426 tools**.
 - Main CI [45037484505](https://github.com/Nolane-x/Nolane-search/actions/runs/45037484505) passed TypeScript type-check, all 25 Vitest files, deployment-script checks, the Python runner suite and Worker build.
 - Worker export and production health smoke [45037484786](https://github.com/Nolane-x/Nolane-search/actions/runs/45037484786) passed.
 - Cloudflare deployment [45037484485](https://github.com/Nolane-x/Nolane-search/actions/runs/45037484485) passed on rerun attempt 2, including source verification, build, bundle validation, Worker/runtime-secret upload and Telegram webhook plus command-menu registration. The initial deployment attempt hit a network timeout at Telegram registration; rerun succeeded. D1 migration was skipped because no schema changed.
