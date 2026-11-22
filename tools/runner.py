@@ -10515,7 +10515,7 @@ def image_privacy_audit(p):
             exif=image.getexif()
             names={str(ExifTags.TAGS.get(key,key)).casefold() for key in exif.keys()}
             date_tags={"datetime","datetimeoriginal","datetimedigitized"}
-            identity_tags={"bodyserialnumber","camer aserialnumber","serialnumber","lensserialnumber","ownername","cameraownername","artist","usercomment"}
+            identity_tags={"bodyserialnumber","cameraserialnumber","serialnumber","lensserialnumber","ownername","cameraownername","artist","usercomment"}
             gps_present=34853 in exif
             dates=len(names&date_tags)
             identity=sum(1 for key in names if key.replace(" ","") in {item.replace(" ","") for item in identity_tags})
