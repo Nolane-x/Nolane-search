@@ -2,6 +2,20 @@
 
 Last verified: 2026-11-22. Production deployment evidence is separated from owner-level Telegram upload/retry journeys.
 
+# Verified Project Status
+
+Last verified: 2026-11-22. Production deployment evidence is kept separate from owner-level Telegram file-upload/retry checks.
+
+## In review — Wave 26 candidate (2026-11-22)
+
+- Branch: `feat/wave-twenty-six-bioinformatics-tools`.
+- Eleven additional processors are registered across TypeScript catalog, Python RUNNERS allowlist, handler dispatch, pipeline transitions and upload inference. Candidate catalog: **417 tools**; production remains **406** until all release gates pass.
+- New domains: FASTA/FASTQ sequence records, VCF variant calls, SAM read alignments, GFF3/GTF annotation, BED genomic intervals, GenBank flat files, PDB structure records, GFA assembly graphs, Newick trees and Clustal/Stockholm alignments.
+- Twenty-three dedicated Python regression tests cover privacy-preserving summaries, gzip streams, malformed records, coordinates/field widths, sequence/quality lengths, graph references, tree syntax and alignment block lengths. No new runtime dependency is introduced.
+- Genomic/sequence inputs can contain sensitive or identifying human data. Reports withhold identifiers, sample labels, sequence/genotype content and coordinates, but source files still pass through the existing ephemeral GitHub-hosted runner. Do not upload regulated/patient data without authorization.
+- Plain `.vcf` is ambiguous with vCard; automatic inference requires genomic MIME or `.vcf.gz`, while direct `/tool vcf-variant-audit` remains available for plain VCF.
+- PR CI, Worker export/health smoke and Cloudflare deployment are pending for Wave 26.
+- Owner-level E2E after release: test synthetic/non-sensitive FASTA/FASTQ/VCF/SAM/GFF3/BED/GenBank/PDB/GFA/Newick/Stockholm files through private Telegram, inspect delivered reports and verify `/tool_retry`.
 ## Latest production release — Wave 25 (2026-11-22)
 
 - [PR #77](https://github.com/Nolane-x/Nolane-search/pull/77) merged into `main` as commit `bd5b51cd119d049dd14a654147d03a4303fa7e2c`; eleven processors increased production from 395 to **406 tools**.
