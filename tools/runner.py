@@ -11257,7 +11257,7 @@ def sqlglot_format(p):
         if not isinstance(envelope,dict) or not isinstance(envelope.get("sql"),str):
             raise RuntimeError('JSON cần trường "sql" dạng chuỗi.')
         sql=envelope["sql"]
-        read_dialect=str(envelope.get("read_dialect","ansi")).lower()
+        read_dialect=str(envelope.get("read_dialect","auto")).lower()
         write_dialect=str(envelope.get("write_dialect",read_dialect)).lower()
     allowed={"auto","bigquery","clickhouse","databricks","duckdb","mysql","postgres","presto","redshift","snowflake","spark","sqlite","trino","tsql"}
     if read_dialect not in allowed or write_dialect not in allowed:
@@ -11918,7 +11918,9 @@ def html_local_link_audit(p):
                     if parts.scheme or parts.netloc or raw_value.startswith("//"):
                         skipped_external+=1; continue
                     decoded=unquote(parts.path)
-                    if decoded.startswith("/"): target=posixpath.normpath(decoded.lstrip("/"))
+                    if decoded.startswith("/"):
+                        target=posixpath.normpath(decoded.lstrip("/"))
+                        if target==".": target="index.html"
                     elif decoded: target=posixpath.normpath(posixpath.join(posixpath.dirname(source_path),decoded))
                     else: target=source_path
                     if target=="." : target=source_path
