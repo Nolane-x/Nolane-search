@@ -116,8 +116,11 @@ jobs:
         if: contains(steps.job.outputs.tool_ids, 'css-quality-audit')
         run: python -m pip install --disable-pip-version-check tinycss2
       - name: Install HDF5 inspector
-        if: contains(steps.job.outputs.tool_ids, 'hdf5-audit')
+        if: contains(steps.job.outputs.tool_ids, 'hdf5-audit') || contains(steps.job.outputs.tool_ids, 'nwb-structure-audit')
         run: python -m pip install --disable-pip-version-check h5py
+      - name: Install DICOM parser
+        if: contains(steps.job.outputs.tool_ids, 'dicom-privacy-audit')
+        run: python -m pip install --disable-pip-version-check pydicom
       - name: Install GraphQL SDL parser
         if: contains(steps.job.outputs.tool_ids, 'graphql-schema-audit')
         run: python -m pip install --disable-pip-version-check 'graphql-core>=3.2,<4'
