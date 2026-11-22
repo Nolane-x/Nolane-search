@@ -231,7 +231,7 @@ def xliff_audit(path: Path) -> dict:
             if source is not None and target is not None:
                 if text_of(source).strip() == text_of(target).strip():
                     same_source_target += 1
-                if placeholders(source) != placeholders(target):
+                if text_of(target).strip() and placeholders(source) != placeholders(target):
                     placeholder_mismatches += 1
             attrs = {key.rsplit("}", 1)[-1].lower(): value.lower() for key, value in element.attrib.items()}
             state = attrs.get("state") or attrs.get("approved") or "unspecified"
@@ -569,7 +569,7 @@ def gltf_audit(path: Path) -> dict:
         parsed = urllib.parse.urlsplit(uri)
         if parsed.scheme.lower() == "data":
             data_uris += 1
-        elif parsed.scheme or uri.startswith(("/", "\\")):
+        elif uri and not uri.startswith("#"):
             external += 1
         if ".." in uri.replace("\\", "/").split("/") or "\0" in uri:
             unsafe += 1
