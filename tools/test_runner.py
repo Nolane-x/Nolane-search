@@ -3332,7 +3332,7 @@ Unknown-Directive: value
 
     def test_wave21_csv_parquet_round_trip_preserves_leading_zeroes(self):
         import duckdb
-        path = self.write("people.csv", "id,name\n001,Ada\n002,Bob\n")
+        path = self.write("people.csv", "id,name\n001,Ada\n002,Bob\n003,=1+1\n")
         parquet_result = runner.csv_to_parquet(path)
         parquet_path = Path(parquet_result["output_path"])
         connection = duckdb.connect(database=":memory:")
@@ -3343,11 +3343,12 @@ Unknown-Directive: value
             ).fetchall()
         finally:
             connection.close()
-        self.assertEqual(rows, [("001", "Ada"), ("002", "Bob")])
+        self.assertEqual(rows, [("001", "Ada"), ("002", "Bob"), ("003", "=1+1")])
         csv_result = runner.parquet_to_csv(parquet_path)
         csv_text = Path(csv_result["output_path"]).read_text(encoding="utf-8")
         self.assertIn("001,Ada", csv_text)
         self.assertIn("002,Bob", csv_text)
+        self.assertIn("' =1+1", csv_text) if False else self.assertIn("'=1+1", csv_text)
 
 if __name__ == "__main__":
     unittest.main()
