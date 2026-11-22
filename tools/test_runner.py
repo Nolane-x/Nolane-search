@@ -3077,5 +3077,160 @@ _private IN TXT "do-not-disclose"
         self.assertNotIn("private.example.test",report)
         self.assertNotIn("123456789",report)
 
+
+    def test_wave_twenty_rss_atom_audit_counts_missing_and_duplicate_fields_without_values(self):
+        raw="""<?xml version="1.0"?>
+<rss version="2.0"><channel>
+  <title>Private Feed Title</title>
+  <item><title>Secret Entry</title><guid>duplicate-id</guid><link>https://private.example/item</link><pubDate>Today</pubDate><enclosure url="https://private.example/audio.mp3"/></item>
+  <item><guid>duplicate-id</guid><author>private@example.test</author></item>
+</channel></rss>
+"""
+        path=self.write("feed.rss",raw)
+        result=runner.rss_atom_audit(path)
+        report=result["summary"]
+        self.assertIn("entries: 2",report)
+        self.assertIn("missing title: 1",report)
+        self.assertIn("missing link: 1",report)
+        self.assertIn("duplicate IDs: 1",report)
+        self.assertIn("Enclosure elements: 1",report)
+        for secret in ("Private Feed Title","Secret Entry","private.example","private@example.test"):
+            self.assertNotIn(secret,report)
+
+    def test_wave_twenty_sitemap_audit_checks_loc_duplicates_and_priority(self):
+        raw="""<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://private.example/a</loc><lastmod>2026-11-22</lastmod><priority>0.8</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://private.example/a</loc><priority>1.5</priority><changefreq>sometimes</changefreq></url>
+  <url><priority>bad</priority></url>
+</urlset>
+"""
+        path=self.write("sitemap.xml",raw)
+        result=runner.sitemap_xml_audit(path)
+        report=result["summary"]
+        self.assertIn("entries: 3",report)
+        self.assertIn("missing loc: 1",report)
+        self.assertIn("duplicate loc values: 1",report)
+        self.assertIn("invalid priority values: 2",report)
+        self.assertIn("invalid changefreq values: 1",report)
+        self.assertNotIn("private.example",report)
+
+    def test_wave_twenty_robots_audit_counts_rules_without_paths(self):
+        raw="""User-agent: *
+Disallow: /private/
+Allow: /public/
+Crawl-delay: 5
+Sitemap: https://private.example/sitemap.xml
+
+User-agent: Bot
+Disallow: /secret/
+Unknown-Directive: value
+"""
+        path=self.write("robots.txt",raw)
+        result=runner.robots_txt_audit(path)
+        report=result["summary"]
+        self.assertIn("user-agent groups: 2",report)
+        self.assertIn("allow/disallow rules: 3",report)
+        self.assertIn("Sitemap directives: 1",report)
+        self.assertIn("crawl-delay directives: 1",report)
+        self.assertIn("unknown directives: 1",report)
+        for secret in ("/private/","/public/","/secret/","private.example"):
+            self.assertNotIn(secret,report)
+
+    def test_wave_twenty_jsonl_profile_reports_type_drift_without_values(self):
+        raw='{"id":1,"name":"private-name"}\n{"id":"two","enabled":true}\n{"id":3,"secret":"DO_NOT_PRINT","secret":"DUPLICATE"}\n{invalid json}\n'
+        path=self.write("records.jsonl",raw)
+        result=runner.jsonl_profile(path)
+        report=result["summary"]
+        self.assertIn("valid records: 3",report)
+        self.assertIn("invalid/oversized lines: 1",report)
+        self.assertIn("Top-level field names: 4",report)
+        self.assertIn("duplicate object keys encountered: 1",report)
+        for secret in ("private-name","DO_NOT_PRINT","DUPLICATE"):
+            self.assertNotIn(secret,report)
+
+    def test_wave_twenty_image_privacy_audit_detects_metadata_without_values(self):
+        from PIL import Image
+        image=Image.new("RGB",(64,48),"white")
+        exif=Image.Exif()
+        exif[271]="Private Camera Make"
+        exif[272]="Secret Camera Model"
+        exif[315]="Private Photographer"
+        exif[36867]="2026:11:22 10:30:00"
+        path=self.input_dir/"private-photo.jpg"
+        image.save(path,format="JPEG",exif=exif)
+        result=runner.image_privacy_audit(path)
+        report=result["summary"]
+        self.assertIn("EXIF tags:",report)
+        self.assertIn("date/time tags: 1",report)
+        self.assertIn("identity/device-related tags: 3",report)
+        for secret in ("Private Camera Make","Secret Camera Model","Private Photographer","2026:11:22"):
+            self.assertNotIn(secret,report)
+
+    def test_wave_twenty_svg_safety_audit_reports_active_content_without_values(self):
+        raw="""<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" onload="steal()">
+<script>secretScript()</script>
+<foreignObject><div>private content</div></foreignObject>
+<image xlink:href="https://private.example/track.png"/>
+<a href="javascript:alert(1)">click</a>
+<rect style="fill:url(https://private.example/paint.svg#x)"/>
+</svg>"""
+        path=self.write("unsafe.svg",raw)
+        result=runner.svg_safety_audit(path)
+        report=result["summary"]
+        self.assertIn("Script elements: 1",report)
+        self.assertIn("foreignObject elements: 1",report)
+        self.assertIn("event-handler attributes: 1",report)
+        self.assertIn("External references:",report)
+        self.assertIn("unsafe URI schemes: 1",report)
+        for secret in ("steal()","private.example","private content","javascript:alert"):
+            self.assertNotIn(secret,report)
+
+    def test_wave_twenty_wcag_contrast_audit_calculates_known_ratios(self):
+        path=self.write("contrast.txt","#000000 #FFFFFF\n#777777 #FFFFFF\ninvalid pair\n")
+        result=runner.wcag_contrast_audit(path)
+        report=result["summary"]
+        self.assertIn("Valid pairs: 2",report)
+        self.assertIn("invalid lines skipped: 1",report)
+        self.assertIn("21.00:1",report)
+        self.assertIn("WCAG 2.2 AA",report)
+        self.assertIn("Line 1: 21.00:1",report)
+
+    def test_wave_twenty_ssh_public_key_audit_detects_weak_rsa_and_duplicate_without_comments(self):
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa,ed25519
+        rsa_key=rsa.generate_private_key(public_exponent=65537,key_size=1024)
+        ed_key=ed25519.Ed25519PrivateKey.generate()
+        rsa_line=rsa_key.public_key().public_bytes(serialization.Encoding.OpenSSH,serialization.PublicFormat.OpenSSH).decode()+" private-comment@example.test"
+        ed_line=ed_key.public_key().public_bytes(serialization.Encoding.OpenSSH,serialization.PublicFormat.OpenSSH).decode()+" another-private-comment"
+        path=self.write("authorized_keys",rsa_line+"\n"+rsa_line+"\n"+ed_line+"\n")
+        result=runner.ssh_public_key_audit(path)
+        report=result["summary"]
+        self.assertIn("Valid public keys: 3",report)
+        self.assertIn("duplicate public keys: 1",report)
+        self.assertIn("RSA=2",report)
+        self.assertIn("Ed25519=1",report)
+        self.assertIn("Weak RSA keys (<2048 bits): 2",report)
+        self.assertNotIn("private-comment",report)
+        self.assertNotIn("example.test",report)
+
+    def test_wave_twenty_archive_checksum_manifest_hashes_members_without_extracting(self):
+        import hashlib
+        path=self.input_dir/"bundle.zip"
+        first=b"first private file content"
+        second=b"second private file content"
+        with zipfile.ZipFile(path,"w",compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("folder/first.txt",first)
+            archive.writestr("folder/second.txt",second)
+        result=runner.archive_checksum_manifest(path)
+        output=Path(result["output_path"])
+        with output.open(encoding="utf-8-sig",newline="") as handle:
+            rows=list(csv.DictReader(handle))
+        self.assertEqual(len(rows),2)
+        by_path={row["path"]:row for row in rows}
+        self.assertEqual(by_path["folder/first.txt"]["sha256"],hashlib.sha256(first).hexdigest())
+        self.assertEqual(by_path["folder/second.txt"]["sha256"],hashlib.sha256(second).hexdigest())
+        self.assertNotIn("private file content",result["summary"])
+
 if __name__ == "__main__":
     unittest.main()

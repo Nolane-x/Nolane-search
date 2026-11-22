@@ -1,5 +1,20 @@
 Nolane Tools hiện có **336 công cụ đã triển khai trên production**; Wave 19 phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `f7be3cf0-1370-4333-84be-af5f22e6f012`. Main CI, Worker export/production smoke và deployment đều đã thành công. Catalog TypeScript, Python runner allowlist, handler, text-output registry và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và các repository upstream đã xem được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
 
+### Wave 20 — Creator, publishing and content utilities (in development)
+
+| ID | Công cụ | Nhóm | Chức năng |
+|---|---|---|---|
+| /tool rss-atom-audit | RSS/Atom feed audit | Publishing | Kiểm tra feed RSS/Atom/RDF: entry thiếu title/ID/link/date, duplicate IDs, enclosure/author/category counts; không xuất URL/nội dung. |
+| /tool sitemap-xml-audit | XML sitemap audit | Website | Kiểm tra urlset/sitemapindex, loc thiếu/trùng, lastmod, priority, changefreq; không fetch URL. |
+| /tool robots-txt-audit | robots.txt audit | Website | Thống kê user-agent groups, allow/disallow, sitemap, crawl-delay, rule mồ côi và directive lạ; không crawl. |
+| /tool jsonl-profile | JSONL profiler | Dữ liệu | Thống kê record, invalid line, field presence/type drift, duplicate keys; không xuất JSON values. |
+| /tool image-privacy-audit | Image metadata privacy | Hình ảnh | Phát hiện GPS/date/serial/owner/thumbnail/XMP/IPTC/ICC metadata; chỉ xuất loại và số lượng. |
+| /tool svg-safety-audit | SVG safety audit | Thiết kế/web | Rà script, foreignObject, event attributes, external/data URI, CSS url/@import; không chạy hoặc sanitize SVG. |
+| /tool wcag-contrast-audit | WCAG contrast checker | Thiết kế/accessibility | Tính HEX pair contrast ratio, đánh giá WCAG 2.2 AA/AAA cho normal/large text. |
+| /tool ssh-public-key-audit | SSH public key audit | Developer/security | Kiểm tra OpenSSH/PEM public key, thuật toán, RSA/EC yếu, DSA và duplicate; không hỗ trợ private key hoặc kết nối server. |
+| /tool archive-checksum-manifest | ZIP SHA-256 manifest | Tệp/integrity | Hash từng member ZIP và xuất CSV path/size/SHA-256; không giải nén ra filesystem, chặn traversal/symlink/encrypted entries. |
+
+Wave 20 đang chờ CI/deploy; chưa tính 9 tool này vào production. Giới hạn: RSS/Atom 10 MiB/50.000 entries; sitemap 20 MiB/50.000 entries; robots 2 MiB/20.000 dòng; JSONL 20 MiB/100.000 records/1 MiB per line; image 20 MiB/80 megapixel; SVG 5 MiB/100.000 elements/250.000 attributes; WCAG 2 MiB/5.000 dòng; SSH 2 MiB/1.000 keys; ZIP manifest 20 MiB/1.000 members/200 MiB dữ liệu giải nén/50 MiB mỗi member. Không fetch URL, execute script, connect SSH server hay mở nội dung tệp archive ra filesystem.
 ### Wave 19 — Network, media, ebook and data quality tools — deployed 2026-11-22
 
 | ID | Công cụ | Nhóm | Chức năng |
