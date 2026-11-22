@@ -1,4 +1,4 @@
-# Wave 20 handoff — Creator, publishing and content utilities
+# Wave 20 release handoff — Creator, publishing and content utilities
 
 Date: 2026-11-22
 Repository: https://github.com/Nolane-x/Nolane-search
@@ -6,7 +6,7 @@ Branch: feat/wave-twenty-creator-content-utilities
 
 ## Scope
 
-Adds nine processors beyond the 336-tool Wave 19 production catalog:
+Wave 20 is deployed. Nine processors extend the 336-tool Wave 19 production catalog to 345:
 
 - rss-atom-audit: parse RSS/Atom/RDF feeds offline; count missing/duplicate IDs and missing title/link/date without printing content or URLs.
 - sitemap-xml-audit: inspect sitemap urlset/index structure, loc duplicates, lastmod, priority and changefreq; never fetch URLs.
@@ -44,7 +44,17 @@ Adds nine processors beyond the 336-tool Wave 19 production catalog:
 2. Nine new tools have matching pipeline transitions; report-only tools appear in TEXT_OUTPUT_TOOLS; CSV checksum output feeds CSV processors.
 3. Python fixtures cover all nine tools and privacy boundaries.
 4. Type-check, Vitest, deployment-script checks, Python runner suite and Worker build pass.
-5. Worker export/health smoke and Cloudflare deploy pass before counting 345 production processors.
+5. Worker export/health smoke [44982433601](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433601) and Cloudflare deploy [44982433602](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433602) passed; the 345-tool catalog is live.
 6. Real Telegram upload/report/retry remains owner-level E2E after deployment.
 
 Research notes: docs/TOOL-RESEARCH-2026-11-22.md
+## Production rollout — 2026-11-22
+
+- Canonical production commit: `32aede18727b75b2cef2a06b7d603615bedcdac0`.
+- Main CI [44982433603](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433603) passed type-check, Vitest, deployment-script checks, 136 Python tests and Worker build.
+- Worker export and production smoke [44982433601](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433601) passed.
+- Cloudflare production deployment [44982433602](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433602) passed; Telegram webhook and command menu were registered; D1 migration was skipped because no schema changed.
+- Production Worker Version ID: `8eeb9bd7-77f7-4205-898a-db49f35424ce`.
+- PR #71 was closed as a duplicate/stale branch after Wave 20 had already landed on `main`; it was not merged.
+
+Research and license decisions: docs/TOOL-RESEARCH-2026-11-22.md

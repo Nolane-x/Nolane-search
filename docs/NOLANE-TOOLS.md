@@ -1,6 +1,6 @@
-Nolane Tools hiện có **336 công cụ đã triển khai trên production**; Wave 19 phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `f7be3cf0-1370-4333-84be-af5f22e6f012`. Main CI, Worker export/production smoke và deployment đều đã thành công. Catalog TypeScript, Python runner allowlist, handler, text-output registry và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và các repository upstream đã xem được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
+Nolane Tools hiện có **345 công cụ đã triển khai trên production**; Wave 20 phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `8eeb9bd7-77f7-4205-898a-db49f35424ce`. Main CI, Worker export/production smoke và deployment đều đã thành công. Catalog TypeScript, Python runner allowlist, handler, text-output registry và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và các repository upstream đã xem được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
 
-### Wave 20 — Creator, publishing and content utilities (in development)
+### Wave 20 — Creator, publishing and content utilities — deployed 2026-11-22
 
 | ID | Công cụ | Nhóm | Chức năng |
 |---|---|---|---|
@@ -14,7 +14,7 @@ Nolane Tools hiện có **336 công cụ đã triển khai trên production**; W
 | /tool ssh-public-key-audit | SSH public key audit | Developer/security | Kiểm tra OpenSSH/PEM public key, thuật toán, RSA/EC yếu, DSA và duplicate; không hỗ trợ private key hoặc kết nối server. |
 | /tool archive-checksum-manifest | ZIP SHA-256 manifest | Tệp/integrity | Hash từng member ZIP và xuất CSV path/size/SHA-256; không giải nén ra filesystem, chặn traversal/symlink/encrypted entries. |
 
-Wave 20 đang chờ CI/deploy; chưa tính 9 tool này vào production. Giới hạn: RSS/Atom 10 MiB/50.000 entries; sitemap 20 MiB/50.000 entries; robots 2 MiB/20.000 dòng; JSONL 20 MiB/100.000 records/1 MiB per line; image 20 MiB/80 megapixel; SVG 5 MiB/100.000 elements/250.000 attributes; WCAG 2 MiB/5.000 dòng; SSH 2 MiB/1.000 keys; ZIP manifest 20 MiB/1.000 members/200 MiB dữ liệu giải nén/50 MiB mỗi member. Không fetch URL, execute script, connect SSH server hay mở nội dung tệp archive ra filesystem.
+Wave 20 đã qua main CI (136 Python tests), Worker export/production smoke và Cloudflare deployment; cả 9 công cụ đã được triển khai trong catalog production. Live Telegram upload/report/retry vẫn cần kiểm tra trực tiếp. Giới hạn: RSS/Atom 10 MiB/50.000 entries; sitemap 20 MiB/50.000 entries; robots 2 MiB/20.000 dòng; JSONL 20 MiB/100.000 records/1 MiB per line; image 20 MiB/80 megapixel; SVG 5 MiB/100.000 elements/250.000 attributes; WCAG 2 MiB/5.000 dòng; SSH 2 MiB/1.000 keys; ZIP manifest 20 MiB/1.000 members/200 MiB dữ liệu giải nén/50 MiB mỗi member. Không fetch URL, execute script, connect SSH server hay mở nội dung tệp archive ra filesystem. Deployment evidence: [Main CI 44982433603](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433603), [Worker export/smoke 44982433601](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433601), [Production deploy 44982433602](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433602).
 ### Wave 19 — Network, media, ebook and data quality tools — deployed 2026-11-22
 
 | ID | Công cụ | Nhóm | Chức năng |

@@ -2,7 +2,17 @@
 
 Last verified: 2026-11-22. This document distinguishes production deployment and configuration checks from user-level behavior that still requires a real Telegram interaction.
 
-## Latest production release — Wave 19 (2026-11-22)
+## Latest production release — Wave 20 (2026-11-22)
+
+- Wave 20 landed directly on `main` as commit `32aede18727b75b2cef2a06b7d603615bedcdac0`; it adds nine processors and raises the production catalog from 336 to **345 tools**.
+- Main CI [44982433603](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433603) passed TypeScript type-check, Vitest, deployment-script checks, **136 Python runner tests**, and Worker build.
+- Worker export and production health smoke [44982433601](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433601) passed.
+- Cloudflare deployment [44982433602](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433602) passed source/bundle validation, Worker upload, runtime-secret upload and Telegram webhook/command-menu registration. D1 migration was skipped because Wave 20 has no schema changes.
+- Production Worker Version ID: `8eeb9bd7-77f7-4205-898a-db49f35424ce`.
+- Added tools: RSS/Atom audit, sitemap XML audit, robots.txt audit, JSONL profiling, image metadata privacy audit, SVG active-content audit, WCAG contrast checker, SSH public-key audit and ZIP SHA-256 manifest.
+- Owner-level E2E remains: upload representative RSS/Atom, sitemap/robots, JSONL, image, SVG, color-pair TXT, SSH public-key and ZIP files in private Telegram; inspect outputs and test `/tool_retry`. CI/deployment does not prove that direct Telegram journey.
+
+## Previous production release — Wave 19 (2026-11-22)
 
 - [PR #69](https://github.com/Nolane-x/Nolane-search/pull/69) merged as commit `063b73168111db96acb799df27e1c9fb5f11d3e6`.
 - Production catalog: **336 processors**, up from 328 in Wave 18.
