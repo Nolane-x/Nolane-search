@@ -2,7 +2,18 @@
 
 Last verified: 2026-11-22. This document distinguishes production deployment and configuration checks from user-level behavior that still requires a real Telegram interaction.
 
-## Latest production release — Wave 18 (2026-11-22)
+## Latest production release — Wave 19 (2026-11-22)
+
+- [PR #69](https://github.com/Nolane-x/Nolane-search/pull/69) merged as commit `063b73168111db96acb799df27e1c9fb5f11d3e6`.
+- Production catalog: **336 processors**, up from 328 in Wave 18.
+- Added eight distinct processors: PCAP/PCAPNG network audit, audio tag completeness, 16×16 DCT perceptual image similarity, JSON Schema validation, EPUB structure audit, Markdown quality audit, BIND DNS zone audit and X.509 certificate audit.
+- Main CI [44981447755](https://github.com/Nolane-x/Nolane-search/actions/runs/44981447755), Worker export and production health smoke [44981447745](https://github.com/Nolane-x/Nolane-search/actions/runs/44981447745) and Cloudflare deploy [44981447683](https://github.com/Nolane-x/Nolane-search/actions/runs/44981447683) all passed.
+- Main CI passed TypeScript type-check, Vitest, deployment script checks, **127 Python runner tests**, and Worker build.
+- Deployment verified Worker bundle, runtime secrets, Telegram webhook and command-menu registration. D1 migration was skipped because Wave 19 made no schema change.
+- Production Worker Version ID: `f7be3cf0-1370-4333-84be-af5f22e6f012`.
+- Remaining owner-level E2E: send representative PCAP/PCAPNG, audio, image ZIP, JSON Schema envelope, EPUB, Markdown, DNS zone and X.509 files to the private Telegram bot; inspect results and test `/tool_retry`. CI/deploy does not prove these direct user interactions.
+
+## Previous production release — Wave 18 (2026-11-22)
 
 - [PR #68](https://github.com/Nolane-x/Nolane-search/pull/68) merged as commit `374f4c011a59e50e30ac0ace5891d458b32407ff`.
 - Production catalog: **328 processors**, up from 318 in Wave 17.
@@ -26,7 +37,7 @@ Last verified: 2026-11-22. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `374f4c011a59e50e30ac0ace5891d458b32407ff`
+- Latest production source commit: `063b73168111db96acb799df27e1c9fb5f11d3e6`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -38,7 +49,7 @@ Last verified: 2026-11-22. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker Version ID: `1271380c-e118-4731-ad33-5f38adcd20c8`, deployed by [GitHub Actions run 44980373529](https://github.com/Nolane-x/Nolane-search/actions/runs/44980373529) on 2026-11-22 at 03:23 UTC from main commit `374f4c011a59e50e30ac0ace5891d458b32407ff`.
+- Cloudflare Worker Version ID: `f7be3cf0-1370-4333-84be-af5f22e6f012`, deployed by [GitHub Actions run 44981447683](https://github.com/Nolane-x/Nolane-search/actions/runs/44981447683) on 2026-11-22 at 03:37 UTC from main commit `063b73168111db96acb799df27e1c9fb5f11d3e6`.
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
