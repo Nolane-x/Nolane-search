@@ -2678,5 +2678,224 @@ dependencies = ["requests>=2.0", "httpx"]
         self.assertNotIn(token,report)
 
 
+
+    def test_wave_eighteen_har_privacy_audit_never_discloses_capture_values(self):
+        har={
+            "log":{"version":"1.2","entries":[{
+                "request":{
+                    "method":"GET",
+                    "url":"https://private.example/api?access_token=TOP_SECRET",
+                    "headers":[
+                        {"name":"Authorization","value":"Bearer HEADER_SECRET"},
+                        {"name":"Cookie","value":"session=COOKIE_SECRET"}
+                    ],
+                    "cookies":[{"name":"session","value":"COOKIE_SECRET"}],
+                    "queryString":[{"name":"access_token","value":"TOP_SECRET"}],
+                    "postData":{"mimeType":"application/json","params":[{"name":"password","value":"FORM_SECRET"}],"text":"Bearer BODY_SECRET"}
+                },
+                "response":{"status":200,"headers":[{"name":"Set-Cookie","value":"session=RESPONSE_SECRET"}],"content":{"text":"response-body-private"}}
+            }]}
+        }
+        path=self.input_dir/"capture.har"
+        path.write_text(json.dumps(har),encoding="utf-8")
+        result=runner.har_privacy_audit(path)
+        report=Path(result["output_path"]).read_text(encoding="utf-8") if result.get("output_path") else result["summary"]
+        self.assertIn("Authorization headers: 1",report)
+        self.assertIn("sensitive query parameters: 2",report)
+        self.assertIn("sensitive form fields: 1",report)
+        for secret in ("TOP_SECRET","HEADER_SECRET","COOKIE_SECRET","FORM_SECRET","BODY_SECRET","private.example","response-body-private"):
+            self.assertNotIn(secret,report)
+
+    def test_wave_eighteen_icalendar_audit_withholds_event_details(self):
+        raw="""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Nolane Test//EN
+BEGIN:VEVENT
+UID:duplicate-private-uid
+DTSTART:20261122T120000Z
+DTEND:20261122T110000Z
+SUMMARY:Private medical appointment
+LOCATION:Secret Clinic
+ATTENDEE:mailto:person.private@example.test
+ORGANIZER:mailto:organizer.private@example.test
+RRULE:FREQ=DAILY;COUNT=2
+BEGIN:VALARM
+TRIGGER:-PT15M
+ACTION:DISPLAY
+DESCRIPTION:Private reminder
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:duplicate-private-uid
+DTSTART:20261123T120000Z
+SUMMARY:Another private event
+END:VEVENT
+END:VCALENDAR
+"""
+        path=self.write("calendar.ics",raw)
+        result=runner.ics_calendar_audit(path)
+        report=Path(result["output_path"]).read_text(encoding="utf-8") if result.get("output_path") else result["summary"]
+        self.assertIn("events: 2",report)
+        self.assertIn("duplicate UIDs: 1",report)
+        self.assertIn("VALARM components: 1",report)
+        for secret in ("Private medical appointment","Secret Clinic","person.private@example.test","organizer.private@example.test","duplicate-private-uid"):
+            self.assertNotIn(secret,report)
+
+    def test_wave_eighteen_vcard_privacy_audit_counts_duplicates_without_values(self):
+        raw="""BEGIN:VCARD
+VERSION:3.0
+FN:Private Person One
+N:One;Private;;;
+EMAIL:private@example.test
+TEL:+1-202-555-0100
+ADR:;;Private Street;Private City;;;
+ORG:Private Employer
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+FN:Private Person Two
+N:Two;Private;;;
+EMAIL:private@example.test
+TEL:+1-202-555-0100
+NOTE:private contact note
+END:VCARD
+"""
+        path=self.write("contacts.vcf",raw)
+        result=runner.vcard_privacy_audit(path)
+        report=Path(result["output_path"]).read_text(encoding="utf-8") if result.get("output_path") else result["summary"]
+        self.assertIn("Contact cards: 2",report)
+        self.assertIn("Duplicate email values: 1",report)
+        self.assertIn("Duplicate normalized telephone values: 1",report)
+        for secret in ("Private Person","private@example.test","+1-202-555-0100","Private Street","Private Employer","private contact note"):
+            self.assertNotIn(secret,report)
+
+    def test_wave_eighteen_gpx_report_calculates_route_without_revealing_coordinates(self):
+        raw="""<?xml version="1.0"?>
+<gpx version="1.1" creator="test">
+  <trk><name>Private Home Route</name><trkseg>
+    <trkpt lat="21.028000" lon="105.854000"><ele>10</ele><time>2026-11-22T01:00:00Z</time></trkpt>
+    <trkpt lat="21.029000" lon="105.855000"><ele>25</ele><time>2026-11-22T01:05:00Z</time></trkpt>
+  </trkseg></trk>
+  <wpt lat="21.030000" lon="105.856000"><name>Private Home</name></wpt>
+</gpx>
+"""
+        path=self.write("route.gpx",raw)
+        result=runner.gpx_track_report(path)
+        report=Path(result["output_path"]).read_text(encoding="utf-8") if result.get("output_path") else result["summary"]
+        self.assertIn("Track points: 2",report)
+        self.assertIn("waypoints: 1",report)
+        self.assertIn("cumulative ascent: 15.0 m",report)
+        self.assertNotIn("21.028000",report)
+        self.assertNotIn("105.854000",report)
+        self.assertNotIn("Private Home",report)
+
+    def test_wave_eighteen_geojson_audit_checks_geometry_and_coordinate_ranges(self):
+        payload={"type":"FeatureCollection","features":[
+            {"type":"Feature","properties":{"secret_name":"private","owner":"private"},"geometry":{"type":"Point","coordinates":[105.8,21.0]}},
+            {"type":"Feature","properties":{},"geometry":{"type":"Point","coordinates":[220,120]}}
+        ]}
+        path=self.input_dir/"map.geojson"
+        path.write_text(json.dumps(payload),encoding="utf-8")
+        result=runner.geojson_audit(path)
+        report=Path(result["output_path"]).read_text(encoding="utf-8") if result.get("output_path") else result["summary"]
+        self.assertIn("features: 2",report)
+        self.assertIn("Point=2",report)
+        self.assertIn("invalid longitude/latitude pairs: 1",report)
+        self.assertNotIn("105.8",report)
+        self.assertNotIn("private",report)
+
+    def test_wave_eighteen_qr_code_generator_creates_png_without_echoing_payload(self):
+        from PIL import Image
+        path=self.write("payload.txt","https://example.test/private?token=DO_NOT_ECHO")
+        result=runner.qr_code_generate(path)
+        output=Path(result["output_path"])
+        self.assertTrue(output.exists())
+        self.assertNotIn("DO_NOT_ECHO",result["summary"])
+        with Image.open(output) as image:
+            self.assertEqual(image.format,"PNG")
+            self.assertGreater(image.width,100)
+
+    def test_wave_eighteen_font_inspector_handles_malformed_font_safely(self):
+        path=self.write("broken.ttf","this is not a font")
+        with self.assertRaisesRegex(RuntimeError,"font hợp lệ"):
+            runner.font_inspect(path)
+
+    def test_wave_eighteen_subtitle_fix_sorts_and_repairs_cues(self):
+        raw="""3
+00:00:03,000 --> 00:00:02,000
+Third caption
+
+1
+00:00:01,000 --> 00:00:02,000
+First caption
+
+2
+00:00:02,000 --> 00:00:02,000
+Second caption
+
+4
+00:00:04,000 --> 00:00:05,000
+
+"""
+        path=self.write("captions.srt",raw)
+        result=runner.subtitle_fix(path)
+        output=Path(result["output_path"]).read_text(encoding="utf-8")
+        self.assertTrue(result["output_path"].endswith("-fixed.srt"))
+        self.assertIn("điều chỉnh 2",result["summary"])
+        self.assertLess(output.index("First caption"),output.index("Second caption"))
+        self.assertLess(output.index("Second caption"),output.index("Third caption"))
+        self.assertIn("2\n00:00:02,000 --> 00:00:02,001",output)
+        self.assertNotIn("Fourth caption",output)
+
+    def test_wave_eighteen_openapi_audit_checks_local_contract_without_disclosing_values(self):
+        raw="""openapi: 3.1.0
+info:
+  title: Private API
+  version: 1.0.0
+servers:
+  - url: http://private.example.test/api
+paths:
+  /users/{userId}:
+    get:
+      operationId: getUser
+      parameters:
+        - name: otherId
+          in: path
+          required: true
+          schema: {type: string}
+      responses: {}
+    post:
+      operationId: getUser
+      responses:
+        '200': {description: OK}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Missing'
+components:
+  schemas: {}
+"""
+        path=self.write("openapi.yaml",raw)
+        result=runner.openapi_contract_audit(path)
+        report=Path(result["output_path"]).read_text(encoding="utf-8") if result.get("output_path") else result["summary"]
+        self.assertIn("Operations: 2",report)
+        self.assertIn("duplicate operationId: 1",report)
+        self.assertIn("without responses: 1",report)
+        self.assertIn("path-parameter declaration gaps: 1",report)
+        self.assertIn("unresolved local references: 1",report)
+        self.assertIn("HTTP (non-TLS) server URLs: 1",report)
+
+    def test_wave_eighteen_color_convert_generates_rgb_hsl_and_cmyk(self):
+        path=self.write("colors.txt","#f00\n#336699\nrgb(255, 255, 255)\nnot-a-color\n")
+        result=runner.color_convert(path)
+        report=Path(result["output_path"]).read_text(encoding="utf-8") if result.get("output_path") else result["summary"]
+        self.assertIn("#FF0000",report)
+        self.assertIn("hsl(",report)
+        self.assertIn("cmyk(",report)
+        self.assertIn("invalid lines skipped: 1",report)
+        self.assertNotIn("not-a-color",report)
+
+
 if __name__ == "__main__":
     unittest.main()
