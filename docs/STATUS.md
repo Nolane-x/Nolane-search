@@ -2,11 +2,20 @@
 
 Last verified: 2026-11-22. This document distinguishes production deployment and configuration checks from user-level behavior that still requires a real Telegram interaction.
 
+## Latest production release — Wave 17 (2026-11-22)
+
+- [PR #67](https://github.com/Nolane-x/Nolane-search/pull/67) merged as commit `66aeb33c1319c161b224d8e65df1832e11bce4ac`.
+- Production catalog: **318 processors**, up from 316 in Wave 16.
+- Added `email-security-audit` (.eml) and `jwt-security-audit` structural auditors. They redact addresses, URLs, attachment names, JWTs and claim values. Email authentication headers are untrusted assertions; the tools do not query DNS, verify SPF/DKIM/DMARC or cryptographically validate JWT signatures.
+- Main CI [44977998187](https://github.com/Nolane-x/Nolane-search/actions/runs/44977998187), Worker export/smoke [44977998129](https://github.com/Nolane-x/Nolane-search/actions/runs/44977998129) and production deployment [44977998189](https://github.com/Nolane-x/Nolane-search/actions/runs/44977998189) passed.
+- Deployment verified source, Worker bundle, runtime-secret upload and Telegram webhook/command registration. D1 migration step was skipped because no migration changed.
+- Worker Version ID: `f3180bcc-896d-4fef-9887-c81146865265`.
+- Remaining owner-level E2E: upload representative EML/JWT files in private Telegram, inspect reports and test retry. CI and deployment do not prove these real Telegram interactions.
 ## Repository and production release
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `cae8ddd629f5bccc30199e7d036dd89377cf7b6f`
+- Latest production source commit: `66aeb33c1319c161b224d8e65df1832e11bce4ac`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -18,7 +27,7 @@ Last verified: 2026-11-22. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `03210f3c-6bd5-47a9-ab1d-deeac1fca8a1` (version 73, 100% traffic; deployment `c39bb7f6-fb16-4749-ac9c-a540400483de`, created 2026-11-22T02:20:39Z).
+- Cloudflare Worker Version ID: `f3180bcc-896d-4fef-9887-c81146865265`, deployed by [GitHub Actions run 44977998189](https://github.com/Nolane-x/Nolane-search/actions/runs/44977998189) on 2026-11-22 at 02:52 UTC from main commit `66aeb33c1319c161b224d8e65df1832e11bce4ac`.
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
