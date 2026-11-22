@@ -245,6 +245,20 @@ class Wave27DigitalPreservationTests(unittest.TestCase):
         self.assert_report(result)
         self.assertIn("Linking references without a matching identifier: 1", result["summary"])
 
+    def test_premis_links_match_entity_kind_and_identifier_type(self):
+        source = """<premis>
+<event>
+  <eventIdentifier><eventIdentifierType>local</eventIdentifierType><eventIdentifierValue>shared-id</eventIdentifierValue></eventIdentifier>
+  <linkingObjectIdentifier><linkingObjectIdentifierType>local</linkingObjectIdentifierType><linkingObjectIdentifierValue>shared-id</linkingObjectIdentifierValue></linkingObjectIdentifier>
+  <linkingAgentIdentifier><linkingAgentIdentifierType>local</linkingAgentIdentifierType><linkingAgentIdentifierValue>agent-id</linkingAgentIdentifierValue></linkingAgentIdentifier>
+</event>
+<object><objectIdentifier><objectIdentifierType>URI</objectIdentifierType><objectIdentifierValue>shared-id</objectIdentifierValue></objectIdentifier></object>
+<agent><agentIdentifier><agentIdentifierType>local</agentIdentifierType><agentIdentifierValue>agent-id</agentIdentifierValue></agentIdentifier></agent>
+</premis>"""
+        result = wave27.premis_event_audit(self.write("typed-links.xml", source))
+        self.assert_report(result)
+        self.assertIn("Linking references without a matching identifier: 1", result["summary"])
+
     def test_stac_audit_counts_item_assets_and_links_without_geometry(self):
         document = {
             "stac_version": "1.1.0",
@@ -289,6 +303,17 @@ class Wave27DigitalPreservationTests(unittest.TestCase):
         self.assertNotIn("Private scholarly title", result["summary"])
         self.assertNotIn("Private Author", result["summary"])
         self.assertNotIn("Private text content", result["summary"])
+
+    def test_tei_audit_ignores_external_and_sibling_document_fragments(self):
+        source = """<TEI xmlns="http://www.tei-c.org/ns/1.0" xmlns:xml="http://www.w3.org/XML/1998/namespace">
+<teiHeader/><text><body>
+<p xml:id="local-target" target="#local-target https://external.example/doc#external-target sibling.xml#sibling-target"/>
+<p target="#missing-local"/>
+</body></text></TEI>"""
+        result = wave27.tei_document_audit(self.write("external-targets.xml", source))
+        self.assert_report(result)
+        self.assertIn("Distinct internal fragment targets: 2", result["summary"])
+        self.assertIn("Internal fragment targets without matching xml:id: 1", result["summary"])
 
     def test_tei_audit_detects_duplicate_xml_ids(self):
         source = """<TEI xmlns="http://www.tei-c.org/ns/1.0"><teiHeader/><text><body><p xml:id="x"/><p xml:id="x"/></body></text></TEI>"""
