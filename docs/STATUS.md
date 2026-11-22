@@ -1,12 +1,12 @@
 # Verified Project Status
 
-Last verified: 2026-11-21. This document distinguishes production deployment and configuration checks from user-level behavior that still requires a real Telegram interaction.
+Last verified: 2026-11-22. This document distinguishes production deployment and configuration checks from user-level behavior that still requires a real Telegram interaction.
 
 ## Repository and production release
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `a0919d77a76e3077aad485b4f621f4206ff6e24d`
+- Latest production source commit: `1aba865d8265485dc1ccded67d379598092305cc`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -18,7 +18,7 @@ Last verified: 2026-11-21. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `741a6df7-916b-4f19-a75f-f8ea95863960` (version 69, 100% traffic; deployment `93ac3038-31bd-4a4b-9360-95e19c063827`, created 2026-11-21T15:26:33Z).
+- Cloudflare Worker version ID: `59beaf42-8526-49d5-821f-e13b783d9d50` (version 70, 100% traffic; deployment `c39e7ba5-e0af-4d66-bb31-034541c8b256`, created 2026-11-22T00:08:18Z).
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
@@ -480,3 +480,24 @@ The registry expands from 17 to 23 implemented tools.
 - Fresh production `GET /health` returned `ok: true` and `database: reachable`; it reported four AI provider-key routes, nine model routes and archive enabled. A health/configuration response confirms route loading, not the current quota or live inference health of every upstream key.
 - All five HTML processors are bounded static heuristics: they do not fetch remote URLs/images, execute scripts, submit forms or run browser-based checks. SEO/accessibility findings are not Google ranking predictions or WCAG certification.
 - Still pending owner-level verification: upload representative HTML files through the real Telegram bot, inspect delivered TXT reports, and test a retry. CI, webhook registration and health checks do not prove this complete user interaction.
+
+
+## Wave 13 — Practical productivity processors — deployed 2026-11-22
+
+- PR #63 merged: https://github.com/Nolane-x/Nolane-search/pull/63
+- Main commit: `1aba865d8265485dc1ccded67d379598092305cc`.
+- Catalog expanded from 302 to **308 executable tools** with six new processors:
+  - `xlsx-formula-report`: inventories formulas per sheet, volatile functions, external-workbook references and cached formula errors/missing results; never recalculates formulas or prints cell data.
+  - `xlsx-to-markdown`: exports bounded XLSX sheets as Markdown tables using cached values only.
+  - `subtitle-audit`: detects malformed timestamps, non-positive durations, out-of-order/overlapping intervals, duplicate captions and long lines/cues.
+  - `image-favicon`: creates ICO favicons at 16/32/48/64/128/256 px, preserves transparency when possible and does not retain EXIF.
+  - `pdf-page-audit`: reports per-page text/image/vector counts, dimensions and rotation, with heuristic hints for blank or image-only pages; performs no OCR.
+  - `markdown-toc`: adds a generated Table of Contents to a copy of a Markdown file, ignoring fenced code and disambiguating duplicate heading slugs.
+- Main CI #283 passed: 25 test files / 224 Vitest tests, 103 Python runner tests, TypeScript type-check, deployment-script checks and Cloudflare Worker build: https://github.com/Nolane-x/Nolane-search/actions/runs/44965103274
+- PR CI #282 passed: https://github.com/Nolane-x/Nolane-search/actions/runs/44965015650
+- Cloudflare build/export and Worker smoke test #109 passed: https://github.com/Nolane-x/Nolane-search/actions/runs/44965103506
+- Production deployment #116 passed: https://github.com/Nolane-x/Nolane-search/actions/runs/44965103181. It validated deployment secrets, uploaded the Worker/runtime secrets and registered Telegram webhook updates/commands. D1 migration was skipped because Wave 13 does not change the schema.
+- Cloudflare API confirms Worker version 70 `59beaf42-8526-49d5-821f-e13b783d9d50` receives 100% traffic through deployment `c39e7ba5-e0af-4d66-bb31-034541c8b256`.
+- Fresh production `GET /health` returned `ok: true` and `database: reachable`; it reports four AI provider-key routes, nine model routes and archive enabled. This confirms route configuration is loaded, not that every upstream key has quota or can complete inference.
+- All six tools are bounded file processors; no D1 migration, new external service or new secret was added. XLSX reads cached formula values without recalculation; PDF scan/blank labels and subtitle line/duration flags are heuristics.
+- Still pending owner-level end-to-end verification: upload representative XLSX, SRT/VTT, image, PDF and Markdown files through the live Telegram bot, inspect delivered artifacts and exercise retry. CI and webhook registration do not prove this full user interaction.
