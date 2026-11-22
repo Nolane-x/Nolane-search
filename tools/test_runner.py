@@ -3348,7 +3348,7 @@ Unknown-Directive: value
         csv_text = Path(csv_result["output_path"]).read_text(encoding="utf-8")
         self.assertIn("001,Ada", csv_text)
         self.assertIn("002,Bob", csv_text)
-        self.assertIn("' =1+1", csv_text) if False else self.assertIn("'=1+1", csv_text)
+        self.assertIn("'=1+1", csv_text)
 
 if __name__ == "__main__":
     unittest.main()
