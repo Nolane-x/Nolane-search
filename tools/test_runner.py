@@ -2902,5 +2902,179 @@ components:
         self.assertNotIn("not-a-color",report)
 
 
+
+    def test_wave_nineteen_pcap_audit_counts_protocols_without_disclosing_addresses(self):
+        import socket
+        import dpkt
+        path=self.input_dir/"capture.pcap"
+        with path.open("wb") as handle:
+            writer=dpkt.pcap.Writer(handle,linktype=dpkt.pcap.DLT_EN10MB)
+            tcp=dpkt.tcp.TCP(sport=51515,dport=443,flags=dpkt.tcp.TH_SYN)
+            ip=dpkt.ip.IP(src=socket.inet_aton("192.0.2.10"),dst=socket.inet_aton("198.51.100.20"),p=dpkt.ip.IP_PROTO_TCP,data=tcp)
+            frame=dpkt.ethernet.Ethernet(src=b"\x00\x01\x02\x03\x04\x05",dst=b"\x06\x07\x08\x09\x0a\x0b",type=dpkt.ethernet.ETH_TYPE_IP,data=ip)
+            writer.writepkt(bytes(frame),ts=1.0)
+            udp=dpkt.udp.UDP(sport=53000,dport=53,data=b"private-dns-payload")
+            udp.ulen=len(udp)
+            ip2=dpkt.ip.IP(src=socket.inet_aton("192.0.2.10"),dst=socket.inet_aton("198.51.100.53"),p=dpkt.ip.IP_PROTO_UDP,data=udp)
+            frame2=dpkt.ethernet.Ethernet(src=b"\x00\x01\x02\x03\x04\x05",dst=b"\x06\x07\x08\x09\x0a\x0b",type=dpkt.ethernet.ETH_TYPE_IP,data=ip2)
+            writer.writepkt(bytes(frame2),ts=2.0)
+            writer.close()
+        result=runner.pcap_network_audit(path)
+        report=result["summary"]
+        self.assertIn("packets: 2",report)
+        self.assertIn("TCP packets: 1",report)
+        self.assertIn("UDP packets: 1",report)
+        self.assertIn("DNS/mDNS-port packets: 1",report)
+        for secret in ("192.0.2.10","198.51.100.20","private-dns-payload"):
+            self.assertNotIn(secret,report)
+
+    def test_wave_nineteen_audio_tag_audit_reports_completeness_not_tag_values(self):
+        path=self.write("song.mp3","placeholder")
+        metadata={
+            "format":{"format_name":"mp3","duration":"12.5","tags":{"title":"Secret Song Title","artist":"Private Artist","album":"Private Album"}},
+            "streams":[{"codec_type":"audio","codec_name":"mp3","sample_rate":"44100","channels":2,"tags":{"genre":"Jazz"}}]
+        }
+        with patch.object(runner,"ffprobe",return_value=metadata):
+            result=runner.audio_tag_audit(path)
+        report=result["summary"]
+        self.assertIn("Present tag groups: title, artist, album, genre",report)
+        self.assertIn("Missing common tag groups",report)
+        for secret in ("Secret Song Title","Private Artist","Private Album"):
+            self.assertNotIn(secret,report)
+
+    def test_wave_nineteen_image_similarity_uses_hashes_for_identical_images(self):
+        from PIL import Image,ImageDraw
+        import io
+        archive_path=self.input_dir/"images.zip"
+        image=Image.new("RGB",(128,128),"white")
+        draw=ImageDraw.Draw(image)
+        draw.rectangle((20,20,100,100),fill="black")
+        payload=io.BytesIO()
+        image.save(payload,format="PNG")
+        with zipfile.ZipFile(archive_path,"w",compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("folder/private-image-a.png",payload.getvalue())
+            archive.writestr("folder/private-image-copy.png",payload.getvalue())
+        result=runner.image_similarity_audit(archive_path)
+        output=Path(result["output_path"])
+        with output.open(encoding="utf-8-sig",newline="") as handle:
+            rows=list(csv.DictReader(handle))
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["match_type"],"exact-sha256")
+        self.assertIn("DCT 16×16",result["summary"])
+
+    def test_wave_nineteen_json_schema_validate_reports_locations_without_values(self):
+        payload={
+            "schema":{
+                "$schema":"https://json-schema.org/draft/2020-12/schema",
+                "type":"object",
+                "required":["email","age"],
+                "properties":{"email":{"type":"string","format":"email"},"age":{"type":"integer","minimum":18}}
+            },
+            "data":{"email":"private-person@example.test","age":14}
+        }
+        path=self.input_dir/"validation.json"
+        path.write_text(json.dumps(payload),encoding="utf-8")
+        result=runner.json_schema_validate(path)
+        report=result["summary"]
+        self.assertIn("result: INVALID",report)
+        self.assertIn("Validation errors:",report)
+        self.assertNotIn("private-person@example.test",report)
+        self.assertNotIn("age=14",report)
+
+    def test_wave_nineteen_epub_structure_audit_checks_manifest_and_spine(self):
+        path=self.input_dir/"book.epub"
+        container="""<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>"""
+        opf="""<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Private Novel Title</dc:title><dc:creator>Private Author</dc:creator><dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="cover" href="images/cover.png" media-type="image/png"/>
+  </manifest>
+  <spine><itemref idref="chapter1"/><itemref idref="missing-chapter"/></spine>
+</package>"""
+        with zipfile.ZipFile(path,"w") as archive:
+            archive.writestr("mimetype",b"application/epub+zip",compress_type=zipfile.ZIP_STORED)
+            archive.writestr("META-INF/container.xml",container)
+            archive.writestr("OEBPS/content.opf",opf)
+            archive.writestr("OEBPS/chapter1.xhtml","<html/>")
+            archive.writestr("OEBPS/nav.xhtml","<html/>")
+            archive.writestr("OEBPS/images/cover.png",b"fake")
+        result=runner.epub_structure_audit(path)
+        report=result["summary"]
+        self.assertIn("mimetype first/stored/content: OK",report)
+        self.assertIn("unresolved spine idrefs: 1",report)
+        self.assertIn("Navigation documents: 1",report)
+        self.assertNotIn("Private Novel Title",report)
+        self.assertNotIn("Private Author",report)
+
+    def test_wave_nineteen_markdown_quality_audit_reports_rules_without_source(self):
+        fence=chr(96)*3
+        raw="# Main\n### Skipped level\n\n# Main\nTrailing line  \n[empty]()\n"+fence+"python\nprint('private body')\n"
+        path=self.write("guide.md",raw)
+        result=runner.markdown_quality_audit(path)
+        report=result["summary"]
+        self.assertIn("heading-level jumps: 1",report)
+        self.assertIn("repeated headings: 1",report)
+        self.assertIn("trailing-whitespace lines: 1",report)
+        self.assertIn("empty link targets: 1",report)
+        self.assertIn("unclosed code fence: 1",report)
+        self.assertNotIn("private body",report)
+
+    def test_wave_nineteen_dns_zone_audit_counts_records_without_domain_values(self):
+        raw="""$ORIGIN example.test.
+$TTL 3600
+@ IN SOA ns1.example.test. hostmaster.example.test. (2026112201 3600 600 1209600 300)
+@ IN NS ns1.example.test.
+@ IN A 192.0.2.5
+mail IN MX 10 mail.example.test.
+_private IN TXT "do-not-disclose"
+"""
+        path=self.write("example.zone",raw)
+        result=runner.dns_zone_audit(path)
+        report=result["summary"]
+        self.assertIn("SOA records: 1",report)
+        self.assertIn("NS: 1",report)
+        self.assertIn("A: 1",report)
+        self.assertIn("MX: 1",report)
+        self.assertNotIn("example.test",report)
+        self.assertNotIn("192.0.2.5",report)
+        self.assertNotIn("do-not-disclose",report)
+
+    def test_wave_nineteen_x509_audit_reports_expiry_and_key_strength_without_identity(self):
+        import datetime
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes,serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.x509.oid import NameOID
+        key=rsa.generate_private_key(public_exponent=65537,key_size=1024)
+        subject=x509.Name([x509.NameAttribute(NameOID.COMMON_NAME,"private.example.test")])
+        now=datetime.datetime.utcnow()
+        cert=(x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(subject)
+            .public_key(key.public_key())
+            .serial_number(123456789)
+            .not_valid_before(now-datetime.timedelta(days=2))
+            .not_valid_after(now+datetime.timedelta(days=90))
+            .add_extension(x509.BasicConstraints(ca=False,path_length=None),critical=True)
+            .add_extension(x509.SubjectAlternativeName([x509.DNSName("private.example.test")]),critical=False)
+            .sign(key,hashes.SHA256()))
+        path=self.input_dir/"private-cert.pem"
+        path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+        result=runner.x509_certificate_audit(path)
+        report=result["summary"]
+        self.assertIn("Certificates: 1",report)
+        self.assertIn("weak public keys: 1",report)
+        self.assertIn("DNS=1",report)
+        self.assertNotIn("private.example.test",report)
+        self.assertNotIn("123456789",report)
+
 if __name__ == "__main__":
     unittest.main()
