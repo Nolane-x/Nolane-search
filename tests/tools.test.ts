@@ -40,7 +40,9 @@ describe("Nolane Tools registry", () => {
     expect(inferToolForUpload({ mimeType: "application/rss+xml", fileName: "news.rss" })).toBe("rss-atom-audit");
     expect(inferToolForUpload({ mimeType: "text/plain", fileName: "robots.txt" })).toBe("robots-txt-audit");
     expect(inferToolForUpload({ mimeType: "image/svg+xml", fileName: "logo.svg" })).toBe("svg-safety-audit");
+    expect(inferToolForUpload({ mimeType: "application/xml", fileName: "sitemap.xml" })).toBe("sitemap-xml-audit");
     expect(inferToolForUpload({ mimeType: "text/plain", fileName: "id_ed25519.pub" })).toBe("ssh-public-key-audit");
+    expect(inferToolForUpload({ mimeType: "text/plain", fileName: "authorized_keys" })).toBe("ssh-public-key-audit");
     expect(inferToolForUpload({ mimeType: "text/markdown", fileName: "guide.md" })).toBe("markdown-quality-audit");
     expect(inferToolForUpload({ mimeType: "application/octet-stream", fileName: "example.zone" })).toBe("dns-zone-audit");
     expect(inferToolForUpload({ mimeType: "application/pkix-cert", fileName: "certificate.pem" })).toBe("x509-certificate-audit");
