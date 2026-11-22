@@ -19,7 +19,7 @@ Wave 28 limits and safety: ZIP input tối đa 20 MiB, 10.000 members và 180 Mi
 
 ### Wave 27 — Digital preservation, research-data packaging and scholarly metadata — deployed 2026-11-22
 
-Wave 27 adds nine candidate processors to the existing 417-tool production catalog. The branch contains **426 registered tools**; production remains at 417 until PR CI, Worker export/health smoke and Cloudflare deployment pass.
+Wave 27 adds nine processors to the existing 417-tool production catalog, bringing production to **426 tools**. [PR #79](https://github.com/Nolane-x/Nolane-search/pull/79) merged as `408beb47bf3eeceeb4f0bb5a33f8e3bb23d9ad1d`; main CI [45037484505](https://github.com/Nolane-x/Nolane-search/actions/runs/45037484505), Worker export/health smoke [45037484786](https://github.com/Nolane-x/Nolane-search/actions/runs/45037484786) and Cloudflare deployment [45037484485](https://github.com/Nolane-x/Nolane-search/actions/runs/45037484485) passed. The deployed Worker Version ID is `3f0d1279-321b-4438-8a93-28960781dddf`.
 
 | ID | Công cụ | Nhóm | Chức năng |
 |---|---|---|---|
