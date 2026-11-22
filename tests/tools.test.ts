@@ -366,7 +366,7 @@ describe("Nolane Tools registry", () => {
       expect(getTool(id)?.category).toBe(category);
       expect(getTool(id)?.ready).toBe(true);
       expect(isToolCompatible(getTool(id)!,mimeType,fileName)).toBe(true);
-      expect(validateToolPipeline({mimeType,fileName},[{toolId:id},{toolId:id==="xlsx-to-markdown"?"markdown-outline":"text-clean"}]).ok).toBe(true);
+      expect(validateToolPipeline({mimeType,fileName},[{toolId:id},{toolId:id==="xlsx-to-markdown"||id==="markdown-toc"?"markdown-outline":id==="image-favicon"?"file-hash":"text-clean"}]).ok).toBe(true);
     }
   });
 
