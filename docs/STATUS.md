@@ -2,28 +2,28 @@
 
 Last verified: 2026-11-22. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## In review — Wave 27 candidate (2026-11-22)
+## In review — Wave 28 candidate (2026-11-22)
 
-- Branch: `feat/wave-twenty-seven-digital-preservation-tools`.
-- Nine processors are registered in TypeScript catalog, Python RUNNERS allowlist, handler dispatch, pipeline transitions and upload inference. Candidate catalog: **426 tools**; production remains **417** until all release gates pass.
-- Domains: BagIt checksum manifests, Frictionless Data Package descriptors, RO-Crate JSON-LD, IIIF Presentation 3.0, DataCite 4.7, METS 1.12.1, PREMIS 3.0, STAC 1.1.0 and TEI P5 4.12.0.
-- Twenty-one focused Python regression tests cover checksum verification, archive safety, JSON-LD graph references, Manifest/Canvas structure, DOI core metadata, METS/PREMIS cross-links, STAC assets and TEI XML IDs; the latest review also verifies PREMIS entity/type-aware links and TEI same-document fragments.
-- No new runtime dependencies. Remote resource URLs are never fetched; BagIt members are streamed without extracting them to the runner filesystem.
-- PR CI [45037254705](https://github.com/Nolane-x/Nolane-search/actions/runs/45037254705) passed after the latest review fixes (type-check, all 25 Vitest files, deployment-script checks, Python runner tests and Worker build). Worker export/health smoke and Cloudflare deployment remain pending until the PR is merged.
-- Owner-level E2E after release: test synthetic/non-sensitive BagIt, Frictionless, RO-Crate, IIIF, DataCite, METS/PREMIS, STAC and TEI examples via private Telegram; inspect reports and test `/tool_retry`.
-## Latest production release — Wave 26 (2026-11-22)
+- Branch: `feat/wave-twenty-eight-scientific-format-tools`; [PR #80](https://github.com/Nolane-x/Nolane-search/pull/80).
+- Eight processors are registered in the TypeScript catalog, Python runner allowlist, handlers, pipeline transitions and upload inference. Candidate catalog: **434 tools**; production remains **426** until PR CI, Worker export/health smoke and Cloudflare deployment all pass.
+- Domains: OCFL 1.0/1.1 object inventory and fixity, Zarr v2/v3, NIfTI-1/2 headers, DICOM privacy-risk screen, LAS 1.0–1.4 LiDAR headers, JPEG 2000 JP2 boxes with codestream skipping, NetCDF classic CDF-1/CDF-2 with seek-based payload skipping and NWB/HDF5 hierarchy.
+- Twenty focused Python regression tests cover OCFL inventory and sidecar fixity, unsafe ZIP paths, Zarr metadata/chunk privacy, NIfTI endian/header/gzip, DICOM identifier suppression, LAS bounds, JP2 box framing, NetCDF header parsing and NWB metadata-only inspection.
+- Runtime extras are selected conditionally for the runner: `pydicom` only for DICOM and existing `h5py` for NWB/HDF5. No D1 migration or schema changes.
+- Data outputs intentionally suppress patient identifiers, voxel/pixel/point-cloud data, scientific arrays, paths and descriptive values. These are structural/header diagnostics, not de-identification, clinical validation or full format conformance.
+- PR CI is pending for current Wave 28 code; do not merge or count the candidate as production until the latest commit's check suite, Worker build/export and deployment succeed.
+- Owner-level E2E remains separate: test with synthetic/non-sensitive DICOM/NIfTI/LAS/Zarr/NetCDF/NWB/OCFL/JP2 samples through the private Telegram bot, inspect reports and test `/tool_retry`.
 
-- [PR #78](https://github.com/Nolane-x/Nolane-search/pull/78) merged into main as commit fd60df0480a82775e6ba6974e386096fa58f6a0c; eleven processors increased production from 406 to **417 tools**.
-- Main CI [45030758881](https://github.com/Nolane-x/Nolane-search/actions/runs/45030758881) passed TypeScript type-check, all **25 Vitest files**, deployment-script checks, **229 Python runner tests** and Worker build.
-- Worker export [45030758769](https://github.com/Nolane-x/Nolane-search/actions/runs/45030758769) passed source verification, Cloudflare build, build-output publication and production health smoke.
-- Cloudflare deployment [45030758729](https://github.com/Nolane-x/Nolane-search/actions/runs/45030758729) passed source validation, build, bundle validation, Worker upload, runtime-secret upload and Telegram webhook/command-menu registration. D1 migration was skipped because Wave 26 introduced no database schema changes.
-- Cloudflare API confirms Worker Version 83, a0d66d94-083a-46fa-af0b-1237e435a478, receives **100% of production traffic** under deployment 95d12888-5427-4ac6-bb98-3bf4cb40fe89.
-- Added FASTA/FASTQ, VCF/SAM, GFF3/BED, GenBank, PDB, GFA, Newick and Clustal/Stockholm inspectors.
-- Registry parity: **417 unique TypeScript catalog IDs, 417 Python runner allowlist IDs and 417 Python handlers**; all eleven Wave 26 IDs have upload inference and pipeline transitions.
-- No new runtime dependency or D1 migration was required.
-- Genomics data may be sensitive. Summary redaction is not source-file de-identification; owner-level E2E should use synthetic/non-sensitive files until the data-handling policy permits otherwise.
-- Plain .vcf can be a vCard; MIME text/vcard retains the vCard processor, while genomic MIME or .vcf.gz infers the VCF variant audit. Direct /tool vcf-variant-audit is available for ambiguous plain VCF files.
-- Owner-level E2E remains: upload synthetic/non-sensitive FASTA/FASTQ/VCF/SAM/GFF3/BED/GenBank/PDB/GFA/Newick/Stockholm examples through the private Telegram bot, inspect reports and test /tool_retry. CI and webhook registration do not prove every Telegram upload journey.
+## Latest production release — Wave 27 (2026-11-22)
+
+- [PR #79](https://github.com/Nolane-x/Nolane-search/pull/79) merged into `main` as commit `408beb47bf3eeceeb4f0bb5a33f8e3bb23d9ad1d`; nine processors raised production from 417 to **426 tools**.
+- Main CI [45037484505](https://github.com/Nolane-x/Nolane-search/actions/runs/45037484505) passed TypeScript type-check, all 25 Vitest files, deployment-script checks, the Python runner suite and Worker build.
+- Worker export and production health smoke [45037484786](https://github.com/Nolane-x/Nolane-search/actions/runs/45037484786) passed.
+- Cloudflare deployment [45037484485](https://github.com/Nolane-x/Nolane-search/actions/runs/45037484485) passed on rerun attempt 2, including source verification, build, bundle validation, Worker/runtime-secret upload and Telegram webhook plus command-menu registration. The initial deployment attempt hit a network timeout at Telegram registration; rerun succeeded. D1 migration was skipped because no schema changed.
+- Deployed Worker Version ID: `3f0d1279-321b-4438-8a93-28960781dddf`. Deployment logs report "Deploy complete", verified the webhook for `message` and `callback_query`, and confirmed Telegram bot commands registered.
+- Added BagIt, Frictionless Data Package, RO-Crate, IIIF, DataCite, METS, PREMIS, STAC and TEI processors.
+- Registry parity was checked by CI; 21 Wave 27 focused Python regression tests cover preservation archives, metadata and cross-reference edge cases.
+- No D1 migration or new runtime dependency was needed.
+- Owner-level E2E remains separate: test synthetic/non-sensitive examples via private Telegram, inspect reports and exercise `/tool_retry`. CI and webhook registration do not prove every user-level upload journey.
 
 ## Previous production release — Wave 25 (2026-11-22)
 

@@ -457,6 +457,14 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "premis-event-audit", name: "Kiểm tra PREMIS Preservation Events", category: "data", description: "Đếm PREMIS objects/events/agents/rights, identifiers và linking references, kiểm tra event timestamp; không xuất agent, rights hay object values.", accepts: ["application/xml", "text/xml", ".premis.xml", "premis.xml"], output: "Báo cáo PREMIS TXT", ready: true },
   { id: "stac-catalog-audit", name: "Kiểm tra STAC Catalog/Item/Collection", category: "data", description: "Rà STAC 1.1: type/version, links, assets/roles, geometry/bbox shape và temporal/spatial extents; không xuất coordinates, asset href hoặc provider metadata.", accepts: ["application/geo+json", "application/json", "stac-item.json", "stac-collection.json", "stac-catalog.json", ".stac.json"], output: "Báo cáo STAC TXT", ready: true },
   { id: "tei-document-audit", name: "Kiểm tra TEI P5 Scholarly XML", category: "document", description: "Đếm teiHeader/fileDesc/titleStmt/text/body/div/p và các elements scholarly; kiểm tra duplicate xml:id và broken fragment targets; không xuất văn bản/tên tác giả.", accepts: ["application/tei+xml", "application/xml", "text/xml", ".tei", ".tei.xml", ".tei.gz"], output: "Báo cáo TEI TXT", ready: true },
+  { id: "ocfl-object-audit", name: "Kiểm tra OCFL Object Inventory", category: "data", description: "Rà OCFL 1.0/1.1 inventory, version head, manifest/state links, NAMASTE declaration và SHA-512/SHA-256 fixity trong ZIP; không giải nén hay xuất identifier/path/payload.", accepts: ["application/zip", ".ocfl.zip"], output: "Báo cáo OCFL TXT", ready: true },
+  { id: "zarr-store-audit", name: "Kiểm tra Zarr Scientific Array Store", category: "data", description: "Rà metadata Zarr v2/v3 trong ZIP: group/array nodes, shape/dtype/chunk declarations và ancestor hierarchy; không đọc chunk values hay attributes.", accepts: ["application/zip", ".zarr.zip"], output: "Báo cáo Zarr TXT", ready: true },
+  { id: "nifti-header-audit", name: "Kiểm tra NIfTI Medical Imaging Header", category: "data", description: "Đọc header NIfTI-1/2, endian, dimensions, datatype/bitpix và voxel spacing; không giải nén toàn bộ volume hoặc đọc voxel payload.", accepts: ["application/nifti", ".nii", ".nii.gz"], output: "Báo cáo NIfTI TXT", ready: true },
+  { id: "dicom-privacy-audit", name: "Rà rủi ro thông tin DICOM", category: "image", description: "Đếm các trường định danh DICOM và private tags ở header-only mode; pixel data và raw values không được đưa vào báo cáo. Đây không phải công cụ khử định danh.", accepts: ["application/dicom", ".dcm", ".dicom"], output: "Báo cáo DICOM Privacy TXT", ready: true },
+  { id: "las-pointcloud-audit", name: "Kiểm tra LAS LiDAR Point Cloud Header", category: "data", description: "Rà LAS 1.0–1.4 version, point format, header/record lengths, counts và byte bounds; không đọc coordinates, bounds hay point records; LAZ không hỗ trợ.", accepts: ["application/vnd.las", ".las"], output: "Báo cáo LAS TXT", ready: true },
+  { id: "jp2-box-audit", name: "Kiểm tra JPEG 2000 JP2 Box Structure", category: "image", description: "Rà JP2 signature, ftyp/jp2h/ihdr/jp2c box framing và lengths; không decode codestream hoặc xuất pixel data.", accepts: ["image/jp2", ".jp2"], output: "Báo cáo JP2 TXT", ready: true },
+  { id: "netcdf-classic-audit", name: "Kiểm tra NetCDF Classic Header", category: "data", description: "Đọc metadata header CDF-1/CDF-2: dimensions, global attributes, variable descriptors và record count; không đọc array payload; NetCDF-4/CDF-5 chưa hỗ trợ.", accepts: ["application/x-netcdf", ".nc"], output: "Báo cáo NetCDF TXT", ready: true },
+  { id: "nwb-structure-audit", name: "Kiểm tra NWB Neurodata HDF5 Structure", category: "data", description: "Kiểm tra root NWB attributes, standard groups, hierarchy/object counts và HDF5 links; chỉ metadata, không đọc timeseries, images hay scientific dataset values.", accepts: ["application/x-nwb", "application/x-hdf5", ".nwb"], output: "Báo cáo NWB TXT", ready: true },
 
 ];
 
@@ -868,6 +876,14 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "premis-event-audit": ["text-clean", "text-stats"],
   "stac-catalog-audit": ["text-clean", "text-stats"],
   "tei-document-audit": ["text-clean", "text-stats"],
+  "ocfl-object-audit": ["text-clean", "text-stats"],
+  "zarr-store-audit": ["text-clean", "text-stats"],
+  "nifti-header-audit": ["text-clean", "text-stats"],
+  "dicom-privacy-audit": ["text-clean", "text-stats"],
+  "las-pointcloud-audit": ["text-clean", "text-stats"],
+  "jp2-box-audit": ["text-clean", "text-stats"],
+  "netcdf-classic-audit": ["text-clean", "text-stats"],
+  "nwb-structure-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
@@ -1098,6 +1114,14 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (name === "premis.xml" || name.endsWith(".premis.xml")) return "premis-event-audit";
   if (name === "stac-item.json" || name === "stac-collection.json" || name === "stac-catalog.json" || name.endsWith(".stac.json")) return "stac-catalog-audit";
   if (name === "tei.xml" || name.endsWith(".tei.xml") || name.endsWith(".tei.gz")) return "tei-document-audit";
+  if (name.endsWith(".ocfl.zip")) return "ocfl-object-audit";
+  if (name.endsWith(".zarr.zip")) return "zarr-store-audit";
+  if (name.endsWith(".nii") || name.endsWith(".nii.gz")) return "nifti-header-audit";
+  if (name.endsWith(".dcm") || name.endsWith(".dicom") || mime === "application/dicom") return "dicom-privacy-audit";
+  if (name.endsWith(".las") || mime === "application/vnd.las") return "las-pointcloud-audit";
+  if (name.endsWith(".jp2") || mime === "image/jp2") return "jp2-box-audit";
+  if (name.endsWith(".nc") || mime === "application/x-netcdf") return "netcdf-classic-audit";
+  if (name.endsWith(".nwb") || mime === "application/x-nwb") return "nwb-structure-audit";
   if (name.endsWith(".svg") || mime === "image/svg+xml") return "svg-safety-audit";
   if (mime.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(name)) return "image-ocr";
   if (mime === "application/x-ndjson" || mime === "application/jsonl" || name.endsWith(".jsonl")) return "jsonl-format";
