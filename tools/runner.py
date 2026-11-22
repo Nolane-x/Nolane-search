@@ -11098,6 +11098,8 @@ def kml_kmz_audit(p):
     except ET.ParseError as exc:
         raise RuntimeError("KML XML không hợp lệ.") from exc
     def local(tag): return tag.rsplit("}",1)[-1].casefold()
+    if local(root.tag)!="kml":
+        raise RuntimeError("KML document root must be <kml>.")
     placemarks=folders=documents=points=linestrings=polygons=multigeometries=tracks=coordinate_nodes=coordinate_pairs=invalid_pairs=0
     for node in root.iter():
         name=local(node.tag)
@@ -11112,7 +11114,7 @@ def kml_kmz_audit(p):
         elif name in {"coordinates","coord"}:
             coordinate_nodes+=1
             raw_value=(node.text or "").strip()
-            tokens=raw_value.split() if name=="coord" else raw_value.split()
+            tokens=[raw_value] if name=="coord" else raw_value.split()
             for token in tokens:
                 try:
                     if name=="coord":
@@ -11152,8 +11154,8 @@ def design_token_audit(p):
         return result
     try:
         root=json.loads(p.read_text(encoding="utf-8-sig"),object_pairs_hook=pairs_hook)
-    except (UnicodeError,json.JSONDecodeError) as exc:
-        raise RuntimeError("Design tokens phải là JSON UTF-8 hợp lệ.") from exc
+    except (UnicodeError,json.JSONDecodeError,RecursionError) as exc:
+        raise RuntimeError("Design tokens phải là JSON UTF-8 hợp lệ với độ sâu lồng nhau an toàn.") from exc
     if not isinstance(root,dict):
         raise RuntimeError("Design token document root phải là object.")
     token_paths=set()
@@ -11201,18 +11203,29 @@ def design_token_audit(p):
         graph[source]=resolved
     cycles=0
     state={}
-    def visit(name):
-        nonlocal cycles
-        if state.get(name)==1:
-            cycles+=1
-            return
-        if state.get(name)==2: return
-        state[name]=1
-        for target in graph.get(name,[]):
-            visit(target)
-        state[name]=2
-    for name in graph:
-        if state.get(name) is None: visit(name)
+    for start in graph:
+        if state.get(start) is not None:
+            continue
+        stack=[(start,False)]
+        while stack:
+            name,closing=stack.pop()
+            if closing:
+                state[name]=2
+                continue
+            current=state.get(name)
+            if current==2:
+                continue
+            if current==1:
+                cycles+=1
+                continue
+            state[name]=1
+            stack.append((name,True))
+            for target in graph.get(name,[]):
+                target_state=state.get(target)
+                if target_state==1:
+                    cycles+=1
+                elif target_state is None:
+                    stack.append((target,False))
     lines=[
         "W3C Design Tokens structure audit",
         f"File bytes: {size:,}; groups: {group_count:,}; tokens: {len(token_paths):,}; duplicate JSON keys: {duplicate_keys:,}",
