@@ -1,6 +1,6 @@
-Nolane Tools hiện có **328 công cụ đã triển khai trên production**; Wave 18 phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `1271380c-e118-4731-ad33-5f38adcd20c8`. Main CI, Worker export/production smoke và deployment đều đã thành công. Catalog TypeScript, Python runner allowlist, handler, text-output registry và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và các repository upstream đã xem được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
+Nolane Tools hiện có **336 công cụ đã triển khai trên production**; Wave 19 phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `f7be3cf0-1370-4333-84be-af5f22e6f012`. Main CI, Worker export/production smoke và deployment đều đã thành công. Catalog TypeScript, Python runner allowlist, handler, text-output registry và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và các repository upstream đã xem được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
 
-### Wave 19 — Network, media, ebook and data quality tools (in development)
+### Wave 19 — Network, media, ebook and data quality tools — deployed 2026-11-22
 
 | ID | Công cụ | Nhóm | Chức năng |
 |---|---|---|---|
@@ -13,7 +13,7 @@ Nolane Tools hiện có **328 công cụ đã triển khai trên production**; W
 | /tool dns-zone-audit | DNS zone audit | Network | Parse BIND zone offline và thống kê SOA/NS/A/AAAA/MX/CNAME/TXT; không in domain/IP/TXT values. |
 | /tool x509-certificate-audit | X.509 certificate audit | Bảo mật | Kiểm tra validity/expiry/key size/hash/CA/SAN counts; không in certificate identity fields và không xác minh chain/revocation. |
 
-Wave 19 đang chờ CI/deploy; không cộng 8 tool này vào production trước khi main CI, Worker export/smoke và Cloudflare deploy hoàn tất. Giới hạn: PCAP tối đa 20 MiB/200.000 packets; audio 100 MiB; image ZIP tối đa 1.000 entries/200 ảnh/150 MiB giải nén; JSON Schema 10 MiB; EPUB 20 MiB/3.000 entries/120 MiB giải nén; Markdown 5 MiB/100.000 dòng; DNS zone 10 MiB; X.509 5 MiB/50 certificates. Không có traffic replay, remote DNS lookup, remote $ref, chain/revocation lookup hay arbitrary code execution.
+Wave 19 đã qua main CI, Worker export/production smoke và Cloudflare deployment. Cả 8 công cụ đã có mặt trong catalog production; live Telegram upload/report/retry vẫn cần kiểm tra trực tiếp trong private chat. Giới hạn: PCAP tối đa 20 MiB/200.000 packets; audio 100 MiB; image ZIP tối đa 1.000 entries/200 ảnh/150 MiB giải nén; JSON Schema 10 MiB; EPUB 20 MiB/3.000 entries/120 MiB giải nén; Markdown 5 MiB/100.000 dòng; DNS zone 10 MiB; X.509 5 MiB/50 certificates. Không có traffic replay, remote DNS lookup, remote $ref, chain/revocation lookup hay arbitrary code execution. Deployment evidence: [Main CI 44981447755](https://github.com/Nolane-x/Nolane-search/actions/runs/44981447755), [Worker export/smoke 44981447745](https://github.com/Nolane-x/Nolane-search/actions/runs/44981447745), [Production deploy 44981447683](https://github.com/Nolane-x/Nolane-search/actions/runs/44981447683).
 ### Wave 18 — Cross-domain everyday, data and media tools — deployed 2026-11-22
 
 | ID | Công cụ | Nhóm | Chức năng |
