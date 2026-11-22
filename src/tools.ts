@@ -356,6 +356,16 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "openapi-contract-audit", name: "Kiểm tra hợp đồng OpenAPI", category: "developer", description: "Rà OpenAPI 3.x/Swagger 2: operationId, responses, path parameters, local $ref và HTTP server URLs; không tải remote references hoặc gọi API.", accepts: ["application/json", "application/yaml", "text/yaml", ".json", ".yaml", ".yml"], output: "Báo cáo OpenAPI TXT", ready: true },
   { id: "color-convert", name: "Chuyển đổi hệ màu", category: "utility", description: "Chuyển danh sách HEX/RGB sang HEX, RGB, HSL và CMYK; xử lý nhiều dòng, giữ số dòng nguồn và báo dòng không hợp lệ.", accepts: ["text/plain", ".txt"], output: "Bảng chuyển đổi màu TXT", ready: true },
 
+
+  { id: "pcap-network-audit", name: "Phân tích PCAP/PCAPNG", category: "developer", description: "Phân tích offline packet capture: protocol, packet count/bytes, duration, TCP/UDP/ICMP, port frequency và số IP endpoint; không in IP, DNS name hay payload.", accepts: ["application/vnd.tcpdump.pcap", ".pcap", ".pcapng"], output: "Báo cáo mạng PCAP TXT", ready: true },
+  { id: "audio-tag-audit", name: "Kiểm tra tag và metadata audio", category: "audio-video", description: "Kiểm tra độ đầy đủ tag title/artist/album/date/genre/track/disc/album artist/composer và cover-art; không xuất tag values hoặc đường dẫn tệp.", accepts: ["audio/mpeg", "audio/flac", "audio/mp4", "audio/ogg", ".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wav", ".aiff"], output: "Báo cáo metadata audio TXT", ready: true },
+  { id: "image-similarity-audit", name: "Tìm ảnh tương tự bằng perceptual hash", category: "image", description: "So sánh ảnh trong ZIP bằng DCT perceptual hash 16×16 và SHA-256, xuất CSV cặp giống/gần giống; giới hạn 200 ảnh và 150 MiB giải nén.", accepts: ["application/zip", ".zip"], output: "Danh sách ảnh tương tự CSV", ready: true },
+  { id: "json-schema-validate", name: "Kiểm định dữ liệu bằng JSON Schema", category: "data", description: "Kiểm định trường data theo schema JSON Schema; chặn remote $ref và chỉ báo JSON Pointer/rule, không in instance values.", accepts: ["application/json", ".json"], output: "Báo cáo JSON Schema TXT", ready: true },
+  { id: "epub-structure-audit", name: "Kiểm tra cấu trúc EPUB", category: "document", description: "Kiểm tra mimetype, container.xml, OPF manifest/spine, broken/unsafe href, nav, encrypted metadata và metadata field counts; không xuất tiêu đề/tác giả/chapter.", accepts: ["application/epub+zip", ".epub"], output: "Báo cáo cấu trúc EPUB TXT", ready: true },
+  { id: "markdown-quality-audit", name: "Kiểm tra chất lượng Markdown", category: "developer", description: "Rà heading hierarchy/trùng, trailing whitespace, dòng dài, spacing, empty link và code fence chưa đóng; chỉ báo line/rule, không copy source content.", accepts: ["text/markdown", ".md"], output: "Báo cáo Markdown TXT", ready: true },
+  { id: "dns-zone-audit", name: "Kiểm toán DNS zone file", category: "developer", description: "Parse BIND zone offline, thống kê SOA/NS/A/AAAA/MX/CNAME/TXT; chặn $INCLUDE/$GENERATE và không in domain, IP, TXT hay mailbox values.", accepts: [".zone"], output: "Báo cáo DNS zone TXT", ready: true },
+  { id: "x509-certificate-audit", name: "Kiểm tra chứng thư X.509", category: "developer", description: "Đọc PEM/DER bundle, kiểm tra expiry, validity, key sizes, weak signature hashes, CA và SAN counts; không in subject/issuer/SAN/serial, không kiểm tra chain trust/revocation.", accepts: ["application/pkix-cert", "application/x-pem-file", ".pem", ".crt", ".cer", ".der"], output: "Báo cáo X.509 TXT", ready: true },
+
 ];
 
 
@@ -678,6 +688,14 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "subtitle-fix": ["subtitle-audit", "subtitle-convert", "subtitle-text"],
   "openapi-contract-audit": ["text-clean", "text-stats"],
   "color-convert": ["text-clean", "text-stats"],
+  "pcap-network-audit": ["text-clean", "text-stats"],
+  "audio-tag-audit": ["text-clean", "text-stats"],
+  "image-similarity-audit": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json"],
+  "json-schema-validate": ["text-clean", "text-stats"],
+  "epub-structure-audit": ["text-clean", "text-stats"],
+  "markdown-quality-audit": ["text-clean", "text-stats"],
+  "dns-zone-audit": ["text-clean", "text-stats"],
+  "x509-certificate-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
@@ -856,6 +874,10 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (mime === "application/x-ndjson" || mime === "application/jsonl" || name.endsWith(".jsonl")) return "jsonl-format";
   if (mime === "application/pdf" || name.endsWith(".pdf")) return "pdf-text";
   if (name.endsWith(".epub") || mime === "application/epub+zip") return "epub-text";
+  if (name.endsWith(".pcap") || name.endsWith(".pcapng")) return "pcap-network-audit";
+  if (name.endsWith(".zone")) return "dns-zone-audit";
+  if (/\.(?:pem|crt|cer|der)$/i.test(name)) return "x509-certificate-audit";
+  if (name.endsWith(".md") || mime === "text/markdown") return "markdown-quality-audit";
   if (name.endsWith(".har")) return "har-privacy-audit";
   if (name.endsWith(".ics") || name.endsWith(".ical") || mime === "text/calendar") return "ics-calendar-audit";
   if (name.endsWith(".vcf") || name.endsWith(".vcard") || mime === "text/vcard" || mime === "text/x-vcard") return "vcard-privacy-audit";
