@@ -1,6 +1,6 @@
 # Nolane Tools
 
-Nolane Tools hiện có **312 công cụ đã triển khai trên production**; Wave 14 đã phát hành ngày 2026-11-22 trên Cloudflare Worker version 71. Catalog TypeScript, Python runner allowlist, 312 handler và 752 cạnh pipeline đã được đối chiếu khớp. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp. Wave 7 và Wave 8 đưa catalog lên 275 công cụ; Wave 9 thêm 8 auditor hạ tầng/CI/CD; Wave 10 thêm 8 repository engineering analyzers, Wave 11 thêm 6 analyzer cho environment contracts, architecture cycles, change impact, OpenAPI, container và CI reliability, Wave 12 thêm 5 HTML quality auditors cho SEO, accessibility, links, forms và images; Wave 13 thêm 6 productivity processors; Wave 14 thêm 4 auditor DOCX/PPTX/CSV/archive. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **314 công cụ đã đăng ký trong mã nguồn**; Wave 14 đã triển khai 312 công cụ ngày 2026-11-22 trên Cloudflare Worker version 71. Wave 15 bổ sung hai privacy auditor cho XLSX/PDF, đang chờ CI/deploy. Catalog TypeScript, Python runner allowlist, handler và các cạnh pipeline được đối chiếu tự động. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp. Wave 7 và Wave 8 đưa catalog lên 275 công cụ; Wave 9 thêm 8 auditor hạ tầng/CI/CD; Wave 10 thêm 8 repository engineering analyzers, Wave 11 thêm 6 analyzer cho environment contracts, architecture cycles, change impact, OpenAPI, container và CI reliability, Wave 12 thêm 5 HTML quality auditors cho SEO, accessibility, links, forms và images; Wave 13 thêm 6 productivity processors; Wave 14 thêm 4 auditor DOCX/PPTX/CSV/archive. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
 ### Wave 14 — File quality, privacy and archive security — deployed 2026-11-22
 
@@ -12,6 +12,15 @@ Nolane Tools hiện có **312 công cụ đã triển khai trên production**; W
 | /tool archive-security-audit | Kiểm toán an toàn ZIP/TAR | Kiểm tra đường dẫn tuyệt đối/traversal, entry trùng/collision, link/special entry, mã hóa, compression ratio bất thường, tệp lớn, archive lồng nhau và đuôi thực thi. Không giải nén. | TXT |
 
 Giới hạn Wave 14: DOCX/PPTX chỉ đọc cấu trúc và counters, không render, không chấm WCAG đầy đủ và không hiển thị nội dung tài liệu. PPTX font-size chỉ kiểm tra kích thước khai báo trực tiếp, không suy ra font kế thừa từ theme/master. CSV giới hạn 50.000 dòng và 200 cột; phát hiện điện thoại/header là heuristic. Archive kiểm tra tối đa 10.000 entry, không giải nén hay đọc nội dung thành viên; extension thực thi là tín hiệu cần xem xét chứ không chứng minh malware. Không có D1 migration hoặc secret mới.
+
+### Wave 15 — Spreadsheet and PDF privacy auditors (in development)
+
+| ID | Công cụ | Chức năng | Đầu ra |
+|---|---|---|---|
+| /tool xlsx-privacy-audit | Kiểm toán riêng tư Excel | Quét email, thẻ thanh toán (Luhn), credential-like tokens, IPv4, số điện thoại theo header và cột nhạy cảm; chỉ báo sheet/cột/địa chỉ ô/loại/số lượng, không in giá trị. Chỉ dùng cached formula values. | TXT |
+| /tool pdf-privacy-audit | Kiểm toán riêng tư PDF | Tìm email, thẻ thanh toán, điện thoại đi cùng nhãn, IPv4, giấy tờ và credential-like tokens trên text layer; chỉ trả trang/loại/số lượng, không OCR hay trích raw text. | TXT |
+
+Giới hạn Wave 15: XLSX tối đa 100 sheet, 50.000 dòng/sheet, 200 cột/sheet và 2.000.000 ô khai báo/quét; công thức chỉ được kiểm tra qua cached results, không tính lại. PDF tối đa 300 trang và 2.000.000 ký tự text layer; không OCR nên trang scan/ảnh có thể bỏ sót. Phát hiện là heuristic, không chứng minh dữ liệu là PII hoặc credential hợp lệ. Không có D1 migration hay secret mới.
 
 ## Sử dụng
 

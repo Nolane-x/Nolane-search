@@ -2524,5 +2524,51 @@ dependencies = ["requests>=2.0", "httpx"]
         self.assertIn("extreme compression ratio",archive_report)
 
 
+    def test_wave_fifteen_xlsx_and_pdf_privacy_auditors_never_disclose_raw_values(self):
+        from openpyxl import Workbook
+        import fitz
+
+        xlsx_path=self.input_dir/"private.xlsx"
+        workbook=Workbook()
+        sheet=workbook.active
+        sheet.title="Customer Data"
+        sheet.append(["email","card_number","api_token","phone_number","ip_address"])
+        sheet.append(["person@example.test","4111111111111111","ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456","+84901234567","192.168.1.10"])
+        workbook.create_sheet("Visible cover")
+        sheet.sheet_state="hidden"
+        workbook.save(xlsx_path)
+        xlsx_result=runner.xlsx_privacy_audit(xlsx_path)
+        xlsx_report=Path(xlsx_result["output_path"]).read_text(encoding="utf-8") if xlsx_result.get("output_path") else xlsx_result["summary"]
+        self.assertIn("email-like",xlsx_report)
+        self.assertIn("payment-card-like (Luhn)",xlsx_report)
+        self.assertIn("credential-like",xlsx_report)
+        self.assertIn("phone-like",xlsx_report)
+        self.assertIn("IPv4 address",xlsx_report)
+        self.assertIn("Hidden or very-hidden sheets: 1",xlsx_report)
+        self.assertNotIn("person@example.test",xlsx_report)
+        self.assertNotIn("4111111111111111",xlsx_report)
+        self.assertNotIn("ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456",xlsx_report)
+        self.assertNotIn("+84901234567",xlsx_report)
+
+        pdf_path=self.input_dir/"private.pdf"
+        document=fitz.open()
+        page=document.new_page()
+        page.insert_textbox(fitz.Rect(40,40,550,780),"Email: person@example.test\nPhone: +84901234567\nCard: 4111111111111111\nIP: 192.168.1.10\nCCCD: 012345678901\nKey: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456",fontsize=9)
+        document.save(pdf_path)
+        document.close()
+        pdf_result=runner.pdf_privacy_audit(pdf_path)
+        pdf_report=Path(pdf_result["output_path"]).read_text(encoding="utf-8") if pdf_result.get("output_path") else pdf_result["summary"]
+        self.assertIn("email-like",pdf_report)
+        self.assertIn("payment-card-like (Luhn)",pdf_report)
+        self.assertIn("phone-like",pdf_report)
+        self.assertIn("IPv4 address",pdf_report)
+        self.assertIn("identity-document-like",pdf_report)
+        self.assertIn("credential-like",pdf_report)
+        self.assertNotIn("person@example.test",pdf_report)
+        self.assertNotIn("4111111111111111",pdf_report)
+        self.assertNotIn("ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456",pdf_report)
+        self.assertNotIn("+84901234567",pdf_report)
+
+
 if __name__ == "__main__":
     unittest.main()
