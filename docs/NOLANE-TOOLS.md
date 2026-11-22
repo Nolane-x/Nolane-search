@@ -1,5 +1,19 @@
 Nolane Tools hiện có **328 công cụ đã triển khai trên production**; Wave 18 phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `1271380c-e118-4731-ad33-5f38adcd20c8`. Main CI, Worker export/production smoke và deployment đều đã thành công. Catalog TypeScript, Python runner allowlist, handler, text-output registry và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và các repository upstream đã xem được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
 
+### Wave 19 — Network, media, ebook and data quality tools (in development)
+
+| ID | Công cụ | Nhóm | Chức năng |
+|---|---|---|---|
+| /tool pcap-network-audit | PCAP/PCAPNG audit | Network | Thống kê packet/protocol/port/duration và IP endpoint counts; không in địa chỉ, DNS names hoặc payload. |
+| /tool audio-tag-audit | Audio tag audit | Media | Kiểm tra độ đầy đủ title/artist/album/date/genre/track/disc/cover-art; không xuất tag values. |
+| /tool image-similarity-audit | Perceptual image similarity | Hình ảnh | Dùng DCT pHash 16×16 và SHA-256 để tìm ảnh giống/gần giống trong ZIP; xuất CSV. |
+| /tool json-schema-validate | JSON Schema validator | Dữ liệu | Kiểm định instance theo schema, chặn remote refs và chỉ xuất JSON pointer/rule. |
+| /tool epub-structure-audit | EPUB structure audit | Ebook | Kiểm tra mimetype/container/OPF manifest/spine/nav và broken/unsafe href; không xuất metadata sách. |
+| /tool markdown-quality-audit | Markdown quality audit | Văn bản | Rà heading, whitespace, long lines, links và code fences; chỉ xuất line/rule. |
+| /tool dns-zone-audit | DNS zone audit | Network | Parse BIND zone offline và thống kê SOA/NS/A/AAAA/MX/CNAME/TXT; không in domain/IP/TXT values. |
+| /tool x509-certificate-audit | X.509 certificate audit | Bảo mật | Kiểm tra validity/expiry/key size/hash/CA/SAN counts; không in certificate identity fields và không xác minh chain/revocation. |
+
+Wave 19 đang chờ CI/deploy; không cộng 8 tool này vào production trước khi main CI, Worker export/smoke và Cloudflare deploy hoàn tất. Giới hạn: PCAP tối đa 20 MiB/200.000 packets; audio 100 MiB; image ZIP tối đa 1.000 entries/200 ảnh/150 MiB giải nén; JSON Schema 10 MiB; EPUB 20 MiB/3.000 entries/120 MiB giải nén; Markdown 5 MiB/100.000 dòng; DNS zone 10 MiB; X.509 5 MiB/50 certificates. Không có traffic replay, remote DNS lookup, remote $ref, chain/revocation lookup hay arbitrary code execution.
 ### Wave 18 — Cross-domain everyday, data and media tools — deployed 2026-11-22
 
 | ID | Công cụ | Nhóm | Chức năng |

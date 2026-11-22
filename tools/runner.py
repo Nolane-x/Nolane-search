@@ -90,6 +90,12 @@ RUNNERS = {
     "email-security-audit", "jwt-security-audit",
     "har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit",
     "qr-code-generate","font-inspect","subtitle-fix","openapi-contract-audit","color-convert",
+    "pcap-network-audit", "audio-tag-audit",
+    "image-similarity-audit", "json-schema-validate",
+    "epub-structure-audit",
+    "markdown-quality-audit",
+    "dns-zone-audit",
+    "x509-certificate-audit",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -404,11 +410,19 @@ PIPELINE_TRANSITIONS = {
     "subtitle-fix":{"subtitle-audit","subtitle-convert","subtitle-text"},
     "openapi-contract-audit":{"text-clean","text-stats"},
     "color-convert":{"text-clean","text-stats"},
+    "pcap-network-audit":{"text-clean","text-stats"},
+    "audio-tag-audit":{"text-clean","text-stats"},
+    "image-similarity-audit":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json"},
+    "json-schema-validate":{"text-clean","text-stats"},
+    "epub-structure-audit":{"text-clean","text-stats"},
+    "markdown-quality-audit":{"text-clean","text-stats"},
+    "dns-zone-audit":{"text-clean","text-stats"},
+    "x509-certificate-audit":{"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -9647,6 +9661,563 @@ def color_convert(p):
     lines.extend(f"{n} | {hexv} | rgb({r},{g},{b}) | hsl({h},{s}%,{l}%) | cmyk({c}%,{m}%,{y}%,{k}%)" for n,hexv,r,g,b,h,s,l,c,m,y,k in rows[:2000])
     return tool_text("\n".join(lines),"Color converter")
 
+
+def pcap_network_audit(p):
+    import dpkt
+    size=p.stat().st_size
+    if size>20*1024*1024:
+        raise RuntimeError("PCAP input vượt giới hạn 20 MiB.")
+    protocol_counts={}
+    port_counts={}
+    host_count=set()
+    packet_count=0
+    packet_bytes=0
+    parse_errors=0
+    tcp_count=udp_count=icmp_count=dns_count=ip_count=0
+    timestamps=[]
+    try:
+        with p.open("rb") as handle:
+            magic=handle.read(4)
+            handle.seek(0)
+            reader=dpkt.pcapng.Reader(handle) if magic==b"\x0a\x0d\x0d\x0a" else dpkt.pcap.Reader(handle)
+            linktype=reader.datalink()
+            for timestamp,packet_bytes_raw in reader:
+                packet_count+=1
+                if packet_count>200000:
+                    raise RuntimeError("PCAP vượt giới hạn 200.000 packets.")
+                packet_bytes+=len(packet_bytes_raw)
+                timestamps.append(float(timestamp))
+                try:
+                    if linktype==dpkt.pcap.DLT_EN10MB:
+                        frame=dpkt.ethernet.Ethernet(packet_bytes_raw)
+                        network=frame.data
+                    elif linktype in (dpkt.pcap.DLT_RAW,dpkt.pcap.DLT_IPV4,dpkt.pcap.DLT_IPV6):
+                        if not packet_bytes_raw:
+                            continue
+                        version=packet_bytes_raw[0]>>4
+                        network=dpkt.ip.IP(packet_bytes_raw) if version==4 else dpkt.ip6.IP6(packet_bytes_raw) if version==6 else None
+                    else:
+                        name="linktype-"+str(linktype)
+                        protocol_counts[name]=protocol_counts.get(name,0)+1
+                        continue
+                    if isinstance(network,dpkt.ip.IP):
+                        ip_count+=1
+                        host_count.add(network.src)
+                        host_count.add(network.dst)
+                        payload=network.data
+                        protocol_name="IPv4"
+                    elif isinstance(network,dpkt.ip6.IP6):
+                        ip_count+=1
+                        host_count.add(network.src)
+                        host_count.add(network.dst)
+                        payload=network.data
+                        protocol_name="IPv6"
+                    else:
+                        protocol_counts["non-IP/other"]=protocol_counts.get("non-IP/other",0)+1
+                        continue
+                    if isinstance(payload,dpkt.tcp.TCP):
+                        tcp_count+=1
+                        port_counts[payload.sport]=port_counts.get(payload.sport,0)+1
+                        port_counts[payload.dport]=port_counts.get(payload.dport,0)+1
+                        if payload.dport in (53,5353) or payload.sport in (53,5353):
+                            dns_count+=1
+                    elif isinstance(payload,dpkt.udp.UDP):
+                        udp_count+=1
+                        port_counts[payload.sport]=port_counts.get(payload.sport,0)+1
+                        port_counts[payload.dport]=port_counts.get(payload.dport,0)+1
+                        if payload.dport in (53,5353) or payload.sport in (53,5353):
+                            dns_count+=1
+                    elif isinstance(payload,(dpkt.icmp.ICMP,dpkt.icmp6.ICMP6)):
+                        icmp_count+=1
+                    protocol_counts[protocol_name]=protocol_counts.get(protocol_name,0)+1
+                except (dpkt.UnpackError,ValueError,IndexError,AttributeError):
+                    parse_errors+=1
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("Không thể đọc PCAP/PCAPNG hoặc định dạng link-layer chưa hỗ trợ.") from exc
+    duration=max(timestamps)-min(timestamps) if len(timestamps)>1 else 0.0
+    top_ports=sorted(port_counts.items(),key=lambda item:(-item[1],item[0]))[:12]
+    lines=[
+        "PCAP network capture audit",
+        f"File bytes: {size:,}; packets: {packet_count:,}; captured packet bytes: {packet_bytes:,}",
+        f"Capture duration: {duration:.3f}s; IP packets: {ip_count:,}; unique IP endpoints: {len(host_count):,}; parse errors: {parse_errors:,}",
+        f"TCP packets: {tcp_count:,}; UDP packets: {udp_count:,}; ICMP packets: {icmp_count:,}; DNS/mDNS-port packets: {dns_count:,}",
+        "Network type counts: "+(", ".join(f"{name}={count:,}" for name,count in sorted(protocol_counts.items())) or "none"),
+        "Top transport ports: "+(", ".join(f"{port} ({count:,})" for port,count in top_ports) or "none"),
+        "IP addresses, packet payloads, DNS names and application data are never included.",
+        "Offline metadata only; traffic is not replayed and no host is contacted."
+    ]
+    return tool_text("\n".join(lines),"PCAP network audit")
+
+
+def audio_tag_audit(p):
+    size=p.stat().st_size
+    if size>100*1024*1024:
+        raise RuntimeError("Audio tag audit giới hạn file 100 MiB.")
+    data=ffprobe(p)
+    fmt=data.get("format",{})
+    format_tags=fmt.get("tags",{}) if isinstance(fmt.get("tags"),dict) else {}
+    streams=[item for item in data.get("streams",[]) if item.get("codec_type")=="audio"]
+    all_tags=dict(format_tags)
+    attached_pictures=sum(1 for item in data.get("streams",[]) if item.get("codec_type")=="video" and (item.get("disposition") or {}).get("attached_pic"))
+    for stream in streams:
+        if isinstance(stream.get("tags"),dict):
+            all_tags.update(stream["tags"])
+    normalized={str(key).strip().casefold().replace(" ","_") for key in all_tags}
+    groups={
+        "title":{"title","tit2"},
+        "artist":{"artist","tpe1"},
+        "album":{"album","talb"},
+        "date/year":{"date","year","tdrc","tyer","originaldate"},
+        "genre":{"genre","tcon"},
+        "track number":{"track","tracknumber","trck"},
+        "disc number":{"disc","discnumber","tpos"},
+        "album artist":{"album_artist","albumartist","tpe2"},
+        "composer":{"composer","tcom"}
+    }
+    present=[name for name,keys in groups.items() if normalized&keys]
+    missing=[name for name in groups if name not in present]
+    lines=[
+        "Audio metadata and tag completeness audit",
+        f"Bytes: {size:,}; container: {fmt.get('format_name','unknown')}; duration: {float(fmt.get('duration') or 0):.2f}s; audio streams: {len(streams):,}",
+        f"Metadata tag keys: {len(normalized):,}; attached cover-art streams: {attached_pictures:,}",
+        "Present tag groups: "+(", ".join(present) if present else "none"),
+        "Missing common tag groups: "+(", ".join(missing) if missing else "none"),
+        "Tag values, file path and embedded cover images are withheld; this checks completeness, not correctness."
+    ]
+    for stream in streams[:8]:
+        lines.append(f"Audio stream: {stream.get('codec_name','unknown')} · {stream.get('sample_rate','?')} Hz · {stream.get('channels','?')} channel(s)")
+    return tool_text("\n".join(lines),"Audio tag audit")
+
+
+def image_similarity_audit(p):
+    import io
+    import math
+    from PIL import Image,ImageOps
+    if not zipfile.is_zipfile(p):
+        raise RuntimeError("Gửi ZIP chứa bộ ảnh cần tìm ảnh gần giống.")
+    def phash_16(image):
+        size=32
+        pixels=list(image.convert("L").resize((size,size),Image.Resampling.LANCZOS).getdata())
+        matrix=[pixels[row*size:(row+1)*size] for row in range(size)]
+        cosine=[[math.cos(math.pi*(2*position+1)*frequency/(2*size)) for position in range(size)] for frequency in range(16)]
+        horizontal=[[sum(matrix[row][x]*cosine[u][x] for x in range(size)) for u in range(16)] for row in range(size)]
+        coefficients=[[sum(horizontal[y][u]*cosine[v][y] for y in range(size)) for u in range(16)] for v in range(16)]
+        values=[coefficients[v][u] for v in range(16) for u in range(16) if v or u]
+        median=sorted(values)[len(values)//2]
+        result=0
+        bit=0
+        for v in range(16):
+            for u in range(16):
+                if v==0 and u==0:
+                    continue
+                if coefficients[v][u]>=median:
+                    result|=(1<<bit)
+                bit+=1
+        return result
+    records=[]
+    total_bytes=0
+    allowed={".jpg",".jpeg",".png",".webp",".bmp",".tif",".tiff"}
+    try:
+        with zipfile.ZipFile(p) as archive:
+            infos=archive.infolist()
+            if len(infos)>1000:
+                raise RuntimeError("ZIP vượt giới hạn 1.000 entries.")
+            seen=set()
+            members=[]
+            for info in infos:
+                if info.is_dir():
+                    continue
+                _safe_archive_parts(info.filename)
+                if info.filename in seen:
+                    raise RuntimeError("ZIP chứa tên tệp trùng lặp.")
+                seen.add(info.filename)
+                if Path(info.filename).suffix.lower() not in allowed:
+                    continue
+                if info.flag_bits&0x1 or info.file_size>20*1024*1024:
+                    continue
+                total_bytes+=info.file_size
+                if total_bytes>150*1024*1024:
+                    raise RuntimeError("ZIP vượt 150 MiB dữ liệu ảnh khai báo.")
+                members.append(info)
+                if len(members)>200:
+                    raise RuntimeError("Tối đa 200 ảnh trong một lần so sánh.")
+            for info in members:
+                payload=archive.read(info)
+                with Image.open(io.BytesIO(payload)) as raw:
+                    _guard_image_dimensions(raw)
+                    image=ImageOps.exif_transpose(raw).convert("RGB")
+                    perceptual=phash_16(image)
+                records.append((info.filename,hashlib.sha256(payload).hexdigest(),perceptual))
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("Không thể đọc ZIP hoặc một tệp ảnh bị hỏng/không an toàn.") from exc
+    if not records:
+        raise RuntimeError("ZIP không có ảnh được hỗ trợ.")
+    matches=[]
+    for left in range(len(records)):
+        for right in range(left+1,len(records)):
+            a,b=records[left],records[right]
+            distance=(a[2]^b[2]).bit_count()
+            if a[1]==b[1]:
+                matches.append((a[0],b[0],"exact-sha256",0))
+            elif distance<=20:
+                matches.append((a[0],b[0],"near-visual-phash16",distance))
+    out=p.with_name(p.stem+"-image-similarity.csv")
+    with out.open("w",encoding="utf-8-sig",newline="") as target:
+        writer=csv.writer(target,lineterminator="\n")
+        writer.writerow(["image_a","image_b","match_type","phash16_hamming_distance"])
+        writer.writerows([(_spreadsheet_safe(a),_spreadsheet_safe(b),kind,distance) for a,b,kind,distance in matches])
+    return {"summary":f"Đã phân tích {len(records):,} ảnh, {total_bytes:,} byte giải nén; tìm thấy {len(matches):,} cặp giống/gần giống. Perceptual hash DCT 16×16, ngưỡng ≤20/255.","output_path":str(out)}
+
+
+def json_schema_validate(p):
+    import jsonschema
+    size=p.stat().st_size
+    if size>10*1024*1024:
+        raise RuntimeError("JSON Schema validation giới hạn input 10 MiB.")
+    try:
+        envelope=json.loads(p.read_text(encoding="utf-8-sig"))
+    except (UnicodeError,json.JSONDecodeError) as exc:
+        raise RuntimeError("Input phải là JSON UTF-8 hợp lệ.") from exc
+    if not isinstance(envelope,dict) or not isinstance(envelope.get("schema"),dict) or "data" not in envelope:
+        raise RuntimeError("JSON phải có hai trường cấp gốc: schema (object) và data.")
+    schema=envelope["schema"]
+    instance=envelope["data"]
+    def reject_remote_refs(value):
+        if isinstance(value,dict):
+            reference=value.get("$ref")
+            if isinstance(reference,str) and not reference.startswith("#"):
+                raise RuntimeError("Remote/external $ref bị chặn; chỉ hỗ trợ tham chiếu cục bộ trong schema.")
+            for child in value.values():
+                reject_remote_refs(child)
+        elif isinstance(value,list):
+            for child in value:
+                reject_remote_refs(child)
+    reject_remote_refs(schema)
+    try:
+        validator_class=jsonschema.validators.validator_for(schema)
+        validator_class.check_schema(schema)
+        validator=validator_class(schema)
+        errors=[]
+        for error in validator.iter_errors(instance):
+            errors.append(error)
+            if len(errors)>=501:
+                break
+    except Exception as exc:
+        raise RuntimeError("Schema không hợp lệ hoặc JSON Schema draft chưa được hỗ trợ.") from exc
+    truncated=len(errors)>500
+    errors=errors[:500]
+    lines=[
+        "JSON Schema validation report",
+        f"Draft: {schema.get('$schema','default')}; result: {'VALID' if not errors else 'INVALID'}",
+        f"Validation errors: {len(errors):,}"+(" (first 500 shown; additional errors omitted)" if truncated else ""),
+        "Instance values are never copied into this report."
+    ]
+    for error in errors[:100]:
+        pointer="/" + "/".join(str(part).replace("~","~0").replace("/","~1") for part in error.absolute_path) if error.absolute_path else "(root)"
+        lines.append(f"- {pointer}: rule={error.validator or 'unknown'}")
+    if len(errors)>100:
+        lines.append(f"- {len(errors)-100:,} additional error locations omitted.")
+    return tool_text("\n".join(lines),"JSON Schema validation")
+
+
+def epub_structure_audit(p):
+    import xml.etree.ElementTree as ET
+    from urllib.parse import unquote
+    size=p.stat().st_size
+    if size>20*1024*1024:
+        raise RuntimeError("EPUB input vượt giới hạn 20 MiB.")
+    def parse_xml(raw):
+        if re.search(rb"<!\s*(DOCTYPE|ENTITY)\b",raw,re.I):
+            raise RuntimeError("EPUB XML DTD/ENTITY bị chặn.")
+        return ET.fromstring(raw)
+    try:
+        with zipfile.ZipFile(p) as archive:
+            infos=archive.infolist()
+            if len(infos)>3000 or sum(item.file_size for item in infos)>120*1024*1024:
+                raise RuntimeError("EPUB vượt 3.000 entries hoặc 120 MiB dữ liệu giải nén.")
+            names=[item.filename for item in infos]
+            name_set=set(names)
+            duplicate_paths=len(names)-len(name_set)
+            mimetype_ok=False
+            if infos and infos[0].filename=="mimetype":
+                info=infos[0]
+                if info.file_size<=100 and info.compress_type==zipfile.ZIP_STORED:
+                    mimetype_ok=archive.read(info)==b"application/epub+zip"
+            if "META-INF/container.xml" not in name_set:
+                raise RuntimeError("EPUB thiếu META-INF/container.xml.")
+            container_raw=archive.read("META-INF/container.xml")
+            if len(container_raw)>1024*1024:
+                raise RuntimeError("container.xml vượt 1 MiB.")
+            container=parse_xml(container_raw)
+            rootfiles=container.findall(".//{*}rootfile")
+            if not rootfiles:
+                raise RuntimeError("Không tìm thấy OPF rootfile trong container.xml.")
+            opf_path=unquote(rootfiles[0].attrib.get("full-path",""))
+            if not opf_path or opf_path.startswith(("/","\\")) or ".." in Path(opf_path.replace("\\","/")).parts or opf_path not in name_set:
+                raise RuntimeError("Đường dẫn OPF không an toàn hoặc không tồn tại.")
+            opf_raw=archive.read(opf_path)
+            if len(opf_raw)>3*1024*1024:
+                raise RuntimeError("OPF package vượt 3 MiB.")
+            package=parse_xml(opf_raw)
+            metadata=package.find(".//{*}metadata")
+            title_count=len(metadata.findall(".//{*}title")) if metadata is not None else 0
+            creator_count=len(metadata.findall(".//{*}creator")) if metadata is not None else 0
+            language_count=len(metadata.findall(".//{*}language")) if metadata is not None else 0
+            manifest=package.findall(".//{*}manifest/{*}item")
+            spine=package.findall(".//{*}spine/{*}itemref")
+            identifiers=set()
+            duplicate_ids=0
+            missing_hrefs=0
+            unsafe_hrefs=0
+            for item in manifest:
+                item_id=item.attrib.get("id","")
+                if item_id in identifiers:
+                    duplicate_ids+=1
+                identifiers.add(item_id)
+                href=item.attrib.get("href","")
+                parsed=urllib.parse.urlsplit(href)
+                if parsed.scheme or parsed.netloc:
+                    unsafe_hrefs+=1
+                    continue
+                target=unquote(parsed.path)
+                normalized=posixpath.normpath(posixpath.join(posixpath.dirname(opf_path),target))
+                if target.startswith(("/","\\")) or normalized==".." or normalized.startswith("../") or "\\" in target:
+                    unsafe_hrefs+=1
+                elif normalized not in name_set:
+                    missing_hrefs+=1
+            unresolved_spine=sum(1 for ref in spine if ref.attrib.get("idref") not in identifiers)
+            navigation_items=sum(1 for item in manifest if "nav" in item.attrib.get("properties","").split())
+            image_items=sum(1 for item in manifest if item.attrib.get("media-type","").startswith("image/"))
+            scripted_items=sum(1 for item in manifest if "scripted" in item.attrib.get("properties","").split())
+            encrypted="META-INF/encryption.xml" in name_set
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("Không thể đọc cấu trúc EPUB hợp lệ hoặc thành phần ZIP/XML bị hỏng.") from exc
+    lines=[
+        "EPUB package structure audit",
+        f"Archive entries: {len(infos):,}; duplicate paths: {duplicate_paths:,}; mimetype first/stored/content: {'OK' if mimetype_ok else 'problem'}",
+        f"OPF manifest items: {len(manifest):,}; spine entries: {len(spine):,}; duplicate manifest IDs: {duplicate_ids:,}",
+        f"Manifest href targets missing: {missing_hrefs:,}; unsafe href targets: {unsafe_hrefs:,}; unresolved spine idrefs: {unresolved_spine:,}",
+        f"Navigation documents: {navigation_items:,}; image resources: {image_items:,}; scripted resources: {scripted_items:,}; encrypted metadata present: {int(encrypted)}",
+        f"Metadata field counts: title={title_count:,}; creator={creator_count:,}; language={language_count:,}",
+        "Book title, authors, chapter text and archive paths are withheld. This is a local package-structure audit, not a full EPUB conformance certification."
+    ]
+    return tool_text("\n".join(lines),"EPUB structure audit")
+
+
+def markdown_quality_audit(p):
+    size=p.stat().st_size
+    if size>5*1024*1024:
+        raise RuntimeError("Markdown quality audit giới hạn input 5 MiB.")
+    try:
+        raw=p.read_text(encoding="utf-8-sig")
+    except UnicodeError as exc:
+        raise RuntimeError("Markdown phải là văn bản UTF-8.") from exc
+    source_lines=raw.splitlines()
+    if len(source_lines)>100000:
+        raise RuntimeError("Markdown vượt 100.000 dòng.")
+    trailing=long_lines=heading_jumps=duplicate_headings=heading_spacing=empty_links=0
+    fence_open=False
+    fence_char=""
+    fence_len=0
+    fence_start=0
+    previous_heading=0
+    heading_seen={}
+    findings=[]
+    def add(line,rule):
+        if len(findings)<120:
+            findings.append((line,rule))
+    fence_re=re.compile(r"^\s{0,3}(" + re.escape(chr(96)) + r"{3,}|~{3,})")
+    for number,line in enumerate(source_lines,1):
+        if line.rstrip(" \t")!=line:
+            trailing+=1
+            add(number,"trailing-whitespace")
+        if len(line)>120:
+            long_lines+=1
+            add(number,"line-over-120")
+        fence=fence_re.match(line)
+        if fence:
+            token=fence.group(1)
+            if not fence_open:
+                fence_open=True
+                fence_char=token[0]
+                fence_len=len(token)
+                fence_start=number
+            elif token[0]==fence_char and len(token)>=fence_len:
+                fence_open=False
+            continue
+        if fence_open:
+            continue
+        heading=re.match(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$",line)
+        if heading:
+            level=len(heading.group(1))
+            heading_text=heading.group(2).strip().casefold()
+            if previous_heading and level>previous_heading+1:
+                heading_jumps+=1
+                add(number,"heading-level-jump")
+            if heading_seen.get(heading_text):
+                duplicate_headings+=1
+                add(number,"duplicate-heading")
+            heading_seen[heading_text]=True
+            previous_heading=level
+            if number>1 and source_lines[number-2].strip():
+                heading_spacing+=1
+                add(number,"heading-without-blank-line-before")
+        if re.search(r"\[[^\]]*\]\(\s*\)",line) or re.search(r"\[[^\]]*\]\[\s*\]",line):
+            empty_links+=1
+            add(number,"empty-link-target")
+    if fence_open:
+        add(fence_start,"unclosed-code-fence")
+    lines=[
+        "Markdown quality audit",
+        f"Lines: {len(source_lines):,}; bytes: {size:,}; repeated headings: {duplicate_headings:,}",
+        f"Trailing-whitespace lines: {trailing:,}; long lines (>120 chars): {long_lines:,}; heading-level jumps: {heading_jumps:,}",
+        f"Heading spacing findings: {heading_spacing:,}; empty link targets: {empty_links:,}; unclosed code fence: {int(fence_open)}",
+        f"Findings listed: {len(findings):,} (maximum 120); source line contents are not copied into the report."
+    ]
+    lines.extend(f"- Line {line}: {rule}" for line,rule in findings)
+    return tool_text("\n".join(lines),"Markdown quality audit")
+
+
+def dns_zone_audit(p):
+    import dns.rdatatype
+    import dns.zone
+    size=p.stat().st_size
+    if size>10*1024*1024:
+        raise RuntimeError("DNS zone audit giới hạn input 10 MiB.")
+    try:
+        raw=p.read_text(encoding="utf-8-sig")
+    except UnicodeError as exc:
+        raise RuntimeError("DNS zone file phải là văn bản UTF-8.") from exc
+    if re.search(r"(?im)^\s*\$(?:INCLUDE|GENERATE)\b",raw):
+        raise RuntimeError("$INCLUDE và $GENERATE bị chặn để tránh truy cập file ngoài hoặc mở rộng dữ liệu ngoài dự kiến.")
+    try:
+        zone=dns.zone.from_text(raw,origin=None,relativize=False,allow_include=False,check_origin=False)
+    except Exception as exc:
+        raise RuntimeError("DNS zone không hợp lệ; kiểm tra cú pháp BIND, $ORIGIN và record data.") from exc
+    counts={}
+    owner_names=records=soa_count=ns_count=mx_count=txt_count=aaaa_count=a_count=cname_count=0
+    for owner,node in zone.nodes.items():
+        owner_names+=1
+        for rrset in node.rdatasets:
+            label=dns.rdatatype.to_text(rrset.rdtype)
+            amount=len(rrset)
+            counts[label]=counts.get(label,0)+amount
+            records+=amount
+            if rrset.rdtype==dns.rdatatype.SOA:
+                soa_count+=amount
+            elif rrset.rdtype==dns.rdatatype.NS:
+                ns_count+=amount
+            elif rrset.rdtype==dns.rdatatype.MX:
+                mx_count+=amount
+            elif rrset.rdtype==dns.rdatatype.TXT:
+                txt_count+=amount
+            elif rrset.rdtype==dns.rdatatype.AAAA:
+                aaaa_count+=amount
+            elif rrset.rdtype==dns.rdatatype.A:
+                a_count+=amount
+            elif rrset.rdtype==dns.rdatatype.CNAME:
+                cname_count+=amount
+    lines=[
+        "DNS zone file audit",
+        f"Origin defined: {int(zone.origin is not None)}; owner names: {owner_names:,}; records: {records:,}",
+        f"SOA records: {soa_count:,}; NS: {ns_count:,}; A: {a_count:,}; AAAA: {aaaa_count:,}; MX: {mx_count:,}; CNAME: {cname_count:,}; TXT: {txt_count:,}",
+        "Record-type counts: "+(", ".join(f"{name}={count:,}" for name,count in sorted(counts.items())) or "none"),
+        "SOA/NS presence: "+("SOA missing" if not soa_count else "SOA present")+"; "+("NS missing" if not ns_count else "NS present"),
+        "Domain names, IP addresses, TXT contents and mailbox values are never included. No DNS queries or zone transfers are performed."
+    ]
+    return tool_text("\n".join(lines),"DNS zone audit")
+
+
+def x509_certificate_audit(p):
+    import datetime
+    from cryptography import x509
+    from cryptography.hazmat.primitives.asymmetric import rsa,ec,dsa,ed25519,ed448
+    size=p.stat().st_size
+    if size>5*1024*1024:
+        raise RuntimeError("Certificate audit giới hạn input 5 MiB.")
+    raw=p.read_bytes()
+    blocks=re.findall(rb"-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----",raw)
+    try:
+        certs=[x509.load_pem_x509_certificate(block) for block in blocks] if blocks else [x509.load_der_x509_certificate(raw)]
+    except Exception as exc:
+        raise RuntimeError("Không thể phân tích PEM/DER X.509 certificate; private keys không được hỗ trợ.") from exc
+    if not 1<=len(certs)<=50:
+        raise RuntimeError("Certificate bundle phải có từ 1 đến 50 certificates.")
+    now=datetime.datetime.now(datetime.timezone.utc)
+    expired=not_yet=expiring=weak_signatures=weak_keys=ca_count=self_issued=0
+    algorithms={}
+    key_types={}
+    san_dns=san_ip=0
+    for cert in certs:
+        not_before=cert.not_valid_before_utc
+        not_after=cert.not_valid_after_utc
+        if now<not_before:
+            not_yet+=1
+        elif now>=not_after:
+            expired+=1
+        elif not_after-now<=datetime.timedelta(days=30):
+            expiring+=1
+        algorithm=getattr(cert.signature_hash_algorithm,"name","unknown") if cert.signature_hash_algorithm else "unknown"
+        algorithms[algorithm]=algorithms.get(algorithm,0)+1
+        if algorithm.lower() in {"md5","sha1"}:
+            weak_signatures+=1
+        key=cert.public_key()
+        if isinstance(key,rsa.RSAPublicKey):
+            key_name="RSA"
+            key_size=key.key_size
+            if key_size<2048:
+                weak_keys+=1
+        elif isinstance(key,ec.EllipticCurvePublicKey):
+            key_name="EC"
+            key_size=key.key_size
+            if key_size<224:
+                weak_keys+=1
+        elif isinstance(key,dsa.DSAPublicKey):
+            key_name="DSA"
+            key_size=key.key_size
+            if key_size<2048:
+                weak_keys+=1
+        elif isinstance(key,ed25519.Ed25519PublicKey):
+            key_name="Ed25519"
+            key_size=256
+        elif isinstance(key,ed448.Ed448PublicKey):
+            key_name="Ed448"
+            key_size=456
+        else:
+            key_name=type(key).__name__
+            key_size=getattr(key,"key_size",0)
+        key_types[f"{key_name}-{key_size}"]=key_types.get(f"{key_name}-{key_size}",0)+1
+        try:
+            basic=cert.extensions.get_extension_for_class(x509.BasicConstraints).value
+            if basic.ca:
+                ca_count+=1
+        except x509.ExtensionNotFound:
+            pass
+        if cert.subject==cert.issuer:
+            self_issued+=1
+        try:
+            san=cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+            san_dns+=len(san.get_values_for_type(x509.DNSName))
+            san_ip+=len(san.get_values_for_type(x509.IPAddress))
+        except x509.ExtensionNotFound:
+            pass
+    lines=[
+        "X.509 certificate bundle audit",
+        f"Certificates: {len(certs):,}; expired: {expired:,}; not-yet-valid: {not_yet:,}; expiring within 30 days: {expiring:,}",
+        f"CA certificates: {ca_count:,}; subject=issuer certificates: {self_issued:,}; weak signature hashes (MD5/SHA-1): {weak_signatures:,}; weak public keys: {weak_keys:,}",
+        "Signature hash algorithms: "+(", ".join(f"{name}={count:,}" for name,count in sorted(algorithms.items())) or "none"),
+        "Public key types/sizes: "+(", ".join(f"{name}={count:,}" for name,count in sorted(key_types.items())) or "none"),
+        f"Subject Alternative Name counts: DNS={san_dns:,}; IP={san_ip:,}",
+        "Subjects, issuers, serials, SAN values and public-key bytes are withheld. No chain trust, revocation or hostname validation is performed."
+    ]
+    return tool_text("\n".join(lines),"X.509 certificate audit")
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -9778,6 +10349,14 @@ TOOLS={
  "subtitle-fix":subtitle_fix,
  "openapi-contract-audit":openapi_contract_audit,
  "color-convert":color_convert,
+ "pcap-network-audit":pcap_network_audit,
+ "audio-tag-audit":audio_tag_audit,
+ "image-similarity-audit":image_similarity_audit,
+ "json-schema-validate":json_schema_validate,
+ "epub-structure-audit":epub_structure_audit,
+ "markdown-quality-audit":markdown_quality_audit,
+ "dns-zone-audit":dns_zone_audit,
+ "x509-certificate-audit":x509_certificate_audit,
 
 }
 
