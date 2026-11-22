@@ -638,41 +638,56 @@ def premis_event_audit(path: Path) -> dict:
     counts = collections.Counter()
     identifiers = set()
     duplicate_identifiers = missing_links = invalid_dates = 0
+    identifier_entity = {
+        "objectidentifier": "object",
+        "eventidentifier": "event",
+        "agentidentifier": "agent",
+        "rightsstatementidentifier": "rights",
+    }
+    linking_entity = {
+        "linkingobjectidentifier": "object",
+        "linkingeventidentifier": "event",
+        "linkingagentidentifier": "agent",
+        "linkingrightsstatementidentifier": "rights",
+    }
     link_refs = []
     for node in root.iter():
         tag = _local(node.tag)
         if tag in {"object", "event", "agent", "rights"}:
             counts[tag] += 1
-        if tag in {"objectidentifier", "eventidentifier", "agentidentifier", "rightsstatementidentifier"}:
+        if tag in identifier_entity:
             identifier_type = ""
             identifier_value = ""
             for child in node:
                 child_tag = _local(child.tag)
                 if child_tag.endswith("identifiertype"):
-                    identifier_type = child_tag
+                    identifier_type = (child.text or "").strip()
                 elif child_tag.endswith("identifiervalue"):
-                    identifier_value = child.text or ""
-            key = (tag, identifier_value)
+                    identifier_value = (child.text or "").strip()
             if identifier_value:
+                key = (identifier_entity[tag], identifier_type, identifier_value)
                 if key in identifiers:
                     duplicate_identifiers += 1
                 identifiers.add(key)
-        if tag in {"linkingobjectidentifier", "linkingagentidentifier", "linkingrightsstatementidentifier"}:
+        if tag in linking_entity:
             link_type = ""
             link_value = ""
             for child in node:
                 child_tag = _local(child.tag)
                 if child_tag.endswith("identifiertype"):
-                    link_type = child.text or ""
+                    link_type = (child.text or "").strip()
                 elif child_tag.endswith("identifiervalue"):
-                    link_value = child.text or ""
+                    link_value = (child.text or "").strip()
             if link_value:
-                link_refs.append((tag, link_type, link_value))
-        if tag in {"eventdatetime"} and node.text:
+                link_refs.append((linking_entity[tag], link_type, link_value))
+        if tag == "eventdatetime" and node.text:
             value = node.text.strip()
             if not re.match(r"^\d{4}-\d\d-\d\dT", value):
                 invalid_dates += 1
-    missing_links = sum(1 for _, _, value in link_refs if not any(identifier_value == value for _, identifier_value in identifiers))
+    missing_links = sum(
+        1 for entity_type, identifier_type, value in link_refs
+        if (entity_type, identifier_type, value) not in identifiers
+    )
     lines = [
         f"PREMIS object entities: {counts['object']:,}",
         f"PREMIS event entities: {counts['event']:,}",
@@ -772,7 +787,7 @@ def tei_document_audit(path: Path) -> dict:
     targets = set()
     for node in root.iter():
         tag = _local(node.tag)
-        if tag in {"teiheader", "filedesc", "titlestmt", "publicationstmt", "sourcedesc", "text", "front", "body", "back", "div", "p", "lg", "l", "sp", "stage", "pb", "lb", "note", "ref", "ptr", "list", "item", "graphic", "persname", "orgname", "placeName".lower(), "bibl", "biblstruct"}:
+        if tag in {"teiheader", "filedesc", "titlestmt", "publicationstmt", "sourcedesc", "text", "front", "body", "back", "div", "p", "lg", "l", "sp", "stage", "pb", "lb", "note", "ref", "ptr", "list", "item", "graphic", "persname", "orgname", "placename", "bibl", "biblstruct"}:
             counts[tag] += 1
         xml_id = node.attrib.get("{http://www.w3.org/XML/1998/namespace}id")
         if xml_id:
@@ -782,7 +797,13 @@ def tei_document_audit(path: Path) -> dict:
         for key in ("target", "corresp", "sameAs", "copyOf", "next", "prev"):
             value = node.attrib.get(key)
             if value:
-                targets.update(match for match in re.findall(r"#([A-Za-z_][\w.-]*)", value))
+                for token in value.split():
+                    parsed = urllib.parse.urlsplit(token)
+                    # Only a bare same-document fragment is checked against this
+                    # TEI file. External and sibling-document fragments are not
+                    # false positives for this document's xml:id inventory.
+                    if not parsed.scheme and not parsed.netloc and not parsed.path and parsed.fragment:
+                        targets.add(urllib.parse.unquote(parsed.fragment))
     missing_targets = sum(1 for target in targets if target not in xml_ids)
     lines = [
         f"TEI root valid: True",
