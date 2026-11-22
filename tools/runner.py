@@ -86,6 +86,7 @@ RUNNERS = {
     "repo-ci-reliability",
     "docx-audit", "pptx-audit", "csv-privacy-audit", "archive-security-audit",
     "xlsx-privacy-audit", "pdf-privacy-audit",
+    "office-active-content-audit", "pdf-active-content-audit",
 
 }
 
@@ -386,13 +387,15 @@ PIPELINE_TRANSITIONS = {
     "archive-security-audit": {"text-clean", "text-stats"},
     "xlsx-privacy-audit": {"text-clean", "text-stats"},
     "pdf-privacy-audit": {"text-clean", "text-stats"},
+    "office-active-content-audit": {"text-clean", "text-stats"},
+    "pdf-active-content-audit": {"text-clean", "text-stats"},
     "csv-to-sql-inserts": set(),
 
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -8588,6 +8591,280 @@ def pdf_privacy_audit(p):
     return tool_text("\n".join(lines),"PDF privacy audit")
 
 
+def office_active_content_audit(p):
+    import xml.etree.ElementTree as ET
+    if not zipfile.is_zipfile(p):
+        raise RuntimeError("Tệp không phải gói Office OOXML ZIP hợp lệ.")
+    counters={}
+    external_by_type={}
+    unsafe_schemes={}
+    total_uncompressed=0
+    xml_bytes_read=0
+    parsed_relationships=0
+    malformed_relationships=0
+    encrypted_members=0
+    path_traversal=0
+    macro_enabled_content_types=0
+    macro_members=0
+    embedded_objects=0
+    activex_objects=0
+    custom_ui_parts=0
+    external_workbook_links=0
+    external_connections=0
+    def add(name,count=1):
+        counters[name]=counters.get(name,0)+count
+    with zipfile.ZipFile(p) as archive:
+        infos=archive.infolist()
+        if len(infos)>20000:
+            raise RuntimeError("Gói Office vượt giới hạn 20.000 thành phần.")
+        for info in infos:
+            name=str(info.filename or "")
+            normalized=name.replace("\\","/")
+            parts=[part for part in normalized.split("/") if part not in ("",".")]
+            if normalized.startswith("/") or re.match(r"^[A-Za-z]:",normalized) or ".." in parts:
+                path_traversal+=1
+            if info.flag_bits&0x1:
+                encrypted_members+=1
+            total_uncompressed+=max(0,int(info.file_size))
+            lower=normalized.lower()
+            base=Path(lower).name
+            if base=="vbaproject.bin" or "vba/" in lower and base.endswith(".bin"):
+                macro_members+=1
+            if "/activex/" in "/"+lower or lower.startswith("activex/"):
+                activex_objects+=1
+            if "/embeddings/" in "/"+lower or lower.startswith("embeddings/") or "oleobject" in base:
+                embedded_objects+=1
+            if lower.startswith("customui/") or "/customui/" in lower:
+                custom_ui_parts+=1
+            if lower.startswith("xl/externallinks/") or "/externallinks/" in lower:
+                external_workbook_links+=1
+            if lower.startswith("xl/externalconnections/") or "/externalconnections/" in lower:
+                external_connections+=1
+        if total_uncompressed>500*1024*1024:
+            raise RuntimeError("Gói Office có kích thước giải nén khai báo vượt 500 MiB.")
+        rel_files=[item for item in infos if item.filename.lower().endswith(".rels")]
+        if len(rel_files)>2000:
+            raise RuntimeError("Gói Office có quá nhiều relationships để kiểm tra an toàn.")
+        for item in rel_files:
+            if item.file_size>2*1024*1024:
+                add("oversized_relationship_xml")
+                continue
+            if xml_bytes_read+item.file_size>12*1024*1024:
+                add("relationship_xml_read_limit_reached")
+                break
+            raw=archive.read(item)
+            xml_bytes_read+=len(raw)
+            upper=raw.upper()
+            if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
+                malformed_relationships+=1
+                add("relationship_xml_with_doctype_or_entity")
+                continue
+            try:
+                root=ET.fromstring(raw)
+            except (ET.ParseError,ValueError):
+                malformed_relationships+=1
+                add("malformed_relationship_xml")
+                continue
+            for relation in root.iter():
+                if not str(relation.tag).lower().endswith("}relationship") and str(relation.tag).lower()!="relationship":
+                    continue
+                parsed_relationships+=1
+                target_mode=str(relation.attrib.get("TargetMode","")).strip().lower()
+                if target_mode!="external":
+                    continue
+                relation_type=str(relation.attrib.get("Type","") or "")
+                relation_kind=relation_type.rsplit("/",1)[-1].lower() or "unknown"
+                external_by_type[relation_kind]=external_by_type.get(relation_kind,0)+1
+                target=str(relation.attrib.get("Target","") or "")
+                scheme=urllib.parse.urlsplit(target).scheme.lower()
+                if scheme in {"javascript","data","file","vbscript","ms-msdt","shell","command"}:
+                    unsafe_schemes[scheme]=unsafe_schemes.get(scheme,0)+1
+        content_types=next((item for item in infos if item.filename.lower()=="[content_types].xml"),None)
+        if content_types:
+            if content_types.file_size>2*1024*1024:
+                add("oversized_content_types_xml")
+            elif xml_bytes_read+content_types.file_size<=12*1024*1024:
+                raw=archive.read(content_types)
+                xml_bytes_read+=len(raw)
+                if b"<!DOCTYPE" in raw.upper() or b"<!ENTITY" in raw.upper():
+                    add("content_types_xml_with_doctype_or_entity")
+                else:
+                    try:
+                        root=ET.fromstring(raw)
+                        for element in root.iter():
+                            content_type=str(element.attrib.get("ContentType","")).lower()
+                            part_name=str(element.attrib.get("PartName","")).lower()
+                            if "macroenabled" in content_type or "vbaproject" in content_type:
+                                macro_enabled_content_types+=1
+                            if "externallink" in part_name:
+                                external_workbook_links=max(external_workbook_links,1)
+                    except (ET.ParseError,ValueError):
+                        add("malformed_content_types_xml")
+    if macro_members: add("vba_project_binary",macro_members)
+    if macro_enabled_content_types: add("macro_enabled_content_types",macro_enabled_content_types)
+    if activex_objects: add("activex_object_parts",activex_objects)
+    if embedded_objects: add("embedded_or_ole_parts",embedded_objects)
+    if custom_ui_parts: add("custom_ui_parts",custom_ui_parts)
+    if external_workbook_links: add("external_workbook_link_parts",external_workbook_links)
+    if external_connections: add("external_connection_parts",external_connections)
+    if encrypted_members: add("encrypted_zip_members",encrypted_members)
+    if path_traversal: add("unsafe_package_paths",path_traversal)
+    if malformed_relationships: add("relationship_xml_parse_findings",malformed_relationships)
+    if unsafe_schemes:
+        for scheme,count in unsafe_schemes.items(): add("external_relationship_unsafe_scheme_"+scheme,count)
+    lines=[
+        "Office OOXML active-content security audit",
+        f"Archive entries: {len(infos):,}; declared uncompressed size: {total_uncompressed:,} bytes",
+        f"Relationship parts parsed: {len(rel_files)-malformed_relationships:,}; relationships inspected: {parsed_relationships:,}",
+        f"External relationships: {sum(external_by_type.values()):,}; unsafe external schemes: {sum(unsafe_schemes.values()):,}",
+        f"VBA project binaries: {macro_members:,}; macro-enabled content types: {macro_enabled_content_types:,}",
+        f"ActiveX parts: {activex_objects:,}; embedded/OLE parts: {embedded_objects:,}; custom UI parts: {custom_ui_parts:,}",
+        f"External workbook-link parts: {external_workbook_links:,}; external connection parts: {external_connections:,}",
+        f"Encrypted members: {encrypted_members:,}; suspicious package paths: {path_traversal:,}",
+        "",
+        "External relationship types:"
+    ]
+    if external_by_type:
+        lines.extend(f"- {kind}: {count:,}" for kind,count in sorted(external_by_type.items()))
+    else:
+        lines.append("- None detected")
+    lines.extend(["","Review signals:"])
+    findings=[]
+    if macro_members or macro_enabled_content_types: findings.append("VBA or macro-enabled package markers are present; do not enable macros unless the source is trusted.")
+    if activex_objects: findings.append("ActiveX components are present.")
+    if embedded_objects: findings.append("Embedded or OLE objects are present; this audit does not inspect or open them.")
+    if external_by_type: findings.append("The document contains external relationships which may cause network access or linked-content loading.")
+    if unsafe_schemes: findings.append("External relationships use potentially unsafe URI schemes.")
+    if custom_ui_parts: findings.append("Custom Office UI parts are present.")
+    if encrypted_members: findings.append("One or more ZIP members are encrypted and could not be inspected.")
+    if path_traversal: findings.append("Package contains absolute or traversal-like member paths.")
+    if malformed_relationships: findings.append("One or more relationship XML parts were malformed or used forbidden DTD/entity declarations.")
+    lines.extend("- "+finding for finding in findings or ["No configured active-content indicator was detected."])
+    lines.extend(["","Static metadata/XML inspection only. No macro, ActiveX, OLE object, embedded file, link target or external resource was executed, opened or downloaded. This is not malware scanning or a guarantee that a document is safe."])
+    return tool_text("\n".join(lines),"Office active-content audit")
+
+
+def pdf_active_content_audit(p):
+    import fitz
+    document=fitz.open(p)
+    try:
+        if document.is_encrypted and document.needs_pass:
+            raise RuntimeError("PDF được mã hóa bằng mật khẩu; không thể kiểm tra object graph.")
+        if document.page_count>300:
+            raise RuntimeError("PDF active-content audit giới hạn 300 trang.")
+        xref_length=document.xref_length()
+        if xref_length>15000:
+            raise RuntimeError("PDF vượt giới hạn 15.000 indirect objects.")
+        total_object_chars=0
+        scanned_objects=0
+        oversized_objects=0
+        token_patterns={
+            "JavaScript action":re.compile(r"/JavaScript\b"),
+            "JS action payload":re.compile(r"/JS\b"),
+            "OpenAction":re.compile(r"/OpenAction\b"),
+            "Additional Actions":re.compile(r"/AA\b"),
+            "Launch action":re.compile(r"/Launch\b"),
+            "EmbeddedFiles name tree":re.compile(r"/EmbeddedFiles\b"),
+            "File specification":re.compile(r"/Filespec\b"),
+            "RichMedia":re.compile(r"/RichMedia\b"),
+            "AcroForm":re.compile(r"/AcroForm\b"),
+            "XFA form":re.compile(r"/XFA\b"),
+            "SubmitForm action":re.compile(r"/SubmitForm\b"),
+            "ImportData action":re.compile(r"/ImportData\b"),
+            "Remote GoTo action":re.compile(r"/GoToR\b"),
+            "URI action":re.compile(r"/URI\b"),
+            "Rendition or media action":re.compile(r"/(?:Rendition|Movie|Sound|3D)\b"),
+            "Collection or portfolio":re.compile(r"/Collection\b"),
+        }
+        token_objects={name:0 for name in token_patterns}
+        for xref in range(1,xref_length):
+            try:
+                obj=document.xref_object(xref,compressed=False) or ""
+            except Exception:
+                continue
+            scanned_objects+=1
+            total_object_chars+=len(obj)
+            if total_object_chars>3_000_000:
+                raise RuntimeError("PDF vượt giới hạn 3.000.000 ký tự object metadata.")
+            if len(obj)>65536:
+                oversized_objects+=1
+                obj=obj[:65536]
+            for name,pattern in token_patterns.items():
+                if pattern.search(obj):
+                    token_objects[name]+=1
+        uri_links=0
+        launch_links=0
+        remote_goto_links=0
+        unsafe_uri_links=0
+        widgets=0
+        for page in document:
+            try:
+                links=page.get_links() or []
+            except Exception:
+                links=[]
+            for link in links:
+                kind=link.get("kind")
+                if kind==getattr(fitz,"LINK_URI",-100):
+                    uri_links+=1
+                    uri=str(link.get("uri","") or "")
+                    scheme=urllib.parse.urlsplit(uri).scheme.lower()
+                    if scheme in {"javascript","data","file","vbscript","ms-msdt","shell","command"}:
+                        unsafe_uri_links+=1
+                elif kind==getattr(fitz,"LINK_LAUNCH",-101):
+                    launch_links+=1
+                elif kind==getattr(fitz,"LINK_GOTOR",-102):
+                    remote_goto_links+=1
+            try:
+                widgets_iter=page.widgets()
+                if widgets_iter:
+                    widgets+=sum(1 for _ in widgets_iter)
+            except Exception:
+                pass
+        try:
+            embedded_files=int(document.embfile_count())
+        except Exception:
+            embedded_files=0
+        catalog=document.pdf_catalog()
+        try:
+            open_action_type,open_action_value=document.xref_get_key(catalog,"OpenAction")
+            catalog_open_action=0 if str(open_action_type).lower() in {"null","none"} else 1
+        except Exception:
+            catalog_open_action=0
+        try:
+            aa_type,aa_value=document.xref_get_key(catalog,"AA")
+            catalog_additional_actions=0 if str(aa_type).lower() in {"null","none"} else 1
+        except Exception:
+            catalog_additional_actions=0
+        findings=sum(token_objects.values())+uri_links+launch_links+remote_goto_links+unsafe_uri_links+embedded_files+widgets
+        lines=[
+            "PDF active-content security audit",
+            f"Pages: {document.page_count:,}; indirect objects scanned: {scanned_objects:,}; object metadata characters: {total_object_chars:,}",
+            f"Catalog OpenAction: {catalog_open_action}; catalog Additional Actions: {catalog_additional_actions}",
+            f"URI links: {uri_links:,}; Launch links: {launch_links:,}; remote GoTo links: {remote_goto_links:,}; unsafe URI schemes: {unsafe_uri_links:,}",
+            f"Embedded files: {embedded_files:,}; form widgets: {widgets:,}; oversized object dictionaries: {oversized_objects:,}",
+            "",
+            "Active-content markers (number of objects containing each marker):"
+        ]
+        lines.extend(f"- {name}: {count:,}" for name,count in token_objects.items())
+        lines.extend(["","Review signals:"])
+        review=[]
+        if token_objects["JavaScript action"] or token_objects["JS action payload"]: review.append("JavaScript action markers are present.")
+        if token_objects["OpenAction"] or catalog_open_action: review.append("The document defines an OpenAction; it may run when the PDF is opened.")
+        if token_objects["Additional Actions"] or catalog_additional_actions: review.append("Additional action dictionaries are present.")
+        if token_objects["Launch action"] or launch_links: review.append("Launch actions or launch links are present.")
+        if token_objects["EmbeddedFiles name tree"] or token_objects["File specification"] or embedded_files: review.append("File-attachment markers or embedded files are present.")
+        if token_objects["RichMedia"] or token_objects["Rendition or media action"]: review.append("Rich media or multimedia action markers are present.")
+        if token_objects["AcroForm"] or token_objects["XFA form"] or widgets: review.append("Interactive form fields or XFA markers are present.")
+        if token_objects["SubmitForm action"] or token_objects["ImportData action"]: review.append("Form submit/import action markers are present.")
+        if token_objects["Remote GoTo action"] or remote_goto_links: review.append("Remote-document navigation markers are present.")
+        if unsafe_uri_links: review.append("One or more URI links use a potentially unsafe scheme.")
+        lines.extend("- "+item for item in review or ["No configured active-content indicator was detected."])
+        lines.extend(["","Static PDF object-graph inspection only. No JavaScript, launch action, link target or embedded file was executed or opened. A marker can be benign; this is not malware scanning or a guarantee that a PDF is safe."])
+        return tool_text("\n".join(lines),"PDF active-content audit")
+    finally:
+        document.close()
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -8705,6 +8982,8 @@ TOOLS={
  "archive-security-audit":archive_security_audit,
  "xlsx-privacy-audit":xlsx_privacy_audit,
  "pdf-privacy-audit":pdf_privacy_audit,
+ "office-active-content-audit":office_active_content_audit,
+ "pdf-active-content-audit":pdf_active_content_audit,
 
 }
 

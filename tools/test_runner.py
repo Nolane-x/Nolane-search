@@ -2570,5 +2570,57 @@ dependencies = ["requests>=2.0", "httpx"]
         self.assertNotIn("+84901234567",pdf_report)
 
 
+    def test_wave_sixteen_office_active_content_audit_reports_markers_without_targets(self):
+        office_path=self.input_dir/"review.docx"
+        rels='''<?xml version="1.0" encoding="UTF-8"?>
+        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="javascript:alert(1)" TargetMode="External"/>
+          <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="https://private.example.test/template.dotm" TargetMode="External"/>
+        </Relationships>'''
+        content_types='''<?xml version="1.0" encoding="UTF-8"?>
+        <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+          <Default Extension="bin" ContentType="application/vnd.ms-office.vbaProject"/>
+          <Override PartName="/word/document.xml" ContentType="application/vnd.ms-word.document.macroEnabled.main+xml"/>
+        </Types>'''
+        with zipfile.ZipFile(office_path,"w",compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("[Content_Types].xml",content_types)
+            archive.writestr("word/_rels/document.xml.rels",rels)
+            archive.writestr("word/vbaProject.bin",b"macro-placeholder")
+            archive.writestr("word/embeddings/oleObject1.bin",b"ole-placeholder")
+            archive.writestr("word/activeX/activeX1.bin",b"activex-placeholder")
+            archive.writestr("customUI/customUI.xml",b"<customUI/>")
+        result=runner.office_active_content_audit(office_path)
+        report=Path(result["output_path"]).read_text(encoding="utf-8") if result.get("output_path") else result["summary"]
+        self.assertIn("VBA project binaries: 1",report)
+        self.assertIn("ActiveX parts: 1",report)
+        self.assertIn("embedded/OLE parts: 1",report)
+        self.assertIn("unsafe external schemes: 1",report)
+        self.assertIn("attachedtemplate: 1",report.lower())
+        self.assertNotIn("private.example.test",report)
+        self.assertNotIn("javascript:alert",report)
+        self.assertNotIn("macro-placeholder",report)
+
+    def test_wave_sixteen_pdf_active_content_audit_reports_actions_and_attachments(self):
+        import fitz
+        pdf_path=self.input_dir/"active.pdf"
+        document=fitz.open()
+        document.new_page()
+        action_xref=document.get_new_xref()
+        document.update_object(action_xref,"<< /Type /Action /S /JavaScript /JS (app.alert) >>")
+        document.xref_set_key(document.pdf_catalog(),"OpenAction",f"{action_xref} 0 R")
+        document.embfile_add("payload.bin",b"do-not-open-this")
+        document.save(pdf_path)
+        document.close()
+        result=runner.pdf_active_content_audit(pdf_path)
+        report=Path(result["output_path"]).read_text(encoding="utf-8") if result.get("output_path") else result["summary"]
+        self.assertIn("JavaScript action",report)
+        self.assertIn("JS action payload",report)
+        self.assertIn("OpenAction",report)
+        self.assertIn("Embedded files: 1",report)
+        self.assertNotIn("app.alert",report)
+        self.assertNotIn("do-not-open-this",report)
+        self.assertNotIn("payload.bin",report)
+
+
 if __name__ == "__main__":
     unittest.main()
