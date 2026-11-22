@@ -70,6 +70,7 @@ Giới hạn an toàn theo từng processor được kiểm tra ở runner: ví 
 | `/tool audio-silence-report` | Phát hiện khoảng lặng audio | Tìm timestamp im lặng bằng FFmpeg. | Báo cáo TXT |
 | `/tool video-silence-report` | Phát hiện khoảng lặng video | Phân tích audio track của video để tìm đoạn im lặng. | Báo cáo TXT |
 | `/tool subtitle-convert` | Chuyển SRT ↔ VTT | Tự nhận dạng định dạng đầu vào, giữ nguyên cue. | SRT hoặc VTT |
+| `/tool subtitle-audit` | Kiểm tra chất lượng phụ đề | Tìm timestamp lỗi, cue đảo thứ tự/chồng thời gian, caption lặp, dòng dài và cue kéo dài. | Báo cáo TXT |
 | `/tool text-deduplicate` | Loại dòng trùng | Chuẩn hóa Unicode và loại dòng trùng, giữ thứ tự đầu tiên. | TXT/Markdown |
 | `/tool text-join` | Hợp nhất nhiều nhánh văn bản | Chỉ dùng làm node DAG; hợp nhất 2–3 đầu ra UTF-8 theo thứ tự node cha, gắn tiêu đề nguồn và giới hạn tổng đầu vào/đầu ra 45 MB. | TXT |
 | `/tool text-diff` | So sánh hai tệp văn bản | Tạo unified diff từ đúng hai tệp trong ZIP. | TXT |
@@ -90,6 +91,7 @@ Giới hạn an toàn theo từng processor được kiểm tra ở runner: ví 
 | `/tool image-palette` | Trích xuất bảng màu | Phân tích tối đa 8 màu chủ đạo và tỷ trọng xuất hiện trong ảnh. | Bảng màu HEX và tỷ lệ |
 | `/tool image-grayscale` | Chuyển ảnh grayscale | Chuyển ảnh sang thang xám và giữ alpha trong suốt. | PNG grayscale |
 | `/tool image-png` | Chuyển ảnh sang PNG | Chuyển ảnh sang PNG lossless, giữ alpha khi có thể và loại EXIF. | PNG lossless |
+| `/tool image-favicon` | Tạo favicon website | Sinh favicon ICO nhiều kích thước 16–256 px, giữ alpha và loại EXIF. | ICO |
 
 ### Tài liệu
 
@@ -97,6 +99,7 @@ Giới hạn an toàn theo từng processor được kiểm tra ở runner: ví 
 |---|---|---|---|
 | `/tool pdf-text` | PDF sang văn bản | Trích xuất văn bản PDF; tự OCR trang scan khi PDF không có text layer. | Văn bản hoặc tệp TXT |
 | `/tool pdf-info` | Phân tích PDF | Đọc số trang, kích thước trang, metadata và cấu trúc PDF. | Báo cáo PDF |
+| `/tool pdf-page-audit` | Kiểm tra PDF theo trang | Đếm text/ảnh/vector từng trang, kích thước, xoay; gợi ý trang trắng hoặc scan, không OCR. | Báo cáo TXT |
 | `/tool office-text` | Đọc Office | Trích xuất nội dung DOCX, PPTX, XLSX và thống kê sheet/slide. | Văn bản hoặc TXT |
 | `/tool text-clean` | Làm sạch văn bản | Chuẩn hóa Unicode, xuống dòng, khoảng trắng và ký tự vô hình trong TXT/Markdown/log. | Tệp văn bản đã làm sạch |
 | `/tool text-stats` | Thống kê văn bản | Đếm ký tự, từ, câu, đoạn, từ duy nhất và thời gian đọc ước tính. | Báo cáo thống kê |
@@ -134,6 +137,8 @@ Giới hạn an toàn theo từng processor được kiểm tra ở runner: ví 
 | `/tool yaml-format` | YAML formatter / validator | Kiểm tra YAML bằng SafeLoader, hỗ trợ nhiều document và định dạng lại. | Tệp YAML đã định dạng |
 | `/tool xml-format` | XML formatter / validator | Kiểm tra cú pháp XML, định dạng thụt lề và chặn DTD/ENTITY nguy hiểm. | Tệp XML đã định dạng |
 | `/tool xlsx-profile` | Excel data profiler | Phân tích từng sheet: thiếu dữ liệu, dòng trùng, thống kê số và mẫu dữ liệu. | Báo cáo workbook |
+| `/tool xlsx-formula-report` | Kiểm tra công thức Excel | Thống kê formula, volatile functions, external workbook refs và cached errors; không tính lại hay in giá trị ô. | Báo cáo TXT |
+| `/tool xlsx-to-markdown` | Excel sang Markdown | Xuất tối đa 20 sheet thành bảng Markdown, giới hạn 5.000 dòng tổng cộng và 20 cột mỗi sheet. | Markdown |
 | `/tool csv-clean` | Làm sạch CSV | Chuẩn hóa header và ô, bỏ dòng trống/trùng, chống formula injection. | CSV sạch |
 | `/tool json-to-csv` | JSON sang CSV | Chuyển mảng object JSON thành CSV. | CSV |
 | `/tool csv-to-xlsx` | CSV sang Excel | Chuyển CSV thành workbook XLSX. | XLSX |
@@ -150,6 +155,7 @@ Giới hạn an toàn theo từng processor được kiểm tra ở runner: ví 
 | ID | Công cụ | Chức năng | Đầu ra |
 |---|---|---|---|
 | `/tool markdown-outline` | Lập mục lục Markdown | Trích heading ATX/Setext, bỏ qua fenced code và sinh anchor slug tham khảo. | TXT outline |
+| `/tool markdown-toc` | Tự tạo mục lục Markdown | Chèn Table of Contents vào bản sao tài liệu; bỏ qua code fence và xử lý heading trùng. | Markdown mới |
 | `/tool markdown-links` | Trích liên kết Markdown | Xuất inline link và ảnh Markdown, giữ dòng và nhãn. | CSV |
 | `/tool text-redact` | Che dữ liệu nhạy cảm | Che email, token/credential phổ biến và số điện thoại dạng thường gặp; xuất bản đã che riêng. | Tệp redacted |
 | `/tool text-extract` | Trích URL/email/IP | Trích URL, email, IPv4 hợp lệ; khử trùng và đếm lần xuất hiện. | CSV |
