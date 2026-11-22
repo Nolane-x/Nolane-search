@@ -366,6 +366,17 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "dns-zone-audit", name: "Kiểm toán DNS zone file", category: "developer", description: "Parse BIND zone offline, thống kê SOA/NS/A/AAAA/MX/CNAME/TXT; chặn $INCLUDE/$GENERATE và không in domain, IP, TXT hay mailbox values.", accepts: [".zone"], output: "Báo cáo DNS zone TXT", ready: true },
   { id: "x509-certificate-audit", name: "Kiểm tra chứng thư X.509", category: "developer", description: "Đọc PEM/DER bundle, kiểm tra expiry, validity, key sizes, weak signature hashes, CA và SAN counts; không in subject/issuer/SAN/serial, không kiểm tra chain trust/revocation.", accepts: ["application/pkix-cert", "application/x-pem-file", ".pem", ".crt", ".cer", ".der"], output: "Báo cáo X.509 TXT", ready: true },
 
+
+  { id: "rss-atom-audit", name: "Kiểm tra RSS và Atom feed", category: "data", description: "Phân tích RSS 2.0, Atom và RSS 1.0: entry title/ID/link/date thiếu hoặc trùng, enclosure, author/category counts; không xuất URL hay nội dung feed.", accepts: ["application/rss+xml", "application/atom+xml", ".rss", ".atom"], output: "Báo cáo RSS/Atom TXT", ready: true },
+  { id: "sitemap-xml-audit", name: "Kiểm tra XML sitemap", category: "developer", description: "Kiểm tra urlset/sitemapindex, loc thiếu/trùng, lastmod, priority và changefreq; không in URL và không crawl/fetch địa chỉ.", accepts: ["application/xml", "text/xml", ".xml"], output: "Báo cáo sitemap TXT", ready: true },
+  { id: "robots-txt-audit", name: "Kiểm tra robots.txt", category: "developer", description: "Phân tích user-agent groups, allow/disallow, sitemap, crawl-delay, Host, rule mồ côi và directive lạ; không tải website hoặc crawl.", accepts: ["text/plain", ".txt"], output: "Báo cáo robots.txt TXT", ready: true },
+  { id: "jsonl-profile", name: "Phân tích dữ liệu JSONL", category: "data", description: "Profile JSON Lines: valid/invalid records, top-level field presence, mixed types và duplicate keys; không xuất dữ liệu mẫu hoặc field values.", accepts: ["application/x-ndjson", "application/jsonl", ".jsonl"], output: "Báo cáo JSONL TXT", ready: true },
+  { id: "image-privacy-audit", name: "Kiểm tra metadata riêng tư ảnh", category: "image", description: "Phát hiện GPS, ngày giờ, số serial/owner, thumbnail, XMP/IPTC và ICC metadata trong ảnh; chỉ báo cáo loại/số lượng, không xuất giá trị EXIF.", accepts: ["image/jpeg", "image/png", "image/tiff", "image/webp", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp"], output: "Báo cáo riêng tư ảnh TXT", ready: true },
+  { id: "svg-safety-audit", name: "Kiểm tra an toàn SVG", category: "image", description: "Rà script, foreignObject, event-handler attributes, external/data URI, CSS url() và @import; không sanitize hoặc chạy nội dung, không in URL/attribute values.", accepts: ["image/svg+xml", ".svg"], output: "Báo cáo SVG safety TXT", ready: true },
+  { id: "wcag-contrast-audit", name: "Kiểm tra tương phản màu WCAG", category: "utility", description: "Tính contrast ratio từ cặp HEX, đối chiếu WCAG 2.2 AA/AAA cho normal/large text; hỗ trợ danh sách nhiều dòng.", accepts: ["text/plain", ".txt"], output: "Báo cáo contrast WCAG TXT", ready: true },
+  { id: "ssh-public-key-audit", name: "Kiểm tra SSH public keys", category: "developer", description: "Đọc authorized_keys/OpenSSH public keys/PEM public key, phát hiện duplicate, RSA/EC key yếu và DSA deprecated; không hỗ trợ private key, không kết nối SSH.", accepts: ["text/plain", ".pub", ".pem"], output: "Báo cáo SSH public key TXT", ready: true },
+  { id: "archive-checksum-manifest", name: "Tạo checksum manifest cho ZIP", category: "utility", description: "Tính SHA-256 từng member ZIP và xuất CSV path/size/digest; chặn traversal, symlink, encrypted member và giới hạn số tệp/dung lượng, không giải nén ra thư mục.", accepts: ["application/zip", ".zip"], output: "SHA-256 manifest CSV", ready: true },
+
 ];
 
 
@@ -696,6 +707,15 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "markdown-quality-audit": ["text-clean", "text-stats"],
   "dns-zone-audit": ["text-clean", "text-stats"],
   "x509-certificate-audit": ["text-clean", "text-stats"],
+  "rss-atom-audit": ["text-clean", "text-stats"],
+  "sitemap-xml-audit": ["text-clean", "text-stats"],
+  "robots-txt-audit": ["text-clean", "text-stats"],
+  "jsonl-profile": ["text-clean", "text-stats"],
+  "image-privacy-audit": ["text-clean", "text-stats"],
+  "svg-safety-audit": ["text-clean", "text-stats"],
+  "wcag-contrast-audit": ["text-clean", "text-stats"],
+  "ssh-public-key-audit": ["text-clean", "text-stats"],
+  "archive-checksum-manifest": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json"],
 };
 
 export type ToolPipelineValidation =
@@ -874,6 +894,9 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (mime === "application/x-ndjson" || mime === "application/jsonl" || name.endsWith(".jsonl")) return "jsonl-format";
   if (mime === "application/pdf" || name.endsWith(".pdf")) return "pdf-text";
   if (name.endsWith(".epub") || mime === "application/epub+zip") return "epub-text";
+  if (name.endsWith("robots.txt")) return "robots-txt-audit";
+  if (name.endsWith(".rss") || name.endsWith(".atom") || mime === "application/rss+xml" || mime === "application/atom+xml") return "rss-atom-audit";
+  if (name.endsWith(".svg") || mime === "image/svg+xml") return "svg-safety-audit";
   if (name.endsWith(".pcap") || name.endsWith(".pcapng")) return "pcap-network-audit";
   if (name.endsWith(".zone")) return "dns-zone-audit";
   if (/\.(?:pem|crt|cer|der)$/i.test(name)) return "x509-certificate-audit";
