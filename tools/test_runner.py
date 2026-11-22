@@ -2765,7 +2765,7 @@ END:VCARD
         report=Path(result["output_path"]).read_text(encoding="utf-8") if result.get("output_path") else result["summary"]
         self.assertIn("Contact cards: 2",report)
         self.assertIn("Duplicate email values: 1",report)
-        self.assertIn("Duplicate normalized telephone values: 1",report)
+        self.assertIn("duplicate normalized telephone values: 1",report)
         for secret in ("Private Person","private@example.test","+1-202-555-0100","Private Street","Private Employer","private contact note"):
             self.assertNotIn(secret,report)
 
