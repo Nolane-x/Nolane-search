@@ -24,11 +24,17 @@
 ## Implementation map
 
 - Parser module: `tools/wave27.py`.
-- Synthetic regression suite: `tools/test_wave27.py` (19 tests).
+- Synthetic regression suite: `tools/test_wave27.py` (21 tests).
 - Runner imports, allowlist, handler dispatch, text-output support and pipeline transitions: `tools/runner.py`.
 - TypeScript catalog, transitions and upload inference: `src/tools.ts`.
 - Registry/inference tests and Telegram Tool Center count: `tests/tools.test.ts`, `tests/telegram.test.ts`.
 - Research provenance, versioned references, bounds and privacy safeguards: `docs/TOOL-RESEARCH-2026-11-22.md`, `docs/NOLANE-TOOLS.md` and `docs/STATUS.md`.
+
+## Review hardening
+
+- PREMIS linking identifiers are now matched by target entity kind, identifier type and value, avoiding false matches when two object classes reuse the same identifier string.
+- TEI fragment checks now count only same-document `#fragment` references; fragments in external URLs and sibling-document URIs are not reported as broken local IDs.
+- Two additional synthetic regression tests cover these cases; all 21 Wave 27 tests pass in PR CI.
 
 ## Safety and bounds
 
