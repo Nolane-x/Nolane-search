@@ -8879,7 +8879,7 @@ def email_security_audit(p):
     message=BytesParser(policy=policy.default).parsebytes(raw)
     def domains_for(header):
         result=set()
-        for _,address in getaddresses(message.get_all(header,[])):
+        for _,address in getaddresses([str(value) for value in message.get_all(header,[])]):
             if "@" not in address: continue
             domain=address.rsplit("@",1)[1].strip().strip("<>[]").lower().rstrip(".")
             if domain and re.fullmatch(r"[a-z0-9.-]{1,253}",domain):
@@ -8952,9 +8952,14 @@ def email_security_audit(p):
         except LookupError: body=payload.decode("utf-8",errors="replace")
         for url in url_re.findall(body):
             url_count+=1
-            scheme=urllib.parse.urlsplit(url).scheme.lower()
+            try:
+                parsed_url=urllib.parse.urlsplit(url)
+            except ValueError:
+                unsafe_urls+=1
+                continue
+            scheme=parsed_url.scheme.lower()
             if scheme in {"javascript","data","file","vbscript"}: unsafe_urls+=1
-            hostname=(urllib.parse.urlsplit(url).hostname or "").lower().rstrip(".")
+            hostname=(parsed_url.hostname or "").lower().rstrip(".")
             if hostname in shorteners: shortener_urls+=1
     defects=len(getattr(message,"defects",[]) or [])
     lines=[
