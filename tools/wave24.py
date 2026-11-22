@@ -168,6 +168,7 @@ def odf_package_audit(path: Path) -> dict:
             1 for name in names
             if name not in {"mimetype", manifest_name}
             and not name.startswith("META-INF/")
+            and not name.endswith("/")
             and name not in manifest_paths
         )
         lines = [
@@ -205,7 +206,7 @@ def xliff_audit(path: Path) -> dict:
         return "".join(element.itertext()) if element is not None else ""
     def placeholders(element):
         value = text_of(element)
-        regex_count = len(re.findall(r"%(?:\d+\$)?[sdif]|\\{[A-Za-z_][\\w.-]*\\}|\\{\\{[A-Za-z_][\\w.-]*\\}\\}", value))
+        regex_count = len(re.findall(r"%(?:\d+\$)?[sdif]|\{[A-Za-z_][\w.-]*\}|\{\{[A-Za-z_][\w.-]*\}\}", value))
         structural = sum(1 for node in element.iter() if _local(node.tag) in {"ph", "pc", "bpt", "ept", "it", "sc", "ec"})
         return regex_count + structural
     for element in root.iter():
@@ -479,7 +480,7 @@ def krita_project_audit(path: Path) -> dict:
         root = _xml(archive.read("maindoc.xml"), "Krita project")
         images = [node for node in root.iter() if _local(node.tag) == "image"]
         image = images[0] if images else root
-        nodes = [node for node in root.iter() if _local(node.tag) == "node"]
+        nodes = [node for node in root.iter() if _local(node.tag) in {"node", "layer"}]
         node_types = collections.Counter()
         hidden = locked = selected = 0
         for node in nodes:
@@ -538,11 +539,13 @@ def gltf_audit(path: Path) -> dict:
                 json_chunk = chunk
             elif chunk_type == 0x004E4942:
                 binary_chunks += 1
+                if binary_chunks > 1 or json_chunk is None:
+                    raise RuntimeError("GLB contains duplicate or out-of-order BIN chunks.")
                 seen_bin = True
             else:
                 raise RuntimeError("GLB contains an unexpected or out-of-order chunk.")
-        if json_chunk is None or not seen_bin:
-            raise RuntimeError("GLB requires a JSON chunk and at most one BIN chunk.")
+        if json_chunk is None:
+            raise RuntimeError("GLB requires a JSON chunk.")
         try:
             document = json.loads(json_chunk.decode("utf-8").rstrip(" \t\r\n\0"))
         except (UnicodeError, json.JSONDecodeError) as exc:
@@ -791,7 +794,7 @@ def design_token_audit(path: Path) -> dict:
         nonlocal direct_refs
         found = set()
         if isinstance(value, str):
-            for ref in re.findall(r"(?<!\\)\\{([^{}]+)\\}", value):
+            for ref in re.findall(r"(?<!\\)\{([^{}]+)\}", value):
                 found.add(ref)
                 direct_refs += 1
         elif isinstance(value, dict):

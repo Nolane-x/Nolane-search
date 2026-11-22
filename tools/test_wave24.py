@@ -232,7 +232,7 @@ class Wave24InteroperabilityTests(unittest.TestCase):
         self.assertNotIn("color.primary", result["summary"])
 
     def test_warc_audit_counts_records_without_urls_or_headers(self):
-        body = b"WARC/1.1\r\nWARC-Type: response\r\nWARC-Record-ID: <urn:uuid:secret-id>\r\nWARC-Target-URI: https://private.example/path\r\nContent-Type: application/http; msgtype=response\r\nContent-Length: 22\r\n\r\nHTTP/1.1 200 OK\r\n\r\n"
+        body = b"WARC/1.1\r\nWARC-Type: response\r\nWARC-Record-ID: <urn:uuid:secret-id>\r\nWARC-Target-URI: https://private.example/path\r\nContent-Type: application/http; msgtype=response\r\nContent-Length: 19\r\n\r\nHTTP/1.1 200 OK\r\n\r\n"
         path = self.root / "archive.warc"
         path.write_bytes(body)
         result = wave24.warc_archive_audit(path)
