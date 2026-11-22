@@ -9359,6 +9359,7 @@ def gpx_track_report(p):
 
 
 def geojson_audit(p):
+    import math
     size=p.stat().st_size
     if size>20*1024*1024: raise RuntimeError("GeoJSON input vượt giới hạn 20 MiB.")
     try: data=json.loads(p.read_text(encoding="utf-8-sig"))
@@ -9452,7 +9453,7 @@ def font_inspect(p):
                     except Exception: continue
                     if value: names.setdefault(record.nameID,value[:160])
         family=names.get(1,"Unknown"); subfamily=names.get(2,"Unknown")
-        glyphs=len(font.get("maxp").glyphOrder) if font.get("maxp") else 0
+        glyphs=len(font.getGlyphOrder())
         cmap=font.getBestCmap() or {}
         axes=[]
         if font.get("fvar"):
