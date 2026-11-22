@@ -228,6 +228,24 @@ class Wave28Tests(unittest.TestCase):
         self.assertIn("NetCDF classic version: CDF-1", result["summary"])
         self.assertIn("Variable descriptors: 0", result["summary"])
 
+    def test_netcdf_classic_parses_dimension_and_variable_headers(self):
+        parts = [
+            b"CDF\x01",
+            struct.pack(">I", 0),
+            struct.pack(">II", 10, 1),
+            struct.pack(">I", 1), b"x", b"\x00" * 3, struct.pack(">I", 4),
+            struct.pack(">II", 0, 0),
+            struct.pack(">II", 11, 1),
+            struct.pack(">I", 1), b"v", b"\x00" * 3,
+            struct.pack(">I", 1), struct.pack(">I", 0),
+            struct.pack(">II", 0, 0),
+            struct.pack(">III", 5, 16, 80),
+            b"\x00" * 16,
+        ]
+        result = wave28.netcdf_classic_audit(self.write("variable.nc", b"".join(parts)))
+        self.assertIn("Dimension entries: 1", result["summary"])
+        self.assertIn("Variable descriptors: 1", result["summary"])
+
     def test_netcdf_rejects_netcdf4_and_cdf5_magic(self):
         with self.assertRaisesRegex(RuntimeError, "CDF-1 and CDF-2 only"):
             wave28.netcdf_classic_audit(self.write("new.nc", b"CDF\x05" + b"\x00" * 28))
