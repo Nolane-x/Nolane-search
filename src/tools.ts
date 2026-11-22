@@ -340,6 +340,8 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "archive-security-audit", name: "Kiểm toán an toàn ZIP/TAR", category: "utility", description: "Rà path traversal, tên trùng/collision, symlink/special file, tệp mã hóa, tỷ lệ nén, tệp quá lớn, archive lồng nhau và đuôi thực thi; không giải nén hay chạy nội dung.", accepts: [".zip", ".tar", ".tgz", ".tar.gz", ".gz"], output: "Báo cáo an toàn archive TXT", ready: true },
   { id: "xlsx-privacy-audit", name: "Kiểm toán riêng tư Excel", category: "data", description: "Rà dữ liệu Excel theo mẫu email, thẻ thanh toán, IPv4, credential và header nhạy cảm; chỉ xuất sheet/cột/ô/loại/số lượng, không tiết lộ giá trị ô. Dùng giá trị cache của công thức.", accepts: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx"], output: "Báo cáo riêng tư XLSX TXT", ready: true },
   { id: "pdf-privacy-audit", name: "Kiểm toán riêng tư PDF", category: "document", description: "Quét text layer PDF để tìm email, thẻ thanh toán, số điện thoại có nhãn, IPv4, giấy tờ/credential dạng nghi vấn; chỉ báo cáo trang/loại/số lượng, không OCR hay in giá trị nhạy cảm.", accepts: ["application/pdf", ".pdf"], output: "Báo cáo riêng tư PDF TXT", ready: true },
+  { id: "office-active-content-audit", name: "Kiểm tra active content Office", category: "document", description: "Rà gói OOXML DOCX/DOCM/PPTX/PPTM/XLSX/XLSM: macro/VBA, ActiveX, OLE/embedded objects, custom UI, external relationships và scheme nguy hiểm; chỉ báo cáo loại/số lượng, không chạy hoặc mở nội dung nhúng.", accepts: [".docx", ".docm", ".dotx", ".dotm", ".pptx", ".pptm", ".ppsx", ".ppsm", ".potx", ".potm", ".xlsx", ".xlsm", ".xltx", ".xltm"], output: "Báo cáo active content Office TXT", ready: true },
+  { id: "pdf-active-content-audit", name: "Kiểm tra active content PDF", category: "document", description: "Rà JavaScript/JS, OpenAction, Additional Actions, Launch, URI/GoToR, RichMedia, XFA/AcroForm và file đính kèm nhúng; chỉ báo cáo số lượng, không chạy action hoặc giải nén tệp đính kèm.", accepts: ["application/pdf", ".pdf"], output: "Báo cáo active content PDF TXT", ready: true },
 ];
 
 
@@ -648,6 +650,8 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "archive-security-audit": ["text-clean", "text-stats"],
   "xlsx-privacy-audit": ["text-clean", "text-stats"],
   "pdf-privacy-audit": ["text-clean", "text-stats"],
+  "office-active-content-audit": ["text-clean", "text-stats"],
+  "pdf-active-content-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
