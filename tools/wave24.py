@@ -440,7 +440,9 @@ def openraster_audit(path: Path) -> dict:
                 compositing[composite] += 1
                 src = element.attrib.get("src", "")
                 if src:
-                    if src.startswith(("/", "\\")) or ".." in src.replace("\\", "/").split("/"):
+                    parsed_src = urllib.parse.urlsplit(src)
+                    normalized_src = src.replace("\\", "/")
+                    if parsed_src.scheme or parsed_src.netloc or src.startswith(("/", "\\")) or ".." in normalized_src.split("/"):
                         external += 1
                     elif src not in names:
                         missing_sources += 1
@@ -857,23 +859,29 @@ def design_token_audit(path: Path) -> dict:
         for ref in refs:
             if ref not in tokens:
                 unresolved += 1
-    visiting = set()
-    visited = set()
-    def visit(node):
-        nonlocal circular
-        if node in visiting:
-            circular += 1
-            return
-        if node in visited:
-            return
-        visiting.add(node)
-        for target in resolved_graph.get(node, ()):
-            if target in tokens:
-                visit(target)
-        visiting.remove(node)
-        visited.add(node)
-    for token in resolved_graph:
-        visit(token)
+    # Iterative graph walk avoids Python recursion limits on large token systems.
+    state = {}
+    for start in resolved_graph:
+        if state.get(start, 0) != 0:
+            continue
+        state[start] = 1
+        stack = [(start, iter(resolved_graph.get(start, ())))]
+        while stack:
+            node, edges = stack[-1]
+            try:
+                target = next(edges)
+            except StopIteration:
+                state[node] = 2
+                stack.pop()
+                continue
+            if target not in tokens:
+                continue
+            target_state = state.get(target, 0)
+            if target_state == 1:
+                circular += 1
+            elif target_state == 0:
+                state[target] = 1
+                stack.append((target, iter(resolved_graph.get(target, ()))))
     type_counts = collections.Counter()
     for node in tokens.values():
         token_type = node.get("$type", "inherited/unspecified")
