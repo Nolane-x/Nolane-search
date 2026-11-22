@@ -10860,7 +10860,7 @@ def pdf_table_extract(p):
                         buffer = io.StringIO(newline="")
                         writer = csv.writer(buffer, lineterminator="\n")
                         for row in rows:
-                            writer.writerow(row + [""] * (columns - len(row)))
+                            writer.writerow([_spreadsheet_safe(cell) for cell in row + [""] * (columns - len(row))])
                         name = f"page-{page_number:03d}-table-{table_number:03d}.csv"
                         bundle.writestr(name, buffer.getvalue())
                         table_files.append(name)
@@ -11183,28 +11183,34 @@ def parquet_to_csv(p):
     if p.stat().st_size > 20 * 1024 * 1024:
         raise RuntimeError("Parquet to CSV giới hạn input 20 MiB.")
     out = p.with_name(p.stem + ".csv")
+    raw_out = p.with_name(p.stem + "-export-raw.csv")
     source = str(p.resolve()).replace("'", "''")
-    target = str(out.resolve()).replace("'", "''")
+    target = str(raw_out.resolve()).replace("'", "''")
     connection = duckdb.connect(database=":memory:")
     try:
-        connection.execute("SET threads=2")
-        connection.execute("SET memory_limit='256MB'")
-        connection.execute("SET enable_progress_bar=false")
-        relation = f"read_parquet('{source}')"
-        row_count = connection.execute(f"SELECT count(*) FROM {relation}").fetchone()[0]
-        if row_count > 1000000:
-            raise RuntimeError("Parquet vượt giới hạn 1.000.000 hàng.")
-        connection.execute(f"COPY (SELECT * FROM {relation}) TO '{target}' (HEADER, DELIMITER ',', QUOTE '\"', ESCAPE '\"')")
-    except RuntimeError:
-        raise
-    except Exception as exc:
-        raise RuntimeError("Không thể đọc Parquet hoặc xuất CSV.") from exc
+        try:
+            connection.execute("SET threads=2")
+            connection.execute("SET memory_limit='256MB'")
+            connection.execute("SET enable_progress_bar=false")
+            relation = f"read_parquet('{source}')"
+            row_count = connection.execute(f"SELECT count(*) FROM {relation}").fetchone()[0]
+            if row_count > 1000000:
+                raise RuntimeError("Parquet vượt giới hạn 1.000.000 hàng.")
+            connection.execute(f"COPY (SELECT * FROM {relation}) TO '{target}' (FORMAT CSV, HEADER, DELIMITER ',', QUOTE '\"', ESCAPE '\"')")
+        finally:
+            connection.close()
+        with raw_out.open("r", encoding="utf-8", newline="") as source_handle:
+            reader = csv.reader(source_handle)
+            with out.open("w", encoding="utf-8-sig", newline="") as target_handle:
+                writer = csv.writer(target_handle, lineterminator="\n")
+                for row in reader:
+                    writer.writerow([_spreadsheet_safe(cell) for cell in row])
     finally:
-        connection.close()
+        raw_out.unlink(missing_ok=True)
     if out.stat().st_size > MAX_PIPELINE_OUTPUT:
         out.unlink(missing_ok=True)
         raise RuntimeError("CSV output vượt giới hạn 45 MiB.")
-    return {"summary": f"Đã chuyển {row_count:,} hàng Parquet sang CSV UTF-8.", "output_path": str(out)}
+    return {"summary": f"Đã chuyển {row_count:,} hàng Parquet sang CSV UTF-8; ô có thể bị hiểu là công thức bảng tính đã được trung hòa.", "output_path": str(out)}
 
 
 TOOLS={
