@@ -21,7 +21,7 @@
 7. `netcdf-classic-audit` — NetCDF CDF-1/CDF-2 header parser; NetCDF-4/CDF-5 are unsupported.
 8. `nwb-structure-audit` — HDF5/NWB metadata hierarchy; no dataset values.
 
-Implementations: `tools/wave28.py`; tests: `tools/test_wave28.py`. The current test file has 17 synthetic regression cases. Catalog/dispatch changes touch `src/tools.ts`, `tools/runner.py`, `.github/workflows/ci.yml`, `.github/workflows/tool-runner.yml`, and `tests/tools.test.ts` / `tests/telegram.test.ts`.
+Implementations: `tools/wave28.py`; tests: `tools/test_wave28.py`. The current test file has 19 synthetic regression cases. Catalog/dispatch changes touch `src/tools.ts`, `tools/runner.py`, `.github/workflows/ci.yml`, `.github/workflows/tool-runner.yml`, and `tests/tools.test.ts` / `tests/telegram.test.ts`.
 
 ## Release gates
 
