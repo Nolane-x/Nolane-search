@@ -71,7 +71,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends libzbar0
           python -m pip install --disable-pip-version-check pyzbar
       - name: Install FFmpeg
-        if: contains(steps.job.outputs.tool_ids, 'audio-transcribe') || contains(steps.job.outputs.tool_ids, 'audio-subtitles') || contains(steps.job.outputs.tool_ids, 'audio-info') || contains(steps.job.outputs.tool_ids, 'video-info') || contains(steps.job.outputs.tool_ids, 'video-thumbnail') || contains(steps.job.outputs.tool_ids, 'audio-normalize') || contains(steps.job.outputs.tool_ids, 'video-audio') || contains(steps.job.outputs.tool_ids, 'video-gif') || contains(steps.job.outputs.tool_ids, 'video-contact-sheet') || contains(steps.job.outputs.tool_ids, 'video-compress') || contains(steps.job.outputs.tool_ids, 'audio-convert') || contains(steps.job.outputs.tool_ids, 'audio-silence-report') || contains(steps.job.outputs.tool_ids, 'video-silence-report') || contains(steps.job.outputs.tool_ids, 'video-frames') || contains(steps.job.outputs.tool_ids, 'audio-stereo-split') || contains(steps.job.outputs.tool_ids, 'audio-metadata-clean') || contains(steps.job.outputs.tool_ids, 'video-scene-frames') || contains(steps.job.outputs.tool_ids, 'video-metadata-clean')
+        if: contains(steps.job.outputs.tool_ids, 'audio-transcribe') || contains(steps.job.outputs.tool_ids, 'audio-subtitles') || contains(steps.job.outputs.tool_ids, 'audio-info') || contains(steps.job.outputs.tool_ids, 'video-info') || contains(steps.job.outputs.tool_ids, 'video-thumbnail') || contains(steps.job.outputs.tool_ids, 'audio-normalize') || contains(steps.job.outputs.tool_ids, 'video-audio') || contains(steps.job.outputs.tool_ids, 'video-gif') || contains(steps.job.outputs.tool_ids, 'video-contact-sheet') || contains(steps.job.outputs.tool_ids, 'video-compress') || contains(steps.job.outputs.tool_ids, 'audio-convert') || contains(steps.job.outputs.tool_ids, 'audio-silence-report') || contains(steps.job.outputs.tool_ids, 'video-silence-report') || contains(steps.job.outputs.tool_ids, 'video-frames') || contains(steps.job.outputs.tool_ids, 'audio-stereo-split') || contains(steps.job.outputs.tool_ids, 'audio-metadata-clean') || contains(steps.job.outputs.tool_ids, 'video-scene-frames') || contains(steps.job.outputs.tool_ids, 'video-metadata-clean') || contains(steps.job.outputs.tool_ids, 'audio-tag-audit')
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Cache Whisper model files
         if: contains(steps.job.outputs.tool_ids, 'audio-transcribe') || contains(steps.job.outputs.tool_ids, 'audio-subtitles')
@@ -85,6 +85,18 @@ jobs:
       - name: Install YAML parser
         if: contains(steps.job.outputs.tool_ids, 'yaml-format') || contains(steps.job.outputs.tool_ids, 'code-check') || contains(steps.job.outputs.tool_ids, 'yaml-to-json') || contains(steps.job.outputs.tool_ids, 'json-to-yaml') || contains(steps.job.outputs.tool_ids, 'openapi-contract-audit')
         run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Install PCAP parser
+        if: contains(steps.job.outputs.tool_ids, 'pcap-network-audit')
+        run: python -m pip install --disable-pip-version-check dpkt
+      - name: Install JSON Schema validator
+        if: contains(steps.job.outputs.tool_ids, 'json-schema-validate')
+        run: python -m pip install --disable-pip-version-check jsonschema
+      - name: Install DNS zone parser
+        if: contains(steps.job.outputs.tool_ids, 'dns-zone-audit')
+        run: python -m pip install --disable-pip-version-check dnspython
+      - name: Install X.509 certificate parser
+        if: contains(steps.job.outputs.tool_ids, 'x509-certificate-audit')
+        run: python -m pip install --disable-pip-version-check cryptography
       - name: Install calendar and contact parsers
         if: contains(steps.job.outputs.tool_ids, 'ics-calendar-audit') || contains(steps.job.outputs.tool_ids, 'vcard-privacy-audit')
         run: python -m pip install --disable-pip-version-check vobject
