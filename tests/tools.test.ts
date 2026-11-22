@@ -429,17 +429,17 @@ describe("Nolane Tools registry", () => {
       ["vcard-privacy-audit","utility","text/vcard","contacts.vcf"],
       ["gpx-track-report","data","application/gpx+xml","route.gpx"],
       ["geojson-audit","data","application/geo+json","map.geojson"],
-      ["qr-code-generate","image","text/plain","payload.txt"],
+      ["qr-code-generate","image","text/plain","payload.txt","image-info"],
       ["font-inspect","developer","font/ttf","typeface.ttf"],
-      ["subtitle-fix","audio-video","text/vtt","captions.vtt"],
+      ["subtitle-fix","audio-video","text/vtt","captions.vtt","subtitle-audit"],
       ["openapi-contract-audit","developer","application/yaml","openapi.yaml"],
       ["color-convert","utility","text/plain","palette.txt"],
     ] as const;
-    for (const [id,category,mimeType,fileName] of cases) {
+    for (const [id,category,mimeType,fileName,nextToolId] of cases) {
       expect(getTool(id)?.category).toBe(category);
       expect(getTool(id)?.ready).toBe(true);
       expect(isToolCompatible(getTool(id)!,mimeType,fileName)).toBe(true);
-      expect(validateToolPipeline({mimeType,fileName},[{toolId:id},{toolId:"text-clean"}]).ok).toBe(true);
+      expect(validateToolPipeline({mimeType,fileName},[{toolId:id},{toolId:nextToolId || "text-clean"}]).ok).toBe(true);
     }
   });
 
