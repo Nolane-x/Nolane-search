@@ -3385,9 +3385,9 @@ Unknown-Directive: value
         path=self.input_dir/"box.stl"
         trimesh.creation.box(extents=(2,3,4)).export(str(path))
         result=runner.mesh_inspect(path)
-        self.assertIn("Vertices:",result["summary"])
+        self.assertIn("Vertices: 36",result["summary"])
         self.assertIn("Watertight: True",result["summary"])
-        self.assertIn("Volume",result["summary"])
+        self.assertIn("Volume (model units cubed): 24",result["summary"])
 
     def test_wave22_dxf_audit_reports_entities_and_layers(self):
         import ezdxf
