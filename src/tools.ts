@@ -962,7 +962,7 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (name.endsWith(".bib")) return "bibtex-audit";
   if (name.endsWith(".nmea")) return "nmea-track-audit";
   if (/^(?:site|playbook|ansible)(?:[-_.].*)?\.ya?ml$/i.test(name)) return "ansible-playbook-audit";
-  if (/^(?:prometheus|alert-rules|.*-rules)\.ya?ml$/i.test(name)) return "prometheus-rules-audit";
+  if (/^(?:prometheus|alert-rules|.*(?:-|\.)rules)\.ya?ml$/i.test(name)) return "prometheus-rules-audit";
   if (/(?:^|[-_.])grafana(?:[-_.]|$).*\.json$/i.test(name)) return "grafana-dashboard-audit";
   if (/\.(?:h5|hdf5)$/i.test(name)) return "hdf5-audit";
   if (name.endsWith(".avsc")) return "avro-schema-audit";
