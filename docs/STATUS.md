@@ -7,7 +7,7 @@ Last verified: 2026-11-22. Production deployment and automated test evidence are
 - Branch: `feat/wave-twenty-four-interoperability-tools`.
 - Twelve additional processors are registered in TypeScript catalog, Python RUNNERS allowlist, handler map, pipeline transitions and upload inference. Candidate catalog: **395 tools**; production remains at **383** until release gates pass.
 - New domains: OpenDocument, XLIFF translation QA, MBOX email structure/privacy, GeoPackage and MBTiles, OpenRaster/Krita layered creative files, glTF/GLB assets, draw.io diagrams, n8n automation exports, W3C Design Tokens and WARC web archives.
-- Thirteen dedicated Python regression tests cover the new processors. They use the Python standard library and SQLite only; no third-party runtime dependency or upstream source code is added.
+- Fourteen dedicated Python regression tests cover the new processors. They use the Python standard library and SQLite only; no third-party runtime dependency or upstream source code is added.
 - Input is processed offline on an ephemeral runner. External URIs are never fetched, workflows/code are never executed, image/audio/tile payloads are not rendered, and reports withhold email identities/content, map coordinates/feature values, diagram labels, credential values, design token values and archived URLs/payloads.
 - PR CI, Worker export/production smoke and Cloudflare deployment are still pending for Wave 24.
 - Owner-level E2E after release: representative ODT/ODS/ODP, XLIFF, MBOX, GPKG/MBTiles, ORA/KRA, glTF/GLB, draw.io, n8n JSON, Design Tokens and WARC samples through private Telegram, inspect reports and test `/tool_retry`.

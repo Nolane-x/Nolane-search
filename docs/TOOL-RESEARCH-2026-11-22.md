@@ -182,3 +182,6 @@ All twelve processors live in `tools/wave24.py` and use Python standard library 
 
 The Python allowlist, handler dispatch, pipeline transitions and TypeScript catalog are mirrored at **395 candidate IDs**. File-type inference selects these processors for supported extensions. The tests create synthetic fixtures and verify privacy boundaries as well as expected counts. The Wave 24 code has not yet passed GitHub Actions; production stays at 383 tools until PR CI, Worker export/health smoke and Cloudflare deployment all pass.
 
+
+
+Wave 24 implementation now includes fourteen focused Python regression tests covering package integrity, privacy-preserving output, malformed/unsafe inputs, external references and long alias chains. The candidate remains on its feature branch pending full GitHub Actions CI and production release gates.

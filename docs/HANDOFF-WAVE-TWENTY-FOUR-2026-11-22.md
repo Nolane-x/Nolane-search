@@ -27,7 +27,7 @@
 ## Implementation map
 
 - New processor module: `tools/wave24.py`.
-- New isolated regression suite: `tools/test_wave24.py` (13 tests).
+- New isolated regression suite: `tools/test_wave24.py` (14 tests).
 - Python import, allowlist, handler, text-output support and pipeline transitions: `tools/runner.py`.
 - TypeScript catalog, pipeline transitions and upload inference: `src/tools.ts`.
 - Registry and inference test updates: `tests/tools.test.ts`.
