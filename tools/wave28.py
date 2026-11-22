@@ -172,7 +172,6 @@ def ocfl_object_audit(path: Path) -> dict:
                 digest_mismatches += int(hasher.hexdigest().lower() != digest.lower())
                 files_checked += 1
         state_refs = missing_state_digests = invalid_states = 0
-        logical_paths = set()
         for version_id, version_info in versions.items():
             if not isinstance(version_id, str) or not re.fullmatch(r"v[1-9]\d*", version_id) or not isinstance(version_info, dict):
                 invalid_states += 1
@@ -181,6 +180,7 @@ def ocfl_object_audit(path: Path) -> dict:
             if not isinstance(state, dict):
                 invalid_states += 1
                 continue
+            logical_paths = set()
             for digest, paths in state.items():
                 if not isinstance(paths, list):
                     invalid_states += 1
@@ -236,7 +236,23 @@ def zarr_store_audit(path: Path) -> dict:
             for i, part in enumerate(parts[:-1]):
                 if part.lower().endswith(".zarr"):
                     roots.append("/".join(parts[:i + 1]) + "/")
-        root = min(roots, key=len) if roots else ""
+        if roots:
+            root = min(roots, key=len)
+        else:
+            metadata_parents = [str(PurePosixPath(name).parent) for name in metadata_names]
+            non_root_parents = [value for value in metadata_parents if value not in {"", "."}]
+            root = ""
+            if non_root_parents and len(non_root_parents) == len(metadata_parents):
+                first_parts = non_root_parents[0].split("/")
+                common = []
+                for index in range(min(map(lambda value: len(value.split("/")), non_root_parents))):
+                    component = first_parts[index]
+                    if all(value.split("/")[index] == component for value in non_root_parents):
+                        common.append(component)
+                    else:
+                        break
+                if common:
+                    root = "/".join(common) + "/"
         parsed = {}
         total = 0
         for name in metadata_names:
