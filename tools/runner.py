@@ -87,6 +87,7 @@ RUNNERS = {
     "docx-audit", "pptx-audit", "csv-privacy-audit", "archive-security-audit",
     "xlsx-privacy-audit", "pdf-privacy-audit",
     "office-active-content-audit", "pdf-active-content-audit",
+    "email-security-audit", "jwt-security-audit",
 
 }
 
@@ -389,13 +390,15 @@ PIPELINE_TRANSITIONS = {
     "pdf-privacy-audit": {"text-clean", "text-stats"},
     "office-active-content-audit": {"text-clean", "text-stats"},
     "pdf-active-content-audit": {"text-clean", "text-stats"},
+    "email-security-audit": {"text-clean", "text-stats"},
+    "jwt-security-audit": {"text-clean", "text-stats"},
     "csv-to-sql-inserts": set(),
 
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -8865,6 +8868,227 @@ def pdf_active_content_audit(p):
         document.close()
 
 
+def email_security_audit(p):
+    from email import policy
+    from email.parser import BytesParser
+    from email.utils import getaddresses
+    size=p.stat().st_size
+    if size>10*1024*1024:
+        raise RuntimeError("Email vượt giới hạn 10 MiB.")
+    raw=p.read_bytes()
+    message=BytesParser(policy=policy.default).parsebytes(raw)
+    def domains_for(header):
+        result=set()
+        for _,address in getaddresses([str(value) for value in message.get_all(header,[])]):
+            if "@" not in address: continue
+            domain=address.rsplit("@",1)[1].strip().strip("<>[]").lower().rstrip(".")
+            if domain and re.fullmatch(r"[a-z0-9.-]{1,253}",domain):
+                result.add(domain)
+        return result
+    from_domains=domains_for("From")
+    reply_domains=domains_for("Reply-To")
+    return_domains=domains_for("Return-Path")
+    reply_mismatch=int(bool(from_domains and reply_domains and from_domains.isdisjoint(reply_domains)))
+    return_mismatch=int(bool(from_domains and return_domains and from_domains.isdisjoint(return_domains)))
+    duplicate_headers={}
+    for header in ("From","Date","Message-ID","Subject","Reply-To","Return-Path"):
+        count=len(message.get_all(header,[]))
+        if count>1: duplicate_headers[header.lower()]=count-1
+    required_missing=[name for name in ("From","Date","Message-ID") if not message.get_all(name,[])]
+    received_count=len(message.get_all("Received",[]))
+    auth_text="\n".join(
+        str(value) for name in ("Authentication-Results","ARC-Authentication-Results","Received-SPF")
+        for value in message.get_all(name,[])
+    )
+    auth_pattern=re.compile(r"\b(spf|dkim|dmarc)\s*=\s*(pass|fail|softfail|neutral|none|temperror|permerror)\b",re.I)
+    auth_results={}
+    for mechanism,result in auth_pattern.findall(auth_text):
+        key=(mechanism.lower(),result.lower())
+        auth_results[key]=auth_results.get(key,0)+1
+    attachments=0
+    risky_attachments=0
+    attachment_types={}
+    risky_suffixes={".exe",".scr",".bat",".cmd",".com",".ps1",".vbs",".vbe",".js",".jse",".hta",".jar",".msi",".msp",".lnk",".iso",".img",".dll",".sys",".docm",".dotm",".xlsm",".xltm",".pptm",".ppsm",".ppam"}
+    total_parts=0
+    for part in message.walk():
+        total_parts+=1
+        if total_parts>1000:
+            raise RuntimeError("Email vượt giới hạn 1.000 MIME parts.")
+        if part.is_multipart():
+            continue
+        filename=part.get_filename()
+        disposition=str(part.get_content_disposition() or "").lower()
+        if filename or disposition=="attachment":
+            attachments+=1
+            if attachments>500:
+                raise RuntimeError("Email vượt giới hạn 500 attachments.")
+            suffix=Path(str(filename or "").replace("\\","/")).suffix.lower()
+            mime=str(part.get_content_type() or "application/octet-stream").lower()
+            attachment_types[mime]=attachment_types.get(mime,0)+1
+            if suffix in risky_suffixes:
+                risky_attachments+=1
+    url_count=0
+    unsafe_urls=0
+    shortener_urls=0
+    body_bytes=0
+    url_re=re.compile(r"(?i)\b(?:https?|javascript|data|file|vbscript):[^\s<>\"']{1,2048}")
+    shorteners={"bit.ly","tinyurl.com","t.co","goo.gl","is.gd","cutt.ly","ow.ly","rb.gy"}
+    for part in message.walk():
+        if part.is_multipart() or str(part.get_content_disposition() or "").lower()=="attachment":
+            continue
+        if part.get_content_type() not in {"text/plain","text/html"}:
+            continue
+        try:
+            payload=part.get_payload(decode=True)
+        except Exception:
+            payload=None
+        if not isinstance(payload,bytes): continue
+        if body_bytes+len(payload)>2*1024*1024:
+            payload=payload[:max(0,2*1024*1024-body_bytes)]
+        body_bytes+=len(payload)
+        if not payload: continue
+        charset=part.get_content_charset() or "utf-8"
+        try: body=payload.decode(charset,errors="replace")
+        except LookupError: body=payload.decode("utf-8",errors="replace")
+        for url in url_re.findall(body):
+            url_count+=1
+            try:
+                parsed_url=urllib.parse.urlsplit(url)
+            except ValueError:
+                unsafe_urls+=1
+                continue
+            scheme=parsed_url.scheme.lower()
+            if scheme in {"javascript","data","file","vbscript"}: unsafe_urls+=1
+            hostname=(parsed_url.hostname or "").lower().rstrip(".")
+            if hostname in shorteners: shortener_urls+=1
+    defects=len(getattr(message,"defects",[]) or [])
+    lines=[
+        "Email header and phishing-signal audit",
+        f"Message bytes: {size:,}; MIME parts: {total_parts:,}; Received hops: {received_count:,}",
+        f"From domains: {len(from_domains):,}; Reply-To domains: {len(reply_domains):,}; Return-Path domains: {len(return_domains):,}",
+        f"From/Reply-To domain mismatch: {reply_mismatch}; From/Return-Path domain mismatch: {return_mismatch}",
+        f"Attachments: {attachments:,}; attachments with high-risk filename extensions: {risky_attachments:,}",
+        f"URLs in text/html or text/plain bodies: {url_count:,}; unsafe URI schemes: {unsafe_urls:,}; known shortener URLs: {shortener_urls:,}",
+        f"Parser defects: {defects:,}; duplicate critical headers: {sum(duplicate_headers.values()):,}",
+        "Authentication-Results are parsed as header assertions only; this tool does not verify SPF/DKIM/DMARC or trust the header's origin.",
+        "",
+        "Authentication results asserted by headers:"
+    ]
+    if auth_results:
+        lines.extend(f"- {mechanism.upper()} {result}: {count:,}" for (mechanism,result),count in sorted(auth_results.items()))
+    else:
+        lines.append("- No parseable SPF/DKIM/DMARC result was found in authentication headers.")
+    lines.extend(["","Header and structure findings:"])
+    findings=[]
+    if reply_mismatch: findings.append("From and Reply-To use different domains.")
+    if return_mismatch: findings.append("From and Return-Path use different domains.")
+    if required_missing: findings.append("Missing required headers: "+", ".join(required_missing))
+    if duplicate_headers: findings.append("Duplicate critical headers: "+", ".join(f"{name} (+{count})" for name,count in sorted(duplicate_headers.items())))
+    if risky_attachments: findings.append("One or more attachments use executable, script, macro-enabled Office or shortcut-like extensions.")
+    if unsafe_urls: findings.append("One or more body URLs use unsafe URI schemes.")
+    if shortener_urls: findings.append("Known URL-shortening services are present in the message body.")
+    if defects: findings.append("The email parser reported structural defects.")
+    lines.extend("- "+finding for finding in findings or ["No configured spoofing/structure signal was detected."])
+    lines.extend(["","Privacy and scope: no sender/recipient address, domain, URL, subject, attachment filename or attachment content is printed. No network lookup is performed and no attachment is opened. A message header may be forged; this report is not a mail-gateway verdict."])
+    return tool_text("\n".join(lines),"Email security audit")
+
+
+def jwt_security_audit(p):
+    import base64
+    size=p.stat().st_size
+    if size>5*1024*1024:
+        raise RuntimeError("JWT input vượt giới hạn 5 MiB.")
+    raw=p.read_text(encoding="utf-8-sig",errors="replace")
+    token_re=re.compile(r"(?<![A-Za-z0-9_-])([A-Za-z0-9_-]{8,4096})\.([A-Za-z0-9_-]{8,16384})\.([A-Za-z0-9_-]{0,4096})(?![A-Za-z0-9_-])")
+    matches=[]
+    for match in token_re.finditer(raw):
+        matches.append(match)
+        if len(matches)>1000:
+            raise RuntimeError("JWT input vượt giới hạn 1.000 token-like strings.")
+    unique_tokens={}
+    for match in matches:
+        token=match.group(0)
+        digest=hashlib.sha256(token.encode("ascii",errors="ignore")).hexdigest()
+        unique_tokens.setdefault(digest,(match.group(1),match.group(2),match.group(3)))
+    algorithms={}
+    counters={
+        "alg_none":0,"missing_exp":0,"expired":0,"exp_invalid":0,
+        "missing_iat":0,"iat_invalid":0,"nbf_invalid":0,"not_yet_valid":0,
+        "long_lifetime":0,"external_key_locator":0,"critical_header":0,
+        "missing_signature_segment":0,"malformed":0,"missing_issuer":0,"missing_audience":0
+    }
+    now=int(time.time())
+    def decode_segment(segment):
+        padded=segment+"="*((4-len(segment)%4)%4)
+        payload=base64.urlsafe_b64decode(padded.encode("ascii"))
+        if len(payload)>65536:
+            raise ValueError("JWT JSON segment exceeds limit")
+        value=json.loads(payload.decode("utf-8"))
+        if not isinstance(value,dict):
+            raise ValueError("JWT JSON segment is not an object")
+        return value
+    for header_segment,payload_segment,signature_segment in unique_tokens.values():
+        try:
+            header=decode_segment(header_segment)
+            claims=decode_segment(payload_segment)
+        except Exception:
+            counters["malformed"]+=1
+            continue
+        algorithm=str(header.get("alg","")).strip().lower()
+        algorithms[algorithm or "(missing)"]=algorithms.get(algorithm or "(missing)",0)+1
+        if algorithm=="none": counters["alg_none"]+=1
+        if "exp" not in claims: counters["missing_exp"]+=1
+        else:
+            exp=claims.get("exp")
+            if isinstance(exp,(int,float)) and not isinstance(exp,bool):
+                if exp<=now: counters["expired"]+=1
+            else: counters["exp_invalid"]+=1
+        if "iat" not in claims: counters["missing_iat"]+=1
+        iat=claims.get("iat")
+        if iat is not None and (not isinstance(iat,(int,float)) or isinstance(iat,bool)):
+            counters["iat_invalid"]+=1
+        nbf=claims.get("nbf")
+        if nbf is not None:
+            if isinstance(nbf,(int,float)) and not isinstance(nbf,bool):
+                if nbf>now: counters["not_yet_valid"]+=1
+            else: counters["nbf_invalid"]+=1
+        exp=claims.get("exp")
+        if isinstance(iat,(int,float)) and not isinstance(iat,bool) and isinstance(exp,(int,float)) and not isinstance(exp,bool):
+            if exp-iat>90*24*60*60: counters["long_lifetime"]+=1
+        if "jku" in header or "x5u" in header: counters["external_key_locator"]+=1
+        if "crit" in header: counters["critical_header"]+=1
+        if not signature_segment: counters["missing_signature_segment"]+=1
+        if not claims.get("iss"): counters["missing_issuer"]+=1
+        if not claims.get("aud"): counters["missing_audience"]+=1
+    lines=[
+        "JWT compact-token security audit",
+        f"Input bytes: {size:,}; token-like strings found: {len(matches):,}; unique strings analyzed: {len(unique_tokens):,}",
+        f"Malformed header/payload pairs: {counters['malformed']:,}",
+        "This tool does not verify cryptographic signatures, issuer trust, audience policy or key strength.",
+        "Raw token strings, signatures and claim values are never included.",
+        "",
+        "Algorithms (header-declared, untrusted):"
+    ]
+    if algorithms:
+        lines.extend(f"- {name}: {count:,}" for name,count in sorted(algorithms.items()))
+    else:
+        lines.append("- No decodable JWT headers found.")
+    lines.extend([
+        "",
+        "Review counters:",
+        f"- alg=none: {counters['alg_none']:,}",
+        f"- Missing exp: {counters['missing_exp']:,}; expired: {counters['expired']:,}; invalid exp type: {counters['exp_invalid']:,}",
+        f"- Missing iat: {counters['missing_iat']:,}; invalid iat type: {counters['iat_invalid']:,}",
+        f"- Future nbf: {counters['not_yet_valid']:,}; invalid nbf type: {counters['nbf_invalid']:,}",
+        f"- Lifetime over 90 days (iat to exp): {counters['long_lifetime']:,}",
+        f"- External key locators (jku/x5u): {counters['external_key_locator']:,}; critical header extensions: {counters['critical_header']:,}",
+        f"- Empty signature segment: {counters['missing_signature_segment']:,}; missing issuer: {counters['missing_issuer']:,}; missing audience: {counters['missing_audience']:,}",
+        "",
+        "Scope: compact JWTs are decoded locally for structural review only. Header/claim contents are attacker-controlled until a relying service verifies the signature and applies issuer/audience/expiry policy."
+    ])
+    return tool_text("\n".join(lines),"JWT security audit")
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -8984,6 +9208,8 @@ TOOLS={
  "pdf-privacy-audit":pdf_privacy_audit,
  "office-active-content-audit":office_active_content_audit,
  "pdf-active-content-audit":pdf_active_content_audit,
+ "email-security-audit":email_security_audit,
+ "jwt-security-audit":jwt_security_audit,
 
 }
 
