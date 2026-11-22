@@ -10539,6 +10539,7 @@ def image_privacy_audit(p):
 
 
 def svg_safety_audit(p):
+    import urllib.parse
     import xml.etree.ElementTree as ET
     size=p.stat().st_size
     if size>5*1024*1024:
@@ -10750,6 +10751,7 @@ def ssh_public_key_audit(p):
 
 
 def archive_checksum_manifest(p):
+    import stat
     size=p.stat().st_size
     if size>20*1024*1024:
         raise RuntimeError("Archive checksum manifest giới hạn ZIP input 20 MiB.")
