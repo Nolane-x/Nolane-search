@@ -2534,6 +2534,7 @@ dependencies = ["requests>=2.0", "httpx"]
         sheet.title="Customer Data"
         sheet.append(["email","card_number","api_token","phone_number","ip_address"])
         sheet.append(["person@example.test","4111111111111111","ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456","+84901234567","192.168.1.10"])
+        workbook.create_sheet("Visible cover")
         sheet.sheet_state="hidden"
         workbook.save(xlsx_path)
         xlsx_result=runner.xlsx_privacy_audit(xlsx_path)
