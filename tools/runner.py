@@ -90,6 +90,7 @@ RUNNERS = {
     "email-security-audit", "jwt-security-audit",
     "har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit",
     "qr-code-generate","font-inspect","subtitle-fix","openapi-contract-audit","color-convert",
+    "pcap-network-audit", "audio-tag-audit",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -404,11 +405,13 @@ PIPELINE_TRANSITIONS = {
     "subtitle-fix":{"subtitle-audit","subtitle-convert","subtitle-text"},
     "openapi-contract-audit":{"text-clean","text-stats"},
     "color-convert":{"text-clean","text-stats"},
+    "pcap-network-audit":{"text-clean","text-stats"},
+    "audio-tag-audit":{"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -9647,6 +9650,135 @@ def color_convert(p):
     lines.extend(f"{n} | {hexv} | rgb({r},{g},{b}) | hsl({h},{s}%,{l}%) | cmyk({c}%,{m}%,{y}%,{k}%)" for n,hexv,r,g,b,h,s,l,c,m,y,k in rows[:2000])
     return tool_text("\n".join(lines),"Color converter")
 
+
+def pcap_network_audit(p):
+    import dpkt
+    size=p.stat().st_size
+    if size>20*1024*1024:
+        raise RuntimeError("PCAP input vượt giới hạn 20 MiB.")
+    protocol_counts={}
+    port_counts={}
+    host_count=set()
+    packet_count=0
+    packet_bytes=0
+    parse_errors=0
+    tcp_count=udp_count=icmp_count=dns_count=ip_count=0
+    timestamps=[]
+    try:
+        with p.open("rb") as handle:
+            magic=handle.read(4)
+            handle.seek(0)
+            reader=dpkt.pcapng.Reader(handle) if magic==b"\x0a\x0d\x0d\x0a" else dpkt.pcap.Reader(handle)
+            linktype=reader.datalink()
+            for timestamp,packet_bytes_raw in reader:
+                packet_count+=1
+                if packet_count>200000:
+                    raise RuntimeError("PCAP vượt giới hạn 200.000 packets.")
+                packet_bytes+=len(packet_bytes_raw)
+                timestamps.append(float(timestamp))
+                try:
+                    if linktype==dpkt.pcap.DLT_EN10MB:
+                        frame=dpkt.ethernet.Ethernet(packet_bytes_raw)
+                        network=frame.data
+                    elif linktype in (dpkt.pcap.DLT_RAW,dpkt.pcap.DLT_IPV4,dpkt.pcap.DLT_IPV6):
+                        if not packet_bytes_raw:
+                            continue
+                        version=packet_bytes_raw[0]>>4
+                        network=dpkt.ip.IP(packet_bytes_raw) if version==4 else dpkt.ip6.IP6(packet_bytes_raw) if version==6 else None
+                    else:
+                        name="linktype-"+str(linktype)
+                        protocol_counts[name]=protocol_counts.get(name,0)+1
+                        continue
+                    if isinstance(network,dpkt.ip.IP):
+                        ip_count+=1
+                        host_count.add(network.src)
+                        host_count.add(network.dst)
+                        payload=network.data
+                        protocol_name="IPv4"
+                    elif isinstance(network,dpkt.ip6.IP6):
+                        ip_count+=1
+                        host_count.add(network.src)
+                        host_count.add(network.dst)
+                        payload=network.data
+                        protocol_name="IPv6"
+                    else:
+                        protocol_counts["non-IP/other"]=protocol_counts.get("non-IP/other",0)+1
+                        continue
+                    if isinstance(payload,dpkt.tcp.TCP):
+                        tcp_count+=1
+                        port_counts[payload.sport]=port_counts.get(payload.sport,0)+1
+                        port_counts[payload.dport]=port_counts.get(payload.dport,0)+1
+                        if payload.dport in (53,5353) or payload.sport in (53,5353):
+                            dns_count+=1
+                    elif isinstance(payload,dpkt.udp.UDP):
+                        udp_count+=1
+                        port_counts[payload.sport]=port_counts.get(payload.sport,0)+1
+                        port_counts[payload.dport]=port_counts.get(payload.dport,0)+1
+                        if payload.dport in (53,5353) or payload.sport in (53,5353):
+                            dns_count+=1
+                    elif isinstance(payload,(dpkt.icmp.ICMP,dpkt.icmp6.ICMP6)):
+                        icmp_count+=1
+                    protocol_counts[protocol_name]=protocol_counts.get(protocol_name,0)+1
+                except (dpkt.UnpackError,ValueError,IndexError,AttributeError):
+                    parse_errors+=1
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("Không thể đọc PCAP/PCAPNG hoặc định dạng link-layer chưa hỗ trợ.") from exc
+    duration=max(timestamps)-min(timestamps) if len(timestamps)>1 else 0.0
+    top_ports=sorted(port_counts.items(),key=lambda item:(-item[1],item[0]))[:12]
+    lines=[
+        "PCAP network capture audit",
+        f"File bytes: {size:,}; packets: {packet_count:,}; captured packet bytes: {packet_bytes:,}",
+        f"Capture duration: {duration:.3f}s; IP packets: {ip_count:,}; unique IP endpoints: {len(host_count):,}; parse errors: {parse_errors:,}",
+        f"TCP packets: {tcp_count:,}; UDP packets: {udp_count:,}; ICMP packets: {icmp_count:,}; DNS/mDNS-port packets: {dns_count:,}",
+        "Network type counts: "+(", ".join(f"{name}={count:,}" for name,count in sorted(protocol_counts.items())) or "none"),
+        "Top transport ports: "+(", ".join(f"{port} ({count:,})" for port,count in top_ports) or "none"),
+        "IP addresses, packet payloads, DNS names and application data are never included.",
+        "Offline metadata only; traffic is not replayed and no host is contacted."
+    ]
+    return tool_text("\n".join(lines),"PCAP network audit")
+
+
+def audio_tag_audit(p):
+    size=p.stat().st_size
+    if size>100*1024*1024:
+        raise RuntimeError("Audio tag audit giới hạn file 100 MiB.")
+    data=ffprobe(p)
+    fmt=data.get("format",{})
+    format_tags=fmt.get("tags",{}) if isinstance(fmt.get("tags"),dict) else {}
+    streams=[item for item in data.get("streams",[]) if item.get("codec_type")=="audio"]
+    all_tags=dict(format_tags)
+    attached_pictures=sum(1 for item in data.get("streams",[]) if item.get("codec_type")=="video" and (item.get("disposition") or {}).get("attached_pic"))
+    for stream in streams:
+        if isinstance(stream.get("tags"),dict):
+            all_tags.update(stream["tags"])
+    normalized={str(key).strip().casefold().replace(" ","_") for key in all_tags}
+    groups={
+        "title":{"title","tit2"},
+        "artist":{"artist","tpe1"},
+        "album":{"album","talb"},
+        "date/year":{"date","year","tdrc","tyer","originaldate"},
+        "genre":{"genre","tcon"},
+        "track number":{"track","tracknumber","trck"},
+        "disc number":{"disc","discnumber","tpos"},
+        "album artist":{"album_artist","albumartist","tpe2"},
+        "composer":{"composer","tcom"}
+    }
+    present=[name for name,keys in groups.items() if normalized&keys]
+    missing=[name for name in groups if name not in present]
+    lines=[
+        "Audio metadata and tag completeness audit",
+        f"Bytes: {size:,}; container: {fmt.get('format_name','unknown')}; duration: {float(fmt.get('duration') or 0):.2f}s; audio streams: {len(streams):,}",
+        f"Metadata tag keys: {len(normalized):,}; attached cover-art streams: {attached_pictures:,}",
+        "Present tag groups: "+(", ".join(present) if present else "none"),
+        "Missing common tag groups: "+(", ".join(missing) if missing else "none"),
+        "Tag values, file path and embedded cover images are withheld; this checks completeness, not correctness."
+    ]
+    for stream in streams[:8]:
+        lines.append(f"Audio stream: {stream.get('codec_name','unknown')} · {stream.get('sample_rate','?')} Hz · {stream.get('channels','?')} channel(s)")
+    return tool_text("\n".join(lines),"Audio tag audit")
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -9778,6 +9910,8 @@ TOOLS={
  "subtitle-fix":subtitle_fix,
  "openapi-contract-audit":openapi_contract_audit,
  "color-convert":color_convert,
+ "pcap-network-audit":pcap_network_audit,
+ "audio-tag-audit":audio_tag_audit,
 
 }
 
