@@ -17,6 +17,11 @@ from wave24 import (
     krita_project_audit, mbox_audit, mbtiles_audit, n8n_workflow_audit,
     odf_package_audit, openraster_audit, warc_archive_audit, xliff_audit,
 )
+from wave25 import (
+    coverage_xml_audit, cyclonedx_sbom_audit, fits_file_audit, godot_project_audit,
+    junit_xml_audit, otel_collector_audit, sarif_report_audit, step_cad_audit,
+    unity_package_audit, unreal_project_audit, wasm_module_audit,
+)
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
@@ -146,6 +151,7 @@ RUNNERS = {
     "ansible-playbook-audit", "prometheus-rules-audit", "grafana-dashboard-audit",
     "hdf5-audit", "avro-schema-audit", "graphql-schema-audit", "protobuf-schema-audit",
     "odf-package-audit", "xliff-audit", "mbox-audit", "geopackage-audit", "mbtiles-audit", "openraster-audit", "krita-project-audit", "gltf-audit", "drawio-audit", "n8n-workflow-audit", "design-token-audit", "warc-archive-audit",
+    "wasm-module-audit", "sarif-report-audit", "sbom-audit", "junit-xml-audit", "coverage-xml-audit", "fits-audit", "step-cad-audit", "otel-collector-audit", "godot-project-audit", "unity-package-audit", "unreal-project-audit",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -517,11 +523,22 @@ PIPELINE_TRANSITIONS = {
     "n8n-workflow-audit":{"text-clean","text-stats"},
     "design-token-audit":{"text-clean","text-stats"},
     "warc-archive-audit":{"text-clean","text-stats"},
+    "wasm-module-audit":{"text-clean","text-stats"},
+    "sarif-report-audit":{"text-clean","text-stats"},
+    "sbom-audit":{"text-clean","text-stats"},
+    "junit-xml-audit":{"text-clean","text-stats"},
+    "coverage-xml-audit":{"text-clean","text-stats"},
+    "fits-audit":{"text-clean","text-stats"},
+    "step-cad-audit":{"text-clean","text-stats"},
+    "otel-collector-audit":{"text-clean","text-stats"},
+    "godot-project-audit":{"text-clean","text-stats"},
+    "unity-package-audit":{"text-clean","text-stats"},
+    "unreal-project-audit":{"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-structured-data-audit","css-quality-audit","gcode-audit","midi-audit","musicxml-audit","bibtex-audit","nmea-track-audit","ansible-playbook-audit","prometheus-rules-audit","grafana-dashboard-audit","hdf5-audit","avro-schema-audit","graphql-schema-audit","protobuf-schema-audit","odf-package-audit","xliff-audit","mbox-audit","geopackage-audit","mbtiles-audit","openraster-audit","krita-project-audit","gltf-audit","drawio-audit","n8n-workflow-audit","design-token-audit","warc-archive-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-structured-data-audit","css-quality-audit","gcode-audit","midi-audit","musicxml-audit","bibtex-audit","nmea-track-audit","ansible-playbook-audit","prometheus-rules-audit","grafana-dashboard-audit","hdf5-audit","avro-schema-audit","graphql-schema-audit","protobuf-schema-audit","odf-package-audit","xliff-audit","mbox-audit","geopackage-audit","mbtiles-audit","openraster-audit","krita-project-audit","gltf-audit","drawio-audit","n8n-workflow-audit","design-token-audit","warc-archive-audit","wasm-module-audit","sarif-report-audit","sbom-audit","junit-xml-audit","coverage-xml-audit","fits-audit","step-cad-audit","otel-collector-audit","godot-project-audit","unity-package-audit","unreal-project-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -12271,6 +12288,17 @@ TOOLS={
  "n8n-workflow-audit":n8n_workflow_audit,
  "design-token-audit":design_token_audit,
  "warc-archive-audit":warc_archive_audit,
+ "wasm-module-audit":wasm_module_audit,
+ "sarif-report-audit":sarif_report_audit,
+ "sbom-audit":cyclonedx_sbom_audit,
+ "junit-xml-audit":junit_xml_audit,
+ "coverage-xml-audit":coverage_xml_audit,
+ "fits-audit":fits_file_audit,
+ "step-cad-audit":step_cad_audit,
+ "otel-collector-audit":otel_collector_audit,
+ "godot-project-audit":godot_project_audit,
+ "unity-package-audit":unity_package_audit,
+ "unreal-project-audit":unreal_project_audit,
 
 }
 

@@ -1,5 +1,45 @@
 Nolane Tools hiện có **395 công cụ đã triển khai trên production** sau Wave 24, phát hành ngày 2026-11-22 trên Cloudflare Worker Version 81 (`af2311df-8bac-4597-aaec-e0115fb3106f`). PR #76 đã merge thành commit `dc13766a6afdef744e165c231803130db5e2a3a0`; main CI (189 Python runner tests, 25 Vitest files), Worker export/health smoke và Cloudflare deployment đều thành công. Cloudflare xác nhận 100% traffic trên version này (deployment `83aa00b4-99f7-4477-8273-ed29ce46879f`); Telegram webhook đã được xác minh cho `message` và `callback_query`. Catalog TypeScript, Python runner allowlist, handler và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và giấy phép các dự án upstream được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
 
+### Wave 25 — Build observability, binary analysis, astronomy and game-engine project tools — candidate branch
+
+Wave 25 adds 11 candidate processors to the existing 395-tool production catalog. The candidate branch contains **406 registered tools**; production remains at 395 until PR CI, Worker export/smoke and Cloudflare deployment pass.
+
+| ID | Công cụ | Nhóm | Chức năng |
+|---|---|---|---|
+| /tool wasm-module-audit | WebAssembly binary audit | Developer/binary | Kiểm tra magic/version, section IDs, lengths, LEB128 và function/code vector counts; không decode hoặc execute instructions. |
+| /tool sarif-report-audit | SARIF 2.1 report audit | Security/devtools | Đếm runs/rules/results, levels, suppressions, locations, fixes và missing rule refs; không xuất message/path/snippet. |
+| /tool sbom-audit | CycloneDX / SPDX SBOM audit | Supply chain | Đếm components/packages/files/services, vulnerability entries, licenses, relationships và duplicate/dangling refs; không tiết lộ package IDs/URLs. |
+| /tool junit-xml-audit | JUnit XML audit | Testing/CI | Đếm suites/cases/failures/errors/skipped/flaky, declared count mismatch và duration; không xuất test names hoặc stdout. |
+| /tool coverage-xml-audit | Cobertura / JaCoCo coverage audit | Testing/quality | Đọc line/branch rates và counters ở mức tổng hợp; không hiển thị per-line hits, source paths hay method names. |
+| /tool fits-audit | FITS astronomy audit | Scientific data | Kiểm tra 2880-byte blocks, 80-char cards, HDUs, BITPIX/NAXIS và payload bounds; không giải mã pixels hoặc observation metadata. |
+| /tool step-cad-audit | STEP Part 21 CAD audit | CAD/engineering | Rà HEADER/DATA/ENDSEC, entity IDs/references, duplicates và delimiters; không tính hình học hoặc in design metadata. |
+| /tool otel-collector-audit | OpenTelemetry Collector config audit | Observability | Kiểm tra receivers/processors/exporters/connectors/extensions, service pipeline refs, public bind và literal secret fields; không chạy collector. |
+| /tool godot-project-audit | Godot project.godot audit | Game development | Thống kê sections, autoloads, enabled editor plugins, resource/remote URI và secret-bearing keys; không load scenes/scripts. |
+| /tool unity-package-audit | Unity .unitypackage audit | Game development | Kiểm tra gzip/tar, GUID groups, asset/asset.meta/pathname, missing members và unsafe archive paths; không extract project. |
+| /tool unreal-project-audit | Unreal .uproject audit | Game development | Rà project JSON, modules/plugins, duplicate names, enabled state, target platforms và secret-bearing fields; không load plugins/project. |
+
+Giới hạn Wave 25: input chuẩn tối đa 20 MiB; SARIF/SBOM/JUnit/Coverage/Godot/Unreal text tối đa 10 MiB; YAML aliases giới hạn trước khi parse; WASM section lengths phải nằm trong file; FITS tối đa 20 MiB và chỉ đọc header/data boundaries; STEP tối đa 10 MiB; Unity archive tối đa 10.000 members và 180 MiB expanded. PyYAML chỉ cài khi chọn `otel-collector-audit`, các tool còn lại dùng Python standard library. Đây là static/structural audits, không phải full WebAssembly validation, vulnerability analysis, license legal advice, compiler/test execution, astronomy pixel decoding, CAD geometry validation hoặc engine project load.
+
+### Wave 25 — Build observability, binary analysis, astronomy and game-engine metadata — candidate branch
+
+Wave 25 adds 11 candidate processors to the existing 395-tool production catalog. The candidate branch contains **406 registered tools**; production remains at 395 until PR CI, Worker export/smoke and Cloudflare deployment pass.
+
+| ID | Công cụ | Nhóm | Chức năng |
+|---|---|---|---|
+| /tool wasm-module-audit | WebAssembly binary audit | Developer/binary | Kiểm tra magic/version, section IDs, lengths, LEB128 và function/code vector counts; không decode hoặc execute instructions. |
+| /tool sarif-report-audit | SARIF 2.1 report audit | Security/devtools | Đếm runs/rules/results, severity, suppression, locations, fixes và missing rule refs; không xuất message text, code paths, snippets hoặc fingerprints. |
+| /tool sbom-audit | CycloneDX / SPDX SBOM audit | Supply chain | Đếm components/packages/files, licenses, services, vulnerabilities, relationships và dangling refs trong CycloneDX JSON/XML hoặc SPDX 2.x JSON/XML; không tiết lộ package identifiers/URLs. |
+| /tool junit-xml-audit | JUnit XML audit | Testing/CI | Đếm suites/cases/failures/errors/skipped/flaky, declared-count mismatches và durations; không xuất testcase names, stack traces hay stdout/stderr. |
+| /tool coverage-xml-audit | Cobertura / JaCoCo coverage audit | Testing/quality | Đọc line/branch rates và aggregate counters ở mức tổng hợp; không xuất per-line hits, source paths hay method names. |
+| /tool fits-audit | FITS astronomy audit | Scientific data | Kiểm tra 2880-byte blocks, 80-char cards, HDUs, BITPIX/NAXIS và payload bounds; không giải mã pixels hoặc observation metadata. |
+| /tool step-cad-audit | STEP Part 21 CAD audit | CAD/engineering | Rà HEADER/DATA/ENDSEC, entity IDs/references, duplicates và delimiters; không tính hình học hoặc in design metadata. |
+| /tool otel-collector-audit | OpenTelemetry Collector config audit | Observability | Kiểm tra receivers/processors/exporters/connectors/extensions, service pipeline refs, public bind và literal secret fields; không chạy collector. |
+| /tool godot-project-audit | Godot project.godot audit | Game development | Thống kê sections, autoloads, enabled editor plugins, res:///remote URI refs và secret-bearing keys; không load scenes/scripts. |
+| /tool unity-package-audit | Unity .unitypackage audit | Game development | Kiểm tra gzip/tar, GUID groups, asset/asset.meta/pathname, missing members và unsafe archive paths; không extract project files. |
+| /tool unreal-project-audit | Unreal .uproject audit | Game development | Rà JSON project descriptor, module/plugin declarations, duplicate names, enabled state, target platforms và secret-bearing fields; không load plugins/project. |
+
+Giới hạn Wave 25: input chuẩn tối đa 20 MiB; SARIF/SBOM/JUnit/Coverage/Godot/Unreal text tối đa 10 MiB; YAML aliases giới hạn trước khi parse; WASM section lengths phải nằm trong file; FITS tối đa 20 MiB và chỉ đọc header/data boundaries; STEP tối đa 10 MiB; Unity archive tối đa 10.000 members và 180 MiB expanded. PyYAML chỉ cài khi chọn `otel-collector-audit`, các tool còn lại dùng Python standard library. Đây là static/structural audits, không phải full WebAssembly validation, vulnerability analysis, license legal advice, compiler/test execution, astronomy pixel decoding, CAD geometry validation hoặc engine project load.
+
 ### Wave 24 — Document interoperability, GIS, creative projects and workflow formats — deployed 2026-11-22
 
 Wave 24 adds 12 processors to the previous 383-tool catalog, bringing production to **395 tools**. [PR #76](https://github.com/Nolane-x/Nolane-search/pull/76) merged as `dc13766a6afdef744e165c231803130db5e2a3a0`. Main CI [45015606847](https://github.com/Nolane-x/Nolane-search/actions/runs/45015606847) passed type-check, deployment-script checks, **25 Vitest files** and **189 Python runner tests**. Worker export [45015606799](https://github.com/Nolane-x/Nolane-search/actions/runs/45015606799) passed build, publish and the production `/health` smoke test (`ok: true`, database reachable). Cloudflare deployment [45015606838](https://github.com/Nolane-x/Nolane-search/actions/runs/45015606838) passed upload and Telegram webhook/command-menu registration; D1 migration was skipped because no database schema changed. Cloudflare confirms Worker Version 81 is receiving 100% traffic.
