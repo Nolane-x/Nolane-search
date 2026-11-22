@@ -100,6 +100,11 @@ RUNNERS = {
     "sitemap-xml-audit",
     "robots-txt-audit",
     "jsonl-profile",
+    "image-privacy-audit",
+    "svg-safety-audit",
+    "wcag-contrast-audit",
+    "ssh-public-key-audit",
+    "archive-checksum-manifest",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -426,11 +431,16 @@ PIPELINE_TRANSITIONS = {
     "sitemap-xml-audit":{"text-clean","text-stats"},
     "robots-txt-audit":{"text-clean","text-stats"},
     "jsonl-profile":{"text-clean","text-stats"},
+    "image-privacy-audit":{"text-clean","text-stats"},
+    "svg-safety-audit":{"text-clean","text-stats"},
+    "wcag-contrast-audit":{"text-clean","text-stats"},
+    "ssh-public-key-audit":{"text-clean","text-stats"},
+    "archive-checksum-manifest":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -10492,6 +10502,305 @@ def jsonl_profile(p):
     lines.append("JSON values are never copied into this report; field names and aggregate type counts only.")
     return tool_text("\n".join(lines),"JSONL data profile")
 
+
+
+def image_privacy_audit(p):
+    from PIL import Image,ExifTags
+    size=p.stat().st_size
+    if size>20*1024*1024:
+        raise RuntimeError("Image privacy audit giới hạn file 20 MiB.")
+    try:
+        with Image.open(p) as image:
+            _guard_image_dimensions(image)
+            exif=image.getexif()
+            names={str(ExifTags.TAGS.get(key,key)).casefold() for key in exif.keys()}
+            date_tags={"datetime","datetimeoriginal","datetimedigitized"}
+            identity_tags={"bodyserialnumber","camer aserialnumber","serialnumber","lensserialnumber","ownername","cameraownername","artist","usercomment"}
+            gps_present=34853 in exif
+            dates=len(names&date_tags)
+            identity=sum(1 for key in names if key.replace(" ","") in {item.replace(" ","") for item in identity_tags})
+            thumbnail_present=any(key in image.info for key in ("thumbnail","exif_thumbnail"))
+            xmp_present=any("xmp" in str(key).casefold() for key in image.info)
+            iptc_present=any("iptc" in str(key).casefold() or "photoshop" in str(key).casefold() for key in image.info)
+            profile_present="icc_profile" in image.info
+            tag_count=len(names)
+    except Exception as exc:
+        raise RuntimeError("Không thể đọc metadata ảnh hợp lệ.") from exc
+    lines=[
+        "Image metadata privacy audit",
+        f"Format: {p.suffix.lower()}; file bytes: {size:,}; EXIF tags: {tag_count:,}",
+        f"GPS metadata present: {int(gps_present)}; date/time tags: {dates:,}; identity/device-related tags: {identity:,}",
+        f"Embedded thumbnail present: {int(thumbnail_present)}; XMP metadata present: {int(xmp_present)}; IPTC/Photoshop metadata present: {int(iptc_present)}; ICC profile present: {int(profile_present)}",
+        "No EXIF values, GPS coordinates, timestamps, camera serials, owner names or image pixels are included."
+    ]
+    return tool_text("\n".join(lines),"Image privacy audit")
+
+
+def svg_safety_audit(p):
+    import xml.etree.ElementTree as ET
+    size=p.stat().st_size
+    if size>5*1024*1024:
+        raise RuntimeError("SVG safety audit giới hạn input 5 MiB.")
+    raw=p.read_bytes()
+    if re.search(rb"<!\s*(DOCTYPE|ENTITY)\b",raw,re.I):
+        raise RuntimeError("SVG có DTD/ENTITY bị chặn.")
+    try:
+        root=ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise RuntimeError("SVG/XML không hợp lệ.") from exc
+    def local(value):
+        return value.rsplit("}",1)[-1].casefold()
+    if local(root.tag)!="svg":
+        raise RuntimeError("Root document phải là SVG.")
+    elements=attrs=scripts=foreign_objects=event_handlers=external_refs=unsafe_schemes=css_url_refs=css_imports=embedded_data=0
+    stack=[root]
+    while stack:
+        element=stack.pop()
+        elements+=1
+        if elements>100000:
+            raise RuntimeError("SVG vượt giới hạn 100.000 elements.")
+        tag=local(element.tag)
+        if tag=="script": scripts+=1
+        elif tag=="foreignobject": foreign_objects+=1
+        for key,value in element.attrib.items():
+            attrs+=1
+            if attrs>250000:
+                raise RuntimeError("SVG vượt giới hạn 250.000 attributes.")
+            name=local(key)
+            lower=str(value).strip().casefold()
+            if name.startswith("on"):
+                event_handlers+=1
+            if name in {"href","src"}:
+                if lower.startswith(("javascript:","vbscript:","file:")):
+                    unsafe_schemes+=1
+                elif lower.startswith("data:"):
+                    embedded_data+=1
+                elif lower and not lower.startswith("#"):
+                    parsed=urllib.parse.urlsplit(str(value).strip())
+                    if parsed.scheme or parsed.netloc or value.strip().startswith("//"):
+                        external_refs+=1
+            if "url(" in lower:
+                css_url_refs+=lower.count("url(")
+                matches=re.findall(r"url\(\s*['\"]?([^)'\"]+)",lower)
+                for target in matches:
+                    target=target.strip()
+                    if target.startswith(("javascript:","vbscript:","file:")):
+                        unsafe_schemes+=1
+                    elif target.startswith("data:"):
+                        embedded_data+=1
+                    elif target and not target.startswith("#"):
+                        external_refs+=1
+            if "@import" in lower:
+                css_imports+=lower.count("@import")
+                external_refs+=lower.count("@import")
+        stack.extend(list(element))
+        if element.text and len(element.text)>2*1024*1024:
+            raise RuntimeError("Một text node SVG vượt giới hạn 2 MiB.")
+    lines=[
+        "SVG active-content and external-reference audit",
+        f"File bytes: {size:,}; elements: {elements:,}; attributes: {attrs:,}",
+        f"Script elements: {scripts:,}; foreignObject elements: {foreign_objects:,}; event-handler attributes: {event_handlers:,}",
+        f"External references: {external_refs:,}; unsafe URI schemes: {unsafe_schemes:,}; data URI references: {embedded_data:,}",
+        f"CSS url() references: {css_url_refs:,}; CSS @import directives: {css_imports:,}",
+        "Attribute values, external URLs, text content and embedded data are not printed. This is a static audit, not a sanitizer or malware verdict."
+    ]
+    return tool_text("\n".join(lines),"SVG safety audit")
+
+
+def wcag_contrast_audit(p):
+    size=p.stat().st_size
+    if size>2*1024*1024:
+        raise RuntimeError("WCAG contrast input giới hạn 2 MiB.")
+    try:
+        raw=p.read_text(encoding="utf-8-sig")
+    except UnicodeError as exc:
+        raise RuntimeError("Color pairs phải là UTF-8 text.") from exc
+    def parse_hex(value):
+        value=value.strip().lstrip("#")
+        if not re.fullmatch(r"(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})",value):
+            raise ValueError
+        if len(value)==3:
+            value="".join(character*2 for character in value)
+        return tuple(int(value[index:index+2],16) for index in (0,2,4))
+    def luminance(rgb):
+        channels=[]
+        for value in rgb:
+            channel=value/255.0
+            channels.append(channel/12.92 if channel<=0.04045 else ((channel+0.055)/1.055)**2.4)
+        return 0.2126*channels[0]+0.7152*channels[1]+0.0722*channels[2]
+    valid=invalid=0
+    ratios=[]
+    for line_number,line in enumerate(raw.splitlines(),1):
+        if line_number>5000:
+            raise RuntimeError("WCAG contrast input vượt 5.000 dòng.")
+        stripped=line.strip()
+        if not stripped or stripped.startswith("# "):
+            continue
+        colors=re.findall(r"(?<![0-9A-Za-z])#?(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9A-Za-z])",stripped)
+        if len(colors)!=2:
+            invalid+=1
+            continue
+        try:
+            foreground=parse_hex(colors[0])
+            background=parse_hex(colors[1])
+        except ValueError:
+            invalid+=1
+            continue
+        first=luminance(foreground)
+        second=luminance(background)
+        ratio=(max(first,second)+0.05)/(min(first,second)+0.05)
+        valid+=1
+        ratios.append((line_number,ratio))
+    if not valid:
+        raise RuntimeError("Không tìm thấy cặp màu hợp lệ. Mỗi dòng cần đúng hai mã HEX.")
+    aa_normal=sum(ratio>=4.5 for _,ratio in ratios)
+    aa_large=sum(ratio>=3.0 for _,ratio in ratios)
+    aaa_normal=sum(ratio>=7.0 for _,ratio in ratios)
+    aaa_large=sum(ratio>=4.5 for _,ratio in ratios)
+    lines=[
+        "WCAG color contrast audit",
+        f"Valid pairs: {valid:,}; invalid lines skipped: {invalid:,}",
+        f"WCAG 2.2 AA: normal text (4.5:1) {aa_normal:,}/{valid:,}; large text (3:1) {aa_large:,}/{valid:,}",
+        f"WCAG 2.2 AAA: normal text (7:1) {aaa_normal:,}/{valid:,}; large text (4.5:1) {aaa_large:,}/{valid:,}",
+        "Contrast ratio range: "+f"{min(ratio for _,ratio in ratios):.2f}:1 to {max(ratio for _,ratio in ratios):.2f}:1",
+        "Input color codes are withheld from the summary. Large text means at least 18pt regular or 14pt bold; this check does not assess non-text UI contrast."
+    ]
+    lines.extend(f"- Line {line}: {ratio:.2f}:1" for line,ratio in ratios[:100])
+    if len(ratios)>100:
+        lines.append(f"- {len(ratios)-100:,} additional color-pair ratios omitted.")
+    return tool_text("\n".join(lines),"WCAG contrast audit")
+
+
+def ssh_public_key_audit(p):
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa,ec,dsa,ed25519
+    size=p.stat().st_size
+    if size>2*1024*1024:
+        raise RuntimeError("SSH public-key audit giới hạn file 2 MiB.")
+    try:
+        raw=p.read_text(encoding="utf-8-sig")
+    except UnicodeError as exc:
+        raise RuntimeError("SSH key file phải là UTF-8.") from exc
+    keys=[]
+    errors=0
+    if "-----BEGIN PUBLIC KEY-----" in raw or "-----BEGIN RSA PUBLIC KEY-----" in raw:
+        try:
+            keys.append(serialization.load_pem_public_key(raw.encode("utf-8")))
+        except Exception:
+            errors+=1
+    else:
+        for line in raw.splitlines():
+            stripped=line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            token_start=None
+            for marker in ("ssh-rsa ","ssh-ed25519 ","ssh-dss ","ecdsa-sha2-","sk-ssh-ed25519@openssh.com ","sk-ecdsa-sha2-nistp256@openssh.com "):
+                found=stripped.find(marker)
+                if found>=0 and (token_start is None or found<token_start):
+                    token_start=found
+            if token_start is None:
+                errors+=1
+                continue
+            try:
+                keys.append(serialization.load_ssh_public_key(stripped[token_start:].encode("ascii")))
+            except Exception:
+                errors+=1
+            if len(keys)+errors>1000:
+                raise RuntimeError("SSH file vượt giới hạn 1.000 key lines.")
+    if len(keys)>1000:
+        raise RuntimeError("SSH file vượt giới hạn 1.000 public keys.")
+    if not keys and errors:
+        raise RuntimeError("Không phân tích được SSH public key; private keys không được hỗ trợ.")
+    algorithms={}
+    duplicates=0
+    fingerprints=set()
+    weak_rsa=weak_ec=weak_dsa=0
+    for key in keys:
+        encoded=key.public_bytes(serialization.Encoding.DER,serialization.PublicFormat.SubjectPublicKeyInfo)
+        fingerprint=hashlib.sha256(encoded).digest()
+        if fingerprint in fingerprints:
+            duplicates+=1
+        fingerprints.add(fingerprint)
+        if isinstance(key,rsa.RSAPublicKey):
+            name="RSA"
+            if key.key_size<2048:
+                weak_rsa+=1
+        elif isinstance(key,ec.EllipticCurvePublicKey):
+            name="ECDSA"
+            if key.key_size<256:
+                weak_ec+=1
+        elif isinstance(key,dsa.DSAPublicKey):
+            name="DSA"
+            weak_dsa+=1
+        elif isinstance(key,ed25519.Ed25519PublicKey):
+            name="Ed25519"
+        else:
+            name=type(key).__name__
+        algorithms[name]=algorithms.get(name,0)+1
+    lines=[
+        "SSH public-key inventory audit",
+        f"Valid public keys: {len(keys):,}; malformed/comment-only lines: {errors:,}; duplicate public keys: {duplicates:,}",
+        "Algorithms: "+(", ".join(f"{name}={count:,}" for name,count in sorted(algorithms.items())) or "none"),
+        f"Weak RSA keys (<2048 bits): {weak_rsa:,}; weak ECDSA keys (<256 bits): {weak_ec:,}; DSA keys (deprecated): {weak_dsa:,}",
+        "Key comments, fingerprints, public-key blobs and user identities are not included. No SSH server is contacted or scanned."
+    ]
+    return tool_text("\n".join(lines),"SSH public-key audit")
+
+
+def archive_checksum_manifest(p):
+    size=p.stat().st_size
+    if size>20*1024*1024:
+        raise RuntimeError("Archive checksum manifest giới hạn ZIP input 20 MiB.")
+    out=p.with_name(p.stem+"-sha256-manifest.csv")
+    total_declared=0
+    rows=[]
+    try:
+        with zipfile.ZipFile(p) as archive:
+            infos=archive.infolist()
+            if len(infos)>1000:
+                raise RuntimeError("ZIP vượt giới hạn 1.000 entries.")
+            seen=set()
+            for info in infos:
+                if info.is_dir():
+                    continue
+                _safe_archive_parts(info.filename)
+                if info.filename in seen:
+                    raise RuntimeError("ZIP chứa đường dẫn trùng lặp.")
+                seen.add(info.filename)
+                mode=(info.external_attr>>16)&0o170000
+                if mode==stat.S_IFLNK:
+                    raise RuntimeError("ZIP chứa symbolic link; checksum manifest từ chối symlink.")
+                if info.flag_bits&0x1:
+                    raise RuntimeError("ZIP chứa entry mã hóa; không thể tính checksum tin cậy.")
+                if info.file_size>50*1024*1024:
+                    raise RuntimeError("Một archive member vượt 50 MiB.")
+                total_declared+=info.file_size
+                if total_declared>200*1024*1024:
+                    raise RuntimeError("ZIP vượt 200 MiB dữ liệu giải nén khai báo.")
+                digest=hashlib.sha256()
+                actual=0
+                with archive.open(info,"r") as stream:
+                    while True:
+                        block=stream.read(1024*1024)
+                        if not block:
+                            break
+                        actual+=len(block)
+                        if actual>50*1024*1024 or actual>info.file_size:
+                            raise RuntimeError("Archive member vượt kích thước khai báo hoặc giới hạn 50 MiB.")
+                        digest.update(block)
+                if actual!=info.file_size:
+                    raise RuntimeError("Archive member có kích thước thực không khớp directory metadata.")
+                rows.append((info.filename,actual,digest.hexdigest()))
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("Không thể đọc ZIP để tạo checksum manifest.") from exc
+    with out.open("w",encoding="utf-8-sig",newline="") as handle:
+        writer=csv.writer(handle,lineterminator="\n")
+        writer.writerow(["path","size_bytes","sha256"])
+        writer.writerows([(_spreadsheet_safe(name),count,digest) for name,count,digest in rows])
+    return {"summary":f"Đã tạo SHA-256 manifest cho {len(rows):,} tệp, {sum(row[1] for row in rows):,} byte nội dung. Archive không được giải nén ra filesystem; kết quả là CSV.","output_path":str(out)}
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -10635,6 +10944,11 @@ TOOLS={
  "sitemap-xml-audit":sitemap_xml_audit,
  "robots-txt-audit":robots_txt_audit,
  "jsonl-profile":jsonl_profile,
+ "image-privacy-audit":image_privacy_audit,
+ "svg-safety-audit":svg_safety_audit,
+ "wcag-contrast-audit":wcag_contrast_audit,
+ "ssh-public-key-audit":ssh_public_key_audit,
+ "archive-checksum-manifest":archive_checksum_manifest,
 
 }
 
