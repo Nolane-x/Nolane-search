@@ -3232,5 +3232,124 @@ Unknown-Directive: value
         self.assertEqual(by_path["folder/second.txt"]["sha256"],hashlib.sha256(second).hexdigest())
         self.assertNotIn("private file content",result["summary"])
 
+
+    def test_wave21_pdf_table_extract_exports_detected_tables_as_csv(self):
+        import fitz
+        path = self.input_dir / "table.pdf"
+        document = fitz.open()
+        page = document.new_page(width=400, height=300)
+        for y in (50, 100, 150):
+            page.draw_line((50, y), (350, y), width=1)
+        for x in (50, 200, 350):
+            page.draw_line((x, 50), (x, 150), width=1)
+        page.insert_text((70, 80), "Name", fontsize=12)
+        page.insert_text((220, 80), "Score", fontsize=12)
+        page.insert_text((70, 130), "Ada", fontsize=12)
+        page.insert_text((220, 130), "98", fontsize=12)
+        document.save(path)
+        document.close()
+        result = runner.pdf_table_extract(path)
+        output = Path(result["output_path"])
+        with zipfile.ZipFile(output) as archive:
+            self.assertIn("page-001-table-001.csv", archive.namelist())
+            table = archive.read("page-001-table-001.csv").decode("utf-8")
+            self.assertIn("Name,Score", table)
+            self.assertIn("Ada,98", table)
+        self.assertIn("1 bảng", result["summary"])
+
+    def test_wave21_json_jmespath_query_selects_nested_values(self):
+        path = self.write("query.json", json.dumps({
+            "query": "people[?active].name",
+            "data": {"people": [{"name": "Ada", "active": True}, {"name": "Bob", "active": False}]},
+        }))
+        result = runner.json_jmespath_query(path)
+        selected = json.loads(Path(result["output_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(selected, ["Ada"])
+        self.assertIn("JMESPath", result["summary"])
+
+    def test_wave21_ip_network_report_counts_overlaps_without_network_calls(self):
+        path = self.write("networks.txt", "10.0.0.1\n10.0.0.0/8\n10.1.0.0/16\n2001:db8::1\ninvalid\n")
+        result = runner.ip_network_report(path)
+        with Path(result["output_path"]).open(encoding="utf-8-sig", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(rows[0]["overlap_count"], "1")
+        self.assertEqual(rows[1]["overlap_count"], "2")
+        self.assertEqual(rows[3]["ip_version"], "6")
+        self.assertIn("1 dòng không hợp lệ", result["summary"])
+
+    def test_wave21_barcode_generate_writes_pngs_inside_zip(self):
+        path = self.write("barcodes.txt", "NOLANE-001\n")
+        result = runner.barcode_generate(path)
+        with zipfile.ZipFile(result["output_path"]) as archive:
+            self.assertIn("barcode-001.png", archive.namelist())
+            self.assertTrue(archive.read("barcode-001.png").startswith(b"\x89PNG\r\n\x1a\n"))
+            self.assertIn("manifest.csv", archive.namelist())
+        self.assertIn("1 barcode", result["summary"])
+
+    def test_wave21_docx_to_markdown_preserves_headings_paragraphs_and_tables(self):
+        from docx import Document
+        path = self.input_dir / "notes.docx"
+        document = Document()
+        document.add_heading("Nolane heading", level=1)
+        paragraph = document.add_paragraph()
+        run = paragraph.add_run("Important")
+        run.bold = True
+        document.add_table(rows=2, cols=2)
+        table = document.tables[0]
+        table.cell(0, 0).text = "Tool"
+        table.cell(0, 1).text = "Count"
+        table.cell(1, 0).text = "Nolane"
+        table.cell(1, 1).text = "354"
+        document.save(path)
+        result = runner.docx_to_markdown(path)
+        markdown = Path(result["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("# Nolane heading", markdown)
+        self.assertIn("**Important**", markdown)
+        self.assertIn("| Nolane | 354 |", markdown)
+
+    def test_wave21_pptx_notes_extract_reads_notes_not_slide_body(self):
+        from pptx import Presentation
+        path = self.input_dir / "notes.pptx"
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+        slide.shapes.add_textbox(20, 20, 200, 50).text = "Visible slide content"
+        slide.notes_slide.notes_text_frame.text = "Speaker only: discuss the chart"
+        presentation.save(path)
+        result = runner.pptx_notes_extract(path)
+        notes = Path(result["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Speaker only: discuss the chart", notes)
+        self.assertNotIn("Visible slide content", notes)
+
+    def test_wave21_fuzzy_match_report_returns_ranked_line_pairs(self):
+        path = self.write("near-duplicates.txt", "Nolane search engine\nNolane search engne\nUnrelated sentence\n")
+        result = runner.fuzzy_match_report(path)
+        with Path(result["output_path"]).open(encoding="utf-8-sig", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+        self.assertTrue(rows)
+        self.assertEqual(rows[0]["left_line"], "1")
+        self.assertEqual(rows[0]["right_line"], "2")
+        self.assertGreaterEqual(float(rows[0]["similarity_percent"]), 85)
+
+    def test_wave21_csv_parquet_round_trip_preserves_leading_zeroes(self):
+        import duckdb
+        path = self.write("people.csv", "id,name\n001,Ada\n002,Bob\n003,=1+1\n")
+        parquet_result = runner.csv_to_parquet(path)
+        parquet_path = Path(parquet_result["output_path"])
+        connection = duckdb.connect(database=":memory:")
+        try:
+            rows = connection.execute(
+                "SELECT id, name FROM read_parquet(?) ORDER BY id",
+                [str(parquet_path)],
+            ).fetchall()
+        finally:
+            connection.close()
+        self.assertEqual(rows, [("001", "Ada"), ("002", "Bob"), ("003", "=1+1")])
+        csv_result = runner.parquet_to_csv(parquet_path)
+        csv_text = Path(csv_result["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("001,Ada", csv_text)
+        self.assertIn("002,Bob", csv_text)
+        self.assertIn("'=1+1", csv_text)
+
 if __name__ == "__main__":
     unittest.main()

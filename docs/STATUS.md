@@ -2,6 +2,15 @@
 
 Last verified: 2026-11-22. This document distinguishes production deployment and configuration checks from user-level behavior that still requires a real Telegram interaction.
 
+## In review — Wave 21 candidate (2026-11-22)
+
+- Branch: \`feat/wave-twenty-one-expanded-tool-suite\`.
+- Nine new processors are registered in the branch TypeScript catalog, Python allowlist/handler map and mirrored pipeline transitions, raising the branch catalog from 345 to **354 candidate tools**.
+- Added capabilities: PDF table extraction, JMESPath JSON querying, IPv4/IPv6 CIDR analysis, Code 128 PNG generation, DOCX-to-Markdown, PPTX presenter-note extraction, fuzzy line matching and CSV ↔ Parquet conversion.
+- Added bounded Python fixtures for the new processors and conditional runner dependency installation. CI, Worker build and deployment have **not yet been reported as passing** for this branch.
+- Production remains on Wave 20 / 345 processors until the branch passes PR CI, Worker export/health smoke and a Cloudflare deployment.
+- After rollout, representative private Telegram uploads and retry behavior must still be checked by the owner; automated tests and successful deployment do not prove the complete Telegram user journey.
+
 ## Latest production release — Wave 20 (2026-11-22)
 
 - Wave 20 landed directly on `main` as commit `32aede18727b75b2cef2a06b7d603615bedcdac0`; it adds nine processors and raises the production catalog from 336 to **345 tools**.

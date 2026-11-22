@@ -105,6 +105,15 @@ RUNNERS = {
     "wcag-contrast-audit",
     "ssh-public-key-audit",
     "archive-checksum-manifest",
+    "pdf-table-extract",
+    "json-jmespath-query",
+    "ip-network-report",
+    "barcode-generate",
+    "docx-to-markdown",
+    "pptx-notes-extract",
+    "fuzzy-match-report",
+    "csv-to-parquet",
+    "parquet-to-csv",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -436,6 +445,15 @@ PIPELINE_TRANSITIONS = {
     "wcag-contrast-audit":{"text-clean","text-stats"},
     "ssh-public-key-audit":{"text-clean","text-stats"},
     "archive-checksum-manifest":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json"},
+    "pdf-table-extract":{"archive-inspect","archive-manifest"},
+    "json-jmespath-query":{"json-format","json-to-csv"},
+    "ip-network-report":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
+    "barcode-generate":{"archive-inspect","archive-safe-extract","archive-manifest"},
+    "docx-to-markdown":{"markdown-quality-audit","markdown-outline","markdown-links","markdown-toc","text-clean"},
+    "pptx-notes-extract":{"text-clean","text-stats","text-translate"},
+    "fuzzy-match-report":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
+    "csv-to-parquet":{"parquet-to-csv"},
+    "parquet-to-csv":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
@@ -10803,6 +10821,400 @@ def archive_checksum_manifest(p):
         writer.writerows([(_spreadsheet_safe(name),count,digest) for name,count,digest in rows])
     return {"summary":f"Đã tạo SHA-256 manifest cho {len(rows):,} tệp, {sum(row[1] for row in rows):,} byte nội dung. Archive không được giải nén ra filesystem; kết quả là CSV.","output_path":str(out)}
 
+
+def pdf_table_extract(p):
+    import io
+    try:
+        import pdfplumber
+    except ImportError as exc:
+        raise RuntimeError("Thiếu pdfplumber; runner cần cài dependency của pdf-table-extract.") from exc
+    if p.stat().st_size > 20 * 1024 * 1024:
+        raise RuntimeError("PDF table extraction giới hạn input 20 MiB.")
+    out = p.with_name(p.stem + "-tables.zip")
+    total_tables = 0
+    total_rows = 0
+    total_cells = 0
+    table_files = []
+    try:
+        with pdfplumber.open(p) as pdf:
+            if len(pdf.pages) > 200:
+                raise RuntimeError("PDF vượt giới hạn 200 trang.")
+            with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+                for page_number, page in enumerate(pdf.pages, 1):
+                    for table_number, table in enumerate(page.extract_tables() or [], 1):
+                        rows = []
+                        for raw_row in table or []:
+                            row = [str(cell).replace("\x00", "").strip() if cell is not None else "" for cell in raw_row]
+                            if any(cell for cell in row):
+                                rows.append(row)
+                        if not rows:
+                            continue
+                        columns = max(len(row) for row in rows)
+                        if columns > 100:
+                            raise RuntimeError("PDF table có hơn 100 cột; đã dừng để giới hạn tài nguyên.")
+                        total_tables += 1
+                        total_rows += len(rows)
+                        total_cells += sum(len(row) for row in rows)
+                        if total_tables > 200 or total_rows > 20000 or total_cells > 500000:
+                            raise RuntimeError("PDF vượt giới hạn 200 bảng, 20.000 hàng hoặc 500.000 ô.")
+                        buffer = io.StringIO(newline="")
+                        writer = csv.writer(buffer, lineterminator="\n")
+                        for row in rows:
+                            writer.writerow([_spreadsheet_safe(cell) for cell in row + [""] * (columns - len(row))])
+                        name = f"page-{page_number:03d}-table-{table_number:03d}.csv"
+                        bundle.writestr(name, buffer.getvalue())
+                        table_files.append(name)
+                report = [
+                    "Nolane PDF table extraction",
+                    f"Pages scanned: {len(pdf.pages)}",
+                    f"Tables extracted: {total_tables}",
+                    f"Rows: {total_rows}",
+                    f"Cells: {total_cells}",
+                    "Method: pdfplumber text/geometry extraction; scanned image tables require OCR/table recognition.",
+                ]
+                bundle.writestr("report.txt", "\n".join(report) + "\n")
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("Không thể đọc cấu trúc PDF hoặc trích bảng.") from exc
+    if out.stat().st_size > MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("ZIP bảng PDF vượt giới hạn output 45 MiB.")
+    return {
+        "summary": f"Đã quét PDF và trích {total_tables} bảng thành CSV trong ZIP; {total_rows:,} hàng, {total_cells:,} ô. PDF scan không có text layer có thể không trích được bảng.",
+        "output_path": str(out),
+    }
+
+
+def json_jmespath_query(p):
+    import jmespath
+    if p.stat().st_size > 20 * 1024 * 1024:
+        raise RuntimeError("JSON JMESPath giới hạn input 20 MiB.")
+    try:
+        envelope = json.loads(p.read_text(encoding="utf-8-sig"))
+    except Exception as exc:
+        raise RuntimeError("Đầu vào phải là JSON envelope có query và data.") from exc
+    if not isinstance(envelope, dict) or not isinstance(envelope.get("query"), str) or "data" not in envelope:
+        raise RuntimeError('JSON cần dạng {"query":"foo.bar[*]","data":{...}}.')
+    query = envelope["query"].strip()
+    if not query or len(query) > 4096:
+        raise RuntimeError("JMESPath query phải có 1–4.096 ký tự.")
+    try:
+        expression = jmespath.compile(query)
+        selected = expression.search(envelope["data"])
+    except Exception as exc:
+        raise RuntimeError("JMESPath expression không hợp lệ hoặc không thể thực thi.") from exc
+    out = p.with_name(p.stem + "-query.json")
+    serialized = json.dumps(selected, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+    if len(serialized.encode("utf-8")) > 20 * 1024 * 1024:
+        raise RuntimeError("Kết quả JSON query vượt giới hạn 20 MiB.")
+    out.write_text(serialized, encoding="utf-8")
+    return {"summary": f"Đã áp dụng JMESPath query; kết quả có kiểu {type(selected).__name__}, {len(serialized):,} ký tự.", "output_path": str(out)}
+
+
+def ip_network_report(p):
+    import ipaddress
+    if p.stat().st_size > 5 * 1024 * 1024:
+        raise RuntimeError("IP network report giới hạn input 5 MiB.")
+    networks = []
+    invalid = 0
+    for line_number, raw in enumerate(p.read_text(encoding="utf-8-sig", errors="replace").splitlines(), 1):
+        value = raw.split("#", 1)[0].strip()
+        if not value:
+            continue
+        value = value.split()[0].strip(",;")
+        try:
+            network = ipaddress.ip_network(value, strict=False)
+        except ValueError:
+            invalid += 1
+            continue
+        networks.append((line_number, value, network))
+        if len(networks) > 2000:
+            raise RuntimeError("IP network report giới hạn 2.000 địa chỉ/CIDR.")
+    out = p.with_name(p.stem + "-ip-networks.csv")
+    rows = []
+    for index, (line_number, original, network) in enumerate(networks):
+        overlaps = sum(
+            1 for other_index, (_, _, other) in enumerate(networks)
+            if other_index != index and network.version == other.version and network.overlaps(other)
+        )
+        rows.append((
+            line_number, original, str(network), network.version, network.prefixlen,
+            network.num_addresses, int(network.is_private), int(network.is_global),
+            int(network.is_multicast), overlaps,
+        ))
+    with out.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(["line", "input", "canonical_network", "ip_version", "prefix_length", "address_count", "is_private", "is_global", "is_multicast", "overlap_count"])
+        writer.writerows(rows)
+    return {
+        "summary": f"Đã phân tích {len(networks):,} IP/CIDR, {invalid:,} dòng không hợp lệ; báo cáo có thông tin mạng canonical, số địa chỉ, phạm vi và số mạng chồng lấn.",
+        "output_path": str(out),
+    }
+
+
+def barcode_generate(p):
+    try:
+        import barcode
+        from barcode.writer import ImageWriter
+    except ImportError as exc:
+        raise RuntimeError("Thiếu python-barcode/Pillow để tạo Code 128.") from exc
+    if p.stat().st_size > 2 * 1024 * 1024:
+        raise RuntimeError("Barcode input giới hạn 2 MiB.")
+    payloads = [line.strip() for line in p.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
+    if not payloads or len(payloads) > 50:
+        raise RuntimeError("Cần từ 1 đến 50 dòng payload barcode không rỗng.")
+    for payload in payloads:
+        if len(payload) > 120 or any(ord(char) < 32 or ord(char) > 126 for char in payload):
+            raise RuntimeError("Code 128 chỉ nhận tối đa 120 ký tự ASCII in được trên mỗi dòng.")
+    out = p.with_name(p.stem + "-barcodes.zip")
+    manifest = []
+    try:
+        with tempfile.TemporaryDirectory(prefix="nolane-barcode-", dir=str(p.parent)) as temp_dir:
+            with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+                for index, payload in enumerate(payloads, 1):
+                    name = f"barcode-{index:03d}.png"
+                    target = Path(temp_dir) / f"barcode-{index:03d}"
+                    code = barcode.get_barcode_class("code128")(payload, writer=ImageWriter())
+                    generated = code.save(str(target), options={
+                        "write_text": True, "font_size": 10, "text_distance": 4,
+                        "module_width": 0.25, "module_height": 14.0, "quiet_zone": 6.5,
+                    })
+                    generated_path = Path(generated)
+                    if not generated_path.is_file() or generated_path.stat().st_size > 5 * 1024 * 1024:
+                        raise RuntimeError("Barcode output không hợp lệ hoặc vượt 5 MiB.")
+                    bundle.write(generated_path, arcname=name)
+                    manifest.append((index, name))
+                buffer = __import__("io").StringIO(newline="")
+                writer = csv.writer(buffer, lineterminator="\n")
+                writer.writerow(["index", "filename"])
+                writer.writerows(manifest)
+                bundle.writestr("manifest.csv", buffer.getvalue())
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("Không thể tạo Code 128 barcode; kiểm tra payload và dependency.") from exc
+    if out.stat().st_size > MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("Barcode ZIP vượt giới hạn output 45 MiB.")
+    return {"summary": f"Đã tạo {len(payloads)} barcode Code 128 dạng PNG và đóng gói ZIP; payload chỉ được dùng để mã hóa.", "output_path": str(out)}
+
+
+def docx_to_markdown(p):
+    try:
+        from docx import Document
+        from docx.oxml.table import CT_Tbl
+        from docx.oxml.text.paragraph import CT_P
+        from docx.table import Table
+        from docx.text.paragraph import Paragraph
+    except ImportError as exc:
+        raise RuntimeError("Thiếu python-docx để chuyển DOCX sang Markdown.") from exc
+    if p.stat().st_size > 20 * 1024 * 1024:
+        raise RuntimeError("DOCX to Markdown giới hạn input 20 MiB.")
+    try:
+        document = Document(str(p))
+        chunks = []
+        block_count = 0
+        for child in document.element.body.iterchildren():
+            block_count += 1
+            if block_count > 50000:
+                raise RuntimeError("DOCX vượt giới hạn 50.000 block.")
+            if isinstance(child, CT_P):
+                paragraph = Paragraph(child, document)
+                content_parts = []
+                for run in paragraph.runs:
+                    value = run.text.replace("\r", "").replace("\n", "  \n")
+                    if not value:
+                        continue
+                    if run.bold:
+                        value = "**" + value + "**"
+                    if run.italic:
+                        value = "*" + value + "*"
+                    if run.underline:
+                        value = "<u>" + value + "</u>"
+                    content_parts.append(value)
+                content = "".join(content_parts).strip() or paragraph.text.strip()
+                if not content:
+                    continue
+                style = (paragraph.style.name if paragraph.style else "").strip().lower()
+                if style.startswith("heading"):
+                    match = re.search(r"([1-9])$", style)
+                    level = min(6, int(match.group(1))) if match else 2
+                    content = "#" * level + " " + content
+                elif style == "title":
+                    content = "# " + content
+                elif style.startswith("list bullet"):
+                    content = "- " + content
+                elif style.startswith("list number"):
+                    content = "1. " + content
+                elif "quote" in style:
+                    content = "> " + content
+                chunks.append(content)
+            elif isinstance(child, CT_Tbl):
+                table = Table(child, document)
+                rows = []
+                for row in table.rows:
+                    rows.append([cell.text.replace("\r", "").replace("\n", "<br>").replace("|", r"\|").strip() for cell in row.cells])
+                    if len(rows) > 10000:
+                        raise RuntimeError("Một DOCX table vượt 10.000 hàng.")
+                if rows:
+                    width = max(len(row) for row in rows)
+                    normalized = [row + [""] * (width - len(row)) for row in rows]
+                    chunks.append("| " + " | ".join(normalized[0]) + " |")
+                    chunks.append("| " + " | ".join(["---"] * width) + " |")
+                    for row in normalized[1:]:
+                        chunks.append("| " + " | ".join(row) + " |")
+        markdown = "\n\n".join(chunks).strip() + "\n"
+        if len(markdown.encode("utf-8")) > 40 * 1024 * 1024:
+            raise RuntimeError("Markdown đầu ra vượt 40 MiB.")
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("Không thể đọc DOCX; tệp có thể hỏng hoặc chứa cấu trúc không hỗ trợ.") from exc
+    out = p.with_name(p.stem + ".md")
+    out.write_text(markdown, encoding="utf-8")
+    return {"summary": f"Đã chuyển DOCX thành Markdown với {block_count:,} block cấu trúc; giữ heading, đoạn, danh sách phổ biến và bảng. Ảnh, header/footer và bố cục trang không được render.", "output_path": str(out)}
+
+
+def pptx_notes_extract(p):
+    try:
+        from pptx import Presentation
+    except ImportError as exc:
+        raise RuntimeError("Thiếu python-pptx để trích speaker notes.") from exc
+    if p.stat().st_size > 20 * 1024 * 1024:
+        raise RuntimeError("PPTX speaker notes giới hạn input 20 MiB.")
+    try:
+        presentation = Presentation(str(p))
+        if len(presentation.slides) > 300:
+            raise RuntimeError("PPTX vượt giới hạn 300 slide.")
+        sections = []
+        total_chars = 0
+        for index, slide in enumerate(presentation.slides, 1):
+            try:
+                notes = slide.notes_slide.notes_text_frame.text.strip()
+            except (AttributeError, KeyError, ValueError):
+                notes = ""
+            if not notes:
+                continue
+            total_chars += len(notes)
+            if total_chars > 20 * 1024 * 1024:
+                raise RuntimeError("Tổng speaker notes vượt 20 MiB text.")
+            sections.append(f"## Slide {index}\n\n{notes}")
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("Không thể đọc speaker notes từ PPTX.") from exc
+    out = p.with_name(p.stem + "-speaker-notes.md")
+    out.write_text(("\n\n".join(sections) if sections else "Không tìm thấy speaker notes.\n"), encoding="utf-8")
+    return {"summary": f"Đã quét {len(presentation.slides)} slide và trích ghi chú từ {len(sections)} slide; không trích nội dung hiển thị trên slide.", "output_path": str(out)}
+
+
+def fuzzy_match_report(p):
+    try:
+        from rapidfuzz import fuzz, process
+    except ImportError as exc:
+        raise RuntimeError("Thiếu rapidfuzz để chạy fuzzy matching.") from exc
+    if p.stat().st_size > 5 * 1024 * 1024:
+        raise RuntimeError("Fuzzy match report giới hạn input 5 MiB.")
+    lines = [line.strip() for line in p.read_text(encoding="utf-8-sig", errors="replace").splitlines() if line.strip()]
+    if len(lines) < 2:
+        raise RuntimeError("Cần ít nhất hai dòng văn bản không rỗng để so khớp.")
+    if len(lines) > 1200:
+        raise RuntimeError("Fuzzy matching giới hạn 1.200 dòng để kiểm soát số phép so sánh.")
+    if any(len(line) > 2000 for line in lines):
+        raise RuntimeError("Mỗi dòng fuzzy matching không được vượt 2.000 ký tự.")
+    pairs = {}
+    for index, line in enumerate(lines):
+        for match, score, other_index in process.extract(line, lines, scorer=fuzz.ratio, limit=8, score_cutoff=85):
+            if other_index <= index or match == line:
+                continue
+            pairs[(index, other_index)] = round(float(score), 2)
+            if len(pairs) >= 5000:
+                break
+        if len(pairs) >= 5000:
+            break
+    out = p.with_name(p.stem + "-fuzzy-matches.csv")
+    ranked = sorted(pairs.items(), key=lambda item: (-item[1], item[0][0], item[0][1]))
+    with out.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(["left_line", "right_line", "similarity_percent", "left_text", "right_text"])
+        for (left, right), score in ranked:
+            writer.writerow([left + 1, right + 1, score, _spreadsheet_safe(lines[left]), _spreadsheet_safe(lines[right])])
+    return {"summary": f"Đã so khớp {len(lines):,} dòng bằng RapidFuzz; tìm thấy {len(ranked):,} cặp có độ tương đồng từ 85% trở lên (tối đa 5.000 cặp).", "output_path": str(out)}
+
+
+def csv_to_parquet(p):
+    try:
+        import duckdb
+    except ImportError as exc:
+        raise RuntimeError("Thiếu duckdb để chuyển CSV sang Parquet.") from exc
+    if p.stat().st_size > 20 * 1024 * 1024:
+        raise RuntimeError("CSV to Parquet giới hạn input 20 MiB.")
+    out = p.with_name(p.stem + ".parquet")
+    source = str(p.resolve()).replace("'", "''")
+    target = str(out.resolve()).replace("'", "''")
+    connection = duckdb.connect(database=":memory:")
+    try:
+        connection.execute("SET threads=2")
+        connection.execute("SET memory_limit='256MB'")
+        connection.execute("SET enable_progress_bar=false")
+        relation = f"read_csv_auto('{source}', header=true, all_varchar=true, sample_size=-1)"
+        row_count = connection.execute(f"SELECT count(*) FROM {relation}").fetchone()[0]
+        if row_count > 1000000:
+            raise RuntimeError("CSV vượt giới hạn 1.000.000 hàng.")
+        connection.execute(f"COPY (SELECT * FROM {relation}) TO '{target}' (FORMAT PARQUET, COMPRESSION ZSTD)")
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("Không thể parse CSV để chuyển sang Parquet.") from exc
+    finally:
+        connection.close()
+    if out.stat().st_size > MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("Parquet output vượt giới hạn 45 MiB.")
+    return {"summary": f"Đã chuyển {row_count:,} hàng CSV sang Parquet Zstandard; cột được giữ dạng chuỗi để tránh mất số 0 ở đầu.", "output_path": str(out)}
+
+
+def parquet_to_csv(p):
+    try:
+        import duckdb
+    except ImportError as exc:
+        raise RuntimeError("Thiếu duckdb để chuyển Parquet sang CSV.") from exc
+    if p.stat().st_size > 20 * 1024 * 1024:
+        raise RuntimeError("Parquet to CSV giới hạn input 20 MiB.")
+    out = p.with_name(p.stem + ".csv")
+    raw_out = p.with_name(p.stem + "-export-raw.csv")
+    source = str(p.resolve()).replace("'", "''")
+    target = str(raw_out.resolve()).replace("'", "''")
+    connection = duckdb.connect(database=":memory:")
+    try:
+        try:
+            connection.execute("SET threads=2")
+            connection.execute("SET memory_limit='256MB'")
+            connection.execute("SET enable_progress_bar=false")
+            relation = f"read_parquet('{source}')"
+            row_count = connection.execute(f"SELECT count(*) FROM {relation}").fetchone()[0]
+            if row_count > 1000000:
+                raise RuntimeError("Parquet vượt giới hạn 1.000.000 hàng.")
+            connection.execute(f"COPY (SELECT * FROM {relation}) TO '{target}' (FORMAT CSV, HEADER, DELIMITER ',', QUOTE '\"', ESCAPE '\"')")
+            if raw_out.stat().st_size > MAX_PIPELINE_OUTPUT:
+                raise RuntimeError("CSV export từ Parquet vượt giới hạn 45 MiB.")
+        finally:
+            connection.close()
+        with raw_out.open("r", encoding="utf-8", newline="") as source_handle:
+            reader = csv.reader(source_handle)
+            with out.open("w", encoding="utf-8-sig", newline="") as target_handle:
+                writer = csv.writer(target_handle, lineterminator="\n")
+                for row in reader:
+                    writer.writerow([_spreadsheet_safe(cell) for cell in row])
+    finally:
+        raw_out.unlink(missing_ok=True)
+    if out.stat().st_size > MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("CSV output vượt giới hạn 45 MiB.")
+    return {"summary": f"Đã chuyển {row_count:,} hàng Parquet sang CSV UTF-8; ô có thể bị hiểu là công thức bảng tính đã được trung hòa.", "output_path": str(out)}
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -10951,6 +11363,15 @@ TOOLS={
  "wcag-contrast-audit":wcag_contrast_audit,
  "ssh-public-key-audit":ssh_public_key_audit,
  "archive-checksum-manifest":archive_checksum_manifest,
+ "pdf-table-extract":pdf_table_extract,
+ "json-jmespath-query":json_jmespath_query,
+ "ip-network-report":ip_network_report,
+ "barcode-generate":barcode_generate,
+ "docx-to-markdown":docx_to_markdown,
+ "pptx-notes-extract":pptx_notes_extract,
+ "fuzzy-match-report":fuzzy_match_report,
+ "csv-to-parquet":csv_to_parquet,
+ "parquet-to-csv":parquet_to_csv,
 
 }
 

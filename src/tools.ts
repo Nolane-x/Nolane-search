@@ -376,6 +376,15 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "wcag-contrast-audit", name: "Kiểm tra tương phản màu WCAG", category: "utility", description: "Tính contrast ratio từ cặp HEX, đối chiếu WCAG 2.2 AA/AAA cho normal/large text; hỗ trợ danh sách nhiều dòng.", accepts: ["text/plain", ".txt"], output: "Báo cáo contrast WCAG TXT", ready: true },
   { id: "ssh-public-key-audit", name: "Kiểm tra SSH public keys", category: "developer", description: "Đọc authorized_keys/OpenSSH public keys/PEM public key, phát hiện duplicate, RSA/EC key yếu và DSA deprecated; không hỗ trợ private key, không kết nối SSH.", accepts: ["text/plain", ".pub", ".pem"], output: "Báo cáo SSH public key TXT", ready: true },
   { id: "archive-checksum-manifest", name: "Tạo checksum manifest cho ZIP", category: "utility", description: "Tính SHA-256 từng member ZIP và xuất CSV path/size/digest; chặn traversal, symlink, encrypted member và giới hạn số tệp/dung lượng, không giải nén ra thư mục.", accepts: ["application/zip", ".zip"], output: "SHA-256 manifest CSV", ready: true },
+  { id: "pdf-table-extract", name: "Trích bảng từ PDF", category: "document", description: "Phát hiện bảng có text/vector trong PDF và xuất từng bảng thành CSV trong ZIP; giới hạn 200 trang, không OCR bảng scan.", accepts: ["application/pdf", ".pdf"], output: "ZIP các bảng CSV", ready: true },
+  { id: "json-jmespath-query", name: "Truy vấn JSON JMESPath", category: "data", description: "Lọc và chiếu dữ liệu JSON bằng biểu thức JMESPath; tệp đầu vào gồm query và data, không thực thi mã.", accepts: ["application/json", "text/json", ".json"], output: "JSON đã truy vấn", ready: true },
+  { id: "ip-network-report", name: "Phân tích IP và CIDR", category: "developer", description: "Chuẩn hóa IPv4/IPv6 và CIDR, thống kê prefix, số địa chỉ, phạm vi private/global và mạng chồng lấn; xử lý offline.", accepts: ["text/plain", ".txt", ".conf"], output: "CSV báo cáo IP/CIDR", ready: true },
+  { id: "barcode-generate", name: "Tạo barcode Code 128", category: "image", description: "Tạo tối đa 50 barcode Code 128 dạng PNG từ các dòng ASCII và đóng gói ZIP.", accepts: ["text/plain", ".txt", ".csv"], output: "ZIP barcode PNG", ready: true },
+  { id: "docx-to-markdown", name: "DOCX sang Markdown", category: "document", description: "Chuyển tiêu đề, đoạn, danh sách phổ biến và bảng Word thành Markdown; không render ảnh hoặc bố cục trang.", accepts: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx"], output: "Tệp Markdown", ready: true },
+  { id: "pptx-notes-extract", name: "Trích speaker notes PPTX", category: "document", description: "Trích ghi chú thuyết trình theo từng slide thành Markdown; không xuất nội dung trình chiếu hoặc media.", accepts: ["application/vnd.openxmlformats-officedocument.presentationml.presentation", ".pptx"], output: "Markdown speaker notes", ready: true },
+  { id: "fuzzy-match-report", name: "Tìm dòng gần trùng", category: "data", description: "Dùng RapidFuzz so khớp các dòng gần giống, báo độ tương đồng và vị trí; giới hạn 1.200 dòng và 5.000 cặp.", accepts: ["text/plain", ".txt", ".md", ".csv", ".log"], output: "CSV fuzzy matches", ready: true },
+  { id: "csv-to-parquet", name: "CSV sang Parquet", category: "data", description: "Chuyển CSV thành Parquet Zstandard bằng DuckDB; giữ cột dạng chuỗi để bảo toàn số 0 đầu và giới hạn một triệu hàng.", accepts: ["text/csv", ".csv"], output: "Tệp Parquet", ready: true },
+  { id: "parquet-to-csv", name: "Parquet sang CSV", category: "data", description: "Đọc Parquet và xuất CSV UTF-8 bằng DuckDB; không nhận SQL do người dùng cung cấp và giới hạn một triệu hàng.", accepts: ["application/vnd.apache.parquet", ".parquet"], output: "Tệp CSV", ready: true },
 
 ];
 
@@ -716,6 +725,15 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "wcag-contrast-audit": ["text-clean", "text-stats"],
   "ssh-public-key-audit": ["text-clean", "text-stats"],
   "archive-checksum-manifest": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json"],
+  "pdf-table-extract": ["archive-inspect", "archive-manifest"],
+  "json-jmespath-query": ["json-format", "json-to-csv"],
+  "ip-network-report": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json", "csv-to-parquet"],
+  "barcode-generate": ["archive-inspect", "archive-safe-extract", "archive-manifest"],
+  "docx-to-markdown": ["markdown-quality-audit", "markdown-outline", "markdown-links", "markdown-toc", "text-clean"],
+  "pptx-notes-extract": ["text-clean", "text-stats", "text-translate"],
+  "fuzzy-match-report": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json", "csv-to-parquet"],
+  "csv-to-parquet": ["parquet-to-csv"],
+  "parquet-to-csv": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json", "csv-to-parquet"],
 };
 
 export type ToolPipelineValidation =
