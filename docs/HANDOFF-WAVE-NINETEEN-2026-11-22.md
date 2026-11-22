@@ -1,4 +1,4 @@
-# Wave 19 handoff — Network, media, ebook and data quality tools
+# Wave 19 release handoff — Network, media, ebook and data quality tools
 
 Date: 2026-11-22
 Repository: https://github.com/Nolane-x/Nolane-search
@@ -6,7 +6,7 @@ Branch: feat/wave-nineteen-network-media-ebook-data-tools
 
 ## Scope
 
-Adds eight distinct processors beyond the 328-tool Wave 18 production catalog:
+Wave 19 is merged and deployed. Eight distinct processors extend the 328-tool Wave 18 production catalog to 336:
 
 - pcap-network-audit: read PCAP/PCAPNG offline, count protocols/ports/packets/duration and unique endpoint count; no IP addresses, DNS names or payloads in the report.
 - audio-tag-audit: check common title/artist/album/date/genre/track/disc/album artist/composer tag groups and cover-art presence via FFprobe; never emits tag values.
@@ -48,3 +48,13 @@ Adds eight distinct processors beyond the 328-tool Wave 18 production catalog:
 6. Live Telegram upload/report/retry for representative PCAP, audio, ZIP of images, JSON envelope, EPUB, Markdown, DNS zone and X.509 files remains owner-level E2E.
 
 Research notes: docs/TOOL-RESEARCH-2026-11-22.md
+
+## Production rollout — 2026-11-22
+
+- PR #69 merged into `main`: https://github.com/Nolane-x/Nolane-search/pull/69
+- Main commit: `063b73168111db96acb799df27e1c9fb5f11d3e6`.
+- Main CI [44981447755](https://github.com/Nolane-x/Nolane-search/actions/runs/44981447755), Worker export/production health smoke [44981447745](https://github.com/Nolane-x/Nolane-search/actions/runs/44981447745) and production deployment [44981447683](https://github.com/Nolane-x/Nolane-search/actions/runs/44981447683) all passed.
+- CI passed TypeScript type-check, Vitest, deployment-script checks, 127 Python runner tests and Worker build.
+- Deployment verified Worker bundle, runtime-secret upload and Telegram webhook/command-menu registration. D1 migration was skipped because no schema changed.
+- Production catalog: 336 processors. Cloudflare Worker Version ID: `f7be3cf0-1370-4333-84be-af5f22e6f012`.
+- Still required: owner-level private Telegram upload/report/retry for representative input files. CI and deployment do not prove the entire chat interaction.
