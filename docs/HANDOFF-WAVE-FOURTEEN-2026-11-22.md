@@ -1,33 +1,43 @@
-# Wave 14 handoff — Document, privacy and archive auditors
+# Wave 14 release handoff — Document, privacy and archive auditors
 
 Date: 2026-11-22
 Repository: https://github.com/Nolane-x/Nolane-search
-Branch: feat/wave-fourteen-file-auditors
+PR: https://github.com/Nolane-x/Nolane-search/pull/64
+Production source commit: ccd74ad52825c498413622e571cfb2970da4b995
 
-## Scope
+## Release state
 
-Wave 14 proposes four bounded processors. Production baseline remains 308 until PR CI, main CI, Worker export/smoke and production deployment all pass.
+Wave 14 is merged and deployed. The catalog is now 312 production processors (up from 308). Cloudflare Worker version 71, ID `8c86c559-30c2-4ba4-a7e4-5365751df737`, receives 100% traffic through deployment `9194f2a0-9974-4961-8433-9109066cf4b1`.
 
-- docx-audit: structure audit for heading hierarchy, table first rows, image alternative text, unsafe external-link schemes and tracked change markers. Reports counters only; no paragraph/table contents.
-- pptx-audit: slide counters, missing titles, empty slides, dense text, repeated/long titles, explicitly small font runs and images lacking alt text. No rendering or actual clipping detection.
-- csv-privacy-audit: email-like values, Luhn-valid 13–19 digit card candidates, IPv4, phone-like values in phone-named columns and sensitive-looking headers. Reports column/type/count/row numbers only; never raw cell values.
-- archive-security-audit: ZIP/TAR metadata preflight for absolute/traversal paths, duplicate/case-colliding paths, links/special entries, encrypted ZIP members, extreme compression ratios, large members, nested archives and executable/script suffixes. No extraction or member-content reads.
+- PR CI #64: passed — https://github.com/Nolane-x/Nolane-search/actions/runs/44966857743
+- Main CI #286: passed — https://github.com/Nolane-x/Nolane-search/actions/runs/44966971539
+- Worker export and production smoke test #110: passed — https://github.com/Nolane-x/Nolane-search/actions/runs/44966971507
+- Production deployment #117: passed — https://github.com/Nolane-x/Nolane-search/actions/runs/44966971557
+- Live `/health`: `ok: true`, database `reachable`; four provider-key routes and nine model routes reported. This is not proof every upstream key currently has quota or successful inference.
+- Catalog parity: 312 unique TypeScript IDs, 312 Python runner allowlist IDs, 312 Python handlers and 752 matching pipeline edges.
+- Python runner test suite: 104 tests passed; TypeScript type-check, Vitest, deployment-script checks and Worker build passed.
+- No D1 schema migration or new secret/external dependency was required. Office dependencies are installed for relevant GitHub-hosted runner jobs.
 
-## Limits
+## Added tools
 
-- Upload remains bounded by the runner's 20 MiB limit.
-- DOCX: at most 20,000 paragraphs, 1,000 tables and 2,000 inline images.
-- PPTX: at most 300 slides. Font-size warnings use explicitly set run sizes only; no rendering, clipping or full accessibility validation.
-- CSV: at most 50,000 records and 200 columns; reports metadata only. Header and phone checks are heuristic.
-- Archive: at most 10,000 entries; no extraction. Executable extensions are review signals, not a malware verdict.
-- Office dependencies installed only for DOCX/PPTX/Office jobs; CI adds these libraries for fixture tests.
-- No new secret, external service or database migration.
+- `docx-audit`: heading hierarchy, empty table first rows, missing image alt text, unsafe external hyperlinks and tracked changes/comments. No paragraph/table content is emitted.
+- `pptx-audit`: per-slide text/image counters, missing/duplicate/long titles, blank or dense slides, explicitly set font runs below 12 pt and missing image alt text. No rendering/clipping certification.
+- `csv-privacy-audit`: email-like patterns, Luhn card candidates, IPv4, phone-like values in phone-named columns and sensitive header names. Reports column/type/count and sample row numbers, never raw cell values.
+- `archive-security-audit`: ZIP/TAR path traversal/absolute paths, duplicates/case collisions, links/special entries, encrypted ZIP entries, extreme ratios, large files, nested archive and executable/script suffixes. Metadata-only, no extraction/exec.
 
-## Acceptance gates
+## Limits and interpretation
 
-1. TypeScript registry has 312 unique IDs.
-2. TypeScript catalog, Python RUNNERS, Python TOOLS handlers, docs and transition graphs match.
-3. Python tests cover all four tools, especially the CSV raw-value non-disclosure and archive path/collision/ratio findings.
-4. Vitest, type-check, Python compile/unit tests and Worker build pass.
-5. Cloudflare export/smoke and production deploy pass before counting 312 as production.
-6. Live Telegram upload/response/retry for representative DOCX, PPTX, CSV and ZIP remains owner-level E2E; CI does not prove it.
+- Runner upload remains capped by 20 MiB.
+- DOCX checks are structural heuristics, not a full accessibility/WCAG certification or rendered Word layout audit.
+- PPTX is capped at 300 slides; font-size warnings only cover explicit run size values and do not account for theme/master inheritance, overlap or clipping.
+- CSV is capped at 50,000 records and 200 columns. Pattern/header detection can have false positives and false negatives; raw values are withheld from the report.
+- ZIP/TAR is capped at 10,000 entries; no member content is read. Executable/script extensions are review signals, not a malware verdict.
+
+## Remaining real-world verification
+
+Live Telegram end-to-end behavior remains to be verified by uploading representative DOCX, PPTX, CSV and ZIP files, checking that the bot delivers the expected report/artifact, and exercising retry. Successful CI, webhook registration and `/health` do not prove that full Telegram user journey.
+
+## Continue from here
+
+- Keep `main` at 312 production tools unless the next addition has a genuinely useful distinct capability and complete TypeScript/Python/docs/pipeline/test parity.
+- For next file-tool wave, prioritize real user workflows that output usable artifacts, robust malformed-file handling, bounded resource usage and privacy-safe reports rather than cosmetic count growth.
