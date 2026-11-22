@@ -334,6 +334,10 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "repo-api-spec-audit", name: "Kiểm tra hợp đồng OpenAPI", category: "repository", description: "Kiểm tra OpenAPI/Swagger JSON/YAML: operationId trùng, responses thiếu, path parameter, local $ref không tồn tại; không fetch remote refs.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
   { id: "repo-container-audit", name: "Kiểm toán Docker/Container", category: "repository", description: "Kiểm tra Dockerfile/Compose: base image floating, USER, HEALTHCHECK, ARG/ENV credential, copy .env, privileged, host network và Docker socket.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
   { id: "repo-ci-reliability", name: "Kiểm tra độ tin cậy CI", category: "repository", description: "Kiểm tra GitHub Actions: job thiếu timeout, concurrency, continue-on-error, lệnh che lỗi và action dùng moving tag; chỉ static YAML.", accepts: ["application/zip", ".zip"], output: "Báo cáo TXT", ready: true },
+  { id: "docx-audit", name: "Kiểm tra chất lượng DOCX", category: "document", description: "Audit cấu trúc Word: cấp heading, bảng thiếu tiêu đề, ảnh thiếu alt text, liên kết nguy hiểm và dấu vết sửa đổi; chỉ báo cáo metadata/counters, không trích nội dung đoạn văn.", accepts: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx"], output: "Báo cáo DOCX TXT", ready: true },
+  { id: "pptx-audit", name: "Kiểm tra chất lượng PowerPoint", category: "document", description: "Audit từng slide: tiêu đề thiếu/lặp, slide trống, mật độ chữ, font nhỏ và ảnh thiếu alt text; chỉ phân tích tĩnh, không render slide.", accepts: ["application/vnd.openxmlformats-officedocument.presentationml.presentation", ".pptx"], output: "Báo cáo PPTX TXT", ready: true },
+  { id: "csv-privacy-audit", name: "Kiểm toán dữ liệu nhạy cảm CSV", category: "data", description: "Phát hiện email, thẻ thanh toán hợp lệ theo Luhn, IPv4, số điện thoại dạng nghi vấn và cột nhạy cảm; chỉ xuất loại/cột/số dòng, tuyệt đối không in giá trị ô.", accepts: ["text/csv", ".csv"], output: "Báo cáo riêng tư CSV TXT", ready: true },
+  { id: "archive-security-audit", name: "Kiểm toán an toàn ZIP/TAR", category: "utility", description: "Rà path traversal, tên trùng/collision, symlink/special file, tệp mã hóa, tỷ lệ nén, tệp quá lớn, archive lồng nhau và đuôi thực thi; không giải nén hay chạy nội dung.", accepts: [".zip", ".tar", ".tgz", ".tar.gz", ".gz"], output: "Báo cáo an toàn archive TXT", ready: true },
 ];
 
 
@@ -636,6 +640,10 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "repo-api-spec-audit": ["text-clean", "text-stats"],
   "repo-container-audit": ["text-clean", "text-stats"],
   "repo-ci-reliability": ["text-clean", "text-stats"],
+  "docx-audit": ["text-clean", "text-stats"],
+  "pptx-audit": ["text-clean", "text-stats"],
+  "csv-privacy-audit": ["text-clean", "text-stats"],
+  "archive-security-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
