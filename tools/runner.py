@@ -22,6 +22,11 @@ from wave25 import (
     junit_xml_audit, otel_collector_audit, sarif_report_audit, step_cad_audit,
     unity_package_audit, unreal_project_audit, wasm_module_audit,
 )
+from wave26 import (
+    bed_interval_audit, fasta_sequence_audit, fastq_quality_audit, genbank_record_audit,
+    gfa_assembly_audit, gff3_annotation_audit, newick_tree_audit, pdb_structure_audit,
+    sam_alignment_audit, sequence_alignment_audit, vcf_variant_audit,
+)
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
@@ -152,6 +157,7 @@ RUNNERS = {
     "hdf5-audit", "avro-schema-audit", "graphql-schema-audit", "protobuf-schema-audit",
     "odf-package-audit", "xliff-audit", "mbox-audit", "geopackage-audit", "mbtiles-audit", "openraster-audit", "krita-project-audit", "gltf-audit", "drawio-audit", "n8n-workflow-audit", "design-token-audit", "warc-archive-audit",
     "wasm-module-audit", "sarif-report-audit", "sbom-audit", "junit-xml-audit", "coverage-xml-audit", "fits-audit", "step-cad-audit", "otel-collector-audit", "godot-project-audit", "unity-package-audit", "unreal-project-audit",
+    "fasta-sequence-audit", "fastq-quality-audit", "vcf-variant-audit", "sam-alignment-audit", "gff3-annotation-audit", "bed-interval-audit", "genbank-record-audit", "pdb-structure-audit", "gfa-assembly-audit", "newick-tree-audit", "sequence-alignment-audit",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -534,11 +540,22 @@ PIPELINE_TRANSITIONS = {
     "godot-project-audit":{"text-clean","text-stats"},
     "unity-package-audit":{"text-clean","text-stats"},
     "unreal-project-audit":{"text-clean","text-stats"},
+    "fasta-sequence-audit":{"text-clean","text-stats"},
+    "fastq-quality-audit":{"text-clean","text-stats"},
+    "vcf-variant-audit":{"text-clean","text-stats"},
+    "sam-alignment-audit":{"text-clean","text-stats"},
+    "gff3-annotation-audit":{"text-clean","text-stats"},
+    "bed-interval-audit":{"text-clean","text-stats"},
+    "genbank-record-audit":{"text-clean","text-stats"},
+    "pdb-structure-audit":{"text-clean","text-stats"},
+    "gfa-assembly-audit":{"text-clean","text-stats"},
+    "newick-tree-audit":{"text-clean","text-stats"},
+    "sequence-alignment-audit":{"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-structured-data-audit","css-quality-audit","gcode-audit","midi-audit","musicxml-audit","bibtex-audit","nmea-track-audit","ansible-playbook-audit","prometheus-rules-audit","grafana-dashboard-audit","hdf5-audit","avro-schema-audit","graphql-schema-audit","protobuf-schema-audit","odf-package-audit","xliff-audit","mbox-audit","geopackage-audit","mbtiles-audit","openraster-audit","krita-project-audit","gltf-audit","drawio-audit","n8n-workflow-audit","design-token-audit","warc-archive-audit","wasm-module-audit","sarif-report-audit","sbom-audit","junit-xml-audit","coverage-xml-audit","fits-audit","step-cad-audit","otel-collector-audit","godot-project-audit","unity-package-audit","unreal-project-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-structured-data-audit","css-quality-audit","gcode-audit","midi-audit","musicxml-audit","bibtex-audit","nmea-track-audit","ansible-playbook-audit","prometheus-rules-audit","grafana-dashboard-audit","hdf5-audit","avro-schema-audit","graphql-schema-audit","protobuf-schema-audit","odf-package-audit","xliff-audit","mbox-audit","geopackage-audit","mbtiles-audit","openraster-audit","krita-project-audit","gltf-audit","drawio-audit","n8n-workflow-audit","design-token-audit","warc-archive-audit","wasm-module-audit","sarif-report-audit","sbom-audit","junit-xml-audit","coverage-xml-audit","fits-audit","step-cad-audit","otel-collector-audit","godot-project-audit","unity-package-audit","unreal-project-audit","fasta-sequence-audit","fastq-quality-audit","vcf-variant-audit","sam-alignment-audit","gff3-annotation-audit","bed-interval-audit","genbank-record-audit","pdb-structure-audit","gfa-assembly-audit","newick-tree-audit","sequence-alignment-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -12299,6 +12316,17 @@ TOOLS={
  "godot-project-audit":godot_project_audit,
  "unity-package-audit":unity_package_audit,
  "unreal-project-audit":unreal_project_audit,
+ "fasta-sequence-audit":fasta_sequence_audit,
+ "fastq-quality-audit":fastq_quality_audit,
+ "vcf-variant-audit":vcf_variant_audit,
+ "sam-alignment-audit":sam_alignment_audit,
+ "gff3-annotation-audit":gff3_annotation_audit,
+ "bed-interval-audit":bed_interval_audit,
+ "genbank-record-audit":genbank_record_audit,
+ "pdb-structure-audit":pdb_structure_audit,
+ "gfa-assembly-audit":gfa_assembly_audit,
+ "newick-tree-audit":newick_tree_audit,
+ "sequence-alignment-audit":sequence_alignment_audit,
 
 }
 

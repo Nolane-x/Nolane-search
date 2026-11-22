@@ -437,6 +437,17 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "godot-project-audit", name: "Kiểm tra dự án Godot project.godot", category: "developer", description: "Thống kê project settings, autoloads, enabled editor plugins, res:///remote URI refs và secret-bearing keys; không load scenes, scripts hoặc addons.", accepts: ["text/plain", ".godot"], output: "Báo cáo Godot TXT", ready: true },
   { id: "unity-package-audit", name: "Kiểm tra Unity .unitypackage", category: "developer", description: "Kiểm tra gzip/tar, GUID groups, asset/asset.meta/pathname, missing members, duplicates và unsafe paths; không extract project files ra filesystem.", accepts: ["application/gzip", ".unitypackage"], output: "Báo cáo Unity package TXT", ready: true },
   { id: "unreal-project-audit", name: "Kiểm tra Unreal Engine .uproject", category: "developer", description: "Rà JSON FileVersion, module/plugin declarations, duplicate names, enabled state, target platform và secret-bearing fields; không load project/plugins.", accepts: ["application/json", ".uproject"], output: "Báo cáo Unreal project TXT", ready: true },
+  { id: "fasta-sequence-audit", name: "Kiểm tra trình tự FASTA", category: "data", description: "Kiểm tra FASTA nucleotide/protein: số record, độ dài, alphabet IUPAC, record rỗng và ID trùng; không xuất header hoặc sequence.", accepts: ["text/plain", "application/fasta", ".fa", ".fasta", ".fna", ".faa", ".ffn", ".fas", ".fa.gz", ".fasta.gz"], output: "Báo cáo FASTA TXT", ready: true },
+  { id: "fastq-quality-audit", name: "Kiểm tra FASTQ reads và quality", category: "data", description: "Đếm read/base, kiểm tra header/+ separator, wrapped sequence/quality, độ dài, quality ASCII range và lỗi record; không đoán Phred offset hoặc xuất read.", accepts: ["text/plain", "application/fastq", ".fq", ".fastq", ".fq.gz", ".fastq.gz"], output: "Báo cáo FASTQ TXT", ready: true },
+  { id: "vcf-variant-audit", name: "Kiểm tra VCF variant calls", category: "data", description: "Rà VCF v4.x header/columns, POS, ALT classes, multiallelic, sample-column counts, ordering và duplicate keys; không tiết lộ chromosome, vị trí, allele, sample hay genotype.", accepts: ["text/x-vcf", "application/vcf", ".vcf", ".vcf.gz"], output: "Báo cáo VCF TXT", ready: true },
+  { id: "sam-alignment-audit", name: "Kiểm tra SAM read alignments", category: "data", description: "Kiểm tra SAM headers, references, flags, POS/MAPQ, CIGAR-vs-SEQ, SEQ/QUAL length và mapping flags; không xuất QNAME, reference, vị trí, sequence hay tags.", accepts: ["text/plain", "application/sam", ".sam", ".sam.gz"], output: "Báo cáo SAM TXT", ready: true },
+  { id: "gff3-annotation-audit", name: "Kiểm tra chú giải gene GFF3/GTF", category: "data", description: "Rà 9-column rows, coordinate/strand/phase, attributes, duplicate IDs, Parent references và embedded FASTA; không xuất sequence ID, gene label, coordinates hay attributes.", accepts: ["text/gff3", "text/plain", ".gff", ".gff3", ".gtf", ".gff3.gz"], output: "Báo cáo GFF3 TXT", ready: true },
+  { id: "bed-interval-audit", name: "Kiểm tra genomic BED intervals", category: "data", description: "Kiểm tra 0-based half-open coordinates, BED3–BED12, thick ranges, blockCount/blockSizes/blockStarts và strand; không xuất chromosome, names hoặc coordinates.", accepts: ["text/bed", "text/plain", ".bed", ".bed.gz"], output: "Báo cáo BED TXT", ready: true },
+  { id: "genbank-record-audit", name: "Kiểm tra GenBank flat-file records", category: "data", description: "Đếm LOCUS records, FEATURES, qualifiers và ORIGIN sequence lengths; kiểm tra // terminators và declared-length mismatch; không xuất accession, organism, annotation hay sequence.", accepts: ["text/plain", "chemical/seq-aa", ".gb", ".gbk", ".gbff"], output: "Báo cáo GenBank TXT", ready: true },
+  { id: "pdb-structure-audit", name: "Kiểm tra cấu trúc protein PDB", category: "data", description: "Đếm MODEL/ATOM/HETATM, chain/residue keys, alternate locations, element và tọa độ/occupancy lỗi; không xuất atom labels, coordinates, residues hay metadata.", accepts: ["chemical/x-pdb", "application/pdb", ".pdb", ".ent"], output: "Báo cáo PDB TXT", ready: true },
+  { id: "gfa-assembly-audit", name: "Kiểm tra genome assembly graph GFA", category: "data", description: "Rà GFA1/GFA1.1/GFA2 record types, segments, links, paths, sequence lengths và dangling segment references; không xuất graph IDs, sequence hay sample/haplotype.", accepts: ["text/plain", ".gfa", ".gfa1", ".gfa2", ".gfa.gz"], output: "Báo cáo GFA TXT", ready: true },
+  { id: "newick-tree-audit", name: "Kiểm tra cây phát sinh chủng loại Newick", category: "data", description: "Phân tích parentheses, leaves/internal nodes, branch-length syntax, comments, semicolon và nhiều cây; không xuất taxon names hoặc branch values.", accepts: ["text/plain", ".nwk", ".newick", ".tree"], output: "Báo cáo Newick TXT", ready: true },
+  { id: "sequence-alignment-audit", name: "Kiểm tra multiple sequence alignment", category: "data", description: "Kiểm tra Clustal/MUSCLE và Stockholm: sequence rows, aligned lengths, blank blocks, annotation lines và malformed rows; không xuất identifiers, aligned bases hoặc consensus.", accepts: ["text/plain", ".aln", ".sto", ".stockholm"], output: "Báo cáo alignment TXT", ready: true },
 
 ];
 
@@ -828,6 +839,17 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "godot-project-audit": ["text-clean", "text-stats"],
   "unity-package-audit": ["text-clean", "text-stats"],
   "unreal-project-audit": ["text-clean", "text-stats"],
+  "fasta-sequence-audit": ["text-clean", "text-stats"],
+  "fastq-quality-audit": ["text-clean", "text-stats"],
+  "vcf-variant-audit": ["text-clean", "text-stats"],
+  "sam-alignment-audit": ["text-clean", "text-stats"],
+  "gff3-annotation-audit": ["text-clean", "text-stats"],
+  "bed-interval-audit": ["text-clean", "text-stats"],
+  "genbank-record-audit": ["text-clean", "text-stats"],
+  "pdb-structure-audit": ["text-clean", "text-stats"],
+  "gfa-assembly-audit": ["text-clean", "text-stats"],
+  "newick-tree-audit": ["text-clean", "text-stats"],
+  "sequence-alignment-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
@@ -1038,6 +1060,17 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (name === "project.godot" || name.endsWith(".godot")) return "godot-project-audit";
   if (name.endsWith(".unitypackage")) return "unity-package-audit";
   if (name.endsWith(".uproject")) return "unreal-project-audit";
+  if (/\.(?:fa|fasta|fna|faa|ffn|fas)(?:\.gz)?$/i.test(name) || mime === "application/fasta") return "fasta-sequence-audit";
+  if (/\.(?:fq|fastq)(?:\.gz)?$/i.test(name) || mime === "application/fastq") return "fastq-quality-audit";
+  if (name.endsWith(".vcf.gz") || mime === "text/x-vcf" || mime === "application/vcf") return "vcf-variant-audit";
+  if (/\.sam(?:\.gz)?$/i.test(name) || mime === "application/sam") return "sam-alignment-audit";
+  if (/\.(?:gff|gff3|gtf)(?:\.gz)?$/i.test(name) || mime === "text/gff3") return "gff3-annotation-audit";
+  if (/\.bed(?:\.gz)?$/i.test(name) || mime === "text/bed") return "bed-interval-audit";
+  if (/\.(?:gb|gbk|gbff)$/i.test(name) || mime === "chemical/seq-aa") return "genbank-record-audit";
+  if (/\.(?:pdb|ent)$/i.test(name) || mime === "chemical/x-pdb" || mime === "application/pdb") return "pdb-structure-audit";
+  if (/\.gfa(?:1|2)?(?:\.gz)?$/i.test(name)) return "gfa-assembly-audit";
+  if (/\.(?:nwk|newick|tree)$/i.test(name)) return "newick-tree-audit";
+  if (/\.(?:aln|sto|stockholm)$/i.test(name)) return "sequence-alignment-audit";
   if (name.endsWith(".svg") || mime === "image/svg+xml") return "svg-safety-audit";
   if (mime.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(name)) return "image-ocr";
   if (mime === "application/x-ndjson" || mime === "application/jsonl" || name.endsWith(".jsonl")) return "jsonl-format";

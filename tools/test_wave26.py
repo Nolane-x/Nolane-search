@@ -266,14 +266,14 @@ private-seq-2 ACTG
         source = """CLUSTAL W multiple sequence alignment
 
 private-one ACGT 4
-private-two AC-T 3
-  ** *
+private-two AC- 3
+  ** 
 """
         result = wave26.sequence_alignment_audit(self.write("alignment.aln", source))
         self.assert_report(result)
         self.assertIn("Alignment format: Clustal/MUSCLE", result["summary"])
         self.assertIn("Distinct sequence rows: 2", result["summary"])
-        self.assertIn("Unequal row lengths detected: 0", result["summary"])
+        self.assertIn("Unequal row lengths detected: 1", result["summary"])
         self.assertNotIn("private-one", result["summary"])
 
     def test_alignment_audit_rejects_unknown_format(self):
