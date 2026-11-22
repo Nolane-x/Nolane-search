@@ -27,7 +27,7 @@ Expand beyond the 354 production processors without duplicating existing OCR, su
 | \`subtitle-quality-audit\` | Caption timing/readability metrics | .srt/.vtt → CSV | 10 MiB/20K cues; reports CPS, line length, overlaps and short cues without subtitle text. |
 | \`kml-to-geojson\` | Convert KML placemarks to GeoJSON | .kml/.xml → .geojson | 20 MiB/20K features/500K coordinates; blocks DTD/entities and does not fetch NetworkLinks. |
 | \`coordinate-transform\` | EPSG coordinate transformation | JSON envelope → GeoJSON | 10 MiB/10K coordinates; EPSG identifiers only, PROJ network disabled. |
-| \`html-seo-audit\` | Static SEO/accessibility metadata inventory | .html/.htm → TXT | 10 MiB; reports counts/rules without page metadata values or network fetches. |
+| `html-structured-data-audit` | JSON-LD structured-data inventory | .html/.htm → TXT | 10 MiB; reports JSON/context/type/schema.org/duplicate-ID metrics without structured content or identifiers. |
 | \`html-local-link-audit\` | Check internal resources/fragments in a site bundle | ZIP of HTML site → CSV | 20 MiB/100 MiB expanded/500 files/200 HTML pages/5K findings; external links skipped. |
 | \`css-quality-audit\` | CSS parser and maintainability metrics | .css → TXT | 10 MiB; duplicate selectors/properties, !important, imports, external URLs and parse errors; no CSS values copied. |
 
