@@ -105,11 +105,15 @@ def ocfl_object_audit(path: Path) -> dict:
     try:
         archive, members, expanded = _zip_index(path, "OCFL")
         inventories = [name for name in members if PurePosixPath(name).name == "inventory.json"]
-        roots = [name[:-len("inventory.json")] for name in inventories if name.endswith("inventory.json")]
-        if len(inventories) != 1 or len(roots) != 1:
+        if not inventories:
+            raise RuntimeError("OCFL archive is missing an object-root inventory.json.")
+        shallowest = min(len(PurePosixPath(name).parts) for name in inventories)
+        root_inventories = [name for name in inventories if len(PurePosixPath(name).parts) == shallowest]
+        if len(root_inventories) != 1:
             raise RuntimeError("OCFL archive must contain exactly one object-root inventory.json.")
-        root = roots[0]
-        inventory_name = inventories[0]
+        inventory_name = root_inventories[0]
+        root_parent = str(PurePosixPath(inventory_name).parent)
+        root = "" if root_parent == "." else root_parent + "/"
         declaration_names = [name for name in members if name.startswith(root) and
                              PurePosixPath(name[len(root):]).name in {"0=ocfl_object_1.0", "0=ocfl_object_1.1"}]
         if len(declaration_names) != 1:
@@ -666,7 +670,7 @@ def nwb_structure_audit(path: Path) -> dict:
         with h5py.File(path, "r") as root:
             attrs = root.attrs
             nwb_version = "nwb_version" in attrs
-            namespaces = "namespaces" in attrs
+            namespaces = "namespace" in attrs
             top_level = {name: isinstance(root.get(name, getlink=True), h5py.HardLink) and
                          isinstance(root.get(name), h5py.Group)
                          for name in ("acquisition", "analysis", "general", "processing", "stimulus", "intervals")}
