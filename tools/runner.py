@@ -3624,9 +3624,11 @@ def subtitle_audit(p):
         cues.append({"start":start,"end":end,"caption":caption})
     invalid=sum(c["end"]<=c["start"] for c in cues)
     ordered=overlap=duplicates=long_lines=long_cues=0; seen=set(); prev_start=None; prev_end=None
+    prior_intervals=[]
     for cue in cues:
         if prev_start is not None and cue["start"]<prev_start: ordered+=1
-        if prev_end is not None and cue["start"]<prev_end: overlap+=1
+        if cue["end"]>cue["start"] and any(cue["start"]<end and cue["end"]>start for start,end in prior_intervals): overlap+=1
+        if cue["end"]>cue["start"]: prior_intervals.append((cue["start"],cue["end"]))
         if cue["caption"]:
             key=unicodedata.normalize("NFKC",cue["caption"]).casefold()
             if key in seen: duplicates+=1
