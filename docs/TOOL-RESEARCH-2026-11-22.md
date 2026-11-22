@@ -70,3 +70,19 @@ Nine tools were selected: RSS/Atom feed audit, XML sitemap audit, robots.txt aud
 No new third-party runtime package is required. RSS/Atom, sitemap, robots, JSONL, SVG and checksum use Python standard-library modules; image metadata reuses Pillow; SSH public keys reuse the cryptography package already installed for X.509.
 
 The SVG sanitizer project and GPL-3.0 RSS parser were deliberately not integrated. The new SVG processor reports risky structures only; it is not a sanitizer.
+## Wave 21 repositories reviewed
+
+| Repository | Scope examined | License observed | Integration decision |
+|---|---|---|---|
+| [tobymao/sqlglot](https://github.com/tobymao/sqlglot) | SQL parser, AST, formatter, transpiler and multi-dialect support | MIT | Add offline SQL static analysis and formatter; no SQL engine or connection |
+| [graphql-python/graphql-core](https://github.com/graphql-python/graphql-core) | GraphQL SDL parser, schema construction and schema validation | MIT | Add local SDL validation and aggregate schema inventory; do not call GraphQL services |
+| [pallets-eco/croniter](https://github.com/pallets-eco/croniter) | Cron expression iteration and next-run calculation | MIT | Add UTC preview from a fixed invocation base; commands are not executed and scheduler timezone is not inferred |
+| [jupyter/nbformat](https://github.com/jupyter/nbformat) | Jupyter notebook format and schema validation | BSD-3-Clause | Reviewed as the format reference; implement a bounded read-only JSON structure/privacy audit using stdlib |
+| [design-tokens/community-group](https://github.com/design-tokens/community-group) | W3C Design Tokens Community Group format and technical reports | W3C Software and Document License for reports; BSD-3-Clause for software/tests | Implement an independent limited parser for token groups/types and `{path.to.token}` aliases; not a full normative conformance validator |
+| [cleder/fastkml](https://github.com/cleder/fastkml) | KML parsing and GIS feature models | LGPL-2.1 | Reviewed but not integrated; KML/KMZ support uses stdlib XML/ZIP only |
+
+## Wave 21 implementation
+
+Seven processors are selected: SQL static audit, SQL formatter, GraphQL SDL schema audit, Jupyter notebook privacy audit, KML/KMZ geometry audit, W3C Design Tokens structural audit and cron schedule preview.
+
+Optional runner dependencies: sqlglot (MIT), graphql-core (MIT) and croniter (MIT). Python stdlib handles notebook JSON, KML/XML, KMZ ZIP and design token JSON. FastKML is not included.
