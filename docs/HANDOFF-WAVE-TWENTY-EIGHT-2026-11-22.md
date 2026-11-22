@@ -12,13 +12,13 @@
 
 ## Wave 28 processor IDs
 
-1. `ocfl-object-audit` — OCFL root/version inventory, state/manifest references, content fixity and inventory digest sidecars.
+1. `ocfl-object-audit` — OCFL root/version inventory, state/manifest references, content fixity and every inventory digest sidecar, including BLAKE2b-512.
 2. `zarr-store-audit` — Zarr v2/v3 group/array metadata and hierarchy, not chunk data.
 3. `nifti-header-audit` — NIfTI-1/2 header-only validation, including bounded .nii.gz header reads.
 4. `dicom-privacy-audit` — limited DICOM header identifier/private-tag risk screen, not de-identification.
 5. `las-pointcloud-audit` — LAS 1.0–1.4 header and point-record byte-range checks; LAZ is unsupported.
-6. `jp2-box-audit` — JPEG 2000 JP2 box framing, not codestream decoding.
-7. `netcdf-classic-audit` — NetCDF CDF-1/CDF-2 header parser; NetCDF-4/CDF-5 are unsupported.
+6. `jp2-box-audit` — JPEG 2000 JP2 box framing using offsets, not codestream decoding or payload reads.
+7. `netcdf-classic-audit` — seek-based NetCDF CDF-1/CDF-2 header parser that skips variable-array payload bytes; NetCDF-4/CDF-5 are unsupported.
 8. `nwb-structure-audit` — HDF5/NWB metadata hierarchy; no dataset values.
 
 Implementations: `tools/wave28.py`; tests: `tools/test_wave28.py`. The current test file has 19 synthetic regression cases. Catalog/dispatch changes touch `src/tools.ts`, `tools/runner.py`, `.github/workflows/ci.yml`, `.github/workflows/tool-runner.yml`, and `tests/tools.test.ts` / `tests/telegram.test.ts`.
