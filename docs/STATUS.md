@@ -2,26 +2,25 @@
 
 Last verified: 2026-11-22. Production deployment and automated test evidence are recorded separately from owner-level Telegram upload/retry journeys.
 
-## In review — Wave 24 candidate (2026-11-22)
+## Latest production release — Wave 24 (2026-11-22)
 
-- Branch: `feat/wave-twenty-four-interoperability-tools`.
-- Twelve additional processors are registered in TypeScript catalog, Python RUNNERS allowlist, handler map, pipeline transitions and upload inference. Candidate catalog: **395 tools**; production remains at **383** until release gates pass.
-- New domains: OpenDocument, XLIFF translation QA, MBOX email structure/privacy, GeoPackage and MBTiles, OpenRaster/Krita layered creative files, glTF/GLB assets, draw.io diagrams, n8n automation exports, W3C Design Tokens and WARC web archives.
-- Fourteen dedicated Python regression tests cover the new processors. They use the Python standard library and SQLite only; no third-party runtime dependency or upstream source code is added.
-- Input is processed offline on an ephemeral runner. External URIs are never fetched, workflows/code are never executed, image/audio/tile payloads are not rendered, and reports withhold email identities/content, map coordinates/feature values, diagram labels, credential values, design token values and archived URLs/payloads.
-- PR CI, Worker export/production smoke and Cloudflare deployment are still pending for Wave 24.
-- Owner-level E2E after release: representative ODT/ODS/ODP, XLIFF, MBOX, GPKG/MBTiles, ORA/KRA, glTF/GLB, draw.io, n8n JSON, Design Tokens and WARC samples through private Telegram, inspect reports and test `/tool_retry`.
+- [PR #76](https://github.com/Nolane-x/Nolane-search/pull/76) merged into `main` as commit `dc13766a6afdef744e165c231803130db5e2a3a0`; twelve processors increased production from 383 to **395 tools**.
+- Main CI [45015606847](https://github.com/Nolane-x/Nolane-search/actions/runs/45015606847) passed TypeScript type-check, all **25 Vitest files**, deployment-script checks, **189 Python runner tests** and Worker build.
+- Worker export [45015606799](https://github.com/Nolane-x/Nolane-search/actions/runs/45015606799) passed source verification, Cloudflare build, build-output publication and production `/health` smoke. The health response was `ok: true` with database `reachable`.
+- Cloudflare deployment [45015606838](https://github.com/Nolane-x/Nolane-search/actions/runs/45015606838) passed source validation, build, deployment-bundle validation, Worker upload, runtime-secret upload and Telegram webhook/command-menu registration. D1 migration was skipped because Wave 24 introduced no database schema changes.
+- Cloudflare API confirms Worker Version 81, `af2311df-8bac-4597-aaec-e0115fb3106f`, receives **100% of production traffic** under deployment `83aa00b4-99f7-4477-8273-ed29ce46879f`.
+- Added OpenDocument package, XLIFF translation QA, MBOX privacy audit, GeoPackage and MBTiles, OpenRaster and Krita project, glTF/GLB, draw.io, n8n workflow, W3C Design Tokens and WARC auditors.
+- Registry parity: **395 unique TypeScript catalog IDs, 395 Python runner allowlist IDs and 395 Python handlers**. All twelve new IDs have upload inference and pipeline transitions.
+- No new runtime/CI dependency or D1 migration was required; Wave 24 uses Python standard library and SQLite only.
+- Owner-level E2E remains: send representative ODT/ODS/ODP, XLIFF, MBOX, GPKG/MBTiles, ORA/KRA, glTF/GLB, draw.io, n8n JSON, Design Tokens and WARC files through the private Telegram bot, inspect delivered reports and test `/tool_retry`. Automated tests and webhook registration do not prove every Telegram upload journey.
 
-## Latest production release — Wave 23 (2026-11-22)
+## Previous production release — Wave 23 (2026-11-22)
 
-- [PR #75](https://github.com/Nolane-x/Nolane-search/pull/75) merged into `main` as commit `32f2fbb4e6936a5caea0bf552e337c852797a1e7`; twelve processors increased the production catalog from 371 to **383 tools**.
-- Main CI [45013947086](https://github.com/Nolane-x/Nolane-search/actions/runs/45013947086) passed TypeScript type-check, all **25 Vitest files**, deployment-script checks, **175 Python runner tests** and Cloudflare Worker build.
-- Worker export and production smoke [45013946991](https://github.com/Nolane-x/Nolane-search/actions/runs/45013946991) passed, including compiled Worker bundle publication and the `/health` smoke test.
-- Cloudflare deployment [45013946981](https://github.com/Nolane-x/Nolane-search/actions/runs/45013946981) passed source validation, build, deployment-bundle validation, Worker upload, runtime-secret upload and Telegram webhook/command-menu registration. D1 migration was skipped because Wave 23 introduced no schema changes.
-- Cloudflare API confirms Worker Version 80, `f30ef26b-02c1-4d57-922a-acf3e698669d`, receives **100% of production traffic** under deployment `4047b8ec-f5bf-4f82-ad8e-ab272db4edce`.
-- Added CNC/G-code, MIDI, MusicXML, BibTeX, NMEA/GNSS, Ansible, Prometheus rules, Grafana dashboard, HDF5 metadata, Avro, GraphQL SDL and Protocol Buffers audits.
-- Registry parity: 383 unique TypeScript catalog IDs, 383 Python runner allowlist IDs and 383 Python handlers.
-- Owner-level E2E remains: upload representative files for all Wave 23 domains in private Telegram, inspect delivered reports and test `/tool_retry`. Automated tests and webhook registration do not prove every upload journey.
+- [PR #75](https://github.com/Nolane-x/Nolane-search/pull/75) merged into `main` as commit `32f2fbb4e6936a5caea0bf552e337c852797a1e7`; twelve processors increased the catalog from 371 to **383 tools**.
+- Main CI [45013947086](https://github.com/Nolane-x/Nolane-search/actions/runs/45013947086) passed type-check, all **25 Vitest files**, deployment-script checks, **175 Python runner tests** and Worker build.
+- Worker export [45013946991](https://github.com/Nolane-x/Nolane-search/actions/runs/45013946991) passed the production health smoke; deployment [45013946981](https://github.com/Nolane-x/Nolane-search/actions/runs/45013946981) passed. Cloudflare Worker Version 80 `f30ef26b-02c1-4d57-922a-acf3e698669d` received 100% traffic before Wave 24.
+- Wave 23 added CNC/G-code, MIDI, MusicXML, BibTeX, NMEA/GNSS, Ansible, Prometheus, Grafana, HDF5, Avro, GraphQL SDL and Protocol Buffers.
+- Owner-level Telegram E2E remains a separate check for representative uploads and `/tool_retry`.
 
 ## Previous production release — Wave 20 (2026-11-22)
 
