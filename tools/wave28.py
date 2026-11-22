@@ -115,6 +115,7 @@ def ocfl_object_audit(path: Path) -> dict:
         root_parent = str(PurePosixPath(inventory_name).parent)
         root = "" if root_parent == "." else root_parent + "/"
         declaration_names = [name for name in members if name.startswith(root) and
+                             len(PurePosixPath(name[len(root):]).parts) == 1 and
                              PurePosixPath(name[len(root):]).name in {"0=ocfl_object_1.0", "0=ocfl_object_1.1"}]
         if len(declaration_names) != 1:
             raise RuntimeError("OCFL object must contain one 1.0 or 1.1 NAMASTE declaration.")
@@ -132,7 +133,7 @@ def ocfl_object_audit(path: Path) -> dict:
             candidate_raw = _read_bounded(archive, members[candidate_name], 8 * 1024 * 1024)
             candidate_inventory = _json_bytes(candidate_raw, "OCFL version inventory")
             candidate_algorithm = str(candidate_inventory.get("digestAlgorithm", "")).lower()
-            if candidate_algorithm not in {"sha512", "sha256", "sha1", "md5", "blake2b-512"}:
+            if candidate_algorithm not in {"sha512", "sha256", "sha1", "md5", "blake2b-512"} or candidate_algorithm != algorithm:
                 inventory_sidecar_mismatches += 1
                 continue
             sidecar_name = candidate_name + "." + candidate_algorithm
@@ -148,7 +149,7 @@ def ocfl_object_audit(path: Path) -> dict:
             else:
                 actual = hashlib.new(candidate_algorithm, candidate_raw).hexdigest().lower()
             inventory_sidecars_checked += 1
-            inventory_sidecar_mismatches += int(expected != actual or filename != "inventory.json")
+            inventory_sidecar_mismatches += int(expected != actual or filename != "inventory.json" or len(sidecar_raw) != 2)
         current = inventory.get("head")
         versions = inventory.get("versions")
         manifest = inventory.get("manifest")
@@ -212,13 +213,20 @@ def ocfl_object_audit(path: Path) -> dict:
                         invalid_states += 1
                     else:
                         logical_paths.add(logical)
+        valid_version_ids = [
+            int(version_id[1:]) for version_id in versions
+            if isinstance(version_id, str) and re.fullmatch(r"v[1-9]\d*", version_id)
+        ]
+        highest_version = "v" + str(max(valid_version_ids)) if valid_version_ids else ""
         head_missing = int(current not in versions)
+        head_not_latest = int(not highest_version or current != highest_version)
         lines = [
             f"OCFL specification declaration: {version}",
             f"Inventory sidecars checked: {inventory_sidecars_checked:,}",
             f"Inventory sidecars missing: {inventory_sidecars_missing:,}",
             f"Inventory sidecar digest mismatches: {inventory_sidecar_mismatches:,}",
             f"Current head resolves to a version: {not bool(head_missing)}",
+            f"Current head is the highest version: {not bool(head_not_latest)}",
             f"Object versions: {len(versions):,}",
             f"Manifest digest entries: {len(manifest_digests):,}",
             f"Manifest content paths checked: {files_checked:,}",
@@ -657,8 +665,8 @@ def netcdf_classic_audit(path: Path) -> dict:
         kind = take("I")
         vsize = take("I")
         begin = take("I") if version == 1 else take("Q")
-        if kind not in type_sizes or begin >= len(raw) or vsize > len(raw):
-            raise RuntimeError("NetCDF variable descriptor contains unsupported type or offsets.")
+        if kind not in type_sizes or begin < offset or begin + vsize > len(raw):
+            raise RuntimeError("NetCDF variable descriptor contains unsupported type or out-of-bounds offsets.")
         if dims and dims[0] < len(dimension_ids) and dimension_ids[dims[0]] == 0:
             record_vars += 1
     lines = [
