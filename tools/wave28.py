@@ -45,6 +45,15 @@ def _json_bytes(raw: bytes, label: str) -> dict:
     return value
 
 
+def _new_hasher(algorithm: str):
+    if algorithm == "blake2b-512":
+        return hashlib.blake2b(digest_size=64)
+    try:
+        return hashlib.new(algorithm)
+    except ValueError as exc:
+        raise RuntimeError("OCFL inventory declares an unsupported digest algorithm.") from exc
+
+
 def _safe_member(name: str) -> bool:
     if not name or "\\" in name or "\x00" in name or name.startswith("/"):
         return False
@@ -163,7 +172,7 @@ def ocfl_object_audit(path: Path) -> dict:
                 unsafe_paths += 1
                 continue
             try:
-                hashlib.new(algorithm)
+                _new_hasher(algorithm)
             except ValueError:
                 unsafe_paths += 1
                 continue
@@ -180,7 +189,7 @@ def ocfl_object_audit(path: Path) -> dict:
                 if info is None:
                     missing_files += 1
                     continue
-                hasher = hashlib.new(algorithm)
+                hasher = _new_hasher(algorithm)
                 with archive.open(info, "r") as stream:
                     while True:
                         chunk = stream.read(1024 * 1024)
@@ -520,55 +529,76 @@ def las_pointcloud_audit(path: Path) -> dict:
 
 
 def jp2_box_audit(path: Path) -> dict:
-    """Validate outer JP2 box framing and jp2h/ihdr metadata without decoding pixels."""
+    """Validate JP2 box framing by offsets without reading codestream payloads."""
     _size_guard(path)
-    raw = path.read_bytes()
-    if len(raw) < 12 or struct.unpack(">I", raw[:4])[0] != 12 or raw[4:8] != b"jP  " or raw[8:12] != b"\r\n\x87\n":
-        raise RuntimeError("JPEG 2000 JP2 signature box is missing or invalid.")
+    file_size = path.stat().st_size
     boxes = 0
     malformed = 0
     types = set()
     image_header = None
+    try:
+        with path.open("rb") as stream:
+            signature = stream.read(12)
+            if (len(signature) != 12 or struct.unpack(">I", signature[:4])[0] != 12 or
+                    signature[4:8] != b"jP  " or signature[8:12] != b"\r\n\x87\n"):
+                raise RuntimeError("JPEG 2000 JP2 signature box is missing or invalid.")
+            boxes = 1
+            types.add("jP  ")
 
-    def parse_boxes(data: bytes, nested: bool = False):
-        nonlocal boxes, malformed, image_header
-        offset = 0
-        while offset < len(data):
-            if len(data) - offset < 8:
-                malformed += 1
-                break
-            length = struct.unpack_from(">I", data, offset)[0]
-            kind = data[offset + 4:offset + 8]
-            header_len = 8
-            if length == 1:
-                if len(data) - offset < 16:
-                    malformed += 1
-                    break
-                length = struct.unpack_from(">Q", data, offset + 8)[0]
-                header_len = 16
-            elif length == 0:
-                length = len(data) - offset
-            if length < header_len or offset + length > len(data):
-                malformed += 1
-                break
-            payload = data[offset + header_len:offset + length]
-            boxes += 1
-            if boxes > 100_000:
-                raise RuntimeError("JP2 box count exceeds the 100,000-box limit.")
-            label = kind.decode("ascii", errors="replace")
-            types.add(label)
-            if label == "jp2h":
-                parse_boxes(payload, True)
-            elif label == "ihdr" and nested:
-                if len(payload) < 14:
-                    malformed += 1
-                else:
-                    height, width, components = struct.unpack_from(">IIH", payload, 0)
-                    image_header = (height, width, components)
-            offset += length
-        return offset
+            def parse_boxes(start: int, end: int, nested: bool = False, depth: int = 0):
+                nonlocal boxes, malformed, image_header
+                if depth > 8:
+                    raise RuntimeError("JP2 nested box depth exceeds the 8-level limit.")
+                offset = start
+                while offset < end:
+                    if end - offset < 8:
+                        malformed += 1
+                        break
+                    stream.seek(offset)
+                    header = stream.read(8)
+                    if len(header) != 8:
+                        malformed += 1
+                        break
+                    length = struct.unpack_from(">I", header, 0)[0]
+                    kind = header[4:8]
+                    header_len = 8
+                    if length == 1:
+                        extended = stream.read(8)
+                        if len(extended) != 8:
+                            malformed += 1
+                            break
+                        length = struct.unpack(">Q", extended)[0]
+                        header_len = 16
+                    elif length == 0:
+                        length = end - offset
+                    box_end = offset + length
+                    payload_start = offset + header_len
+                    if length < header_len or box_end > end or box_end > file_size:
+                        malformed += 1
+                        break
+                    boxes += 1
+                    if boxes > 100_000:
+                        raise RuntimeError("JP2 box count exceeds the 100,000-box limit.")
+                    label = kind.decode("ascii", errors="replace")
+                    types.add(label)
+                    if label == "jp2h":
+                        parse_boxes(payload_start, box_end, True, depth + 1)
+                    elif label == "ihdr" and nested:
+                        if box_end - payload_start < 14:
+                            malformed += 1
+                        else:
+                            stream.seek(payload_start)
+                            payload = stream.read(14)
+                            if len(payload) != 14:
+                                malformed += 1
+                            else:
+                                height, width, components = struct.unpack_from(">IIH", payload, 0)
+                                image_header = (height, width, components)
+                    offset = box_end
 
-    parse_boxes(raw)
+            parse_boxes(12, file_size)
+    except OSError as exc:
+        raise RuntimeError("JPEG 2000 JP2 box stream could not be read.") from exc
     required_missing = sum(1 for value in {"ftyp", "jp2h", "jp2c"} if value not in types)
     if image_header is None:
         malformed += 1
@@ -582,6 +612,7 @@ def jp2_box_audit(path: Path) -> dict:
         f"Image header present and dimensions positive: {image_header is not None and all(v > 0 for v in image_header)}",
         f"Malformed or out-of-bounds box records: {malformed:,}",
         "Image dimensions, component details, codestream bytes and pixel values are withheld.",
+        "Only box headers and the fixed 14-byte ihdr payload are read; codestream payload bytes are skipped.",
         "This checks JP2 box framing and basic image-header presence, not full JPEG 2000 codestream conformance or image decoding.",
     ]
     return _report(path, "jp2", "JPEG 2000 JP2 box-structure audit", lines)
@@ -590,85 +621,106 @@ def jp2_box_audit(path: Path) -> dict:
 def netcdf_classic_audit(path: Path) -> dict:
     """Inspect NetCDF classic CDF-1/CDF-2 headers; array payloads are not read."""
     _size_guard(path)
-    raw = path.read_bytes()
-    if len(raw) < 8 or raw[:3] != b"CDF":
-        raise RuntimeError("NetCDF classic magic bytes are missing.")
-    version = raw[3]
-    if version not in {1, 2}:
-        raise RuntimeError("This auditor supports NetCDF classic CDF-1 and CDF-2 only.")
-    offset = 4
-    def take(fmt: str):
-        nonlocal offset
-        size = struct.calcsize(">" + fmt)
-        if offset + size > len(raw):
-            raise RuntimeError("NetCDF header is truncated.")
-        value = struct.unpack_from(">" + fmt, raw, offset)[0]
-        offset += size
-        return value
-    def take_bytes(size: int):
-        nonlocal offset
-        if size < 0 or offset + size > len(raw):
-            raise RuntimeError("NetCDF header field extends beyond the file.")
-        value = raw[offset:offset + size]
-        offset += size
-        return value
-    def padding(size: int):
-        take_bytes((-size) % 4)
-    def name():
-        length = take("I")
-        if length > 1_048_576:
-            raise RuntimeError("NetCDF name exceeds the 1 MiB string limit.")
-        value = take_bytes(length)
-        padding(length)
-        if b"\x00" in value:
-            raise RuntimeError("NetCDF names must not contain NUL bytes.")
-        return value.decode("utf-8", errors="replace")
-    num_records = take("I")
-    def list_header(expected_tag: int):
-        tag, count = take("I"), take("I")
-        if tag == 0 and count == 0:
-            return 0
-        if tag != expected_tag or count > 100_000:
-            raise RuntimeError("NetCDF header list tag or entry count is invalid.")
-        return count
-    dim_count = list_header(10)
-    dimension_ids = []
-    for _ in range(dim_count):
-        name()
-        dimension_ids.append(take("I"))
-    attr_count = list_header(12)
-    type_sizes = {1: 1, 2: 1, 3: 2, 4: 4, 5: 4, 6: 8}
-    def read_attributes(count):
-        total = 0
-        for _ in range(count):
-            name()
-            kind, elements = take("I"), take("I")
-            if kind not in type_sizes or elements > 10_000_000:
-                raise RuntimeError("NetCDF attribute type or element count is unsupported.")
-            size = type_sizes[kind] * elements
-            take_bytes(size)
-            padding(size)
-            total += 1
-        return total
-    global_attrs = read_attributes(attr_count)
-    var_count = list_header(11)
-    record_vars = invalid_var_dims = 0
-    for _ in range(var_count):
-        name()
-        ndims = take("I")
-        if ndims > dim_count:
-            raise RuntimeError("NetCDF variable dimensionality exceeds the dimension table.")
-        dims = [take("I") for _ in range(ndims)]
-        invalid_var_dims += sum(1 for index in dims if index >= dim_count)
-        attrs = list_header(12)
-        read_attributes(attrs)
-        kind = take("I")
-        vsize = take("I")
-        begin = take("I") if version == 1 else take("Q")
-        if kind not in type_sizes or begin < offset or begin + vsize > len(raw):
-            raise RuntimeError("NetCDF variable descriptor contains unsupported type or out-of-bounds offsets.")
-        if dims and dims[0] < len(dimension_ids) and dimension_ids[dims[0]] == 0:
-            record_vars += 1
+    file_size = path.stat().st_size
+    try:
+        with path.open("rb") as stream:
+            magic = stream.read(4)
+            if len(magic) != 4 or magic[:3] != b"CDF":
+                raise RuntimeError("NetCDF classic magic bytes are missing.")
+            version = magic[3]
+            if version not in {1, 2}:
+                raise RuntimeError("This auditor supports NetCDF classic CDF-1 and CDF-2 only.")
+            offset = 4
+
+            def take(fmt: str):
+                nonlocal offset
+                size = struct.calcsize(">" + fmt)
+                if offset + size > file_size:
+                    raise RuntimeError("NetCDF header is truncated.")
+                stream.seek(offset)
+                raw_value = stream.read(size)
+                if len(raw_value) != size:
+                    raise RuntimeError("NetCDF header is truncated.")
+                value = struct.unpack(">" + fmt, raw_value)[0]
+                offset += size
+                return value
+
+            def take_bytes(size: int):
+                nonlocal offset
+                if size < 0 or offset + size > file_size:
+                    raise RuntimeError("NetCDF header field extends beyond the file.")
+                stream.seek(offset)
+                value = stream.read(size)
+                if len(value) != size:
+                    raise RuntimeError("NetCDF header field extends beyond the file.")
+                offset += size
+                return value
+
+            def padding(size: int):
+                take_bytes((-size) % 4)
+
+            def name():
+                length = take("I")
+                if length > 1_048_576:
+                    raise RuntimeError("NetCDF name exceeds the 1 MiB string limit.")
+                value = take_bytes(length)
+                padding(length)
+                if b"\x00" in value:
+                    raise RuntimeError("NetCDF names must not contain NUL bytes.")
+                return value.decode("utf-8", errors="replace")
+
+            num_records = take("I")
+
+            def list_header(expected_tag: int):
+                tag, count = take("I"), take("I")
+                if tag == 0 and count == 0:
+                    return 0
+                if tag != expected_tag or count > 100_000:
+                    raise RuntimeError("NetCDF header list tag or entry count is invalid.")
+                return count
+
+            dim_count = list_header(10)
+            dimension_ids = []
+            for _ in range(dim_count):
+                name()
+                dimension_ids.append(take("I"))
+            attr_count = list_header(12)
+            type_sizes = {1: 1, 2: 1, 3: 2, 4: 4, 5: 4, 6: 8}
+
+            def read_attributes(count):
+                total = 0
+                for _ in range(count):
+                    name()
+                    kind, elements = take("I"), take("I")
+                    if kind not in type_sizes or elements > 10_000_000:
+                        raise RuntimeError("NetCDF attribute type or element count is unsupported.")
+                    size = type_sizes[kind] * elements
+                    take_bytes(size)
+                    padding(size)
+                    total += 1
+                return total
+
+            global_attrs = read_attributes(attr_count)
+            var_count = list_header(11)
+            record_vars = invalid_var_dims = 0
+            for _ in range(var_count):
+                name()
+                ndims = take("I")
+                if ndims > dim_count:
+                    raise RuntimeError("NetCDF variable dimensionality exceeds the dimension table.")
+                dims = [take("I") for _ in range(ndims)]
+                invalid_var_dims += sum(1 for index in dims if index >= dim_count)
+                attrs = list_header(12)
+                read_attributes(attrs)
+                kind = take("I")
+                vsize = take("I")
+                begin = take("I") if version == 1 else take("Q")
+                if kind not in type_sizes or begin < offset or begin + vsize > file_size:
+                    raise RuntimeError("NetCDF variable descriptor contains unsupported type or out-of-bounds offsets.")
+                if dims and dims[0] < len(dimension_ids) and dimension_ids[dims[0]] == 0:
+                    record_vars += 1
+    except OSError as exc:
+        raise RuntimeError("NetCDF classic file could not be read.") from exc
     lines = [
         f"NetCDF classic version: CDF-{version}",
         f"Unlimited record count: {num_records:,}",
@@ -679,6 +731,7 @@ def netcdf_classic_audit(path: Path) -> dict:
         f"Variable dimension references outside table: {invalid_var_dims:,}",
         f"Header bytes parsed: {offset:,}",
         "Dimension names, variable names, attribute names/values, offsets and array values are withheld.",
+        "Only header fields and attribute descriptors are read; variable array payload bytes are not loaded.",
         "NetCDF-4/HDF5 and CDF-5 are not included in this classic-header audit.",
     ]
     return _report(path, "netcdf", "NetCDF classic CDF-1/CDF-2 header audit", lines)
