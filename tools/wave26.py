@@ -18,6 +18,7 @@ from pathlib import Path
 MAX_INPUT = 20 * 1024 * 1024
 MAX_EXPANDED = 120 * 1024 * 1024
 MAX_LINE = 1024 * 1024
+MAX_TEXT = 10 * 1024 * 1024
 MAX_RECORDS = 1_000_000
 DNA = set("ACGTRYSWKMBDHVNU")
 PROTEIN = set("ABCDEFGHIKLMNPQRSTVWXYZJUO")
@@ -241,6 +242,7 @@ def vcf_variant_audit(path: Path) -> dict:
     filters = collections.Counter()
     variant_types = collections.Counter()
     duplicate_keys = set()
+    header_column_count = None
     duplicates = multiallelic = missing_genotype_records = 0
     previous_by_contig = {}
     out_of_order = 0
@@ -258,6 +260,7 @@ def vcf_variant_audit(path: Path) -> dict:
                 malformed += 1
             headers += 1
             columns = line.split("\t")
+            header_column_count = len(columns)
             if columns[:8] != ["#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO"]:
                 malformed += 1
             sample_count = max(0, len(columns) - 9) if len(columns) >= 9 and columns[8] == "FORMAT" else 0
@@ -274,7 +277,7 @@ def vcf_variant_audit(path: Path) -> dict:
             continue
         fields = line.split("\t")
         records += 1
-        if len(fields) < 8 or (sample_count and len(fields) != 9 + sample_count):
+        if len(fields) != header_column_count:
             malformed += 1
             continue
         position = None
@@ -759,9 +762,11 @@ def gfa_assembly_audit(path: Path) -> dict:
     segment_bases = known_length_segments = unknown_length_segments = 0
     malformed = duplicate_segments = 0
     version_headers = 0
+    total_records = 0
     for line in _iter_lines(path):
         if not line:
             continue
+        total_records += 1
         fields = line.split("\t")
         kind = fields[0]
         records[kind] += 1
@@ -817,13 +822,13 @@ def gfa_assembly_audit(path: Path) -> dict:
                 references.update(component.rstrip("+-") for component in fields[2].split())
         else:
             malformed += 1
-        if sum(records.values()) > MAX_RECORDS:
+        if total_records > MAX_RECORDS:
             raise RuntimeError("GFA exceeds the one-million record limit.")
     if not segments:
         raise RuntimeError("GFA input contains no S segment records.")
     missing_references = sum(1 for identifier in references if identifier not in segments)
     lines = [
-        f"GFA records: {sum(records.values()):,}",
+        f"GFA records: {total_records:,}",
         f"Segment records: {len(segments):,}",
         f"Duplicate segment identifiers: {duplicate_segments:,}",
         f"Known segment-length records: {known_length_segments:,}",
@@ -1005,9 +1010,11 @@ def sequence_alignment_audit(path: Path) -> dict:
     malformed = comments = block_count = 0
     if first.startswith("CLUSTAL") or first.startswith("MUSCLE"):
         format_name = "Clustal/MUSCLE"
-        if not lines or not lines[0].strip().upper().startswith(("CLUSTAL", "MUSCLE")):
+        header_index = next((index for index, line in enumerate(lines) if line.strip()), -1)
+        if header_index < 0 or not lines[header_index].strip().upper().startswith(("CLUSTAL", "MUSCLE")):
             malformed += 1
-        for line in lines[1:]:
+            header_index = -1
+        for line in lines[header_index + 1:]:
             if not line.strip():
                 block_count += 1
                 continue
