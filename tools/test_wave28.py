@@ -58,6 +58,8 @@ class Wave28Tests(unittest.TestCase):
             "object/0=ocfl_object_1.1": b"",
             "object/inventory.json": raw,
             "object/inventory.json.sha512": sidecar.encode(),
+            "object/v1/inventory.json": raw,
+            "object/v1/inventory.json.sha512": sidecar.encode(),
             "object/v1/content/object.bin": payload,
         })
         result = wave28.ocfl_object_audit(path)
@@ -137,7 +139,7 @@ class Wave28Tests(unittest.TestCase):
         path = self.write("volume.nii.gz", gzip.compress(bytes(header) + b"x" * (1024 * 1024)))
         result = wave28.nifti_header_audit(path)
         self.assertIn("Header format: NIfTI-1", result["summary"])
-        self.assertIn("voxel data were not decoded", result["summary"])
+        self.assertIn("Header-only inspection", result["summary"])
 
     def test_nifti_rejects_invalid_dimensions(self):
         header = bytearray(352)
@@ -235,7 +237,7 @@ class Wave28Tests(unittest.TestCase):
         path = self.root / "experiment.nwb"
         with h5py.File(path, "w") as root:
             root.attrs["nwb_version"] = "2.7.0"
-            root.attrs["namespaces"] = "core"
+            root.attrs["namespace"] = "core"
             root.create_group("general")
             root.create_group("acquisition").create_dataset("private_timeseries", data=[1.0, 2.0])
             root["general"].attrs["subject_id"] = "PRIVATE_SUBJECT_ID"
