@@ -158,7 +158,7 @@ PIPELINE_TRANSITIONS = {
     "xlsx-to-markdown": {"markdown-outline","markdown-links","markdown-toc","text-clean"},
     "subtitle-audit": {"subtitle-text","text-clean","text-stats"},
     "image-favicon": {"image-info","file-hash"},
-    "pdf-page-audit": {"pdf-text","pdf-info","pdf-compress","pdf-remove-blank"},
+    "pdf-page-audit": {"text-clean","text-stats"},
     "markdown-toc": {"markdown-outline","markdown-links","text-clean"},
 "markdown-outline": {"text-clean","text-stats"},
     "markdown-links": {"csv-profile","csv-clean","csv-to-xlsx","csv-to-json"},
@@ -3502,9 +3502,11 @@ def xlsx_formula_report(p):
         for index,ws in enumerate(formulas.worksheets):
             cache_ws=cached.worksheets[index]
             samples=[]; sheet_total=0; cache_rows=cache_ws.iter_rows(values_only=True)
-            for row_index,row in enumerate(ws.iter_rows(),1):
+            scanned=0
+            for row in ws.iter_rows():
                 cache_row=next(cache_rows,())
-                if row_index>50000: raise RuntimeError("Formula report vượt quá 50.000 dòng mỗi sheet.")
+                scanned+=1
+                if scanned>50000: raise RuntimeError("Formula report vượt quá 50.000 dòng mỗi sheet.")
                 for cell in row[:200]:
                     value=cell.value
                     if not isinstance(value,str) or not value.startswith("="): continue
@@ -3515,7 +3517,7 @@ def xlsx_formula_report(p):
                     cached_value=cache_row[cell.column-1] if len(cache_row)>=cell.column else None
                     if isinstance(cached_value,str) and re.match(r"^#(REF!|DIV/0!|VALUE!|NAME\?|N/A|NUM!|NULL!)$",cached_value.strip(),re.I): errors+=1
                     elif cached_value is None: missing+=1
-            reports.append(f"[{ws.title}] formulas={sheet_total:,}; scanned rows={min(row_index if 'row_index' in locals() else 0,50000):,}")
+            reports.append(f"[{ws.title}] formulas={sheet_total:,}; scanned rows={min(scanned,50000):,}")
             reports.extend("  "+sample for sample in samples)
         lines=["XLSX formula report",f"Sheets inspected: {len(formulas.worksheets)}",f"Formula cells: {total:,}",
                f"External-workbook reference formulas: {external:,}",f"Volatile-function formulas: {volatile:,}",
