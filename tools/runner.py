@@ -412,7 +412,7 @@ PIPELINE_TRANSITIONS = {
     "color-convert":{"text-clean","text-stats"},
     "pcap-network-audit":{"text-clean","text-stats"},
     "audio-tag-audit":{"text-clean","text-stats"},
-    "image-similarity-audit":{"csv-profile","csv-clean"},
+    "image-similarity-audit":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json"},
     "json-schema-validate":{"text-clean","text-stats"},
     "epub-structure-audit":{"text-clean","text-stats"},
     "markdown-quality-audit":{"text-clean","text-stats"},
