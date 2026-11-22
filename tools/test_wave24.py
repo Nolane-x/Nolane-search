@@ -136,7 +136,7 @@ class Wave24InteroperabilityTests(unittest.TestCase):
         self.assertNotIn("1,2,3,4", result["summary"])
 
     def test_openraster_audit_counts_layers_and_missing_sources(self):
-        stack = b"""<image w="512" h="256" name="Private artwork"><stack><layer name="Secret layer" src="data/layer0.png" visibility="visible" opacity="1.0" composite-op="svg:src-over"/><layer name="Missing layer" src="data/missing.png" visibility="hidden"/></stack></image>"""
+        stack = b"""<image w="512" h="256" name="Private artwork"><stack><layer name="Secret layer" src="data/layer0.png" visibility="visible" opacity="1.0" composite-op="svg:src-over"/><layer name="Missing layer" src="data/missing.png" visibility="hidden"/><layer name="Remote layer" src="https://remote.example/layer.png" visibility="visible"/></stack></image>"""
         path = self.archive("art.ora", [
             ("mimetype", b"image/openraster", zipfile.ZIP_STORED),
             ("stack.xml", stack, zipfile.ZIP_DEFLATED),
@@ -145,7 +145,8 @@ class Wave24InteroperabilityTests(unittest.TestCase):
         ])
         result = wave24.openraster_audit(path)
         self.assert_report(result)
-        self.assertIn("Layer entries: 2", result["summary"])
+        self.assertIn("Layer entries: 3", result["summary"])
+        self.assertIn("Unsafe layer source paths: 1", result["summary"])
         self.assertIn("Missing layer source members: 1", result["summary"])
         self.assertIn("Canvas dimensions: 512 × 256", result["summary"])
         self.assertNotIn("Secret layer", result["summary"])
@@ -230,6 +231,20 @@ class Wave24InteroperabilityTests(unittest.TestCase):
         self.assertIn("Tokens missing an effective $type: 1", result["summary"])
         self.assertNotIn("#336699", result["summary"])
         self.assertNotIn("color.primary", result["summary"])
+
+    def test_design_token_audit_handles_long_alias_chains_without_recursion(self):
+        tokens = {
+            f"token-{index}": {
+                "$type": "dimension",
+                "$value": f"{{token-{index + 1}}}" if index < 1499 else "1px",
+            }
+            for index in range(1500)
+        }
+        result = wave24.design_token_audit(self.write("long-chain.tokens.json", json.dumps(tokens)))
+        self.assert_report(result)
+        self.assertIn("Tokens: 1,500", result["summary"])
+        self.assertIn("Unresolved alias/reference targets: 0", result["summary"])
+        self.assertIn("Circular alias paths detected: 0", result["summary"])
 
     def test_warc_audit_counts_records_without_urls_or_headers(self):
         body = b"WARC/1.1\r\nWARC-Type: response\r\nWARC-Record-ID: <urn:uuid:secret-id>\r\nWARC-Target-URI: https://private.example/path\r\nContent-Type: application/http; msgtype=response\r\nContent-Length: 19\r\n\r\nHTTP/1.1 200 OK\r\n\r\n"
