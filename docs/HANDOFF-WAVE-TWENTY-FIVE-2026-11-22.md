@@ -1,11 +1,18 @@
 # Wave 25 handoff — 2026-11-22
 
-## Branch and scope
+## Release status — deployed 2026-11-22
 
-- Branch: `feat/wave-twenty-five-build-observability-binary-tools`
-- Base production: Wave 24 / 395 tools, Cloudflare Worker Version 81 `af2311df-8bac-4597-aaec-e0115fb3106f`
-- Candidate catalog: **406 unique tools**, +11 processors.
-- Candidate remains off production until PR CI, Worker export/smoke and Cloudflare deployment pass.
+- PR: [#77](https://github.com/Nolane-x/Nolane-search/pull/77), merged into `main`.
+- Production commit: `bd5b51cd119d049dd14a654147d03a4303fa7e2c`.
+- Catalog: **406 production tools**, up from 395; +11 processors.
+- Main CI [45017239242](https://github.com/Nolane-x/Nolane-search/actions/runs/45017239242): success; 25 Vitest files and 206 Python runner tests passed.
+- Worker export/production health smoke [45017239294](https://github.com/Nolane-x/Nolane-search/actions/runs/45017239294): success.
+- Cloudflare deployment [45017239222](https://github.com/Nolane-x/Nolane-search/actions/runs/45017239222): success; Telegram webhook/command registration passed; D1 migration skipped (no schema change).
+- Cloudflare confirms Worker Version 82 (`22378573-aa24-444d-96b0-59e8df345b75`) receives 100% traffic; deployment ID `1479f8fc-5c7c-4615-a3af-abe1fbb895f5`.
+
+## Scope
+
+The 406-tool production catalog now includes the following 11 Wave 25 processors.
 
 ## Added processors
 
@@ -51,4 +58,4 @@
 4. Cloudflare deployment, runtime secret upload, webhook and command registration.
 5. Owner-level Telegram E2E with representative files and `/tool_retry`.
 
-Do not describe Wave 25 as production until all automated gates pass. Wave 24 remains the 395-tool production baseline.
+Wave 25 is production. Remaining validation is owner-level Telegram E2E: upload representative samples, inspect delivered reports and test `/tool_retry`. Do not infer this from CI or deployment evidence.

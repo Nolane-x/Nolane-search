@@ -2,17 +2,19 @@
 
 Last verified: 2026-11-22. Production deployment evidence is separated from owner-level Telegram upload/retry journeys.
 
-## In review — Wave 25 candidate (2026-11-22)
+## Latest production release — Wave 25 (2026-11-22)
 
-- Branch: `feat/wave-twenty-five-build-observability-binary-tools`.
-- Eleven additional processors are registered in the candidate TypeScript catalog, Python RUNNERS allowlist, handler dispatch, mirrored pipeline transitions and upload inference. Candidate catalog: **406 tools**; production remains **395** until all release gates pass.
-- New domains: WebAssembly binary structure, SARIF static-analysis reports, CycloneDX/SPDX SBOMs, JUnit XML, Cobertura/JaCoCo coverage, NASA FITS astronomy, STEP Part 21 CAD, OpenTelemetry Collector configuration, Godot project settings, Unity packages and Unreal project descriptors.
-- Seventeen dedicated Python regression tests cover the new formats, including both CycloneDX and SPDX JSON/XML variants and WebAssembly's special section order. They use Python standard library modules; PyYAML is reused conditionally for OpenTelemetry YAML.
-- No uploaded WebAssembly module, collector, game-engine project, shell command, build script or CAD geometry is executed. Reports withhold finding messages, package names/IDs, test names/output, astronomy observation metadata, CAD strings/IDs and engine project identifiers/paths.
-- PR CI, Worker export/health smoke and Cloudflare deployment are pending for Wave 25.
-- Owner-level E2E after release: upload representative WASM, SARIF, CycloneDX/SPDX, JUnit, coverage, FITS, STEP, OTel YAML, Godot, Unity and Unreal files in private Telegram; inspect reports and test `/tool_retry`.
+- [PR #77](https://github.com/Nolane-x/Nolane-search/pull/77) merged into `main` as commit `bd5b51cd119d049dd14a654147d03a4303fa7e2c`; eleven processors increased production from 395 to **406 tools**.
+- Main CI [45017239242](https://github.com/Nolane-x/Nolane-search/actions/runs/45017239242) passed TypeScript type-check, all **25 Vitest files**, deployment-script checks, **206 Python runner tests** and Worker build.
+- Worker export [45017239294](https://github.com/Nolane-x/Nolane-search/actions/runs/45017239294) passed source verification, Cloudflare build, build-output publication and production `/health` smoke.
+- Cloudflare deployment [45017239222](https://github.com/Nolane-x/Nolane-search/actions/runs/45017239222) passed source validation, build, deployment-bundle validation, Worker upload, runtime-secret upload and Telegram webhook/command-menu registration. D1 migration was skipped because Wave 25 introduced no database schema changes.
+- Cloudflare API confirms Worker Version 82, `22378573-aa24-444d-96b0-59e8df345b75`, receives **100% of production traffic** under deployment `1479f8fc-5c7c-4615-a3af-abe1fbb895f5`.
+- Added WebAssembly, SARIF, CycloneDX/SPDX SBOM, JUnit, Cobertura/JaCoCo, FITS, STEP CAD, OpenTelemetry, Godot, Unity and Unreal inspectors.
+- Registry parity: **406 unique TypeScript catalog IDs, 406 Python runner allowlist IDs and 406 Python handlers**. All eleven new IDs have upload inference and pipeline transitions.
+- No new runtime dependency or D1 migration was required; PyYAML is installed conditionally for the OpenTelemetry auditor.
+- Owner-level E2E remains: upload representative WASM, SARIF, CycloneDX/SPDX, JUnit, coverage, FITS, STEP, OTel YAML, Godot, Unity and Unreal files through the private Telegram bot, inspect reports and test `/tool_retry`. CI and webhook registration do not prove every Telegram upload journey.
 
-## Latest production release — Wave 24 (2026-11-22)
+## Previous production release — Wave 24 (2026-11-22)
 
 - [PR #76](https://github.com/Nolane-x/Nolane-search/pull/76) merged into `main` as commit `dc13766a6afdef744e165c231803130db5e2a3a0`; twelve processors increased production from 383 to **395 tools**.
 - Main CI [45015606847](https://github.com/Nolane-x/Nolane-search/actions/runs/45015606847) passed TypeScript type-check, all **25 Vitest files**, deployment-script checks, **189 Python runner tests** and Worker build.
