@@ -2553,7 +2553,7 @@ dependencies = ["requests>=2.0", "httpx"]
         pdf_path=self.input_dir/"private.pdf"
         document=fitz.open()
         page=document.new_page()
-        page.insert_text((72,72),"Email: person@example.test; Phone: +84901234567; Card: 4111111111111111; IP: 192.168.1.10; CCCD: 012345678901; Key: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456")
+        page.insert_textbox(fitz.Rect(40,40,550,780),"Email: person@example.test\nPhone: +84901234567\nCard: 4111111111111111\nIP: 192.168.1.10\nCCCD: 012345678901\nKey: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456",fontsize=9)
         document.save(pdf_path)
         document.close()
         pdf_result=runner.pdf_privacy_audit(pdf_path)
