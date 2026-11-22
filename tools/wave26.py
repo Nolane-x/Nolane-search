@@ -1065,4 +1065,4 @@ def sequence_alignment_audit(path: Path) -> dict:
         f"Malformed/unsupported lines: {malformed:,}",
         "Sequence identifiers, aligned characters, annotations and consensus text are withheld.",
     ]
-    return _report(path, "alignment", "Multiple sequence alignment audit", lines)
+    return _report(path, "alignment", "Multiple sequence alignment audit", lines_out)

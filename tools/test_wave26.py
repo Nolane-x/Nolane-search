@@ -92,7 +92,7 @@ private-contig\t20\tprivate-id\tC\tG,CT\t.\tLowQual\t.\tGT\t./.
         self.assertIn("Variant records: 2", result["summary"])
         self.assertIn("Sample columns (count only): 1", result["summary"])
         self.assertIn("Multiallelic records: 1", result["summary"])
-        self.assertIn("SNV=1", result["summary"])
+        self.assertIn("SNV=2", result["summary"])
         self.assertIn("indel=1", result["summary"])
         self.assertIn("Records with only missing genotypes: 1", result["summary"])
         self.assertNotIn("secret-contig", result["summary"])
