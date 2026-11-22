@@ -1,4 +1,33 @@
-Nolane Tools hiện có **354 công cụ đã triển khai trên production** sau khi Wave 21 được merge và deploy ngày 2026-11-22 trên Cloudflare Worker Version ID `05af480c-6631-4402-8711-07bcba267bfe`. Main CI (144 Python runner tests), Worker export/production smoke và deployment đều đã thành công; Telegram webhook đã được xác minh cho `message` và `callback_query`. Catalog TypeScript, Python runner allowlist, handler, text-output registry và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và các repository upstream đã xem được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`. Main CI, Worker export/production smoke và deployment đều đã thành công. Catalog TypeScript, Python runner allowlist, handler, text-output registry và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và các repository upstream đã xem được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
+Nolane Tools hiện có **354 công cụ đã triển khai trên production** sau Wave 21, phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `05af480c-6631-4402-8711-07bcba267bfe`. CI, 144 Python runner tests, Worker export/production smoke và deployment đều đã thành công; Telegram webhook đã được xác minh cho `message` và `callback_query`. Catalog TypeScript, Python runner allowlist, handler và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và giấy phép các dự án upstream được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
+
+### Wave 22 — Multidomain engineering, GIS, CAD and productivity tools — candidate branch, not yet production
+
+Wave 22 adds 17 new processors to the feature branch, raising the branch catalog from 354 to **371 candidate tools**. Production remains at 354 until PR CI, Worker export/health smoke and Cloudflare deployment pass.
+
+| ID | Công cụ | Nhóm | Chức năng |
+|---|---|---|---|
+| /tool sqlglot-format | SQL formatter/transpiler | Developer | Parse, format và chuyển dialect SQL bằng SQLGlot; không chạy truy vấn. |
+| /tool sqlfluff-lint | SQL lint | Developer | Kiểm tra rule/cú pháp theo dialect, báo dòng/cột/rule và không copy SQL source vào report. |
+| /tool python-security-audit | Bandit Python SAST | Developer/security | Phân tích tĩnh một file .py, không thực thi code; báo rule/severity/confidence/dòng. |
+| /tool unit-convert | Unit conversion | Utility | Quy đổi hàng loạt đơn vị vật lý bằng Pint từ định dạng 'quantity -> target_unit'; kiểm tra dimensionality. |
+| /tool mesh-inspect | 3D mesh inspector | CAD/3D | Đọc STL/OBJ/PLY/OFF/GLB/GLTF/3MF; báo vertices, faces, bounds, watertight và volume nếu an toàn. |
+| /tool dxf-audit | DXF CAD audit | CAD/3D | Đọc bản vẽ DXF offline, thống kê entities/layers/blocks/units và auditor findings. |
+| /tool shapefile-audit | Shapefile inventory | GIS | Kiểm tra ZIP .shp/.shx/.dbf, shape type, feature count, fields, bbox và PRJ; không xuất attribute values. |
+| /tool gettext-catalog-audit | Gettext localization audit | Localization | Kiểm tra PO/POT: untranslated, fuzzy, obsolete, plural forms và placeholder drift. |
+| /tool notebook-audit | Jupyter Notebook audit | Developer/research | Validate ipynb schema và thống kê cell/output/execution/attachments; không in cell source. |
+| /tool notebook-strip-outputs | Notebook output cleaner | Document | Xóa execution outputs và reset execution counts, giữ cell source và metadata notebook. |
+| /tool heic-convert | HEIC/HEIF converter | Image | Chuyển HEIC/HEIF sang JPEG/PNG, áp orientation và loại metadata camera/GPS. |
+| /tool subtitle-quality-audit | Subtitle quality audit | Audio/video | Tính CPS, dòng quá dài, cue overlap và cue ngắn; CSV không chứa lời thoại. |
+| /tool kml-to-geojson | KML to GeoJSON | GIS | Chuyển Point/LineString/Polygon/MultiGeometry; chặn DTD/ENTITY và không tải NetworkLink. |
+| /tool coordinate-transform | EPSG coordinate transform | GIS | Chuyển tối đa 10.000 coordinate giữa CRS EPSG bằng pyproj; tắt PROJ network. |
+| /tool html-seo-audit | Static HTML SEO audit | Web/accessibility | Kiểm tra title/meta/canonical/H1/lang/Open Graph/Twitter/JSON-LD/alt; không fetch page. |
+| /tool html-local-link-audit | Local site link checker | Web/developer | Quét link nội bộ và fragment trong ZIP website; phát hiện resource/anchor thiếu, không truy cập Internet. |
+| /tool css-quality-audit | CSS quality audit | Web/developer | Parse CSS, đếm duplicate selectors/properties, !important, @import, external URL và parser errors. |
+
+Giới hạn: SQLGlot/SQLFluff 5 MiB input/1.000.000 ký tự; Bandit một file .py tối đa 10 MiB/120 giây; Pint 2 MiB/1.000 dòng; mesh 20 MiB/2 triệu vertices/4 triệu faces; DXF 20 MiB/1 triệu modelspace entities; Shapefile ZIP 20 MiB/100 MiB expanded/100 members/20 datasets; PO/POT 10 MiB/100.000 entries; Notebook 20 MiB/20.000 cells; HEIC 20 MiB/80 MP; subtitle 10 MiB/20.000 cues; KML 20 MiB/500.000 coordinates/20.000 features; coordinate transform 10 MiB/10.000 coordinates và chỉ EPSG identifiers; HTML/CSS 10 MiB; site ZIP 20 MiB/100 MiB expanded/500 files/200 HTML pages/5.000 reported issues.
+
+Wave 22 là candidate trên branch, chưa phải production. CI và deployment vẫn là gate bắt buộc; E2E Telegram upload/retry phải được chủ bot kiểm tra sau khi phát hành.
+
 
 ### Wave 21 — Broader file, data and productivity tools — deployed 2026-11-22
 
