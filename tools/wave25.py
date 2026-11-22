@@ -133,7 +133,13 @@ def wasm_module_audit(path: Path) -> dict:
         offset = end
     if offset != len(data):
         raise RuntimeError("WASM parser did not end at the file boundary.")
-    order_issues = sum(1 for left, right in zip(standard_order, standard_order[1:]) if left > right)
+    # Core section IDs are not a direct ordering relation: tag (13) has a
+    # dedicated position after memory, while data-count (12) precedes code (10).
+    standard_rank = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 13: 6, 6: 7, 7: 8, 8: 9, 9: 10, 12: 11, 10: 12, 11: 13}
+    order_issues = sum(
+        1 for left, right in zip(standard_order, standard_order[1:])
+        if standard_rank[left] > standard_rank[right]
+    )
     function_count = vector_counts.get(3)
     code_count = vector_counts.get(10)
     function_code_mismatch = int(function_count is not None and code_count is not None and function_count != code_count)

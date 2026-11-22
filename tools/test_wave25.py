@@ -42,6 +42,14 @@ class Wave25BuildObservabilityBinaryTests(unittest.TestCase):
         self.assertIn("type=0", result["summary"])
         self.assertNotIn("instruction", result["summary"].lower().replace("instruction bodies", ""))
 
+    def test_wasm_audit_accepts_data_count_before_code_section(self):
+        # In the Core binary order, data-count section 12 precedes code section 10.
+        data = b"\x00asm\x01\x00\x00\x00" + b"\x0c\x01\x00" + b"\x0a\x01\x00"
+        result = wave25.wasm_module_audit(self.write_bytes("data-count.wasm", data))
+        self.assert_report(result)
+        self.assertIn("Section-order inversions (coarse static check): 0", result["summary"])
+        self.assertIn("Code bodies: 0", result["summary"])
+
     def test_wasm_audit_rejects_truncated_section(self):
         data = b"\x00asm\x01\x00\x00\x00" + b"\x01\x08\x00"
         with self.assertRaisesRegex(RuntimeError, "boundary"):
