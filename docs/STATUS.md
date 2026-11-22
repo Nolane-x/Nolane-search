@@ -6,7 +6,7 @@ Last verified: 2026-11-22. This document distinguishes production deployment and
 
 - Repository: https://github.com/Nolane-x/Nolane-search
 - Default branch: `main`
-- Latest production source commit: `f94cc153936de383e629ed92fcd0fab011883b41`
+- Latest production source commit: `cae8ddd629f5bccc30199e7d036dd89377cf7b6f`
 - Browser search and retrieval upgrade: [PR #2](https://github.com/Nolane-x/Nolane-search/pull/2)
 - Bounded site indexing and search feedback: [PR #3](https://github.com/Nolane-x/Nolane-search/pull/3)
 - Hybrid personal-index retrieval and sitemap crawler upgrade: [PR #4](https://github.com/Nolane-x/Nolane-search/pull/4)
@@ -18,7 +18,7 @@ Last verified: 2026-11-22. This document distinguishes production deployment and
 - Personal Web Index manager in Web and Telegram, including safe removal and watch deactivation: [PR #10](https://github.com/Nolane-x/Nolane-search/pull/10)
 - Telegram and Web per-minute usage caps introduced by [PR #11](https://github.com/Nolane-x/Nolane-search/pull/11) were removed by [PR #12](https://github.com/Nolane-x/Nolane-search/pull/12); Personal Web Index federation was added in the same release.
 - Production Worker: https://nolane-search.nolane-file.workers.dev
-- Cloudflare Worker version ID: `ec64a6ca-e7a8-402b-88c4-e06f0d50c294` (version 72, 100% traffic; deployment `23d28228-ab44-41e7-a0ee-a9eeb5fb0641`, created 2026-11-22T00:40:20Z).
+- Cloudflare Worker version ID: `03210f3c-6bd5-47a9-ab1d-deeac1fca8a1` (version 73, 100% traffic; deployment `c39bb7f6-fb16-4749-ac9c-a540400483de`, created 2026-11-22T02:20:39Z).
 
 The release adds a private browser search portal, AI Overview, multi-turn chat, multi-signal federated retrieval ranking, relevance-aware provider fallback, AI-assisted Deep Search query planning, owner-controlled bounded site indexing, title-weighted BM25 retrieval over the personal FTS5 index, recursive same-origin sitemap discovery, semantic article/main extraction per-result helpful/not-helpful feedback, an interactive Telegram dashboard with one-shot search/AI modes and contextual search follow-ups, plus a verified Telegram callback webhook and immediate callback acknowledgement.
 
@@ -537,3 +537,20 @@ The registry expands from 17 to 23 implemented tools.
 - Registry parity was checked: 314 unique TypeScript catalog IDs, 314 Python runner allowlist IDs, 314 Python handlers and 756 matching TypeScript/Python pipeline edges.
 - No D1 migration, new secret or external service was added. XLSX inspects cached formula values only; PDF scans text layer only and does not OCR. Both audits use bounded heuristic detection and never include raw sensitive values.
 - Still pending owner-level end-to-end verification: upload representative XLSX and PDF files through the actual Telegram bot, inspect the delivered reports and exercise retry. CI, webhook registration and health checks do not prove that entire Telegram user journey.
+
+## Wave 16 — Office and PDF active-content security audits — deployed 2026-11-22
+
+- PR #66 merged: https://github.com/Nolane-x/Nolane-search/pull/66
+- Production source commit: `cae8ddd629f5bccc30199e7d036dd89377cf7b6f`.
+- Catalog expanded from 314 to **316 production tools** with two static security auditors:
+  - `office-active-content-audit`: scans supported OOXML Office packages for VBA project binaries/macro-enabled content types, ActiveX, OLE/embedded parts, customUI, external relationships/workbook links/connections, unsafe URI schemes, encrypted members and traversal-like paths. It reads ZIP metadata and bounded relationship/content-type XML only; no macro or embedded object is opened/executed.
+  - `pdf-active-content-audit`: scans PDF indirect object dictionaries and link metadata for JavaScript/JS, OpenAction, Additional Actions, Launch, EmbeddedFiles/Filespec, RichMedia, AcroForm/XFA, SubmitForm/ImportData, remote GoTo and URI actions. It reports counts only and never runs actions or extracts attachments.
+- PR CI passed: https://github.com/Nolane-x/Nolane-search/actions/runs/44975448150 (107 Python runner tests, TypeScript type-check, Vitest, deployment-script checks and Worker build).
+- Main CI #294 passed: https://github.com/Nolane-x/Nolane-search/actions/runs/44975539445 (107 Python runner tests; TypeScript/Vitest/type-check and Worker build all green).
+- Cloudflare build/export and production Worker smoke test #112 passed: https://github.com/Nolane-x/Nolane-search/actions/runs/44975539435
+- Production deployment #119 passed: https://github.com/Nolane-x/Nolane-search/actions/runs/44975539446. Required deployment secrets were validated, Worker/runtime secrets uploaded and Telegram webhook/command menu registered. D1 migration was skipped because no schema changed.
+- Cloudflare API confirms Worker version 73 `03210f3c-6bd5-47a9-ab1d-deeac1fca8a1` receives 100% traffic through deployment `c39bb7f6-fb16-4749-ac9c-a540400483de`.
+- Fresh production `GET /health` returned `ok: true` and `database: reachable`; four AI provider-key routes and nine model routes were reported. This verifies configuration/route loading, not active quota or inference success for each upstream provider.
+- Registry parity was checked: 316 unique TypeScript catalog IDs, 316 Python runner allowlist IDs, 316 Python handlers and 760 matching TypeScript/Python transition edges.
+- No new dependency, D1 migration, secret or external service was added. Office inspection reads ZIP metadata and selected bounded XML; PDF inspection reads object dictionaries only. Findings are static review signals, not a malware verdict or guarantee of safety.
+- Still pending owner-level end-to-end verification: upload representative DOCX/XLSM/PPTX and PDF samples through the actual Telegram bot, inspect delivered reports and test retry. CI, webhook registration and health checks do not prove the full Telegram user journey.
