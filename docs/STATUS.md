@@ -1,22 +1,22 @@
 # Verified Project Status
 
-Last verified: 2026-11-22. Production deployment evidence is separated from owner-level Telegram upload/retry journeys.
+Last verified: 2026-11-22. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-# Verified Project Status
+## Latest production release — Wave 26 (2026-11-22)
 
-Last verified: 2026-11-22. Production deployment evidence is kept separate from owner-level Telegram file-upload/retry checks.
+- [PR #78](https://github.com/Nolane-x/Nolane-search/pull/78) merged into main as commit fd60df0480a82775e6ba6974e386096fa58f6a0c; eleven processors increased production from 406 to **417 tools**.
+- Main CI [45030758881](https://github.com/Nolane-x/Nolane-search/actions/runs/45030758881) passed TypeScript type-check, all **25 Vitest files**, deployment-script checks, **229 Python runner tests** and Worker build.
+- Worker export [45030758769](https://github.com/Nolane-x/Nolane-search/actions/runs/45030758769) passed source verification, Cloudflare build, build-output publication and production health smoke.
+- Cloudflare deployment [45030758729](https://github.com/Nolane-x/Nolane-search/actions/runs/45030758729) passed source validation, build, bundle validation, Worker upload, runtime-secret upload and Telegram webhook/command-menu registration. D1 migration was skipped because Wave 26 introduced no database schema changes.
+- Cloudflare API confirms Worker Version 83, a0d66d94-083a-46fa-af0b-1237e435a478, receives **100% of production traffic** under deployment 95d12888-5427-4ac6-bb98-3bf4cb40fe89.
+- Added FASTA/FASTQ, VCF/SAM, GFF3/BED, GenBank, PDB, GFA, Newick and Clustal/Stockholm inspectors.
+- Registry parity: **417 unique TypeScript catalog IDs, 417 Python runner allowlist IDs and 417 Python handlers**; all eleven Wave 26 IDs have upload inference and pipeline transitions.
+- No new runtime dependency or D1 migration was required.
+- Genomics data may be sensitive. Summary redaction is not source-file de-identification; owner-level E2E should use synthetic/non-sensitive files until the data-handling policy permits otherwise.
+- Plain .vcf can be a vCard; MIME text/vcard retains the vCard processor, while genomic MIME or .vcf.gz infers the VCF variant audit. Direct /tool vcf-variant-audit is available for ambiguous plain VCF files.
+- Owner-level E2E remains: upload synthetic/non-sensitive FASTA/FASTQ/VCF/SAM/GFF3/BED/GenBank/PDB/GFA/Newick/Stockholm examples through the private Telegram bot, inspect reports and test /tool_retry. CI and webhook registration do not prove every Telegram upload journey.
 
-## In review — Wave 26 candidate (2026-11-22)
-
-- Branch: `feat/wave-twenty-six-bioinformatics-tools`.
-- Eleven additional processors are registered across TypeScript catalog, Python RUNNERS allowlist, handler dispatch, pipeline transitions and upload inference. Candidate catalog: **417 tools**; production remains **406** until all release gates pass.
-- New domains: FASTA/FASTQ sequence records, VCF variant calls, SAM read alignments, GFF3/GTF annotation, BED genomic intervals, GenBank flat files, PDB structure records, GFA assembly graphs, Newick trees and Clustal/Stockholm alignments.
-- Twenty-three dedicated Python regression tests cover privacy-preserving summaries, gzip streams, malformed records, coordinates/field widths, sequence/quality lengths, graph references, tree syntax and alignment block lengths. No new runtime dependency is introduced.
-- Genomic/sequence inputs can contain sensitive or identifying human data. Reports withhold identifiers, sample labels, sequence/genotype content and coordinates, but source files still pass through the existing ephemeral GitHub-hosted runner. Do not upload regulated/patient data without authorization.
-- Plain `.vcf` is ambiguous with vCard; automatic inference requires genomic MIME or `.vcf.gz`, while direct `/tool vcf-variant-audit` remains available for plain VCF.
-- PR CI, Worker export/health smoke and Cloudflare deployment are pending for Wave 26.
-- Owner-level E2E after release: test synthetic/non-sensitive FASTA/FASTQ/VCF/SAM/GFF3/BED/GenBank/PDB/GFA/Newick/Stockholm files through private Telegram, inspect delivered reports and verify `/tool_retry`.
-## Latest production release — Wave 25 (2026-11-22)
+## Previous production release — Wave 25 (2026-11-22)
 
 - [PR #77](https://github.com/Nolane-x/Nolane-search/pull/77) merged into `main` as commit `bd5b51cd119d049dd14a654147d03a4303fa7e2c`; eleven processors increased production from 395 to **406 tools**.
 - Main CI [45017239242](https://github.com/Nolane-x/Nolane-search/actions/runs/45017239242) passed TypeScript type-check, all **25 Vitest files**, deployment-script checks, **206 Python runner tests** and Worker build.

@@ -1,11 +1,14 @@
 # Wave 26 handoff — 2026-11-22
 
-## Branch and scope
+## Release status — deployed 2026-11-22
 
-- Branch: `feat/wave-twenty-six-bioinformatics-tools`
-- Base production: Wave 25 / 406 tools, Cloudflare Worker Version 82 `22378573-aa24-444d-96b0-59e8df345b75`
-- Candidate catalog: **417 unique tools**, +11 processors.
-- Candidate remains off production until PR CI, Worker export/health smoke and Cloudflare deployment pass.
+- PR: [#78](https://github.com/Nolane-x/Nolane-search/pull/78), merged into main.
+- Production commit: fd60df0480a82775e6ba6974e386096fa58f6a0c.
+- Catalog: **417 production tools**, up from 406; +11 processors.
+- Main CI [45030758881](https://github.com/Nolane-x/Nolane-search/actions/runs/45030758881): success; 25 Vitest files and 229 Python runner tests passed.
+- Worker export/health smoke [45030758769](https://github.com/Nolane-x/Nolane-search/actions/runs/45030758769): success.
+- Cloudflare deploy [45030758729](https://github.com/Nolane-x/Nolane-search/actions/runs/45030758729): success; Telegram webhook and command menu registered; D1 migration skipped (no schema change).
+- Cloudflare confirms Worker Version 83 (a0d66d94-083a-46fa-af0b-1237e435a478) receives 100% traffic; deployment ID 95d12888-5427-4ac6-bb98-3bf4cb40fe89.
 
 ## Added processors
 
@@ -49,4 +52,4 @@
 4. Cloudflare deployment, runtime-secret upload, webhook and command registration.
 5. Owner-level Telegram E2E using synthetic/non-sensitive examples and `/tool_retry`.
 
-Wave 26 remains a candidate until all automated release gates pass. Wave 25 is the 406-tool production baseline.
+Wave 26 is production. Remaining work is owner-level Telegram E2E using synthetic/non-sensitive examples and /tool_retry; do not infer successful uploads solely from CI and deployment evidence.
