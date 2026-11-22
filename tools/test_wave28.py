@@ -67,6 +67,7 @@ class Wave28Tests(unittest.TestCase):
         self.assertIn("Content digest mismatches: 0", result["summary"])
         self.assertIn("Inventory sidecars checked: 2", result["summary"])
         self.assertIn("Inventory sidecars missing: 0", result["summary"])
+        self.assertIn("Current head is the highest version: True", result["summary"])
         self.assertIn("Manifest files missing from archive: 0", result["summary"])
         self.assertNotIn("urn:secret-object-id", result["summary"])
 
@@ -108,6 +109,29 @@ class Wave28Tests(unittest.TestCase):
         result = wave28.ocfl_object_audit(path)
         self.assertIn("Inventory sidecars checked: 1", result["summary"])
         self.assertIn("Inventory sidecars missing: 1", result["summary"])
+
+    def test_ocfl_flags_a_head_that_is_not_the_highest_version(self):
+        digest = hashlib.sha512(b"payload").hexdigest()
+        inventory = {
+            "digestAlgorithm": "sha512",
+            "head": "v1",
+            "manifest": {digest: ["v2/content/file.bin"]},
+            "versions": {
+                "v1": {"state": {}},
+                "v2": {"state": {digest: ["file.bin"]}},
+            },
+        }
+        raw = json.dumps(inventory).encode()
+        sidecar = hashlib.sha512(raw).hexdigest() + " inventory.json\n"
+        path = self.zip_file("stale-head.ocfl.zip", {
+            "obj/0=ocfl_object_1.1": b"",
+            "obj/inventory.json": raw,
+            "obj/inventory.json.sha512": sidecar.encode(),
+            "obj/v2/content/file.bin": b"payload",
+        })
+        result = wave28.ocfl_object_audit(path)
+        self.assertIn("Current head resolves to a version: True", result["summary"])
+        self.assertIn("Current head is the highest version: False", result["summary"])
 
     def test_ocfl_rejects_unsafe_archive_paths(self):
         path = self.zip_file("unsafe-ocfl.zip", {"../escape.txt": b"x"})
@@ -268,6 +292,22 @@ class Wave28Tests(unittest.TestCase):
         result = wave28.netcdf_classic_audit(self.write("variable.nc", b"".join(parts)))
         self.assertIn("Dimension entries: 1", result["summary"])
         self.assertIn("Variable descriptors: 1", result["summary"])
+
+    def test_netcdf_rejects_variable_payload_outside_file_bounds(self):
+        parts = [
+            b"CDF\x01",
+            struct.pack(">I", 0),
+            struct.pack(">II", 10, 1),
+            struct.pack(">I", 1), b"x", b"\x00" * 3, struct.pack(">I", 4),
+            struct.pack(">II", 0, 0),
+            struct.pack(">II", 11, 1),
+            struct.pack(">I", 1), b"v", b"\x00" * 3,
+            struct.pack(">I", 1), struct.pack(">I", 0),
+            struct.pack(">II", 0, 0),
+            struct.pack(">III", 5, 16, 80),
+        ]
+        with self.assertRaisesRegex(RuntimeError, "out-of-bounds offsets"):
+            wave28.netcdf_classic_audit(self.write("truncated-variable.nc", b"".join(parts)))
 
     def test_netcdf_rejects_netcdf4_and_cdf5_magic(self):
         with self.assertRaisesRegex(RuntimeError, "CDF-1 and CDF-2 only"):
