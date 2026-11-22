@@ -96,6 +96,10 @@ RUNNERS = {
     "markdown-quality-audit",
     "dns-zone-audit",
     "x509-certificate-audit",
+    "rss-atom-audit",
+    "sitemap-xml-audit",
+    "robots-txt-audit",
+    "jsonl-profile",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -418,11 +422,15 @@ PIPELINE_TRANSITIONS = {
     "markdown-quality-audit":{"text-clean","text-stats"},
     "dns-zone-audit":{"text-clean","text-stats"},
     "x509-certificate-audit":{"text-clean","text-stats"},
+    "rss-atom-audit":{"text-clean","text-stats"},
+    "sitemap-xml-audit":{"text-clean","text-stats"},
+    "robots-txt-audit":{"text-clean","text-stats"},
+    "jsonl-profile":{"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -10218,6 +10226,272 @@ def x509_certificate_audit(p):
     ]
     return tool_text("\n".join(lines),"X.509 certificate audit")
 
+
+def rss_atom_audit(p):
+    import xml.etree.ElementTree as ET
+    size=p.stat().st_size
+    if size>10*1024*1024:
+        raise RuntimeError("RSS/Atom input vượt giới hạn 10 MiB.")
+    raw=p.read_bytes()
+    if re.search(rb"<!\s*(DOCTYPE|ENTITY)\b",raw,re.I):
+        raise RuntimeError("RSS/Atom DTD/ENTITY bị chặn.")
+    try:
+        root=ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise RuntimeError("RSS/Atom XML không hợp lệ.") from exc
+    def local(tag):
+        return tag.rsplit("}",1)[-1].lower()
+    root_type=local(root.tag)
+    if root_type not in {"rss","feed","rdf"}:
+        raise RuntimeError("Chỉ hỗ trợ RSS, Atom và RSS 1.0/RDF feed.")
+    entries=[node for node in root.iter() if local(node.tag) in {"item","entry"}]
+    if len(entries)>50000:
+        raise RuntimeError("Feed vượt giới hạn 50.000 entries.")
+    missing_title=missing_id=missing_link=missing_date=0
+    duplicate_ids=0
+    ids=set()
+    enclosures=authors=categories=0
+    for entry in entries:
+        children=list(entry)
+        def child_values(names):
+            return [child for child in children if local(child.tag) in names]
+        titles=child_values({"title"})
+        if not any((node.text or "").strip() for node in titles):
+            missing_title+=1
+        id_nodes=child_values({"id","guid"})
+        identifier=next(((node.text or "").strip() for node in id_nodes if (node.text or "").strip()),"")
+        if not identifier:
+            missing_id+=1
+        elif identifier in ids:
+            duplicate_ids+=1
+        else:
+            ids.add(identifier)
+        links=child_values({"link"})
+        valid_link=False
+        for node in links:
+            href=(node.attrib.get("href") or node.text or "").strip()
+            if href:
+                valid_link=True
+                break
+        if not valid_link:
+            missing_link+=1
+        if not child_values({"published","pubdate","updated","date","modified"}):
+            missing_date+=1
+        enclosures+=len(child_values({"enclosure"}))
+        authors+=len(child_values({"author","creator"}))
+        categories+=len(child_values({"category"}))
+    channels=sum(1 for node in root.iter() if local(node.tag)=="channel")
+    lines=[
+        "RSS/Atom feed structure audit",
+        f"Root format: {root_type}; channel elements: {channels:,}; entries: {len(entries):,}",
+        f"Entries missing title: {missing_title:,}; missing ID/GUID: {missing_id:,}; duplicate IDs: {duplicate_ids:,}",
+        f"Entries missing link: {missing_link:,}; missing date fields: {missing_date:,}",
+        f"Enclosure elements: {enclosures:,}; author/creator elements: {authors:,}; category elements: {categories:,}",
+        "Feed title, entry titles, URLs, authors, descriptions and content are withheld; this is an offline structural audit."
+    ]
+    return tool_text("\n".join(lines),"RSS/Atom feed audit")
+
+
+def sitemap_xml_audit(p):
+    import xml.etree.ElementTree as ET
+    size=p.stat().st_size
+    if size>20*1024*1024:
+        raise RuntimeError("Sitemap XML vượt giới hạn 20 MiB.")
+    raw=p.read_bytes()
+    if re.search(rb"<!\s*(DOCTYPE|ENTITY)\b",raw,re.I):
+        raise RuntimeError("Sitemap DTD/ENTITY bị chặn.")
+    try:
+        root=ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise RuntimeError("Sitemap XML không hợp lệ.") from exc
+    def local(tag):
+        return tag.rsplit("}",1)[-1].lower()
+    root_type=local(root.tag)
+    if root_type not in {"urlset","sitemapindex"}:
+        raise RuntimeError("Root phải là urlset hoặc sitemapindex.")
+    entry_name="url" if root_type=="urlset" else "sitemap"
+    entries=[child for child in list(root) if local(child.tag)==entry_name]
+    if len(entries)>50000:
+        raise RuntimeError("Sitemap vượt giới hạn 50.000 entries.")
+    missing_loc=duplicate_loc=loc_count=lastmod_count=priority_invalid=changefreq_invalid=0
+    locs=set()
+    valid_freq={"always","hourly","daily","weekly","monthly","yearly","never"}
+    for entry in entries:
+        locs_for_entry=[child for child in list(entry) if local(child.tag)=="loc"]
+        loc=next(((node.text or "").strip() for node in locs_for_entry if (node.text or "").strip()),"")
+        if not loc:
+            missing_loc+=1
+        else:
+            loc_count+=1
+            if loc in locs:
+                duplicate_loc+=1
+            locs.add(loc)
+        for node in list(entry):
+            tag=local(node.tag)
+            value=(node.text or "").strip()
+            if tag=="lastmod" and value:
+                lastmod_count+=1
+            elif tag=="priority" and value:
+                try:
+                    number=float(value)
+                    if not 0<=number<=1:
+                        priority_invalid+=1
+                except ValueError:
+                    priority_invalid+=1
+            elif tag=="changefreq" and value.casefold() not in valid_freq:
+                changefreq_invalid+=1
+    lines=[
+        "XML sitemap audit",
+        f"Root: {root_type}; entries: {len(entries):,}; non-empty loc fields: {loc_count:,}; missing loc: {missing_loc:,}; duplicate loc values: {duplicate_loc:,}",
+        f"lastmod fields: {lastmod_count:,}; invalid priority values: {priority_invalid:,}; invalid changefreq values: {changefreq_invalid:,}",
+        "Sitemap URLs, lastmod timestamps and path values are withheld; no URL is fetched or crawled."
+    ]
+    return tool_text("\n".join(lines),"Sitemap XML audit")
+
+
+def robots_txt_audit(p):
+    size=p.stat().st_size
+    if size>2*1024*1024:
+        raise RuntimeError("robots.txt audit giới hạn input 2 MiB.")
+    try:
+        raw=p.read_text(encoding="utf-8-sig")
+    except UnicodeError as exc:
+        raise RuntimeError("robots.txt phải là văn bản UTF-8.") from exc
+    lines=raw.splitlines()
+    if len(lines)>20000:
+        raise RuntimeError("robots.txt vượt 20.000 dòng.")
+    groups=rules=allow=disallow=sitemaps=crawl_delay=host=unknown=malformed=orphan_rules=0
+    has_agent=False
+    has_rule=False
+    known={"user-agent","allow","disallow","sitemap","crawl-delay","host","clean-param","request-rate","visit-time"}
+    for line in lines:
+        cleaned=line.split("#",1)[0].strip()
+        if not cleaned:
+            if has_rule:
+                has_agent=False
+                has_rule=False
+            continue
+        if ":" not in cleaned:
+            malformed+=1
+            continue
+        directive,value=cleaned.split(":",1)
+        directive=directive.strip().casefold()
+        value=value.strip()
+        if directive=="user-agent":
+            if has_rule:
+                has_agent=False
+                has_rule=False
+            groups+=1
+            has_agent=True
+            if not value:
+                malformed+=1
+        elif directive in {"allow","disallow"}:
+            rules+=1
+            has_rule=True
+            if not has_agent:
+                orphan_rules+=1
+            if directive=="allow":
+                allow+=1
+            else:
+                disallow+=1
+        elif directive=="sitemap":
+            sitemaps+=1
+        elif directive=="crawl-delay":
+            crawl_delay+=1
+            has_rule=True
+            if not value:
+                malformed+=1
+        elif directive=="host":
+            host+=1
+            has_rule=True
+        elif directive in known:
+            has_rule=True
+        else:
+            unknown+=1
+    lines_out=[
+        "robots.txt offline audit",
+        f"Lines: {len(lines):,}; user-agent groups: {groups:,}; allow/disallow rules: {rules:,} ({allow:,} allow / {disallow:,} disallow)",
+        f"Sitemap directives: {sitemaps:,}; crawl-delay directives: {crawl_delay:,}; Host directives: {host:,}",
+        f"Rules outside a user-agent group: {orphan_rules:,}; malformed lines: {malformed:,}; unknown directives: {unknown:,}",
+        "Directive paths, user-agent values and sitemap URLs are withheld. No robots policy is fetched and no crawl is performed."
+    ]
+    return tool_text("\n".join(lines_out),"robots.txt audit")
+
+
+def jsonl_profile(p):
+    size=p.stat().st_size
+    if size>20*1024*1024:
+        raise RuntimeError("JSONL profile giới hạn input 20 MiB.")
+    records=invalid_lines=non_object=duplicate_keys=long_lines=0
+    key_counts={}
+    key_types={}
+    invalid_line_numbers=[]
+    def pairs_hook(pairs):
+        nonlocal duplicate_keys
+        result={}
+        for key,value in pairs:
+            if key in result:
+                duplicate_keys+=1
+            result[key]=value
+        return result
+    def type_name(value):
+        if value is None:
+            return "null"
+        if isinstance(value,bool):
+            return "boolean"
+        if isinstance(value,(int,float)):
+            return "number"
+        if isinstance(value,str):
+            return "string"
+        if isinstance(value,list):
+            return "array"
+        if isinstance(value,dict):
+            return "object"
+        return "other"
+    with p.open("r",encoding="utf-8-sig",errors="replace") as handle:
+        for line_number,line in enumerate(handle,1):
+            if line_number>100000:
+                raise RuntimeError("JSONL vượt giới hạn 100.000 dòng.")
+            if not line.strip():
+                continue
+            if len(line)>1024*1024:
+                long_lines+=1
+                invalid_lines+=1
+                if len(invalid_line_numbers)<20:
+                    invalid_line_numbers.append(line_number)
+                continue
+            try:
+                value=json.loads(line,object_pairs_hook=pairs_hook)
+            except json.JSONDecodeError:
+                invalid_lines+=1
+                if len(invalid_line_numbers)<20:
+                    invalid_line_numbers.append(line_number)
+                continue
+            records+=1
+            if not isinstance(value,dict):
+                non_object+=1
+                continue
+            for key,item in value.items():
+                key=str(key)
+                key_counts[key]=key_counts.get(key,0)+1
+                types=key_types.setdefault(key,{})
+                name=type_name(item)
+                types[name]=types.get(name,0)+1
+    top_keys=sorted(key_counts,key=lambda key:(-key_counts[key],key))[:30]
+    lines=[
+        "JSON Lines data profile",
+        f"Bytes: {size:,}; valid records: {records:,}; invalid/oversized lines: {invalid_lines:,}; non-object records: {non_object:,}",
+        f"Top-level field names: {len(key_counts):,}; duplicate object keys encountered: {duplicate_keys:,}; oversized lines: {long_lines:,}",
+        "Most common field presence and value types:"
+    ]
+    for key in top_keys:
+        type_summary=",".join(f"{name}:{count}" for name,count in sorted(key_types[key].items()))
+        lines.append(f"- {key[:80]} · present {key_counts[key]:,}/{records:,} records · {type_summary}")
+    if invalid_line_numbers:
+        lines.append("First invalid/oversized line numbers: "+", ".join(map(str,invalid_line_numbers)))
+    lines.append("JSON values are never copied into this report; field names and aggregate type counts only.")
+    return tool_text("\n".join(lines),"JSONL data profile")
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -10357,6 +10631,10 @@ TOOLS={
  "markdown-quality-audit":markdown_quality_audit,
  "dns-zone-audit":dns_zone_audit,
  "x509-certificate-audit":x509_certificate_audit,
+ "rss-atom-audit":rss_atom_audit,
+ "sitemap-xml-audit":sitemap_xml_audit,
+ "robots-txt-audit":robots_txt_audit,
+ "jsonl-profile":jsonl_profile,
 
 }
 
