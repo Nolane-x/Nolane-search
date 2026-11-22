@@ -920,8 +920,6 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (name.endsWith("robots.txt")) return "robots-txt-audit";
   if (name.endsWith(".rss") || name.endsWith(".atom") || mime === "application/rss+xml" || mime === "application/atom+xml") return "rss-atom-audit";
   if (name.endsWith(".pub") || name.endsWith(".authorized_keys")) return "ssh-public-key-audit";
-  if (name.endsWith("robots.txt")) return "robots-txt-audit";
-  if (name.endsWith(".rss") || name.endsWith(".atom") || mime === "application/rss+xml" || mime === "application/atom+xml") return "rss-atom-audit";
   if (name.endsWith(".svg") || mime === "image/svg+xml") return "svg-safety-audit";
   if (name.endsWith(".pcap") || name.endsWith(".pcapng")) return "pcap-network-audit";
   if (name.endsWith(".zone")) return "dns-zone-audit";
