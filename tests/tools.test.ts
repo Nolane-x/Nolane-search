@@ -281,7 +281,7 @@ describe("Nolane Tools registry", () => {
       "text-normalize-unicode-nfkc","csv-to-sql-inserts","csv-to-yaml","csv-empty-row-report",
       "csv-row-width-report","json-remove-empty-values","json-to-typescript","json-nesting-report",
     ];
-    expect(TOOL_CATALOG).toHaveLength(345);
+    expect(TOOL_CATALOG).toHaveLength(354);
     for(const id of ids)expect(getTool(id)?.ready).toBe(true);
     expect(validateToolPipeline({mimeType:"text/plain",fileName:"macs.txt"},[{toolId:"text-extract-mac-addresses"},{toolId:"text-deduplicate"}]).ok).toBe(true);
     expect(validateToolPipeline({mimeType:"text/csv",fileName:"rows.csv"},[{toolId:"csv-to-yaml"},{toolId:"yaml-format"},{toolId:"yaml-to-json"}]).ok).toBe(true);
@@ -311,7 +311,7 @@ describe("Nolane Tools registry", () => {
 
   it("registers and infers the eight Wave 9 infrastructure and CI/CD auditors", () => {
     const ids=["github-actions-audit","kubernetes-manifest-audit","terraform-audit","nginx-config-audit","apache-config-audit","caddy-config-audit","systemd-unit-audit","shell-script-audit"];
-    expect(TOOL_CATALOG).toHaveLength(345);
+    expect(TOOL_CATALOG).toHaveLength(354);
     for(const id of ids)expect(getTool(id)?.ready).toBe(true);
     expect(inferToolForUpload({mimeType:"text/plain",fileName:"main.tf"})).toBe("terraform-audit");
     expect(inferToolForUpload({mimeType:"text/plain",fileName:"nginx.conf"})).toBe("nginx-config-audit");
