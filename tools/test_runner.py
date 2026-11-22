@@ -2571,6 +2571,7 @@ dependencies = ["requests>=2.0", "httpx"]
 
 
     def test_wave_sixteen_office_active_content_audit_reports_markers_without_targets(self):
+        import zipfile
         office_path=self.input_dir/"review.docx"
         rels='''<?xml version="1.0" encoding="UTF-8"?>
         <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
