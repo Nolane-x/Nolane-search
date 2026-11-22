@@ -268,6 +268,9 @@ def _xml_bytes(path: Path, allow_mxl: bool = False) -> bytes:
                                  if element.tag.rsplit("}", 1)[-1] == "rootfile"), None)
                 if not rootfile or rootfile not in archive.namelist():
                     raise RuntimeError("MXL score rootfile is missing.")
+                safe_root = rootfile.replace("\\", "/")
+                if safe_root.startswith("/") or ".." in safe_root.split("/"):
+                    raise RuntimeError("Unsafe MXL score rootfile path.")
                 raw = archive.read(rootfile)
         except (zipfile.BadZipFile, ET.ParseError) as exc:
             raise RuntimeError("Invalid compressed MusicXML package.") from exc
@@ -608,6 +611,7 @@ def grafana_dashboard_audit(path: Path) -> dict:
     public_flags = 0
     stack = list(dashboard.get("panels", [])) if isinstance(dashboard.get("panels"), list) else []
     node_count = 0
+    panel_count = 0
     while stack:
         panel = stack.pop()
         node_count += 1
@@ -615,6 +619,7 @@ def grafana_dashboard_audit(path: Path) -> dict:
             raise RuntimeError("Grafana dashboard exceeds the panel-count limit.")
         if not isinstance(panel, dict):
             continue
+        panel_count += 1
         if "id" in panel:
             panel_ids.append(str(panel.get("id")))
         if isinstance(panel.get("type"), str):
@@ -633,7 +638,7 @@ def grafana_dashboard_audit(path: Path) -> dict:
     public_flags = int(bool(dashboard.get("isPublic"))) + int(bool(dashboard.get("publicDashboardEnabled")))
     lines_out = [
         f"Dashboard JSON schema version: {dashboard.get('schemaVersion') if isinstance(dashboard.get('schemaVersion'), int) else 'not specified'}",
-        f"Panels (including nested rows): {len(panel_ids):,}",
+        f"Panels (including nested rows): {panel_count:,}",
         f"Duplicate panel IDs: {repeated_panel_ids:,}",
         f"Panel types: " + (", ".join(f"{key}={value}" for key, value in panel_types.most_common(20)) or "none"),
         f"Panel datasource references: {datasource_refs:,}",

@@ -402,6 +402,18 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "html-structured-data-audit", name: "Kiểm tra JSON-LD Structured Data", category: "developer", description: "Phân tích script application/ld+json, kiểm tra JSON hợp lệ, @context, @type, schema.org và @id trùng; không xuất nội dung hay identifier.", accepts: ["text/html", ".html", ".htm"], output: "Báo cáo HTML SEO TXT", ready: true },
   { id: "html-local-link-audit", name: "Tìm liên kết hỏng trong website ZIP", category: "developer", description: "Quét liên kết nội bộ và fragment trong HTML bundle ZIP, tìm resource/anchor thiếu; bỏ qua external URLs và không crawl hoặc fetch mạng.", accepts: ["application/zip", ".zip"], output: "CSV local link audit", ready: true },
   { id: "css-quality-audit", name: "Kiểm tra chất lượng CSS", category: "developer", description: "Parse CSS và thống kê parser errors, duplicate selectors/properties, !important, @import và external URL references; không xuất selector/value.", accepts: ["text/css", ".css"], output: "Báo cáo CSS audit TXT", ready: true },
+  { id: "gcode-audit", name: "Kiểm tra G-code CNC/3D printing", category: "developer", description: "Đếm lệnh G/M, vùng tọa độ XYZ, feed rate, spindle/power và lệnh cần rà soát; chỉ phân tích tĩnh, không mô phỏng hay chạy máy.", accepts: ["text/plain", ".gcode", ".gco", ".tap", ".nc"], output: "Báo cáo G-code TXT", ready: true },
+  { id: "midi-audit", name: "Kiểm tra cấu trúc MIDI", category: "audio-video", description: "Phân tích Standard MIDI File: track, channel, note events, tempo meta events, ticks và cấu trúc chunk; không phát nhạc hay thực thi MIDI.", accepts: ["audio/midi", "audio/x-midi", ".mid", ".midi"], output: "Báo cáo MIDI TXT", ready: true },
+  { id: "musicxml-audit", name: "Kiểm tra bản nhạc MusicXML", category: "audio-video", description: "Đọc MusicXML/MXL để thống kê part, measure, note, rest, key/time signature và tempo; chặn DTD/entity, không xuất lời hoặc tên nhạc cụ.", accepts: ["application/vnd.recordare.musicxml+xml", ".musicxml", ".mxl"], output: "Báo cáo MusicXML TXT", ready: true },
+  { id: "bibtex-audit", name: "Kiểm tra thư viện tài liệu BibTeX", category: "document", description: "Rà entry/key trùng, trường title/author/year còn thiếu và DOI lặp; không xuất citation key, tác giả, tiêu đề hay DOI.", accepts: ["text/plain", ".bib"], output: "Báo cáo BibTeX TXT", ready: true },
+  { id: "nmea-track-audit", name: "Kiểm tra log GPS NMEA", category: "data", description: "Kiểm tra checksum NMEA, phân loại câu GNSS và định dạng tọa độ RMC/GGA; không tiết lộ tọa độ, timestamp hay tuyến đường.", accepts: ["text/plain", ".nmea"], output: "Báo cáo NMEA TXT", ready: true },
+  { id: "ansible-playbook-audit", name: "Kiểm tra bảo mật Ansible Playbook", category: "developer", description: "Phân tích YAML tĩnh để đếm shell/command/raw, become, no_log, ignore_errors và cấu hình package thiếu pinning; tuyệt đối không chạy task.", accepts: ["application/yaml", "text/yaml", ".yml", ".yaml"], output: "Báo cáo Ansible TXT", ready: true },
+  { id: "prometheus-rules-audit", name: "Kiểm tra Prometheus alert rules", category: "developer", description: "Rà group/rule trùng, alert thiếu severity, summary/description và expression; không thực thi PromQL hoặc hiển thị query/label values.", accepts: ["application/yaml", "text/yaml", ".yml", ".yaml"], output: "Báo cáo Prometheus TXT", ready: true },
+  { id: "grafana-dashboard-audit", name: "Kiểm tra Grafana Dashboard JSON", category: "developer", description: "Thống kê panel/type, datasource, query target, biến và ID trùng; phát hiện public flags; không tiết lộ dashboard UID, URL hoặc query.", accepts: ["application/json", ".json"], output: "Báo cáo Grafana TXT", ready: true },
+  { id: "hdf5-audit", name: "Kiểm tra dữ liệu khoa học HDF5", category: "data", description: "Đọc metadata HDF5: group/dataset, shape, dtype, compression và chunking; không tải tensor hoặc giá trị dataset, bỏ qua external/soft links.", accepts: ["application/x-hdf5", ".h5", ".hdf5"], output: "Báo cáo HDF5 TXT", ready: true },
+  { id: "avro-schema-audit", name: "Kiểm tra Avro Schema", category: "data", description: "Rà cấu trúc record/enum/fixed/array/map, field trùng, union branch trùng và khai báo thiếu; không in tên schema, field hay default values.", accepts: ["application/json", ".avsc"], output: "Báo cáo Avro TXT", ready: true },
+  { id: "graphql-schema-audit", name: "Kiểm tra GraphQL SDL Schema", category: "developer", description: "Parse và validate GraphQL SDL offline; thống kê type, field, argument, enum, deprecated và schema errors; không thực thi resolver/query/mutation.", accepts: ["text/graphql", ".graphql", ".gql"], output: "Báo cáo GraphQL TXT", ready: true },
+  { id: "protobuf-schema-audit", name: "Kiểm tra Protocol Buffers .proto", category: "developer", description: "Rà syntax/package/message/enum/service/RPC, field number và reserved range bằng scanner tĩnh; không chạy protoc hay biên dịch schema.", accepts: ["text/plain", ".proto"], output: "Báo cáo Protobuf TXT", ready: true },
 
 ];
 
@@ -758,6 +770,18 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "html-local-link-audit": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json", "csv-to-parquet"],
   "subtitle-quality-audit": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json", "csv-to-parquet"],
   "unit-convert": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json", "csv-to-parquet"],
+  "gcode-audit": ["text-clean", "text-stats"],
+  "midi-audit": ["text-clean", "text-stats"],
+  "musicxml-audit": ["text-clean", "text-stats"],
+  "bibtex-audit": ["text-clean", "text-stats"],
+  "nmea-track-audit": ["text-clean", "text-stats"],
+  "ansible-playbook-audit": ["text-clean", "text-stats"],
+  "prometheus-rules-audit": ["text-clean", "text-stats"],
+  "grafana-dashboard-audit": ["text-clean", "text-stats"],
+  "hdf5-audit": ["text-clean", "text-stats"],
+  "avro-schema-audit": ["text-clean", "text-stats"],
+  "graphql-schema-audit": ["text-clean", "text-stats"],
+  "protobuf-schema-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
@@ -932,6 +956,18 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (isPhoto) return "image-ocr";
   const mime = (file.mimeType || "").toLowerCase();
   const name = (file.fileName || "").toLowerCase();
+  if (/\.(?:gcode|gco|tap)$/i.test(name)) return "gcode-audit";
+  if (/\.(?:mid|midi)$/i.test(name) || mime.includes("midi")) return "midi-audit";
+  if (/\.(?:musicxml|mxl)$/i.test(name) || mime.includes("musicxml")) return "musicxml-audit";
+  if (name.endsWith(".bib")) return "bibtex-audit";
+  if (name.endsWith(".nmea")) return "nmea-track-audit";
+  if (/^(?:site|playbook|ansible)(?:[-_.].*)?\.ya?ml$/i.test(name)) return "ansible-playbook-audit";
+  if (/^(?:prometheus|alert-rules|.*-rules)\.ya?ml$/i.test(name)) return "prometheus-rules-audit";
+  if (/(?:^|[-_.])grafana(?:[-_.]|$).*\.json$/i.test(name)) return "grafana-dashboard-audit";
+  if (/\.(?:h5|hdf5)$/i.test(name)) return "hdf5-audit";
+  if (name.endsWith(".avsc")) return "avro-schema-audit";
+  if (/\.(?:graphql|gql)$/i.test(name) || mime === "text/graphql") return "graphql-schema-audit";
+  if (name.endsWith(".proto")) return "protobuf-schema-audit";
   if (name.endsWith(".svg") || mime === "image/svg+xml") return "svg-safety-audit";
   if (mime.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(name)) return "image-ocr";
   if (mime === "application/x-ndjson" || mime === "application/jsonl" || name.endsWith(".jsonl")) return "jsonl-format";

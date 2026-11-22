@@ -5,12 +5,13 @@ describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
     const ids = TOOL_CATALOG.map(tool => tool.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(TOOL_CATALOG).toHaveLength(371);
+    expect(TOOL_CATALOG).toHaveLength(383);
     expect(TOOL_CATALOG.every(tool => tool.ready && tool.description.length > 12 && tool.accepts.length > 0)).toBe(true);
     for (const id of ["pdf-table-extract","json-jmespath-query","ip-network-report","barcode-generate","docx-to-markdown","pptx-notes-extract","fuzzy-match-report","csv-to-parquet","parquet-to-csv","sqlglot-format","sqlfluff-lint","python-security-audit","unit-convert","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","notebook-strip-outputs","heic-convert","subtitle-quality-audit","kml-to-geojson","coordinate-transform","html-structured-data-audit","html-local-link-audit","css-quality-audit","text-extract-todo-comments", "text-extract-markdown-images", "text-strip-markdown-frontmatter", "text-markdown-to-plain", "text-sort-unique-words", "text-word-to-lines", "text-join-lines", "text-extract-domains", "text-extract-uuids", "text-extract-semver", "text-extract-ipv6", "text-redact-secrets", "text-extract-comment-lines", "text-tabs-to-spaces", "text-escape-regex", "text-unescape-regex", "json-merge-objects", "json-array-dedupe", "json-array-to-lines", "csv-trim-cells", "csv-remove-empty-columns", "csv-empty-cell-report"]) expect(getTool(id)?.ready).toBe(true);
     for (const id of ["text-translate","language-detect","text-uppercase","text-lowercase","text-title-case","text-sort-lines","text-reverse-lines","text-number-lines","text-remove-blank-lines","text-wrap","text-trim-lines","text-extract-emails","text-extract-urls","text-extract-hashtags","text-to-base64","base64-to-text","url-encode","url-decode","json-minify","json-sort-keys","text-slugify","text-word-frequency","text-extract-numbers","text-extract-dates","text-reverse-characters","text-snake-case","text-kebab-case","text-camel-case","text-swap-case","text-extract-ipv4","text-mask-emails","text-mask-phones","json-to-jsonl","jsonl-to-json","csv-to-tsv","tsv-to-csv","csv-to-markdown","html-minify","xml-minify","text-remove-emoji","text-collapse-whitespace","text-remove-punctuation","text-to-ascii","text-html-escape","text-html-unescape","text-extract-mentions","text-extract-hex-colors","text-extract-phones","text-dedupe-lines","text-count-report","text-quote-lines","text-unquote-lines","csv-transpose","csv-sort-rows","csv-dedupe-rows","csv-to-xml","csv-to-html","json-sort-array","json-remove-nulls","json-to-html-table","text-pascal-case","text-constant-case","text-dot-case","text-initials","text-normalize-unicode","text-remove-control-chars","text-remove-duplicate-words","text-extract-markdown-links","text-extract-markdown-headings","text-extract-quotes","text-paragraph-report","json-flatten","json-unflatten","json-keys-report","csv-remove-empty-rows","csv-add-row-numbers","csv-column-stats","csv-normalize-headers","csv-to-jsonl","jsonl-to-csv","text-indent-lines","text-unindent-lines","text-dedupe-paragraphs","text-tokenize-words","text-sentence-report","text-line-length-report","text-normalize-newlines","text-remove-zero-width","text-extract-file-paths","text-sort-words","html-extract-links","html-extract-images","html-extract-title","html-sanitize","xml-tree-report","json-to-xml","json-type-report","json-escape-string","json-unescape-string","csv-unique-values","text-sentence-case","text-normalize-quotes","text-normalize-dashes","text-reverse-word-order","text-extract-words","text-extract-sentences","text-dedupe-sentences","text-remove-markdown-formatting","text-markdown-toc","text-markdown-code-blocks","text-markdown-table-extract","text-extract-numbered-lists","text-join-hyphenated-lines","text-strip-bom","text-normalize-paragraph-spacing","csv-schema-infer","csv-duplicates-report","csv-sample-rows","json-array-stats","json-canonicalize"]) expect(getTool(id)?.ready).toBe(true);
     for (const id of ["pdf-rotate-cw","pdf-remove-blank","image-trim-border","image-pixelate","image-diff","audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean","json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join"]) expect(getTool(id)).not.toBeNull();
   });
+    for (const id of ["gcode-audit", "midi-audit", "musicxml-audit", "bibtex-audit", "nmea-track-audit", "ansible-playbook-audit", "prometheus-rules-audit", "grafana-dashboard-audit", "hdf5-audit", "avro-schema-audit", "graphql-schema-audit", "protobuf-schema-audit"]) expect(getTool(id)?.ready).toBe(true);
 
   it("infers a suitable default tool from common uploaded media", () => {
     expect(inferToolForUpload({}, true)).toBe("image-ocr");
@@ -281,7 +282,7 @@ describe("Nolane Tools registry", () => {
       "text-normalize-unicode-nfkc","csv-to-sql-inserts","csv-to-yaml","csv-empty-row-report",
       "csv-row-width-report","json-remove-empty-values","json-to-typescript","json-nesting-report",
     ];
-    expect(TOOL_CATALOG).toHaveLength(371);
+    expect(TOOL_CATALOG).toHaveLength(383);
     for(const id of ids)expect(getTool(id)?.ready).toBe(true);
     expect(validateToolPipeline({mimeType:"text/plain",fileName:"macs.txt"},[{toolId:"text-extract-mac-addresses"},{toolId:"text-deduplicate"}]).ok).toBe(true);
     expect(validateToolPipeline({mimeType:"text/csv",fileName:"rows.csv"},[{toolId:"csv-to-yaml"},{toolId:"yaml-format"},{toolId:"yaml-to-json"}]).ok).toBe(true);
@@ -311,7 +312,7 @@ describe("Nolane Tools registry", () => {
 
   it("registers and infers the eight Wave 9 infrastructure and CI/CD auditors", () => {
     const ids=["github-actions-audit","kubernetes-manifest-audit","terraform-audit","nginx-config-audit","apache-config-audit","caddy-config-audit","systemd-unit-audit","shell-script-audit"];
-    expect(TOOL_CATALOG).toHaveLength(371);
+    expect(TOOL_CATALOG).toHaveLength(383);
     for(const id of ids)expect(getTool(id)?.ready).toBe(true);
     expect(inferToolForUpload({mimeType:"text/plain",fileName:"main.tf"})).toBe("terraform-audit");
     expect(inferToolForUpload({mimeType:"text/plain",fileName:"nginx.conf"})).toBe("nginx-config-audit");
@@ -505,4 +506,19 @@ describe("Nolane Tools registry", () => {
     }
   });
 
+
+  it("infers Wave 23 domain-specific file types before generic text handlers", () => {
+    expect(inferToolForUpload({ fileName: "part.gcode" })).toBe("gcode-audit");
+    expect(inferToolForUpload({ fileName: "song.mid" })).toBe("midi-audit");
+    expect(inferToolForUpload({ fileName: "score.musicxml" })).toBe("musicxml-audit");
+    expect(inferToolForUpload({ fileName: "references.bib" })).toBe("bibtex-audit");
+    expect(inferToolForUpload({ fileName: "track.nmea" })).toBe("nmea-track-audit");
+    expect(inferToolForUpload({ fileName: "site.yml" })).toBe("ansible-playbook-audit");
+    expect(inferToolForUpload({ fileName: "alerts.rules.yml" })).toBe("prometheus-rules-audit");
+    expect(inferToolForUpload({ fileName: "grafana-dashboard.json" })).toBe("grafana-dashboard-audit");
+    expect(inferToolForUpload({ fileName: "samples.h5" })).toBe("hdf5-audit");
+    expect(inferToolForUpload({ fileName: "events.avsc" })).toBe("avro-schema-audit");
+    expect(inferToolForUpload({ fileName: "schema.graphql" })).toBe("graphql-schema-audit");
+    expect(inferToolForUpload({ fileName: "events.proto" })).toBe("protobuf-schema-audit");
+  });
 });
