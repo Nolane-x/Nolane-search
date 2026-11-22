@@ -9254,7 +9254,7 @@ def vcard_privacy_audit(p):
     size=p.stat().st_size
     if size>10*1024*1024: raise RuntimeError("vCard input vượt giới hạn 10 MiB.")
     try:
-        components=list(vobject.readComponents(p.read_text(encoding="utf-8-sig"),validate=False,max_nesting=40))
+        components=_read_bounded_vobject_components(p.read_text(encoding="utf-8-sig"),max_depth=40)
     except Exception as exc:
         raise RuntimeError("Không thể phân tích vCard; hãy kiểm tra cấu trúc BEGIN:VCARD/END:VCARD.") from exc
     cards=[item for item in components if str(getattr(item,"name","")).upper()=="VCARD"]
