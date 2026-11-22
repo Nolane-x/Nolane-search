@@ -1,8 +1,6 @@
-# Nolane Tools
+Nolane Tools hiện có **328 công cụ đã triển khai trên production**; Wave 18 phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `1271380c-e118-4731-ad33-5f38adcd20c8`. Main CI, Worker export/production smoke và deployment đều đã thành công. Catalog TypeScript, Python runner allowlist, handler, text-output registry và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và các repository upstream đã xem được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
 
-Nolane Tools hiện có **318 công cụ đã triển khai trên production**; Wave 17 phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `f3180bcc-896d-4fef-9887-c81146865265`. Catalog TypeScript, Python runner allowlist, handler và pipeline transitions được đối chiếu trong CI. Catalog TypeScript, Python runner allowlist, handler và pipeline transitions được đối chiếu tự động. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp. Wave 7 và Wave 8 đưa catalog lên 275 công cụ; Wave 9 thêm 8 auditor hạ tầng/CI/CD; Wave 10 thêm 8 repository engineering analyzers, Wave 11 thêm 6 analyzer cho environment contracts, architecture cycles, change impact, OpenAPI, container và CI reliability, Wave 12 thêm 5 HTML quality auditors cho SEO, accessibility, links, forms và images; Wave 13 thêm 6 productivity processors; Wave 14 thêm 4 auditor DOCX/PPTX/CSV/archive. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
-
-### Wave 18 — Cross-domain everyday, data and media tools (in development)
+### Wave 18 — Cross-domain everyday, data and media tools — deployed 2026-11-22
 
 | ID | Công cụ | Nhóm | Chức năng |
 |---|---|---|---|
@@ -17,7 +15,7 @@ Nolane Tools hiện có **318 công cụ đã triển khai trên production**; W
 | /tool openapi-contract-audit | OpenAPI audit | API | Kiểm tra operationId, responses, path parameters, local refs và HTTP server URLs; không fetch remote refs. |
 | /tool color-convert | Color converter | Thiết kế | Chuyển HEX/RGB sang HEX, RGB, HSL và CMYK cho danh sách nhiều dòng. |
 
-Wave 18 đang chờ CI/deploy; không tính 10 tool này vào production trước khi main CI, Worker export/smoke và deploy hoàn tất. Giới hạn: HAR tối đa 20 MiB/100.000 entries và chỉ quét tối đa 2 MiB body; iCalendar/vCard tối đa 10 MiB; GPX/GeoJSON tối đa 20 MiB; QR payload tối đa 4 KiB; font tối đa 20 MiB; subtitle tối đa 10 MiB; OpenAPI tối đa 10 MiB; color input tối đa 2 MiB. Các auditor trả số liệu và tín hiệu heuristic, không phải chứng nhận tuân thủ hay xác thực bảo mật toàn diện.
+Wave 18 đã qua main CI, Worker export/production smoke và Cloudflare deployment. Cả 10 tool đã có mặt trong catalog production; live Telegram upload/report/retry vẫn cần kiểm tra trực tiếp trong private chat. Deployment evidence: [Main CI 44980373517](https://github.com/Nolane-x/Nolane-search/actions/runs/44980373517), [Worker export/smoke 44980373519](https://github.com/Nolane-x/Nolane-search/actions/runs/44980373519), [Production deploy 44980373529](https://github.com/Nolane-x/Nolane-search/actions/runs/44980373529).\n\nGiới hạn: HAR tối đa 20 MiB/100.000 entries và chỉ quét tối đa 2 MiB body; iCalendar/vCard tối đa 10 MiB; GPX/GeoJSON tối đa 20 MiB; QR payload tối đa 4 KiB; font tối đa 20 MiB; subtitle tối đa 10 MiB; OpenAPI tối đa 10 MiB; color input tối đa 2 MiB. Các auditor trả số liệu và tín hiệu heuristic, không phải chứng nhận tuân thủ hay xác thực bảo mật toàn diện.
 ### Wave 17 — Email and JWT security audits — deployed 2026-11-22
 
 | ID | Công cụ | Chức năng | Đầu ra |
