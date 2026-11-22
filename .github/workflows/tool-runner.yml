@@ -79,6 +79,42 @@ jobs:
       - name: Install Parquet engine
         if: contains(steps.job.outputs.tool_ids, 'csv-to-parquet') || contains(steps.job.outputs.tool_ids, 'parquet-to-csv')
         run: python -m pip install --disable-pip-version-check duckdb
+      - name: Install SQLGlot
+        if: contains(steps.job.outputs.tool_ids, 'sqlglot-format')
+        run: python -m pip install --disable-pip-version-check sqlglot
+      - name: Install SQLFluff
+        if: contains(steps.job.outputs.tool_ids, 'sqlfluff-lint')
+        run: python -m pip install --disable-pip-version-check sqlfluff
+      - name: Install Bandit Python scanner
+        if: contains(steps.job.outputs.tool_ids, 'python-security-audit')
+        run: python -m pip install --disable-pip-version-check bandit
+      - name: Install Pint unit registry
+        if: contains(steps.job.outputs.tool_ids, 'unit-convert')
+        run: python -m pip install --disable-pip-version-check Pint
+      - name: Install 3D mesh parser
+        if: contains(steps.job.outputs.tool_ids, 'mesh-inspect')
+        run: python -m pip install --disable-pip-version-check trimesh
+      - name: Install DXF CAD parser
+        if: contains(steps.job.outputs.tool_ids, 'dxf-audit')
+        run: python -m pip install --disable-pip-version-check ezdxf
+      - name: Install Shapefile parser
+        if: contains(steps.job.outputs.tool_ids, 'shapefile-audit')
+        run: python -m pip install --disable-pip-version-check pyshp
+      - name: Install gettext parser
+        if: contains(steps.job.outputs.tool_ids, 'gettext-catalog-audit')
+        run: python -m pip install --disable-pip-version-check polib
+      - name: Install Jupyter Notebook schema
+        if: contains(steps.job.outputs.tool_ids, 'notebook-audit') || contains(steps.job.outputs.tool_ids, 'notebook-strip-outputs')
+        run: python -m pip install --disable-pip-version-check nbformat
+      - name: Install HEIC decoder
+        if: contains(steps.job.outputs.tool_ids, 'heic-convert')
+        run: python -m pip install --disable-pip-version-check pillow-heif
+      - name: Install coordinate transformation library
+        if: contains(steps.job.outputs.tool_ids, 'coordinate-transform')
+        run: python -m pip install --disable-pip-version-check pyproj
+      - name: Install CSS parser
+        if: contains(steps.job.outputs.tool_ids, 'css-quality-audit')
+        run: python -m pip install --disable-pip-version-check tinycss2
       - name: Install QR decoder
         if: contains(steps.job.outputs.tool_ids, 'qr-read')
         run: |
