@@ -83,8 +83,17 @@ jobs:
         if: contains(steps.job.outputs.tool_ids, 'audio-transcribe') || contains(steps.job.outputs.tool_ids, 'audio-subtitles')
         run: python -m pip install --disable-pip-version-check faster-whisper
       - name: Install YAML parser
-        if: contains(steps.job.outputs.tool_ids, 'yaml-format') || contains(steps.job.outputs.tool_ids, 'code-check') || contains(steps.job.outputs.tool_ids, 'yaml-to-json') || contains(steps.job.outputs.tool_ids, 'json-to-yaml')
+        if: contains(steps.job.outputs.tool_ids, 'yaml-format') || contains(steps.job.outputs.tool_ids, 'code-check') || contains(steps.job.outputs.tool_ids, 'yaml-to-json') || contains(steps.job.outputs.tool_ids, 'json-to-yaml') || contains(steps.job.outputs.tool_ids, 'openapi-contract-audit')
         run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Install calendar and contact parsers
+        if: contains(steps.job.outputs.tool_ids, 'ics-calendar-audit') || contains(steps.job.outputs.tool_ids, 'vcard-privacy-audit')
+        run: python -m pip install --disable-pip-version-check vobject
+      - name: Install font metadata parser
+        if: contains(steps.job.outputs.tool_ids, 'font-inspect')
+        run: python -m pip install --disable-pip-version-check fonttools
+      - name: Install QR image generator
+        if: contains(steps.job.outputs.tool_ids, 'qr-code-generate')
+        run: python -m pip install --disable-pip-version-check 'qrcode[pil]'
       - name: Setup Node for JavaScript syntax checks
         if: contains(steps.job.outputs.tool_ids, 'code-check')
         uses: actions/setup-node@v6
