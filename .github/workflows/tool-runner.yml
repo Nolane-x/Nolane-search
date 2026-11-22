@@ -85,6 +85,15 @@ jobs:
       - name: Install YAML parser
         if: contains(steps.job.outputs.tool_ids, 'yaml-format') || contains(steps.job.outputs.tool_ids, 'code-check') || contains(steps.job.outputs.tool_ids, 'yaml-to-json') || contains(steps.job.outputs.tool_ids, 'json-to-yaml') || contains(steps.job.outputs.tool_ids, 'openapi-contract-audit')
         run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Install SQL parser and formatter
+        if: contains(steps.job.outputs.tool_ids, 'sql-static-audit') || contains(steps.job.outputs.tool_ids, 'sql-format')
+        run: python -m pip install --disable-pip-version-check sqlglot
+      - name: Install GraphQL schema parser
+        if: contains(steps.job.outputs.tool_ids, 'graphql-schema-audit')
+        run: python -m pip install --disable-pip-version-check graphql-core
+      - name: Install cron schedule parser
+        if: contains(steps.job.outputs.tool_ids, 'cron-schedule-audit')
+        run: python -m pip install --disable-pip-version-check croniter
       - name: Install PCAP parser
         if: contains(steps.job.outputs.tool_ids, 'pcap-network-audit')
         run: python -m pip install --disable-pip-version-check dpkt
