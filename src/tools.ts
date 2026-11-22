@@ -861,7 +861,7 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (name.endsWith(".vcf") || name.endsWith(".vcard") || mime === "text/vcard" || mime === "text/x-vcard") return "vcard-privacy-audit";
   if (name.endsWith(".gpx") || mime === "application/gpx+xml") return "gpx-track-report";
   if (name.endsWith(".geojson") || mime === "application/geo+json") return "geojson-audit";
-  if (/\\.(?:ttf|otf|woff)$/i.test(name)) return "font-inspect";
+  if (/\.(?:ttf|otf|woff)$/i.test(name)) return "font-inspect";
 
   if (/^(?:docker-)?compose(?:\.[^/]*)?\.(?:yml|yaml)$/i.test(name)) return "docker-compose-audit";
   if (/^dockerfile(?:\..*)?$/i.test(name)) return "dockerfile-audit";
