@@ -112,5 +112,3 @@ The command returns a preview with its assumptions, warnings, self-reported conf
 
 
 Current development handoff: docs/HANDOFF-WAVE-TWENTY-2026-11-22.md.
-
-Current development handoff: docs/HANDOFF-WAVE-TWENTY-2026-11-22.md.
