@@ -114,6 +114,23 @@ RUNNERS = {
     "fuzzy-match-report",
     "csv-to-parquet",
     "parquet-to-csv",
+    "sqlglot-format",
+    "sqlfluff-lint",
+    "python-security-audit",
+    "unit-convert",
+    "mesh-inspect",
+    "dxf-audit",
+    "shapefile-audit",
+    "gettext-catalog-audit",
+    "notebook-audit",
+    "notebook-strip-outputs",
+    "heic-convert",
+    "subtitle-quality-audit",
+    "kml-to-geojson",
+    "coordinate-transform",
+    "html-seo-audit",
+    "html-local-link-audit",
+    "css-quality-audit",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -454,11 +471,18 @@ PIPELINE_TRANSITIONS = {
     "fuzzy-match-report":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
     "csv-to-parquet":{"parquet-to-csv"},
     "parquet-to-csv":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
+    "sqlglot-format":{"sqlfluff-lint"},
+    "heic-convert":{"image-info","image-clean-exif","image-compress","image-resize","image-webp","image-palette"},
+    "kml-to-geojson":{"geojson-audit"},
+    "coordinate-transform":{"geojson-audit"},
+    "html-local-link-audit":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
+    "subtitle-quality-audit":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
+    "unit-convert":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-seo-audit","css-quality-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -11659,6 +11683,7 @@ def subtitle_quality_audit(p):
 
 
 def kml_to_geojson(p):
+    import math
     import xml.etree.ElementTree as ET
     if p.suffix.lower() not in (".kml",".xml") or p.stat().st_size>20*1024*1024:
         raise RuntimeError("KML converter nhận .kml/.xml tối đa 20 MiB.")
@@ -11741,6 +11766,7 @@ def kml_to_geojson(p):
 
 
 def coordinate_transform(p):
+    import math
     try:
         import pyproj
     except ImportError as exc:
@@ -12153,6 +12179,23 @@ TOOLS={
  "fuzzy-match-report":fuzzy_match_report,
  "csv-to-parquet":csv_to_parquet,
  "parquet-to-csv":parquet_to_csv,
+ "sqlglot-format":sqlglot_format,
+ "sqlfluff-lint":sqlfluff_lint,
+ "python-security-audit":python_security_audit,
+ "unit-convert":unit_convert,
+ "mesh-inspect":mesh_inspect,
+ "dxf-audit":dxf_audit,
+ "shapefile-audit":shapefile_audit,
+ "gettext-catalog-audit":gettext_catalog_audit,
+ "notebook-audit":notebook_audit,
+ "notebook-strip-outputs":notebook_strip_outputs,
+ "heic-convert":heic_convert,
+ "subtitle-quality-audit":subtitle_quality_audit,
+ "kml-to-geojson":kml_to_geojson,
+ "coordinate-transform":coordinate_transform,
+ "html-seo-audit":html_seo_audit,
+ "html-local-link-audit":html_local_link_audit,
+ "css-quality-audit":css_quality_audit,
 
 }
 
