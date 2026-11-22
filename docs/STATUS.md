@@ -6,7 +6,7 @@ Last verified: 2026-11-22. This document distinguishes production deployment and
 
 - Branch: \`feat/wave-twenty-two-multidomain-tool-suite\`.
 - Seventeen additional processors are registered in the branch TypeScript catalog, Python RUNNERS allowlist, Python handler map and mirrored pipeline transitions. Branch catalog: **371 candidate tools**; production remains **354**.
-- New domains: SQL format/lint, Python static security, physical units, 3D mesh and CAD, shapefile/GIS, gettext localization, Jupyter Notebook, HEIC conversion, subtitle QA, KML/GeoJSON, EPSG coordinate transforms, static HTML SEO/local-link and CSS quality analysis.
+- New domains: SQL format/lint, Python static security, physical units, 3D mesh and CAD, shapefile/GIS, gettext localization, Jupyter Notebook, HEIC conversion, subtitle QA, KML/GeoJSON, EPSG coordinate transforms, JSON-LD structured-data/local-link and CSS quality analysis.
 - Upstream licenses and selection rationale are recorded in \`docs/TOOL-RESEARCH-2026-11-22.md\`. Optional dependencies are installed only for a selected processor on the ephemeral runner; CI installs them for regression tests.
 - Seventeen Python regression tests cover all new processors. PR CI, Worker export/smoke and Cloudflare deployment have **not yet been reported as passing** for this branch.
 - Production remains on Wave 21 / 354 tools until the Wave 22 PR passes all checks and Cloudflare deployment succeeds.
