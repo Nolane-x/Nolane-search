@@ -11424,9 +11424,13 @@ def mesh_inspect(p):
     watertight=None; volume=None
     if faces<=500_000:
         try:
-            watertight=bool(mesh.is_watertight)
+            topology=mesh.copy()
+            # STL commonly repeats every triangle vertex; weld exact duplicates
+            # only in this analysis copy so topology statistics reflect the surface.
+            topology.merge_vertices()
+            watertight=bool(topology.is_watertight)
             if watertight:
-                value=float(mesh.volume)
+                value=float(topology.volume)
                 if math.isfinite(value): volume=value
         except Exception: pass
     lines=[
@@ -11436,7 +11440,7 @@ def mesh_inspect(p):
         f"Extents (model units): {extents if extents else 'unavailable'}",
         f"Bounds (model units): {bounds if bounds else 'unavailable'}",
         f"Volume (model units cubed): {volume if volume is not None else 'not available'}",
-        "No mesh repair, scale inference, or external-resource loading was requested."
+        "Watertight/volume use an in-memory analysis copy with duplicate vertices merged; the input file is never modified or repaired."
     ]
     return tool_text("\n".join(lines),"3D mesh inspection")
 
