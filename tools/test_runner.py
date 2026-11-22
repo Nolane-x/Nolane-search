@@ -2623,5 +2623,60 @@ dependencies = ["requests>=2.0", "httpx"]
         self.assertNotIn("payload.bin",report)
 
 
+    def test_wave_seventeen_email_security_audit_hides_addresses_urls_and_attachment_names(self):
+        from email.message import EmailMessage
+        message=EmailMessage()
+        message["From"]="Support <sender@company.example>"
+        message["Reply-To"]="external@attacker.example"
+        message["Return-Path"]="<bounce@attacker.example>"
+        message["To"]="recipient@private.example"
+        message["Date"]="Sun, 22 Nov 2026 08:00:00 +0700"
+        message["Message-ID"]="<sample@company.example>"
+        message["Received"]="from mx1.example by mx2.example"
+        message["Authentication-Results"]="mx.gateway; spf=fail smtp.mailfrom=attacker.example; dkim=none; dmarc=fail"
+        message["Subject"]="Private payment notice"
+        message.set_content("Open http://bit.ly/private-link immediately")
+        message.add_attachment(b"macro-placeholder",maintype="application",subtype="octet-stream",filename="invoice.xlsm")
+        message.add_attachment(b"script-placeholder",maintype="application",subtype="octet-stream",filename="loader.exe")
+        eml_path=self.input_dir/"spoofed.eml"
+        eml_path.write_bytes(message.as_bytes())
+        result=runner.email_security_audit(eml_path)
+        report=Path(result["output_path"]).read_text(encoding="utf-8") if result.get("output_path") else result["summary"]
+        self.assertIn("From/Reply-To domain mismatch: 1",report)
+        self.assertIn("From/Return-Path domain mismatch: 1",report)
+        self.assertIn("SPF fail",report)
+        self.assertIn("DKIM none",report)
+        self.assertIn("DMARC fail",report)
+        self.assertIn("attachments with high-risk filename extensions: 2",report)
+        self.assertIn("known shortener URLs: 1",report)
+        self.assertNotIn("sender@company.example",report)
+        self.assertNotIn("attacker.example",report)
+        self.assertNotIn("bit.ly/private-link",report)
+        self.assertNotIn("invoice.xlsm",report)
+        self.assertNotIn("macro-placeholder",report)
+
+    def test_wave_seventeen_jwt_security_audit_does_not_disclose_token_or_claim_values(self):
+        import base64
+        import time
+        now=int(time.time())
+        def encode(value):
+            return base64.urlsafe_b64encode(json.dumps(value,separators=(",",":")).encode()).decode().rstrip("=")
+        header={"alg":"none","typ":"JWT","jku":"https://keys.private.example/jwks"}
+        claims={"sub":"person@example.test","iss":"private-issuer","aud":"private-api","iat":now-400*24*60*60,"exp":now-1}
+        token=encode(header)+"."+encode(claims)+"."
+        jwt_path=self.input_dir/"sample.jwt"
+        jwt_path.write_text("Bearer "+token+"\n",encoding="utf-8")
+        result=runner.jwt_security_audit(jwt_path)
+        report=Path(result["output_path"]).read_text(encoding="utf-8") if result.get("output_path") else result["summary"]
+        self.assertIn("alg=none: 1",report)
+        self.assertIn("expired: 1",report)
+        self.assertIn("Lifetime over 90 days (iat to exp): 1",report)
+        self.assertIn("External key locators (jku/x5u): 1",report)
+        self.assertNotIn("person@example.test",report)
+        self.assertNotIn("private-issuer",report)
+        self.assertNotIn("keys.private.example",report)
+        self.assertNotIn(token,report)
+
+
 if __name__ == "__main__":
     unittest.main()
