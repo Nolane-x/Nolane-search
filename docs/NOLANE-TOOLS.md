@@ -20,7 +20,7 @@ Wave 22 adds 17 new processors to the feature branch, raising the branch catalog
 | /tool subtitle-quality-audit | Subtitle quality audit | Audio/video | Tính CPS, dòng quá dài, cue overlap và cue ngắn; CSV không chứa lời thoại. |
 | /tool kml-to-geojson | KML to GeoJSON | GIS | Chuyển Point/LineString/Polygon/MultiGeometry; chặn DTD/ENTITY và không tải NetworkLink. |
 | /tool coordinate-transform | EPSG coordinate transform | GIS | Chuyển tối đa 10.000 coordinate giữa CRS EPSG bằng pyproj; tắt PROJ network. |
-| /tool html-seo-audit | Static HTML SEO audit | Web/accessibility | Kiểm tra title/meta/canonical/H1/lang/Open Graph/Twitter/JSON-LD/alt; không fetch page. |
+| /tool html-structured-data-audit | JSON-LD structured-data audit | Web/developer | Parse application/ld+json; kiểm tra JSON, @context/@type/schema.org và @id trùng, không xuất nội dung. |
 | /tool html-local-link-audit | Local site link checker | Web/developer | Quét link nội bộ và fragment trong ZIP website; phát hiện resource/anchor thiếu, không truy cập Internet. |
 | /tool css-quality-audit | CSS quality audit | Web/developer | Parse CSS, đếm duplicate selectors/properties, !important, @import, external URL và parser errors. |
 
