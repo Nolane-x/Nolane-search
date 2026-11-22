@@ -1,11 +1,18 @@
 # Wave 23 handoff — 2026-11-22
 
-## Branch and scope
+## Release status — deployed
 
-- Branch: feat/wave-twenty-three-domain-tools
-- Base production commit: 35ed71a5905b1d2995ba27ad000b1151a78bac77 (Wave 22 / 371 tools)
-- Candidate catalog: **383 tools**, +12 processors.
-- Candidate is not production until PR CI, Worker export/smoke and Cloudflare deployment pass.
+- PR: [#75](https://github.com/Nolane-x/Nolane-search/pull/75), merged 2026-11-22.
+- Production commit: `32f2fbb4e6936a5caea0bf552e337c852797a1e7`.
+- Catalog: **383 production tools**, up from 371; +12 processors.
+- Main CI [45013947086](https://github.com/Nolane-x/Nolane-search/actions/runs/45013947086): success; 25 Vitest files and 175 Python runner tests passed.
+- Worker export [45013946991](https://github.com/Nolane-x/Nolane-search/actions/runs/45013946991): success, compiled bundle published and /health smoke passed.
+- Cloudflare deploy [45013946981](https://github.com/Nolane-x/Nolane-search/actions/runs/45013946981): success; Telegram webhook/command registration passed; D1 migration skipped (no schema change).
+- Cloudflare confirms Worker Version 80 (`f30ef26b-02c1-4d57-922a-acf3e698669d`) receives 100% traffic; deployment ID: `4047b8ec-f5bf-4f82-ad8e-ab272db4edce`.
+
+## Scope
+
+The 383-tool production catalog now includes the following 12 Wave 23 processors.
 
 ## Added processors
 
@@ -33,7 +40,7 @@
 - Registry/category/inference tests: tests/tools.test.ts.
 - Runner installs h5py and graphql-core only when those tools are selected; YAML packages are reused conditionally for Ansible/Prometheus.
 - Research, upstream links and license review: docs/TOOL-RESEARCH-2026-11-22.md.
-- Production and candidate status: docs/STATUS.md and docs/NOLANE-TOOLS.md.
+- Production status and current E2E limitations: docs/STATUS.md and docs/NOLANE-TOOLS.md.
 
 ## Safety and limits
 
@@ -44,12 +51,12 @@
 - All input/output stays within the existing 20 MiB input and 45 MiB output runner boundaries; processors add stricter per-format limits.
 - Reports are static diagnostics, not CNC safety approvals, full standard validators, runtime tests, or security guarantees.
 
-## Release gates
+## Verified release gates
 
-1. TypeScript catalog uniqueness/count and supported upload inference.
-2. Type-check, Vitest, Python compilation and full unittest discovery for tools/test_*.py.
-3. Worker build/export and production health smoke.
-4. Cloudflare deployment with webhook/command registration verification.
-5. Owner-level Telegram E2E for a representative file from each domain and /tool_retry.
+1. TypeScript catalog uniqueness/count and supported upload inference — passed in CI.
+2. Type-check, 25 Vitest files, Python compilation and 175 Python runner tests — passed.
+3. Worker build/export and /health smoke — passed.
+4. Cloudflare deployment, webhook and command registration — passed; Worker Version 80 receives 100% traffic.
+5. Owner-level Telegram E2E for one representative file from each domain and /tool_retry — still required. This last stage requires real sample files and a private chat with the bot; it cannot be inferred from CI or deployment evidence.
 
-Do not mark the 383-tool catalog as production until all automated release gates pass. Wave 22 remains the last verified production baseline at 371 processors.
+Wave 23 is production. Wave 24 work must branch from current main commit `32f2fbb4e6936a5caea0bf552e337c852797a1e7` and preserve the 383-tool parity.
