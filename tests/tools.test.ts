@@ -569,4 +569,14 @@ describe("Nolane Tools registry", () => {
     expect(inferToolForUpload({ fileName: "alignment.sto" })).toBe("sequence-alignment-audit");
     expect(inferToolForUpload({ fileName: "contact.vcf", mimeType: "text/vcard" })).toBe("vcard-privacy-audit");
   });
+
+  it("handles compressed bioinformatics text formats and disambiguates genomic VCF from vCard", () => {
+    expect(inferToolForUpload({ fileName: "genome.fna.gz" })).toBe("fasta-sequence-audit");
+    expect(inferToolForUpload({ fileName: "records.gbff.gz" })).toBe("genbank-record-audit");
+    expect(inferToolForUpload({ fileName: "protein.pdb.gz" })).toBe("pdb-structure-audit");
+    expect(inferToolForUpload({ fileName: "tree.nwk.gz" })).toBe("newick-tree-audit");
+    expect(inferToolForUpload({ fileName: "alignment.sto.gz" })).toBe("sequence-alignment-audit");
+    expect(inferToolForUpload({ fileName: "variants.vcf", mimeType: "text/x-vcf" })).toBe("vcf-variant-audit");
+    expect(inferToolForUpload({ fileName: "contact.vcf", mimeType: "text/vcard" })).toBe("vcard-privacy-audit");
+  });
 });

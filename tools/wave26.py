@@ -622,8 +622,6 @@ def genbank_record_audit(path: Path) -> dict:
             declared_length_mismatches += 1
         current_sequence_length = 0
         declared_length = None
-        in_features_local = False
-        _ = in_features_local
 
     for line in _iter_lines(path):
         if line.startswith("LOCUS"):
@@ -952,7 +950,7 @@ def newick_tree_audit(path: Path) -> dict:
                 if not isinstance(value, tuple):
                     raise ValueError
                 branch_length = float(value[1])
-                if not math.isfinite(branch_length) or branch_length < 0:
+                if not math.isfinite(branch_length):
                     invalid_lengths += 1
             except (ValueError, TypeError):
                 invalid_lengths += 1
