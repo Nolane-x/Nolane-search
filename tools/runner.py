@@ -88,7 +88,8 @@ RUNNERS = {
     "xlsx-privacy-audit", "pdf-privacy-audit",
     "office-active-content-audit", "pdf-active-content-audit",
     "email-security-audit", "jwt-security-audit",
-
+    "har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit",
+    "qr-code-generate","font-inspect","subtitle-fix","openapi-contract-audit","color-convert",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -393,12 +394,21 @@ PIPELINE_TRANSITIONS = {
     "email-security-audit": {"text-clean", "text-stats"},
     "jwt-security-audit": {"text-clean", "text-stats"},
     "csv-to-sql-inserts": set(),
-
+    "har-privacy-audit":{"text-clean","text-stats"},
+    "ics-calendar-audit":{"text-clean","text-stats"},
+    "vcard-privacy-audit":{"text-clean","text-stats"},
+    "gpx-track-report":{"text-clean","text-stats"},
+    "geojson-audit":{"text-clean","text-stats"},
+    "qr-code-generate":{"image-info","image-ocr","qr-read","image-palette","image-to-pdf","image-compress"},
+    "font-inspect":{"text-clean","text-stats"},
+    "subtitle-fix":{"subtitle-audit","subtitle-convert","subtitle-text"},
+    "openapi-contract-audit":{"text-clean","text-stats"},
+    "color-convert":{"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -9089,6 +9099,540 @@ def jwt_security_audit(p):
     return tool_text("\n".join(lines),"JWT security audit")
 
 
+
+def har_privacy_audit(p):
+    size=p.stat().st_size
+    if size>20*1024*1024:
+        raise RuntimeError("HAR file vượt giới hạn 20 MiB.")
+    try:
+        data=json.loads(p.read_text(encoding="utf-8-sig"))
+    except (UnicodeError,json.JSONDecodeError) as exc:
+        raise RuntimeError("HAR phải là JSON UTF-8 hợp lệ.") from exc
+    if not isinstance(data,dict) or not isinstance(data.get("log"),dict):
+        raise RuntimeError("Không tìm thấy đối tượng HAR log.")
+    entries=data["log"].get("entries",[])
+    if not isinstance(entries,list):
+        raise RuntimeError("HAR log.entries phải là một mảng.")
+    if len(entries)>100000:
+        raise RuntimeError("HAR vượt giới hạn 100.000 entries.")
+    sensitive=re.compile(r"(?:authorization|proxy-authorization|cookie|set-cookie|token|secret|password|passwd|api[-_]?key|client[-_]?secret|session|email|phone|credential|auth)",re.I)
+    bearer=re.compile(r"(?i)\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}")
+    jwt=re.compile(r"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])")
+    counts={"authorization_headers":0,"cookie_headers":0,"sensitive_headers":0,"sensitive_query_parameters":0,"sensitive_cookies":0,"sensitive_form_fields":0,"body_token_patterns":0}
+    methods={}; statuses={}; entries_with_sensitive=0; scanned_body_chars=0
+    def inspect_headers(items):
+        if not isinstance(items,list): return False
+        found=False
+        for item in items:
+            if not isinstance(item,dict): continue
+            name=str(item.get("name",""))
+            lower=name.lower()
+            if lower in {"authorization","proxy-authorization"}: counts["authorization_headers"]+=1; found=True
+            elif lower in {"cookie","set-cookie"}: counts["cookie_headers"]+=1; found=True
+            elif sensitive.search(name): counts["sensitive_headers"]+=1; found=True
+        return found
+    def inspect_keyed(items,counter):
+        found=False
+        if not isinstance(items,list): return found
+        for item in items:
+            if isinstance(item,dict) and sensitive.search(str(item.get("name",""))):
+                counts[counter]+=1; found=True
+        return found
+    for entry in entries:
+        if not isinstance(entry,dict): continue
+        request=entry.get("request") if isinstance(entry.get("request"),dict) else {}
+        response=entry.get("response") if isinstance(entry.get("response"),dict) else {}
+        found=False
+        method=str(request.get("method","UNKNOWN")).upper()[:20]
+        methods[method]=methods.get(method,0)+1
+        status=response.get("status")
+        if isinstance(status,int):
+            bucket=f"{status//100}xx"
+            statuses[bucket]=statuses.get(bucket,0)+1
+        found=inspect_headers(request.get("headers")) or found
+        found=inspect_headers(response.get("headers")) or found
+        found=inspect_keyed(request.get("cookies"),"sensitive_cookies") or found
+        found=inspect_keyed(response.get("cookies"),"sensitive_cookies") or found
+        found=inspect_keyed(request.get("queryString"),"sensitive_query_parameters") or found
+        post=request.get("postData") if isinstance(request.get("postData"),dict) else {}
+        found=inspect_keyed(post.get("params"),"sensitive_form_fields") or found
+        url=request.get("url")
+        if isinstance(url,str):
+            try:
+                query=urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query,keep_blank_values=True)
+                for key,_ in query:
+                    if sensitive.search(key):
+                        counts["sensitive_query_parameters"]+=1; found=True
+            except ValueError:
+                pass
+        for body in (post.get("text"),(response.get("content") or {}).get("text") if isinstance(response.get("content"),dict) else None):
+            if not isinstance(body,str) or scanned_body_chars>=2*1024*1024: continue
+            sample=body[:max(0,2*1024*1024-scanned_body_chars)]
+            scanned_body_chars+=len(sample)
+            token_hits=len(bearer.findall(sample))+len(jwt.findall(sample))
+            counts["body_token_patterns"]+=token_hits
+            if token_hits: found=True
+        if found: entries_with_sensitive+=1
+    lines=[
+        "HAR privacy exposure audit",
+        f"File size: {size:,} bytes; entries: {len(entries):,}; entries with sensitive indicators: {entries_with_sensitive:,}",
+        f"Authorization headers: {counts['authorization_headers']:,}; Cookie/Set-Cookie headers: {counts['cookie_headers']:,}",
+        f"Other sensitive headers: {counts['sensitive_headers']:,}; sensitive query parameters: {counts['sensitive_query_parameters']:,}",
+        f"Sensitive cookie names: {counts['sensitive_cookies']:,}; sensitive form fields: {counts['sensitive_form_fields']:,}",
+        f"Bearer/basic or JWT-like body patterns: {counts['body_token_patterns']:,} (bounded scan: {scanned_body_chars:,} characters)",
+        "HTTP methods: "+(", ".join(f"{key}={value}" for key,value in sorted(methods.items())) or "none"),
+        "Response status groups: "+(", ".join(f"{key}={value}" for key,value in sorted(statuses.items())) or "none"),
+        "The report never prints request URLs, header values, cookie values, query values, or captured body content.",
+        "Detection is heuristic; custom secrets and personal data may not match these patterns."
+    ]
+    return tool_text("\n".join(lines),"HAR privacy audit")
+
+
+def ics_calendar_audit(p):
+    import vobject
+    size=p.stat().st_size
+    if size>10*1024*1024: raise RuntimeError("iCalendar input vượt giới hạn 10 MiB.")
+    try:
+        components=list(vobject.readComponents(p.read_text(encoding="utf-8-sig"),validate=False,max_nesting=40))
+    except Exception as exc:
+        raise RuntimeError("Không thể phân tích iCalendar; hãy kiểm tra định dạng và cấu trúc BEGIN/END.") from exc
+    calendars=[item for item in components if str(getattr(item,"name","")).upper()=="VCALENDAR"]
+    if not calendars: raise RuntimeError("Không tìm thấy VCALENDAR.")
+    def vals(component,key):
+        return [item.value for item in component.contents.get(key,[])]
+    events=[]; timezone_count=0; todo_count=0
+    for cal in calendars:
+        events.extend(cal.contents.get("vevent",[]))
+        timezone_count+=len(cal.contents.get("vtimezone",[]))
+        todo_count+=len(cal.contents.get("vtodo",[]))
+    uids=[]; missing_uid=missing_start=missing_end=bad_range=recurring=alarms=attendees=organizers=0
+    for event in events:
+        uid=vals(event,"uid")
+        if uid: uids.append(str(uid[0]).strip())
+        else: missing_uid+=1
+        starts=vals(event,"dtstart"); ends=vals(event,"dtend")
+        if not starts: missing_start+=1
+        if not ends and not vals(event,"duration"): missing_end+=1
+        if starts and ends:
+            try:
+                start=starts[0]; end=ends[0]
+                if end<=start: bad_range+=1
+            except (TypeError,ValueError):
+                bad_range+=1
+        if vals(event,"rrule"): recurring+=1
+        alarms+=len(event.contents.get("valarm",[]))
+        attendees+=len(vals(event,"attendee"))
+        organizers+=len(vals(event,"organizer"))
+    duplicate_uids=len(uids)-len(set(uids))
+    lines=[
+        "iCalendar structure and privacy-safe audit",
+        f"Calendars: {len(calendars):,}; events: {len(events):,}; VTODO components: {todo_count:,}; time zones: {timezone_count:,}",
+        f"Events missing UID: {missing_uid:,}; missing DTSTART: {missing_start:,}; missing DTEND/DURATION: {missing_end:,}",
+        f"Non-positive or incomparable event ranges: {bad_range:,}; duplicate UIDs: {duplicate_uids:,}",
+        f"Recurring events: {recurring:,}; VALARM components: {alarms:,}; attendee fields: {attendees:,}; organizer fields: {organizers:,}",
+        "Event titles, descriptions, attendee addresses, organizers, locations and calendar UIDs are never included.",
+        "This checks local structure only; it does not expand recurrence rules or verify remote calendar availability."
+    ]
+    return tool_text("\n".join(lines),"iCalendar audit")
+
+
+def vcard_privacy_audit(p):
+    import vobject
+    size=p.stat().st_size
+    if size>10*1024*1024: raise RuntimeError("vCard input vượt giới hạn 10 MiB.")
+    try:
+        components=list(vobject.readComponents(p.read_text(encoding="utf-8-sig"),validate=False,max_nesting=40))
+    except Exception as exc:
+        raise RuntimeError("Không thể phân tích vCard; hãy kiểm tra cấu trúc BEGIN:VCARD/END:VCARD.") from exc
+    cards=[item for item in components if str(getattr(item,"name","")).upper()=="VCARD"]
+    if not cards: raise RuntimeError("Không tìm thấy VCARD.")
+    email_values=[]; phone_values=[]; missing_fn=missing_n=0; photo_cards=0; address_fields=org_fields=note_fields=0; malformed=0
+    for card in cards:
+        contents=card.contents
+        names=contents.get("fn",[]); structured=contents.get("n",[])
+        if not names or not str(getattr(names[0],"value","")).strip(): missing_fn+=1
+        if not structured: missing_n+=1
+        for item in contents.get("email",[]):
+            value=str(getattr(item,"value","")).strip().casefold()
+            if value: email_values.append(value)
+        for item in contents.get("tel",[]):
+            value=re.sub(r"\D","",str(getattr(item,"value","")))
+            if value: phone_values.append(value)
+        if contents.get("photo"): photo_cards+=1
+        address_fields+=len(contents.get("adr",[]))
+        org_fields+=len(contents.get("org",[]))
+        note_fields+=len(contents.get("note",[]))
+        malformed+=len(getattr(card,"errors",[]) or [])
+    duplicate_emails=len(email_values)-len(set(email_values))
+    duplicate_phones=len(phone_values)-len(set(phone_values))
+    lines=[
+        "vCard contact and privacy audit",
+        f"Contact cards: {len(cards):,}; email fields: {len(email_values):,}; telephone fields: {len(phone_values):,}",
+        f"Duplicate email values: {duplicate_emails:,}; duplicate normalized telephone values: {duplicate_phones:,}",
+        f"Cards missing FN: {missing_fn:,}; missing structured N: {missing_n:,}; cards containing photos: {photo_cards:,}",
+        f"Address fields: {address_fields:,}; organization fields: {org_fields:,}; note fields: {note_fields:,}; parser diagnostics: {malformed:,}",
+        "Names, email addresses, phone numbers, postal addresses, organization names, notes and photo data are never included."
+    ]
+    return tool_text("\n".join(lines),"vCard privacy audit")
+
+
+def gpx_track_report(p):
+    import math
+    import xml.etree.ElementTree as ET
+    size=p.stat().st_size
+    if size>20*1024*1024: raise RuntimeError("GPX input vượt giới hạn 20 MiB.")
+    try: root=ET.fromstring(p.read_bytes())
+    except ET.ParseError as exc: raise RuntimeError("GPX XML không hợp lệ.") from exc
+    def local(tag): return tag.rsplit("}",1)[-1].lower()
+    def child_value(node,name):
+        for child in list(node):
+            if local(child.tag)==name:
+                return child.text
+        return None
+    def distance(a,b):
+        lat1,lon1=a; lat2,lon2=b
+        radius=6371.0088
+        phi1=math.radians(lat1); phi2=math.radians(lat2)
+        dphi=math.radians(lat2-lat1); dlambda=math.radians(lon2-lon1)
+        h=math.sin(dphi/2)**2+math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+        return 2*radius*math.asin(min(1,math.sqrt(h)))
+    trackpoints=routepoints=waypoints=segments=invalid_points=0
+    total_km=ascent=descent=0.0; elevations=[]; timestamps=[]
+    def parse_points(nodes):
+        nonlocal trackpoints,routepoints,waypoints,invalid_points,total_km,ascent,descent
+        previous=None; previous_ele=None; previous_time=None
+        for point in nodes:
+            try:
+                lat=float(point.attrib.get("lat","nan")); lon=float(point.attrib.get("lon","nan"))
+                if not math.isfinite(lat) or not math.isfinite(lon) or not -90<=lat<=90 or not -180<=lon<=180:
+                    invalid_points+=1; previous=None; previous_ele=None; continue
+            except (TypeError,ValueError):
+                invalid_points+=1; previous=None; previous_ele=None; continue
+            if local(point.tag)=="trkpt": trackpoints+=1
+            elif local(point.tag)=="rtept": routepoints+=1
+            elif local(point.tag)=="wpt": waypoints+=1
+            current=(lat,lon)
+            if previous is not None: total_km+=distance(previous,current)
+            previous=current
+            raw_ele=child_value(point,"ele")
+            current_ele=None
+            if raw_ele is not None:
+                try:
+                    current_ele=float(raw_ele)
+                    if math.isfinite(current_ele):
+                        elevations.append(current_ele)
+                        if previous_ele is not None:
+                            delta=current_ele-previous_ele
+                            if delta>0: ascent+=delta
+                            else: descent-=delta
+                except ValueError: pass
+            previous_ele=current_ele
+            raw_time=child_value(point,"time")
+            if raw_time:
+                try:
+                    from datetime import datetime
+                    timestamps.append(datetime.fromisoformat(raw_time.replace("Z","+00:00")))
+                except ValueError: pass
+    for node in root.iter():
+        if local(node.tag)=="trkseg":
+            segments+=1
+            parse_points([child for child in list(node) if local(child.tag)=="trkpt"])
+        elif local(node.tag)=="rte":
+            parse_points([child for child in list(node) if local(child.tag)=="rtept"])
+        elif local(node.tag)=="wpt":
+            parse_points([node])
+    duration_hours=None
+    if len(timestamps)>=2:
+        try:
+            duration_hours=(max(timestamps)-min(timestamps)).total_seconds()/3600
+        except TypeError: duration_hours=None
+    lines=[
+        "GPX track report",
+        f"Track points: {trackpoints:,}; route points: {routepoints:,}; waypoints: {waypoints:,}; track segments: {segments:,}",
+        f"Calculated path length: {total_km:.3f} km; invalid coordinate pairs: {invalid_points:,}",
+        f"Elevation samples: {len(elevations):,}; cumulative ascent: {ascent:.1f} m; cumulative descent: {descent:.1f} m",
+        (f"Elevation range: {min(elevations):.1f}–{max(elevations):.1f} m" if elevations else "Elevation range: unavailable"),
+        (f"Timestamp span: {duration_hours:.2f} hours" if duration_hours is not None else "Timestamp span: unavailable"),
+        "Coordinates, place names and exact timestamps are withheld from the report to reduce location privacy exposure."
+    ]
+    return tool_text("\n".join(lines),"GPX track report")
+
+
+def geojson_audit(p):
+    size=p.stat().st_size
+    if size>20*1024*1024: raise RuntimeError("GeoJSON input vượt giới hạn 20 MiB.")
+    try: data=json.loads(p.read_text(encoding="utf-8-sig"))
+    except (UnicodeError,json.JSONDecodeError) as exc: raise RuntimeError("GeoJSON phải là JSON UTF-8 hợp lệ.") from exc
+    geometry_counts={}; features=0; missing_geometry=0; positions=0; invalid_positions=0; property_keys=0; empty_geometries=0
+    def walk_coords(value):
+        nonlocal positions,invalid_positions
+        if not isinstance(value,list): return
+        if len(value)>=2 and all(isinstance(x,(int,float)) and not isinstance(x,bool) for x in value[:2]):
+            positions+=1
+            lon,lat=value[0],value[1]
+            if not math.isfinite(float(lon)) or not math.isfinite(float(lat)) or not -180<=lon<=180 or not -90<=lat<=90:
+                invalid_positions+=1
+            return
+        for child in value: walk_coords(child)
+    def visit_geometry(geometry):
+        nonlocal empty_geometries
+        if not isinstance(geometry,dict):
+            empty_geometries+=1; return
+        kind=str(geometry.get("type","Unknown"))
+        geometry_counts[kind]=geometry_counts.get(kind,0)+1
+        if kind=="GeometryCollection":
+            geoms=geometry.get("geometries",[])
+            if not isinstance(geoms,list) or not geoms: empty_geometries+=1
+            else:
+                for child in geoms: visit_geometry(child)
+        else:
+            coords=geometry.get("coordinates")
+            if not isinstance(coords,list) or not coords: empty_geometries+=1
+            else: walk_coords(coords)
+    kind=data.get("type") if isinstance(data,dict) else None
+    if kind=="FeatureCollection":
+        items=data.get("features",[])
+        if not isinstance(items,list): raise RuntimeError("FeatureCollection.features phải là một mảng.")
+        features=len(items)
+        for item in items:
+            if not isinstance(item,dict) or item.get("type")!="Feature": missing_geometry+=1; continue
+            props=item.get("properties")
+            if isinstance(props,dict): property_keys+=len(props)
+            if item.get("geometry") is None: missing_geometry+=1
+            else: visit_geometry(item.get("geometry"))
+    elif kind=="Feature":
+        features=1
+        props=data.get("properties")
+        if isinstance(props,dict): property_keys=len(props)
+        if data.get("geometry") is None: missing_geometry=1
+        else: visit_geometry(data.get("geometry"))
+    else:
+        visit_geometry(data)
+    lines=[
+        "GeoJSON structure audit",
+        f"Top-level type: {kind or 'unknown'}; features: {features:,}; geometry counts: "+(", ".join(f"{name}={count}" for name,count in sorted(geometry_counts.items())) or "none"),
+        f"Coordinate positions: {positions:,}; invalid longitude/latitude pairs: {invalid_positions:,}; empty geometries: {empty_geometries:,}; missing feature geometries: {missing_geometry:,}",
+        f"Property keys across features: {property_keys:,}",
+        "Coordinates, feature properties and feature identifiers are not printed."
+    ]
+    return tool_text("\n".join(lines),"GeoJSON audit")
+
+
+def qr_code_generate(p):
+    import qrcode
+    size=p.stat().st_size
+    if size>4096: raise RuntimeError("QR generator giới hạn payload 4 KiB.")
+    payload=p.read_text(encoding="utf-8-sig")
+    if not payload.strip(): raise RuntimeError("Không thể tạo QR từ nội dung trống.")
+    qr=qrcode.QRCode(version=None,error_correction=qrcode.constants.ERROR_CORRECT_M,box_size=10,border=4)
+    qr.add_data(payload)
+    qr.make(fit=True)
+    image=qr.make_image(fill_color="black",back_color="white")
+    out=p.with_name(p.stem+"-qr.png")
+    image.save(out,format="PNG")
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("QR output exceeds the 45 MB delivery limit.")
+    return {"summary":f"Đã tạo QR PNG từ payload {size:,} bytes. Nội dung payload không được ghi vào job summary.","output_path":str(out)}
+
+
+def font_inspect(p):
+    from fontTools.ttLib import TTFont
+    size=p.stat().st_size
+    if size>20*1024*1024: raise RuntimeError("Font inspection giới hạn file 20 MiB.")
+    font=None
+    try:
+        font=TTFont(str(p),lazy=True,recalcBBoxes=False,recalcTimestamp=False)
+        names={}
+        table=font.get("name")
+        if table:
+            for record in table.names:
+                if record.nameID in {1,2,4,5,6}:
+                    try: value=record.toUnicode().strip()
+                    except Exception: continue
+                    if value: names.setdefault(record.nameID,value[:160])
+        family=names.get(1,"Unknown"); subfamily=names.get(2,"Unknown")
+        glyphs=len(font.get("maxp").glyphOrder) if font.get("maxp") else 0
+        cmap=font.getBestCmap() or {}
+        axes=[]
+        if font.get("fvar"):
+            axes=[f"{axis.axisTag} ({axis.minValue:g}–{axis.maxValue:g})" for axis in font["fvar"].axes[:20]]
+        os2=font.get("OS/2")
+        fs_type=int(getattr(os2,"fsType",0)) if os2 else 0
+        embedding=("restricted" if fs_type&0x0002 else "preview/print" if fs_type&0x0004 else "editable" if fs_type&0x0008 else "installable/unrestricted")
+        lines=[
+            "Font file inspector",
+            f"Format: {p.suffix.lower()}; bytes: {size:,}; glyphs: {glyphs:,}; Unicode cmap entries: {len(cmap):,}",
+            f"Family: {family}; subfamily: {subfamily}",
+            f"Full name: {names.get(4,'Unknown')}; version: {names.get(5,'Unknown')}",
+            f"PostScript name: {names.get(6,'Unknown')}",
+            f"Variable font axes: {', '.join(axes) if axes else 'none detected'}",
+            f"OS/2 fsType embedding flags: 0x{fs_type:04x} ({embedding})",
+            "Metadata is informational; embedding permissions are not a legal license determination."
+        ]
+    except Exception as exc:
+        raise RuntimeError("Không thể đọc font hợp lệ hoặc định dạng font chưa được hỗ trợ.") from exc
+    finally:
+        if font is not None:
+            try: font.close()
+            except Exception: pass
+    return tool_text("\n".join(lines),"Font inspector")
+
+
+def subtitle_fix(p):
+    if p.stat().st_size>10*1024*1024: raise RuntimeError("Subtitle repair giới hạn file 10 MiB.")
+    raw=p.read_text(encoding="utf-8-sig").replace("\r\n","\n").replace("\r","\n")
+    is_vtt=p.suffix.lower()==".vtt" or raw.lstrip().startswith("WEBVTT")
+    stamp=re.compile(r"(?<!\d)(?:(\d{1,2}):)?(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(?:(\d{1,2}):)?(\d{2}):(\d{2})[,.](\d{1,3})(?:\s+.*)?$")
+    cues=[]; removed=0; adjusted=0
+    def millis(groups,offset):
+        hours=int(groups[offset] or 0); minutes=int(groups[offset+1]); seconds=int(groups[offset+2]); fraction=int(groups[offset+3].ljust(3,"0"))
+        if minutes>59 or seconds>59: raise ValueError
+        return ((hours*60+minutes)*60+seconds)*1000+fraction
+    def render(ms,sep):
+        hours,rem=divmod(max(0,ms),3600000); minutes,rem=divmod(rem,60000); seconds,milliseconds=divmod(rem,1000)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}{sep}{milliseconds:03d}"
+    for block in re.split(r"\n[ \t]*\n",raw.strip()):
+        if not block.strip() or block.strip().startswith(("WEBVTT","NOTE","STYLE","REGION")): continue
+        lines=block.strip().splitlines()
+        timestamp_index=next((i for i,line in enumerate(lines) if "-->" in line),None)
+        if timestamp_index is None: continue
+        match=stamp.match(lines[timestamp_index].strip())
+        if not match: removed+=1; continue
+        try:
+            groups=match.groups()
+            start=millis(groups,0); end=millis(groups,4)
+        except (ValueError,TypeError):
+            removed+=1; continue
+        payload="\n".join(lines[timestamp_index+1:]).strip()
+        if not payload: removed+=1; continue
+        if end<=start:
+            end=start+1; adjusted+=1
+        cues.append((start,end,payload))
+    if not cues: raise RuntimeError("Không tìm thấy cue phụ đề hợp lệ để sửa.")
+    cues.sort(key=lambda item:item[0])
+    sep="." if is_vtt else ","
+    out_lines=["WEBVTT",""] if is_vtt else []
+    for index,(start,end,payload) in enumerate(cues,1):
+        if not is_vtt: out_lines.append(str(index))
+        out_lines.extend([render(start,sep)+" --> "+render(end,sep),payload,""])
+    extension=".vtt" if is_vtt else ".srt"
+    out=p.with_name(p.stem+"-fixed"+extension)
+    out.write_text("\n".join(out_lines).rstrip()+"\n",encoding="utf-8")
+    return {"summary":f"Đã chuẩn hóa {len(cues):,} cue; sắp xếp theo thời gian; loại {removed:,} cue lỗi/rỗng; điều chỉnh {adjusted:,} thời lượng không dương.","output_path":str(out)}
+
+
+def openapi_contract_audit(p):
+    size=p.stat().st_size
+    if size>10*1024*1024: raise RuntimeError("OpenAPI file vượt giới hạn 10 MiB.")
+    raw=p.read_text(encoding="utf-8-sig")
+    try:
+        if p.suffix.lower() in {".yaml",".yml"}:
+            import yaml
+            spec=yaml.safe_load(raw)
+        else:
+            spec=json.loads(raw)
+    except Exception as exc:
+        raise RuntimeError("OpenAPI document không phải JSON/YAML hợp lệ.") from exc
+    if not isinstance(spec,dict): raise RuntimeError("OpenAPI document phải là object ở cấp gốc.")
+    version=str(spec.get("openapi") or ("Swagger "+str(spec.get("swagger")) if spec.get("swagger") else "unknown"))
+    is_v3=str(spec.get("openapi","")).startswith("3.")
+    is_swagger=spec.get("swagger")=="2.0"
+    paths=spec.get("paths",{})
+    if not isinstance(paths,dict): raise RuntimeError("OpenAPI paths phải là object.")
+    methods={"get","put","post","delete","options","head","patch","trace"}
+    operations=0; duplicate_ids=0; missing_ids=0; missing_responses=0; missing_summaries=0; path_parameter_gaps=0; security_references=0
+    operation_ids=set(); refs=[]; external_refs=0; malformed_operations=0
+    for path,item in paths.items():
+        if not isinstance(item,dict): continue
+        path_params=set(re.findall(r"\{([^{}]+)\}",str(path)))
+        common=item.get("parameters",[]) if isinstance(item.get("parameters",[]),list) else []
+        declared_common={str(x.get("name")) for x in common if isinstance(x,dict) and x.get("in")=="path"}
+        for method,operation in item.items():
+            if str(method).lower() not in methods: continue
+            operations+=1
+            if not isinstance(operation,dict): malformed_operations+=1; continue
+            op_id=operation.get("operationId")
+            if not isinstance(op_id,str) or not op_id.strip(): missing_ids+=1
+            elif op_id in operation_ids: duplicate_ids+=1
+            else: operation_ids.add(op_id)
+            responses=operation.get("responses")
+            if not isinstance(responses,dict) or not responses: missing_responses+=1
+            if not operation.get("summary") and not operation.get("description"): missing_summaries+=1
+            params=operation.get("parameters",[]) if isinstance(operation.get("parameters",[]),list) else []
+            declared=declared_common|{str(x.get("name")) for x in params if isinstance(x,dict) and x.get("in")=="path"}
+            if not path_params.issubset(declared): path_parameter_gaps+=1
+            if operation.get("security") is not None: security_references+=1
+    def scan_refs(value):
+        nonlocal external_refs
+        if isinstance(value,dict):
+            ref=value.get("$ref")
+            if isinstance(ref,str):
+                if ref.startswith("#/"): refs.append(ref)
+                elif ref.startswith("#"): refs.append(ref)
+                else: external_refs+=1
+            for child in value.values(): scan_refs(child)
+        elif isinstance(value,list):
+            for child in value: scan_refs(child)
+    scan_refs(spec)
+    def resolve_pointer(root,ref):
+        if not ref.startswith("#/"): return ref=="#"
+        current=root
+        for token in ref[2:].split("/"):
+            token=token.replace("~1","/").replace("~0","~")
+            if isinstance(current,dict) and token in current: current=current[token]
+            elif isinstance(current,list) and token.isdigit() and int(token)<len(current): current=current[int(token)]
+            else: return False
+        return True
+    unresolved=sum(not resolve_pointer(spec,ref) for ref in refs)
+    servers=spec.get("servers",[]) if isinstance(spec.get("servers",[]),list) else []
+    insecure_servers=sum(1 for server in servers if isinstance(server,dict) and str(server.get("url","")).lower().startswith("http://"))
+    lines=[
+        "OpenAPI contract audit",
+        f"Document version: {version}; path items: {len(paths):,}; operations: {operations:,}",
+        f"Operations missing operationId: {missing_ids:,}; duplicate operationId: {duplicate_ids:,}; malformed operation objects: {malformed_operations:,}",
+        f"Operations without responses: {missing_responses:,}; without summary/description: {missing_summaries:,}; path-parameter declaration gaps: {path_parameter_gaps:,}",
+        f"Local $ref values: {len(refs):,}; unresolved local references: {unresolved:,}; external references not fetched: {external_refs:,}",
+        f"Operations with explicit security fields: {security_references:,}; HTTP (non-TLS) server URLs: {insecure_servers:,}",
+        "References are checked locally only; remote references are never fetched. This is a structural lint, not a full OpenAPI specification validator."
+    ]
+    if not (is_v3 or is_swagger): lines.append("Warning: expected OpenAPI 3.x or Swagger 2.0 version marker was not found.")
+    return tool_text("\n".join(lines),"OpenAPI audit")
+
+
+def color_convert(p):
+    import colorsys
+    if p.stat().st_size>2*1024*1024: raise RuntimeError("Color converter giới hạn input 2 MiB.")
+    raw=p.read_text(encoding="utf-8-sig")
+    if not raw.strip(): raise RuntimeError("Không có mã màu để chuyển đổi.")
+    hex_re=re.compile(r"^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+    rgb_re=re.compile(r"^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*[\d.]+)?\s*\)$",re.I)
+    rows=[]; invalid=0
+    for number,line in enumerate(raw.splitlines(),1):
+        value=line.strip()
+        if not value: continue
+        match=hex_re.fullmatch(value)
+        if match:
+            digits=match.group(1)
+            if len(digits)==3: digits="".join(char*2 for char in digits)
+            red,green,blue=(int(digits[i:i+2],16) for i in (0,2,4))
+        else:
+            match=rgb_re.fullmatch(value)
+            if not match: invalid+=1; continue
+            red,green,blue=map(int,match.groups())
+            if any(channel>255 for channel in (red,green,blue)): invalid+=1; continue
+        r,g,b=(channel/255 for channel in (red,green,blue))
+        hue,light,saturation=colorsys.rgb_to_hls(r,g,b)
+        k=1-max(r,g,b)
+        if k>=1: cyan=magenta=yellow=0
+        else:
+            cyan=(1-r-k)/(1-k); magenta=(1-g-k)/(1-k); yellow=(1-b-k)/(1-k)
+        rows.append((number,f"#{red:02X}{green:02X}{blue:02X}",red,green,blue,round(hue*360),round(saturation*100),round(light*100),round(cyan*100),round(magenta*100),round(yellow*100),round(k*100)))
+    if not rows: raise RuntimeError("Không tìm thấy mã màu #RGB, #RRGGBB hoặc rgb(r,g,b) hợp lệ.")
+    lines=["Color conversion report","Input lines converted: "+str(len(rows))+"; invalid lines skipped: "+str(invalid),"", "Line | HEX | RGB | HSL | CMYK"]
+    lines.extend(f"{n} | {hexv} | rgb({r},{g},{b}) | hsl({h},{s}%,{l}%) | cmyk({c}%,{m}%,{y}%,{k}%)" for n,hexv,r,g,b,h,s,l,c,m,y,k in rows[:2000])
+    return tool_text("\n".join(lines),"Color converter")
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -9210,6 +9754,16 @@ TOOLS={
  "pdf-active-content-audit":pdf_active_content_audit,
  "email-security-audit":email_security_audit,
  "jwt-security-audit":jwt_security_audit,
+ "har-privacy-audit":har_privacy_audit,
+ "ics-calendar-audit":ics_calendar_audit,
+ "vcard-privacy-audit":vcard_privacy_audit,
+ "gpx-track-report":gpx_track_report,
+ "geojson-audit":geojson_audit,
+ "qr-code-generate":qr_code_generate,
+ "font-inspect":font_inspect,
+ "subtitle-fix":subtitle_fix,
+ "openapi-contract-audit":openapi_contract_audit,
+ "color-convert":color_convert,
 
 }
 
