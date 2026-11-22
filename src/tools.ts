@@ -448,6 +448,15 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "gfa-assembly-audit", name: "Kiểm tra genome assembly graph GFA", category: "data", description: "Rà GFA1/GFA1.1/GFA2 record types, segments, links, paths, sequence lengths và dangling segment references; không xuất graph IDs, sequence hay sample/haplotype.", accepts: ["text/plain", ".gfa", ".gfa1", ".gfa2", ".gfa.gz", ".gfa1.gz", ".gfa2.gz"], output: "Báo cáo GFA TXT", ready: true },
   { id: "newick-tree-audit", name: "Kiểm tra cây phát sinh chủng loại Newick", category: "data", description: "Phân tích parentheses, leaves/internal nodes, branch-length syntax, comments, semicolon và nhiều cây; không xuất taxon names hoặc branch values.", accepts: ["text/plain", ".nwk", ".newick", ".tree", ".nwk.gz", ".newick.gz", ".tree.gz"], output: "Báo cáo Newick TXT", ready: true },
   { id: "sequence-alignment-audit", name: "Kiểm tra multiple sequence alignment", category: "data", description: "Kiểm tra Clustal/MUSCLE và Stockholm: sequence rows, aligned lengths, blank blocks, annotation lines và malformed rows; không xuất identifiers, aligned bases hoặc consensus.", accepts: ["text/plain", ".aln", ".sto", ".stockholm", ".aln.gz", ".sto.gz", ".stockholm.gz"], output: "Báo cáo alignment TXT", ready: true },
+  { id: "bagit-archive-audit", name: "Kiểm tra gói lưu trữ BagIt", category: "data", description: "Kiểm tra bagit.txt, manifest/tagmanifest, completeness và kiểm tra SHA-256/SHA-512/MD5 của payload trong ZIP/TAR; không xuất đường dẫn hoặc payload.", accepts: ["application/zip", "application/x-tar", ".bag.zip", ".bag.tar", ".bag.tar.gz", ".bag.tgz"], output: "Báo cáo BagIt TXT", ready: true },
+  { id: "frictionless-package-audit", name: "Kiểm tra Frictionless Data Package", category: "data", description: "Rà datapackage.json: resources, profiles, schema fields, primary/foreign keys, remote URLs và unsafe paths; không truy cập resource hoặc in metadata.", accepts: ["application/json", ".datapackage.json", "datapackage.json", "frictionless-package.json"], output: "Báo cáo Frictionless TXT", ready: true },
+  { id: "ro-crate-audit", name: "Kiểm tra RO-Crate JSON-LD", category: "data", description: "Kiểm tra @graph, root Dataset, metadata descriptor, duplicate @id và internal references chưa resolve; không truy cập file/resource hoặc xuất contextual entities.", accepts: ["application/ld+json", "application/json", "ro-crate-metadata.json"], output: "Báo cáo RO-Crate TXT", ready: true },
+  { id: "iiif-manifest-audit", name: "Kiểm tra IIIF Presentation Manifest", category: "image", description: "Rà Presentation API 3 Manifest, Canvas dimensions, Annotation Pages, targets, Image bodies, services và structures; không tải ảnh hay in labels/URLs.", accepts: ["application/ld+json", "application/json", "iiif-manifest.json", "manifest.iiif.json"], output: "Báo cáo IIIF TXT", ready: true },
+  { id: "datacite-metadata-audit", name: "Kiểm tra DataCite DOI Metadata XML", category: "data", description: "Rà DataCite 4.0–4.7: DOI identifier, creator/title/publisher/year/resourceType và relatedIdentifiers; không tiết lộ DOI, title, tác giả hay metadata values.", accepts: ["application/xml", "text/xml", ".datacite.xml", "datacite.xml"], output: "Báo cáo DataCite TXT", ready: true },
+  { id: "mets-package-audit", name: "Kiểm tra METS Digital Library Package", category: "document", description: "Đếm METS headers, dmdSec/amdSec, fileSec, structMap/div/fptr và kiểm tra ID references; không xuất file paths hoặc descriptive metadata.", accepts: ["application/xml", "text/xml", ".mets.xml", "mets.xml"], output: "Báo cáo METS TXT", ready: true },
+  { id: "premis-event-audit", name: "Kiểm tra PREMIS Preservation Events", category: "data", description: "Đếm PREMIS objects/events/agents/rights, identifiers và linking references, kiểm tra event timestamp; không xuất agent, rights hay object values.", accepts: ["application/xml", "text/xml", ".premis.xml", "premis.xml"], output: "Báo cáo PREMIS TXT", ready: true },
+  { id: "stac-catalog-audit", name: "Kiểm tra STAC Catalog/Item/Collection", category: "data", description: "Rà STAC 1.1: type/version, links, assets/roles, geometry/bbox shape và temporal/spatial extents; không xuất coordinates, asset href hoặc provider metadata.", accepts: ["application/geo+json", "application/json", "stac-item.json", "stac-collection.json", "stac-catalog.json", ".stac.json"], output: "Báo cáo STAC TXT", ready: true },
+  { id: "tei-document-audit", name: "Kiểm tra TEI P5 Scholarly XML", category: "document", description: "Đếm teiHeader/fileDesc/titleStmt/text/body/div/p và các elements scholarly; kiểm tra duplicate xml:id và broken fragment targets; không xuất văn bản/tên tác giả.", accepts: ["application/tei+xml", "application/xml", "text/xml", ".tei", ".tei.xml", ".tei.gz"], output: "Báo cáo TEI TXT", ready: true },
 
 ];
 
@@ -850,6 +859,15 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "gfa-assembly-audit": ["text-clean", "text-stats"],
   "newick-tree-audit": ["text-clean", "text-stats"],
   "sequence-alignment-audit": ["text-clean", "text-stats"],
+  "bagit-archive-audit": ["text-clean", "text-stats"],
+  "frictionless-package-audit": ["text-clean", "text-stats"],
+  "ro-crate-audit": ["text-clean", "text-stats"],
+  "iiif-manifest-audit": ["text-clean", "text-stats"],
+  "datacite-metadata-audit": ["text-clean", "text-stats"],
+  "mets-package-audit": ["text-clean", "text-stats"],
+  "premis-event-audit": ["text-clean", "text-stats"],
+  "stac-catalog-audit": ["text-clean", "text-stats"],
+  "tei-document-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
@@ -1071,6 +1089,15 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (/\.gfa(?:1|2)?(?:\.gz)?$/i.test(name)) return "gfa-assembly-audit";
   if (/\.(?:nwk|newick|tree)(?:\.gz)?$/i.test(name)) return "newick-tree-audit";
   if (/\.(?:aln|sto|stockholm)(?:\.gz)?$/i.test(name)) return "sequence-alignment-audit";
+  if (/\.(?:bag\.zip|bag\.tar|bag\.tar\.gz|bag\.tgz)$/i.test(name)) return "bagit-archive-audit";
+  if (name === "datapackage.json" || name === ".datapackage.json" || name === "frictionless-package.json") return "frictionless-package-audit";
+  if (name === "ro-crate-metadata.json") return "ro-crate-audit";
+  if (name === "iiif-manifest.json" || name === "manifest.iiif.json") return "iiif-manifest-audit";
+  if (name === "datacite.xml" || name.endsWith(".datacite.xml")) return "datacite-metadata-audit";
+  if (name === "mets.xml" || name.endsWith(".mets.xml")) return "mets-package-audit";
+  if (name === "premis.xml" || name.endsWith(".premis.xml")) return "premis-event-audit";
+  if (name === "stac-item.json" || name === "stac-collection.json" || name === "stac-catalog.json" || name.endsWith(".stac.json")) return "stac-catalog-audit";
+  if (name === "tei.xml" || name.endsWith(".tei.xml") || name.endsWith(".tei.gz")) return "tei-document-audit";
   if (name.endsWith(".svg") || mime === "image/svg+xml") return "svg-safety-audit";
   if (mime.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(name)) return "image-ocr";
   if (mime === "application/x-ndjson" || mime === "application/jsonl" || name.endsWith(".jsonl")) return "jsonl-format";

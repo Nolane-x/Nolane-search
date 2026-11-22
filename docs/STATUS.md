@@ -2,6 +2,15 @@
 
 Last verified: 2026-11-22. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+## In review — Wave 27 candidate (2026-11-22)
+
+- Branch: `feat/wave-twenty-seven-digital-preservation-tools`.
+- Nine processors are registered in TypeScript catalog, Python RUNNERS allowlist, handler dispatch, pipeline transitions and upload inference. Candidate catalog: **426 tools**; production remains **417** until all release gates pass.
+- Domains: BagIt checksum manifests, Frictionless Data Package descriptors, RO-Crate JSON-LD, IIIF Presentation 3.0, DataCite 4.7, METS 1.12.1, PREMIS 3.0, STAC 1.1.0 and TEI P5 4.12.0.
+- Twenty-one focused Python regression tests cover checksum verification, archive safety, JSON-LD graph references, Manifest/Canvas structure, DOI core metadata, METS/PREMIS cross-links, STAC assets and TEI XML IDs; the latest review also verifies PREMIS entity/type-aware links and TEI same-document fragments.
+- No new runtime dependencies. Remote resource URLs are never fetched; BagIt members are streamed without extracting them to the runner filesystem.
+- PR CI [45037254705](https://github.com/Nolane-x/Nolane-search/actions/runs/45037254705) passed after the latest review fixes (type-check, all 25 Vitest files, deployment-script checks, Python runner tests and Worker build). Worker export/health smoke and Cloudflare deployment remain pending until the PR is merged.
+- Owner-level E2E after release: test synthetic/non-sensitive BagIt, Frictionless, RO-Crate, IIIF, DataCite, METS/PREMIS, STAC and TEI examples via private Telegram; inspect reports and test `/tool_retry`.
 ## Latest production release — Wave 26 (2026-11-22)
 
 - [PR #78](https://github.com/Nolane-x/Nolane-search/pull/78) merged into main as commit fd60df0480a82775e6ba6974e386096fa58f6a0c; eleven processors increased production from 406 to **417 tools**.
