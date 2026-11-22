@@ -534,6 +534,7 @@ describe("Nolane Tools registry", () => {
     expect(inferToolForUpload({ fileName: "scene.glb" })).toBe("gltf-audit");
     expect(inferToolForUpload({ fileName: "architecture.drawio" })).toBe("drawio-audit");
     expect(inferToolForUpload({ fileName: "automation.n8n.json" })).toBe("n8n-workflow-audit");
+    expect(inferToolForUpload({ fileName: "workflow.json" })).toBe("n8n-workflow-audit");
     expect(inferToolForUpload({ fileName: "brand.tokens.json" })).toBe("design-token-audit");
     expect(inferToolForUpload({ fileName: "crawl.warc.gz" })).toBe("warc-archive-audit");
   });

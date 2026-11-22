@@ -795,19 +795,24 @@ def design_token_audit(path: Path) -> dict:
     def inspect_value(value, source_path):
         nonlocal direct_refs
         found = set()
-        if isinstance(value, str):
-            for ref in re.findall(r"(?<!\\)\{([^{}]+)\}", value):
-                found.add(ref)
-                direct_refs += 1
-        elif isinstance(value, dict):
-            if isinstance(value.get("$ref"), str):
-                found.add("#" + value["$ref"].lstrip("#"))
-                direct_refs += 1
-            for child in value.values():
-                found.update(inspect_value(child, source_path))
-        elif isinstance(value, list):
-            for child in value:
-                found.update(inspect_value(child, source_path))
+        stack = [value]
+        visited_values = 0
+        while stack:
+            current = stack.pop()
+            visited_values += 1
+            if visited_values > 100_000:
+                raise RuntimeError("Design Token value structure exceeds the scan limit.")
+            if isinstance(current, str):
+                for ref in re.findall(r"(?<!\\)\{([^{}]+)\}", current):
+                    found.add(ref)
+                    direct_refs += 1
+            elif isinstance(current, dict):
+                if isinstance(current.get("$ref"), str):
+                    found.add("#" + current["$ref"].lstrip("#"))
+                    direct_refs += 1
+                stack.extend(current.values())
+            elif isinstance(current, list):
+                stack.extend(current)
         return found
     def walk(node, parts=(), inherited_type=None, depth=0):
         nonlocal groups, invalid_structures, name_issues, untyped, empty_values

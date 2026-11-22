@@ -1001,7 +1001,7 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (name.endsWith(".kra") || mime === "application/x-krita") return "krita-project-audit";
   if (/\.(?:gltf|glb)$/i.test(name) || mime.startsWith("model/gltf")) return "gltf-audit";
   if (name.endsWith(".drawio") || name.endsWith(".drawio.xml")) return "drawio-audit";
-  if (name.endsWith(".n8n.json") || name.endsWith(".workflow.json")) return "n8n-workflow-audit";
+  if (name === "workflow.json" || name === "n8n.json" || name.endsWith(".n8n.json") || name.endsWith(".workflow.json")) return "n8n-workflow-audit";
   if (/(?:design[_.-]?tokens|tokens)\.json$/i.test(name)) return "design-token-audit";
   if (/\.warc(?:\.gz)?$/i.test(name) || mime.includes("warc")) return "warc-archive-audit";
   if (name.endsWith(".svg") || mime === "image/svg+xml") return "svg-safety-audit";
