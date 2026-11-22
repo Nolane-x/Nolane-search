@@ -91,6 +91,7 @@ RUNNERS = {
     "har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit",
     "qr-code-generate","font-inspect","subtitle-fix","openapi-contract-audit","color-convert",
     "pcap-network-audit", "audio-tag-audit",
+    "image-similarity-audit", "json-schema-validate",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -407,11 +408,13 @@ PIPELINE_TRANSITIONS = {
     "color-convert":{"text-clean","text-stats"},
     "pcap-network-audit":{"text-clean","text-stats"},
     "audio-tag-audit":{"text-clean","text-stats"},
+    "image-similarity-audit":{"csv-profile","csv-clean"},
+    "json-schema-validate":{"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -9779,6 +9782,139 @@ def audio_tag_audit(p):
         lines.append(f"Audio stream: {stream.get('codec_name','unknown')} · {stream.get('sample_rate','?')} Hz · {stream.get('channels','?')} channel(s)")
     return tool_text("\n".join(lines),"Audio tag audit")
 
+
+def image_similarity_audit(p):
+    import io
+    import math
+    from PIL import Image,ImageOps
+    if not zipfile.is_zipfile(p):
+        raise RuntimeError("Gửi ZIP chứa bộ ảnh cần tìm ảnh gần giống.")
+    def phash_16(image):
+        size=32
+        pixels=list(image.convert("L").resize((size,size),Image.Resampling.LANCZOS).getdata())
+        matrix=[pixels[row*size:(row+1)*size] for row in range(size)]
+        cosine=[[math.cos(math.pi*(2*position+1)*frequency/(2*size)) for position in range(size)] for frequency in range(16)]
+        horizontal=[[sum(matrix[row][x]*cosine[u][x] for x in range(size)) for u in range(16)] for row in range(size)]
+        coefficients=[[sum(horizontal[y][u]*cosine[v][y] for y in range(size)) for u in range(16)] for v in range(16)]
+        values=[coefficients[v][u] for v in range(16) for u in range(16) if v or u]
+        median=sorted(values)[len(values)//2]
+        result=0
+        bit=0
+        for v in range(16):
+            for u in range(16):
+                if v==0 and u==0:
+                    continue
+                if coefficients[v][u]>=median:
+                    result|=(1<<bit)
+                bit+=1
+        return result
+    records=[]
+    total_bytes=0
+    allowed={".jpg",".jpeg",".png",".webp",".bmp",".tif",".tiff"}
+    try:
+        with zipfile.ZipFile(p) as archive:
+            infos=archive.infolist()
+            if len(infos)>1000:
+                raise RuntimeError("ZIP vượt giới hạn 1.000 entries.")
+            seen=set()
+            members=[]
+            for info in infos:
+                if info.is_dir():
+                    continue
+                _safe_archive_parts(info.filename)
+                if info.filename in seen:
+                    raise RuntimeError("ZIP chứa tên tệp trùng lặp.")
+                seen.add(info.filename)
+                if Path(info.filename).suffix.lower() not in allowed:
+                    continue
+                if info.flag_bits&0x1 or info.file_size>20*1024*1024:
+                    continue
+                total_bytes+=info.file_size
+                if total_bytes>150*1024*1024:
+                    raise RuntimeError("ZIP vượt 150 MiB dữ liệu ảnh khai báo.")
+                members.append(info)
+                if len(members)>200:
+                    raise RuntimeError("Tối đa 200 ảnh trong một lần so sánh.")
+            for info in members:
+                payload=archive.read(info)
+                with Image.open(io.BytesIO(payload)) as raw:
+                    _guard_image_dimensions(raw)
+                    image=ImageOps.exif_transpose(raw).convert("RGB")
+                    perceptual=phash_16(image)
+                records.append((info.filename,hashlib.sha256(payload).hexdigest(),perceptual))
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("Không thể đọc ZIP hoặc một tệp ảnh bị hỏng/không an toàn.") from exc
+    if not records:
+        raise RuntimeError("ZIP không có ảnh được hỗ trợ.")
+    matches=[]
+    for left in range(len(records)):
+        for right in range(left+1,len(records)):
+            a,b=records[left],records[right]
+            distance=(a[2]^b[2]).bit_count()
+            if a[1]==b[1]:
+                matches.append((a[0],b[0],"exact-sha256",0))
+            elif distance<=20:
+                matches.append((a[0],b[0],"near-visual-phash16",distance))
+    out=p.with_name(p.stem+"-image-similarity.csv")
+    with out.open("w",encoding="utf-8-sig",newline="") as target:
+        writer=csv.writer(target,lineterminator="\n")
+        writer.writerow(["image_a","image_b","match_type","phash16_hamming_distance"])
+        writer.writerows([(_spreadsheet_safe(a),_spreadsheet_safe(b),kind,distance) for a,b,kind,distance in matches])
+    return {"summary":f"Đã phân tích {len(records):,} ảnh, {total_bytes:,} byte giải nén; tìm thấy {len(matches):,} cặp giống/gần giống. Perceptual hash DCT 16×16, ngưỡng ≤20/255.","output_path":str(out)}
+
+
+def json_schema_validate(p):
+    import jsonschema
+    size=p.stat().st_size
+    if size>10*1024*1024:
+        raise RuntimeError("JSON Schema validation giới hạn input 10 MiB.")
+    try:
+        envelope=json.loads(p.read_text(encoding="utf-8-sig"))
+    except (UnicodeError,json.JSONDecodeError) as exc:
+        raise RuntimeError("Input phải là JSON UTF-8 hợp lệ.") from exc
+    if not isinstance(envelope,dict) or not isinstance(envelope.get("schema"),dict) or "data" not in envelope:
+        raise RuntimeError("JSON phải có hai trường cấp gốc: schema (object) và data.")
+    schema=envelope["schema"]
+    instance=envelope["data"]
+    def reject_remote_refs(value):
+        if isinstance(value,dict):
+            reference=value.get("$ref")
+            if isinstance(reference,str) and not reference.startswith("#"):
+                raise RuntimeError("Remote/external $ref bị chặn; chỉ hỗ trợ tham chiếu cục bộ trong schema.")
+            for child in value.values():
+                reject_remote_refs(child)
+        elif isinstance(value,list):
+            for child in value:
+                reject_remote_refs(child)
+    reject_remote_refs(schema)
+    try:
+        validator_class=jsonschema.validators.validator_for(schema)
+        validator_class.check_schema(schema)
+        validator=validator_class(schema)
+        errors=[]
+        for error in validator.iter_errors(instance):
+            errors.append(error)
+            if len(errors)>=501:
+                break
+    except Exception as exc:
+        raise RuntimeError("Schema không hợp lệ hoặc JSON Schema draft chưa được hỗ trợ.") from exc
+    truncated=len(errors)>500
+    errors=errors[:500]
+    lines=[
+        "JSON Schema validation report",
+        f"Draft: {schema.get('$schema','default')}; result: {'VALID' if not errors else 'INVALID'}",
+        f"Validation errors: {len(errors):,}"+(" (first 500 shown; additional errors omitted)" if truncated else ""),
+        "Instance values are never copied into this report."
+    ]
+    for error in errors[:100]:
+        pointer="/" + "/".join(str(part).replace("~","~0").replace("/","~1") for part in error.absolute_path) if error.absolute_path else "(root)"
+        lines.append(f"- {pointer}: rule={error.validator or 'unknown'}")
+    if len(errors)>100:
+        lines.append(f"- {len(errors)-100:,} additional error locations omitted.")
+    return tool_text("\n".join(lines),"JSON Schema validation")
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -9912,6 +10048,8 @@ TOOLS={
  "color-convert":color_convert,
  "pcap-network-audit":pcap_network_audit,
  "audio-tag-audit":audio_tag_audit,
+ "image-similarity-audit":image_similarity_audit,
+ "json-schema-validate":json_schema_validate,
 
 }
 
