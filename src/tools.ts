@@ -876,6 +876,14 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "premis-event-audit": ["text-clean", "text-stats"],
   "stac-catalog-audit": ["text-clean", "text-stats"],
   "tei-document-audit": ["text-clean", "text-stats"],
+  "ocfl-object-audit": ["text-clean", "text-stats"],
+  "zarr-store-audit": ["text-clean", "text-stats"],
+  "nifti-header-audit": ["text-clean", "text-stats"],
+  "dicom-privacy-audit": ["text-clean", "text-stats"],
+  "las-pointcloud-audit": ["text-clean", "text-stats"],
+  "jp2-box-audit": ["text-clean", "text-stats"],
+  "netcdf-classic-audit": ["text-clean", "text-stats"],
+  "nwb-structure-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
