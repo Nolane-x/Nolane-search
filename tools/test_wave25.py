@@ -114,6 +114,27 @@ class Wave25BuildObservabilityBinaryTests(unittest.TestCase):
         self.assertNotIn("PrivatePackage", result["summary"])
         self.assertNotIn("private.bin", result["summary"])
 
+    def test_cyclonedx_xml_audit_counts_components_and_vulnerabilities(self):
+        source = """<bom xmlns="http://cyclonedx.org/schema/bom/1.7" version="1"><components><component type="library" bom-ref="pkg:generic/private@1"><name>PrivateDependency</name></component></components><dependencies><dependency ref="pkg:generic/private@1"><dependency ref="pkg:generic/missing@1"/></dependency></dependencies><vulnerabilities><vulnerability><id>PRIVATE-CVE</id></vulnerability></vulnerabilities></bom>"""
+        result = wave25.cyclonedx_sbom_audit(self.write("bom.cdx.xml", source))
+        self.assert_report(result)
+        self.assertIn("SBOM format: CycloneDX XML", result["summary"])
+        self.assertIn("Components/packages: 1", result["summary"])
+        self.assertIn("Dependency edges with missing endpoints: 1", result["summary"])
+        self.assertIn("Vulnerability records: 1", result["summary"])
+        self.assertNotIn("PrivateDependency", result["summary"])
+        self.assertNotIn("PRIVATE-CVE", result["summary"])
+
+    def test_spdx_xml_audit_counts_packages_and_relationships(self):
+        source = """<spdx:SpdxDocument xmlns:spdx="http://spdx.org/rdf/terms#"><spdx:packages><spdx:Package><spdx:SPDXID>SPDXRef-Package</spdx:SPDXID><spdx:name>PrivatePackage</spdx:name><spdx:licenseDeclared>MIT</spdx:licenseDeclared></spdx:Package></spdx:packages><spdx:files><spdx:File><spdx:SPDXID>SPDXRef-File</spdx:SPDXID><spdx:fileName>secret.bin</spdx:fileName></spdx:File></spdx:files><spdx:relationships><spdx:Relationship><spdx:spdxElementId>SPDXRef-Package</spdx:spdxElementId><spdx:relationshipType>CONTAINS</spdx:relationshipType><spdx:relatedSpdxElement>SPDXRef-File</spdx:relatedSpdxElement></spdx:Relationship></spdx:relationships></spdx:SpdxDocument>"""
+        result = wave25.cyclonedx_sbom_audit(self.write("sbom.spdx.xml", source))
+        self.assert_report(result)
+        self.assertIn("SBOM format: SPDX XML", result["summary"])
+        self.assertIn("Package records: 1", result["summary"])
+        self.assertIn("File records: 1", result["summary"])
+        self.assertNotIn("PrivatePackage", result["summary"])
+        self.assertNotIn("secret.bin", result["summary"])
+
     def test_junit_audit_counts_failures_errors_skips_without_test_messages(self):
         source = """<testsuites><testsuite tests="4" failures="1" errors="1" skipped="1" time="1.25"><testcase name="private-pass"/><testcase name="private-fail"><failure message="Secret assertion">Private trace</failure></testcase><testcase name="private-error"><error message="Sensitive error"/></testcase><testcase name="private-skip"><skipped/></testcase><system-out>private stdout</system-out></testsuite></testsuites>"""
         result = wave25.junit_xml_audit(self.write("junit.xml", source))
