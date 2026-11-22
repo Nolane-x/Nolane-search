@@ -7,6 +7,12 @@ from html import escape, unescape
 from html.parser import HTMLParser
 from typing import Any
 
+from wave23 import (
+    ansible_playbook_audit, avro_schema_audit, bibtex_audit, gcode_audit,
+    grafana_dashboard_audit, graphql_schema_audit, hdf5_audit, midi_audit,
+    musicxml_audit, nmea_track_audit, prometheus_rules_audit, protobuf_schema_audit,
+)
+
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
 RUNNERS = {
@@ -131,6 +137,9 @@ RUNNERS = {
     "html-structured-data-audit",
     "html-local-link-audit",
     "css-quality-audit",
+    "gcode-audit", "midi-audit", "musicxml-audit", "bibtex-audit", "nmea-track-audit",
+    "ansible-playbook-audit", "prometheus-rules-audit", "grafana-dashboard-audit",
+    "hdf5-audit", "avro-schema-audit", "graphql-schema-audit", "protobuf-schema-audit",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -478,11 +487,23 @@ PIPELINE_TRANSITIONS = {
     "html-local-link-audit":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
     "subtitle-quality-audit":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
     "unit-convert":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
+    "gcode-audit":{"text-clean","text-stats"},
+    "midi-audit":{"text-clean","text-stats"},
+    "musicxml-audit":{"text-clean","text-stats"},
+    "bibtex-audit":{"text-clean","text-stats"},
+    "nmea-track-audit":{"text-clean","text-stats"},
+    "ansible-playbook-audit":{"text-clean","text-stats"},
+    "prometheus-rules-audit":{"text-clean","text-stats"},
+    "grafana-dashboard-audit":{"text-clean","text-stats"},
+    "hdf5-audit":{"text-clean","text-stats"},
+    "avro-schema-audit":{"text-clean","text-stats"},
+    "graphql-schema-audit":{"text-clean","text-stats"},
+    "protobuf-schema-audit":{"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-structured-data-audit","css-quality-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-structured-data-audit","css-quality-audit","gcode-audit","midi-audit","musicxml-audit","bibtex-audit","nmea-track-audit","ansible-playbook-audit","prometheus-rules-audit","grafana-dashboard-audit","hdf5-audit","avro-schema-audit","graphql-schema-audit","protobuf-schema-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -12208,6 +12229,18 @@ TOOLS={
  "html-structured-data-audit":html_structured_data_audit,
  "html-local-link-audit":html_local_link_audit,
  "css-quality-audit":css_quality_audit,
+ "gcode-audit":gcode_audit,
+ "midi-audit":midi_audit,
+ "musicxml-audit":musicxml_audit,
+ "bibtex-audit":bibtex_audit,
+ "nmea-track-audit":nmea_track_audit,
+ "ansible-playbook-audit":ansible_playbook_audit,
+ "prometheus-rules-audit":prometheus_rules_audit,
+ "grafana-dashboard-audit":grafana_dashboard_audit,
+ "hdf5-audit":hdf5_audit,
+ "avro-schema-audit":avro_schema_audit,
+ "graphql-schema-audit":graphql_schema_audit,
+ "protobuf-schema-audit":protobuf_schema_audit,
 
 }
 

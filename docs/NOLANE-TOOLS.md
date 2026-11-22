@@ -1,8 +1,29 @@
-Nolane Tools hiện có **354 công cụ đã triển khai trên production** sau Wave 21, phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `05af480c-6631-4402-8711-07bcba267bfe`. CI, 144 Python runner tests, Worker export/production smoke và deployment đều đã thành công; Telegram webhook đã được xác minh cho `message` và `callback_query`. Catalog TypeScript, Python runner allowlist, handler và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và giấy phép các dự án upstream được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
+Nolane Tools hiện có **371 công cụ đã triển khai trên production** sau Wave 22, phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `c79774cb-a692-4c3b-a7a5-9d7afb73afcf`. PR #74 đã merge; main CI (161 Python runner tests), Worker export/smoke và Cloudflare deployment đều thành công. Telegram webhook đã được xác minh cho `message` và `callback_query`. Catalog TypeScript, Python runner allowlist, handler và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và giấy phép các dự án upstream được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
 
-### Wave 22 — Multidomain engineering, GIS, CAD and productivity tools — candidate branch, not yet production
+### Wave 23 — Science, observability, music, manufacturing and schema tools — candidate branch
 
-Wave 22 adds 17 new processors to the feature branch, raising the branch catalog from 354 to **371 candidate tools**. Production remains at 354 until PR CI, Worker export/health smoke and Cloudflare deployment pass.
+Wave 23 adds 12 candidate processors to the existing 371-tool production catalog. The candidate branch contains **383 registered tools**; production remains at 371 until CI, Worker export/smoke and Cloudflare deployment pass.
+
+| ID | Công cụ | Nhóm | Chức năng |
+|---|---|---|---|
+| /tool gcode-audit | G-code static audit | Manufacturing/CNC | Đếm lệnh G/M, bounds XYZ, feed/spindle values và lệnh cần rà soát; không mô phỏng hoặc chạy máy. |
+| /tool midi-audit | Standard MIDI audit | Audio/music | Kiểm tra chunk/track/channel/note/tempo events/ticks; không phát nội dung MIDI. |
+| /tool musicxml-audit | MusicXML/MXL audit | Score/music | Thống kê part/measure/note/rest/key/time/tempo; chặn DTD/entity, không xuất lời hoặc tên nhạc cụ. |
+| /tool bibtex-audit | BibTeX bibliography audit | Research/writing | Duplicate citation keys, DOI counts và missing bibliographic fields; suppress citation values. |
+| /tool nmea-track-audit | NMEA GNSS audit | GPS/data | Checksum, sentence types và định dạng RMC/GGA; không ghi tọa độ/timestamp/route vào report. |
+| /tool ansible-playbook-audit | Ansible static audit | DevOps/security | Đếm shell/command/raw, become, no_log, ignored failures và package omissions; không thực thi YAML. |
+| /tool prometheus-rules-audit | Prometheus rules audit | Observability | Kiểm tra cấu trúc groups/rules và alert annotations; không thực thi PromQL hoặc in query. |
+| /tool grafana-dashboard-audit | Grafana dashboard audit | Observability | Thống kê panel/datasource/target/template và duplicate IDs; giữ kín UID, URL và query. |
+| /tool hdf5-audit | HDF5 metadata audit | Scientific data | Đọc group/dataset shape/dtype/compression/chunking; không đọc dataset values, bỏ qua links bên ngoài. |
+| /tool avro-schema-audit | Avro schema audit | Data engineering | Kiểm tra record/enum/fixed/array/map, field/union duplicates và khai báo thiếu. |
+| /tool graphql-schema-audit | GraphQL SDL validator | API engineering | Parse/validate schema offline, thống kê definitions/fields/arguments/deprecations; không chạy resolver. |
+| /tool protobuf-schema-audit | Protocol Buffers audit | API/data engineering | Rà syntax/package/message/enum/service/RPC/field-number bằng static scanner; không biên dịch schema. |
+
+Giới hạn Wave 23: text 10 MiB với line cap 500.000; MIDI/MusicXML/G-code 20 MiB (MXL expanded cap 80 MiB, 50 archive members); BibTeX/NMEA/Ansible 10 MiB; Prometheus YAML 5 MiB; Grafana JSON 10 MiB và 20.000 panel nodes; HDF5 20 MiB và 20.000 objects; Avro/GraphQL/Protobuf 10 MiB và giới hạn nesting/node phù hợp. h5py (BSD-3-Clause) và graphql-core (MIT) chỉ cài khi đúng processor được chọn; PyYAML được dùng có điều kiện cho hai YAML auditors. Reports cố ý giữ kín payload/identity values. Đây là static audit, không phải CNC safety certification, PromQL evaluation, full protoc compilation hoặc guarantee dữ liệu hợp lệ ở mọi runtime.
+
+### Wave 22 — Multidomain engineering, GIS, CAD and productivity tools — deployed 2026-11-22
+
+Wave 22 added 17 processors to main, raising the production catalog from 354 to **371 tools**. [PR #74](https://github.com/Nolane-x/Nolane-search/pull/74) merged as `35ed71a5905b1d2995ba27ad000b1151a78bac77`; [main CI 45004982047](https://github.com/Nolane-x/Nolane-search/actions/runs/45004982047), [Worker export/smoke 45004982085](https://github.com/Nolane-x/Nolane-search/actions/runs/45004982085) and [Cloudflare deployment 45004982003](https://github.com/Nolane-x/Nolane-search/actions/runs/45004982003) passed.
 
 | ID | Công cụ | Nhóm | Chức năng |
 |---|---|---|---|
@@ -26,7 +47,7 @@ Wave 22 adds 17 new processors to the feature branch, raising the branch catalog
 
 Giới hạn: SQLGlot/SQLFluff 5 MiB input/1.000.000 ký tự; Bandit một file .py tối đa 10 MiB/120 giây; Pint 2 MiB/1.000 dòng; mesh 20 MiB/2 triệu vertices/4 triệu faces; DXF 20 MiB/1 triệu modelspace entities; Shapefile ZIP 20 MiB/100 MiB expanded/100 members/20 datasets; PO/POT 10 MiB/100.000 entries; Notebook 20 MiB/20.000 cells; HEIC 20 MiB/80 MP; subtitle 10 MiB/20.000 cues; KML 20 MiB/500.000 coordinates/20.000 features; coordinate transform 10 MiB/10.000 coordinates và chỉ EPSG identifiers; HTML/CSS 10 MiB; site ZIP 20 MiB/100 MiB expanded/500 files/200 HTML pages/5.000 reported issues.
 
-Wave 22 là candidate trên branch, chưa phải production. CI và deployment vẫn là gate bắt buộc; E2E Telegram upload/retry phải được chủ bot kiểm tra sau khi phát hành.
+Wave 22 đã được triển khai trên production sau khi PR #74, main CI, Worker export/smoke và Cloudflare deployment đều thành công. Owner-level E2E vẫn cần gửi file mẫu cho từng nhóm công cụ trong private Telegram chat, kiểm tra file trả về và thử /tool_retry; CI/deploy không chứng minh toàn bộ hành trình thực tế.
 
 
 ### Wave 21 — Broader file, data and productivity tools — deployed 2026-11-22

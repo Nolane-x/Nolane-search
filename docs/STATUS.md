@@ -1,27 +1,26 @@
 # Verified Project Status
 
-Last verified: 2026-11-22. This document distinguishes production deployment and configuration checks from user-level behavior that still requires a real Telegram interaction.
+Last verified: 2026-11-22. This document distinguishes successful production deployment from owner-level Telegram journeys that still need live upload/retry verification.
 
-## In review — Wave 22 candidate (2026-11-22)
+## In review — Wave 23 candidate (2026-11-22)
 
-- Branch: \`feat/wave-twenty-two-multidomain-tool-suite\`.
-- Seventeen additional processors are registered in the branch TypeScript catalog, Python RUNNERS allowlist, Python handler map and mirrored pipeline transitions. Branch catalog: **371 candidate tools**; production remains **354**.
-- New domains: SQL format/lint, Python static security, physical units, 3D mesh and CAD, shapefile/GIS, gettext localization, Jupyter Notebook, HEIC conversion, subtitle QA, KML/GeoJSON, EPSG coordinate transforms, JSON-LD structured-data/local-link and CSS quality analysis.
-- Upstream licenses and selection rationale are recorded in \`docs/TOOL-RESEARCH-2026-11-22.md\`. Optional dependencies are installed only for a selected processor on the ephemeral runner; CI installs them for regression tests.
-- Seventeen Python regression tests cover all new processors. PR CI, Worker export/smoke and Cloudflare deployment have **not yet been reported as passing** for this branch.
-- Production remains on Wave 21 / 354 tools until the Wave 22 PR passes all checks and Cloudflare deployment succeeds.
-- Owner-level E2E after release: representative SQL/Python/unit/CAD/3D/GIS/PO/Notebook/HEIC/subtitle/KML/HTML/CSS uploads and /tool_retry; automated tests do not prove those Telegram journeys.
+- Branch: feat/wave-twenty-three-domain-tools.
+- Twelve additional processors are registered in the candidate TypeScript catalog, Python RUNNERS allowlist, Python handler map and mirrored pipeline transitions. Candidate catalog: **383 tools**; production remains **371** until the candidate passes all release gates.
+- New domains: CNC/G-code, MIDI and MusicXML, BibTeX research libraries, GNSS/NMEA logs, Ansible, Prometheus/Grafana observability, HDF5 scientific data, Avro, GraphQL SDL and Protocol Buffers.
+- Fourteen Python regression tests cover the new parsers/auditors. The candidate adds two conditional dependencies: h5py (BSD-3-Clause) and graphql-core (MIT); they are installed only when the matching processor is selected. CI installs both for regression testing.
+- Static analyzers do not run uploaded code, YAML tasks, PromQL, MIDI events, CNC instructions, GraphQL resolvers or protoc compilation. Coordinates, identity and query values are intentionally withheld from reports.
+- PR CI, Worker export/production smoke and Cloudflare deployment are still pending for Wave 23.
+- Owner-level E2E after release: representative G-code/MIDI/MusicXML/BibTeX/NMEA/Ansible/Prometheus/Grafana/HDF5/Avro/GraphQL/Protobuf uploads through private Telegram, inspect delivered reports, then test /tool_retry. Automated tests do not prove those journeys.
 
-## Latest production release — Wave 21 (2026-11-22)
+## Latest production release — Wave 22 (2026-11-22)
 
-- [PR #73](https://github.com/Nolane-x/Nolane-search/pull/73) merged into \`main\` as commit \`7709aac8173a90a661cea8ea99240ca34526ef8f\`; nine processors increase the catalog from 345 to **354 production tools**.
-- Main CI [44992164320](https://github.com/Nolane-x/Nolane-search/actions/runs/44992164320) passed TypeScript type-check, Vitest, deployment-script checks, all **144 Python runner tests** and Worker build.
-- Worker export and production smoke [44992164270](https://github.com/Nolane-x/Nolane-search/actions/runs/44992164270) passed, including build output publication and the deployed Worker smoke test.
-- Cloudflare deployment [44992164238](https://github.com/Nolane-x/Nolane-search/actions/runs/44992164238) passed source/bundle validation, Worker upload and runtime-secret upload. Telegram webhook registration was verified for \`message\` and \`callback_query\`.
-- Production Worker Version ID: \`05af480c-6631-4402-8711-07bcba267bfe\`.
-- D1 migration was skipped because Wave 21 introduced no schema changes.
-- Added PDF table extraction, JMESPath JSON queries, offline IPv4/IPv6 and CIDR reporting, Code 128 barcode generation, DOCX-to-Markdown, PPTX speaker notes extraction, fuzzy matching and CSV ↔ Parquet interchange.
-- Owner-level E2E remains: upload representative PDF, JSON, IP/CIDR TXT, barcode TXT, DOCX, PPTX, fuzzy-match TXT and Parquet/CSV files through the private Telegram bot; inspect the actual files and test \`/tool_retry\`. CI, webhook verification and deployment do not prove those real file-upload journeys.
+- [PR #74](https://github.com/Nolane-x/Nolane-search/pull/74) merged into main as commit 35ed71a5905b1d2995ba27ad000b1151a78bac77; 17 processors increased the catalog from 354 to **371 production tools**.
+- Main CI [45004982047](https://github.com/Nolane-x/Nolane-search/actions/runs/45004982047) passed type-check, Vitest, deployment-script checks, **161 Python runner tests**, and Worker build.
+- Worker export and production smoke [45004982085](https://github.com/Nolane-x/Nolane-search/actions/runs/45004982085) passed.
+- Cloudflare deployment [45004982003](https://github.com/Nolane-x/Nolane-search/actions/runs/45004982003) passed source/bundle validation, Worker upload and runtime-secret upload. Telegram webhook registration and command-menu registration succeeded; D1 migration was skipped because Wave 22 made no schema change.
+- Production Worker Version ID: c79774cb-a692-4c3b-a7a5-9d7afb73afcf.
+- Added SQLGlot/SQLFluff, Bandit Python SAST, Pint units, 3D mesh inspection, DXF CAD audit, Shapefile inventory, gettext PO/POT audit, Jupyter Notebook audit/cleaning, HEIC conversion, subtitle QA, KML conversion, EPSG transforms, JSON-LD, HTML local-link and CSS quality tools.
+- Owner-level E2E remains: upload representative SQL, Python, CAD/3D, GIS, PO, Notebook, HEIC, subtitle, KML, HTML and CSS samples in private Telegram; inspect outputs and test /tool_retry. CI, webhook registration and deployment do not prove those direct user interactions.
 
 ## Previous production release — Wave 20 (2026-11-22)
 
