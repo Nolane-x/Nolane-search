@@ -16,7 +16,7 @@ The candidate branch adds nine registered processors, taking the branch catalog 
 | /tool csv-to-parquet | CSV to Parquet | Dữ liệu | DuckDB chuyển CSV thành Parquet Zstandard, giữ dữ liệu cột dạng chuỗi để tránh mất số 0 đầu. |
 | /tool parquet-to-csv | Parquet to CSV | Dữ liệu | DuckDB chuyển Parquet sang CSV UTF-8; chỉ truy vấn cố định, không nhận SQL người dùng. |
 
-Giới hạn bổ sung: PDF 25 MiB/200 trang/200 bảng/20.000 hàng/500.000 ô; JMESPath 20 MiB input/output và query tối đa 4.096 ký tự; IP/CIDR 5 MiB/2.000 networks; barcode 2 MiB/50 payload/120 ký tự ASCII mỗi payload; DOCX 25 MiB/50.000 blocks/40 MiB output; PPTX 40 MiB/300 slides/20 MiB notes; fuzzy matching 5 MiB/1.200 dòng/5.000 cặp; Parquet conversions 20 MiB input/1.000.000 hàng/45 MiB output. Các phép chuyển đổi chỉ xử lý dữ liệu người dùng tải lên trên runner dùng một lần.
+Giới hạn bổ sung: PDF 20 MiB/200 trang/200 bảng/20.000 hàng/500.000 ô; JMESPath 20 MiB input/output và query tối đa 4.096 ký tự; IP/CIDR 5 MiB/2.000 networks; barcode 2 MiB/50 payload/120 ký tự ASCII mỗi payload; DOCX 20 MiB/50.000 blocks/20 MiB output; PPTX 20 MiB/300 slides/20 MiB notes; fuzzy matching 5 MiB/1.200 dòng/5.000 cặp; Parquet conversions 20 MiB input/1.000.000 hàng/45 MiB output. Các phép chuyển đổi chỉ xử lý dữ liệu người dùng tải lên trên runner dùng một lần.
 
 ### Wave 20 — Creator, publishing and content utilities — deployed 2026-11-22
 
