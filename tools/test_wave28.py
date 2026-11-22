@@ -133,6 +133,30 @@ class Wave28Tests(unittest.TestCase):
         self.assertIn("Current head resolves to a version: True", result["summary"])
         self.assertIn("Current head is the highest version: False", result["summary"])
 
+    def test_ocfl_supports_blake2b_512_inventory_and_content_fixity(self):
+        payload = b"blake2b protected content"
+        digest = hashlib.blake2b(payload, digest_size=64).hexdigest()
+        inventory = {
+            "digestAlgorithm": "blake2b-512",
+            "head": "v1",
+            "manifest": {digest: ["v1/content/data.bin"]},
+            "versions": {"v1": {"state": {digest: ["data.bin"]}}},
+        }
+        raw = json.dumps(inventory, separators=(",", ":")).encode()
+        sidecar = hashlib.blake2b(raw, digest_size=64).hexdigest() + " inventory.json\n"
+        path = self.zip_file("blake2b.ocfl.zip", {
+            "obj/0=ocfl_object_1.1": b"",
+            "obj/inventory.json": raw,
+            "obj/inventory.json.blake2b-512": sidecar.encode(),
+            "obj/v1/inventory.json": raw,
+            "obj/v1/inventory.json.blake2b-512": sidecar.encode(),
+            "obj/v1/content/data.bin": payload,
+        })
+        result = wave28.ocfl_object_audit(path)
+        self.assertIn("Inventory sidecars checked: 2", result["summary"])
+        self.assertIn("Content digest mismatches: 0", result["summary"])
+        self.assertIn("Manifest files missing from archive: 0", result["summary"])
+
     def test_ocfl_rejects_unsafe_archive_paths(self):
         path = self.zip_file("unsafe-ocfl.zip", {"../escape.txt": b"x"})
         with self.assertRaisesRegex(RuntimeError, "unsafe member path"):
