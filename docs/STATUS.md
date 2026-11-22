@@ -6,8 +6,8 @@ Last verified: 2026-11-22. Production deployment evidence is separated from owne
 
 - Branch: `feat/wave-twenty-eight-scientific-format-tools`; [PR #80](https://github.com/Nolane-x/Nolane-search/pull/80).
 - Eight processors are registered in the TypeScript catalog, Python runner allowlist, handlers, pipeline transitions and upload inference. Candidate catalog: **434 tools**; production remains **426** until PR CI, Worker export/health smoke and Cloudflare deployment all pass.
-- Domains: OCFL 1.0/1.1 object inventory and fixity, Zarr v2/v3, NIfTI-1/2 headers, DICOM privacy-risk screen, LAS 1.0–1.4 LiDAR headers, JPEG 2000 JP2 boxes, NetCDF classic CDF-1/CDF-2 and NWB/HDF5 hierarchy.
-- Seventeen focused Python regression tests cover OCFL inventory and sidecar fixity, unsafe ZIP paths, Zarr metadata/chunk privacy, NIfTI endian/header/gzip, DICOM identifier suppression, LAS bounds, JP2 box framing, NetCDF header parsing and NWB metadata-only inspection.
+- Domains: OCFL 1.0/1.1 object inventory and fixity, Zarr v2/v3, NIfTI-1/2 headers, DICOM privacy-risk screen, LAS 1.0–1.4 LiDAR headers, JPEG 2000 JP2 boxes with codestream skipping, NetCDF classic CDF-1/CDF-2 with seek-based payload skipping and NWB/HDF5 hierarchy.
+- Twenty focused Python regression tests cover OCFL inventory and sidecar fixity, unsafe ZIP paths, Zarr metadata/chunk privacy, NIfTI endian/header/gzip, DICOM identifier suppression, LAS bounds, JP2 box framing, NetCDF header parsing and NWB metadata-only inspection.
 - Runtime extras are selected conditionally for the runner: `pydicom` only for DICOM and existing `h5py` for NWB/HDF5. No D1 migration or schema changes.
 - Data outputs intentionally suppress patient identifiers, voxel/pixel/point-cloud data, scientific arrays, paths and descriptive values. These are structural/header diagnostics, not de-identification, clinical validation or full format conformance.
 - PR CI is pending for current Wave 28 code; do not merge or count the candidate as production until the latest commit's check suite, Worker build/export and deployment succeed.
