@@ -18,7 +18,7 @@ Expand beyond the 354 production processors without duplicating existing OCR, su
 | \`python-security-audit\` | Bandit static security scan | .py → TXT report | One Python file, 10 MiB, 120-second timeout; source is parsed but never executed. |
 | \`unit-convert\` | Physical unit conversion | TXT/CSV → CSV | 2 MiB/1,000 lines; restricted quantity grammar and dimensional compatibility checks. |
 | \`mesh-inspect\` | 3D triangle mesh inspection | STL/OBJ/PLY/OFF/GLB/GLTF/3MF → TXT | 20 MiB; max 2M vertices/4M faces; watertight/volume work only up to 500K faces. |
-| \`dxf-audit\` | CAD drawing structure/auditor | .dxf → TXT | 20 MiB/1M modelspace entities; no rendering or external-reference loading. |
+| \`dxf-audit\` | CAD drawing structure/auditor | .dxf → TXT | 20 MiB/1M modelspace entities; no rendering or external-reference loading; topology metrics weld duplicate vertices only in an in-memory analysis copy, without modifying the source file. |
 | \`shapefile-audit\` | ESRI Shapefile bundle inspection | ZIP containing .shp/.shx/.dbf → TXT | 20 MiB archive/100 MiB expanded/100 members/20 datasets; no attribute values. |
 | \`gettext-catalog-audit\` | Localization catalog QA | .po/.pot → TXT | 10 MiB/100K entries; untranslated/fuzzy/obsolete/plural/placeholder counts; source strings withheld. |
 | \`notebook-audit\` | Jupyter Notebook schema and output inventory | .ipynb → TXT | 20 MiB/20K cells; no code execution or cell source/output disclosure. |
