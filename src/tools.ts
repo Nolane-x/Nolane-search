@@ -344,6 +344,18 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "pdf-active-content-audit", name: "Kiểm tra active content PDF", category: "document", description: "Rà JavaScript/JS, OpenAction, Additional Actions, Launch, URI/GoToR, RichMedia, XFA/AcroForm và file đính kèm nhúng; chỉ báo cáo số lượng, không chạy action hoặc giải nén tệp đính kèm.", accepts: ["application/pdf", ".pdf"], output: "Báo cáo active content PDF TXT", ready: true },
   { id: "email-security-audit", name: "Kiểm tra an toàn email", category: "document", description: "Phân tích EML: giả mạo domain From/Reply-To/Return-Path, kết quả SPF/DKIM/DMARC được header tự khai, hop Received, URL đáng ngờ và tệp đính kèm có đuôi rủi ro; không in địa chỉ, URL hoặc tên file, không mở attachment.", accepts: ["message/rfc822", ".eml"], output: "Báo cáo an toàn email TXT", ready: true },
   { id: "jwt-security-audit", name: "Kiểm tra bảo mật JWT", category: "developer", description: "Phân tích JWT compact: alg=none, header key locator jku/x5u, exp/iat/nbf, token hết hạn hoặc tuổi thọ dài và claim cấu trúc; không xác minh chữ ký, không xuất token hay giá trị claims.", accepts: [".jwt", ".txt", ".log", ".json", ".env"], output: "Báo cáo bảo mật JWT TXT", ready: true },
+
+  { id: "har-privacy-audit", name: "Kiểm tra rò rỉ dữ liệu HAR", category: "developer", description: "Phân tích HAR browser capture để đếm Authorization/Cookie, token, tham số URL, form field nhạy cảm và credential-like body patterns; không in URL, header value, cookie hay body.", accepts: ["application/json", ".har"], output: "Báo cáo quyền riêng tư HAR TXT", ready: true },
+  { id: "ics-calendar-audit", name: "Kiểm tra lịch iCalendar", category: "utility", description: "Kiểm tra VCALENDAR/VEVENT: UID trùng/thiếu, DTSTART/DTEND, recurrence, timezone, VALARM và attendee counts; không xuất tiêu đề, mô tả, địa điểm hay địa chỉ tham dự.", accepts: ["text/calendar", ".ics", ".ical"], output: "Báo cáo lịch iCalendar TXT", ready: true },
+  { id: "vcard-privacy-audit", name: "Kiểm tra riêng tư danh bạ vCard", category: "utility", description: "Thống kê VCF contact, email/phone trùng, trường tên/địa chỉ/tổ chức/ảnh và dữ liệu thiếu; không xuất tên, email, số điện thoại hay địa chỉ.", accepts: ["text/vcard", "text/x-vcard", ".vcf", ".vcard"], output: "Báo cáo quyền riêng tư vCard TXT", ready: true },
+  { id: "gpx-track-report", name: "Phân tích hành trình GPX", category: "data", description: "Tính tổng quãng đường, độ cao tăng/giảm, trackpoint, segment, waypoint và khoảng thời gian từ GPX; không tiết lộ tọa độ, địa danh hay timestamp cụ thể.", accepts: ["application/gpx+xml", ".gpx"], output: "Báo cáo hành trình GPX TXT", ready: true },
+  { id: "geojson-audit", name: "Kiểm tra cấu trúc GeoJSON", category: "data", description: "Kiểm tra Feature/Geometry, thống kê loại hình học, số tọa độ, cặp longitude/latitude sai miền và geometry rỗng; không in tọa độ hoặc property values.", accepts: ["application/geo+json", ".geojson"], output: "Báo cáo GeoJSON TXT", ready: true },
+  { id: "qr-code-generate", name: "Tạo mã QR từ văn bản", category: "image", description: "Tạo ảnh QR PNG từ văn bản UTF-8 hoặc URL trong tệp TXT, có error correction và giới hạn payload 4 KiB; nội dung không được ghi vào job summary.", accepts: ["text/plain", ".txt"], output: "Mã QR PNG", ready: true },
+  { id: "font-inspect", name: "Kiểm tra metadata font", category: "developer", description: "Đọc TTF/OTF/WOFF: family, subfamily, glyph count, Unicode cmap, version, variable axes và OS/2 embedding flags; không tự kết luận quyền sử dụng pháp lý.", accepts: ["font/ttf", "font/otf", "application/font-woff", ".ttf", ".otf", ".woff"], output: "Báo cáo font TXT", ready: true },
+  { id: "subtitle-fix", name: "Sửa và chuẩn hóa phụ đề", category: "audio-video", description: "Sắp xếp cue SRT/VTT theo timestamp, đánh lại số thứ tự SRT, loại cue lỗi/rỗng và sửa duration không dương; giữ nguyên nội dung cue.", accepts: ["text/vtt", "application/x-subrip", ".srt", ".vtt"], output: "Tệp phụ đề đã sửa", ready: true },
+  { id: "openapi-contract-audit", name: "Kiểm tra hợp đồng OpenAPI", category: "developer", description: "Rà OpenAPI 3.x/Swagger 2: operationId, responses, path parameters, local $ref và HTTP server URLs; không tải remote references hoặc gọi API.", accepts: ["application/json", "application/yaml", "text/yaml", ".json", ".yaml", ".yml"], output: "Báo cáo OpenAPI TXT", ready: true },
+  { id: "color-convert", name: "Chuyển đổi hệ màu", category: "utility", description: "Chuyển danh sách HEX/RGB sang HEX, RGB, HSL và CMYK; xử lý nhiều dòng, giữ số dòng nguồn và báo dòng không hợp lệ.", accepts: ["text/plain", ".txt"], output: "Bảng chuyển đổi màu TXT", ready: true },
+
 ];
 
 
@@ -656,6 +668,16 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "pdf-active-content-audit": ["text-clean", "text-stats"],
   "email-security-audit": ["text-clean", "text-stats"],
   "jwt-security-audit": ["text-clean", "text-stats"],
+  "har-privacy-audit": ["text-clean", "text-stats"],
+  "ics-calendar-audit": ["text-clean", "text-stats"],
+  "vcard-privacy-audit": ["text-clean", "text-stats"],
+  "gpx-track-report": ["text-clean", "text-stats"],
+  "geojson-audit": ["text-clean", "text-stats"],
+  "qr-code-generate": ["image-info", "image-ocr", "qr-read", "image-palette", "image-to-pdf", "image-compress"],
+  "font-inspect": ["text-clean", "text-stats"],
+  "subtitle-fix": ["subtitle-audit", "subtitle-convert", "subtitle-text"],
+  "openapi-contract-audit": ["text-clean", "text-stats"],
+  "color-convert": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
@@ -834,6 +856,12 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (mime === "application/x-ndjson" || mime === "application/jsonl" || name.endsWith(".jsonl")) return "jsonl-format";
   if (mime === "application/pdf" || name.endsWith(".pdf")) return "pdf-text";
   if (name.endsWith(".epub") || mime === "application/epub+zip") return "epub-text";
+  if (name.endsWith(".har")) return "har-privacy-audit";
+  if (name.endsWith(".ics") || name.endsWith(".ical") || mime === "text/calendar") return "ics-calendar-audit";
+  if (name.endsWith(".vcf") || name.endsWith(".vcard") || mime === "text/vcard" || mime === "text/x-vcard") return "vcard-privacy-audit";
+  if (name.endsWith(".gpx") || mime === "application/gpx+xml") return "gpx-track-report";
+  if (name.endsWith(".geojson") || mime === "application/geo+json") return "geojson-audit";
+  if (/\\.(?:ttf|otf|woff)$/i.test(name)) return "font-inspect";
 
   if (/^(?:docker-)?compose(?:\.[^/]*)?\.(?:yml|yaml)$/i.test(name)) return "docker-compose-audit";
   if (/^dockerfile(?:\..*)?$/i.test(name)) return "dockerfile-audit";
