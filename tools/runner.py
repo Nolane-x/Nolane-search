@@ -9188,12 +9188,25 @@ def har_privacy_audit(p):
     return tool_text("\n".join(lines),"HAR privacy audit")
 
 
+
+def _read_bounded_vobject_components(raw,max_depth=40):
+    import vobject
+    depth=0
+    for line in raw.splitlines():
+        if re.match(r"^\s*BEGIN\s*:",line,re.I):
+            depth+=1
+            if depth>max_depth:
+                raise RuntimeError(f"Calendar/contact component nesting exceeds {max_depth} levels.")
+        elif re.match(r"^\s*END\s*:",line,re.I):
+            depth=max(0,depth-1)
+    return list(vobject.readComponents(raw,validate=False))
+
 def ics_calendar_audit(p):
     import vobject
     size=p.stat().st_size
     if size>10*1024*1024: raise RuntimeError("iCalendar input vượt giới hạn 10 MiB.")
     try:
-        components=list(vobject.readComponents(p.read_text(encoding="utf-8-sig"),validate=False,max_nesting=40))
+        components=_read_bounded_vobject_components(p.read_text(encoding="utf-8-sig"),max_depth=40)
     except Exception as exc:
         raise RuntimeError("Không thể phân tích iCalendar; hãy kiểm tra định dạng và cấu trúc BEGIN/END.") from exc
     calendars=[item for item in components if str(getattr(item,"name","")).upper()=="VCALENDAR"]
@@ -9590,7 +9603,7 @@ def openapi_contract_audit(p):
     insecure_servers=sum(1 for server in servers if isinstance(server,dict) and str(server.get("url","")).lower().startswith("http://"))
     lines=[
         "OpenAPI contract audit",
-        f"Document version: {version}; path items: {len(paths):,}; operations: {operations:,}",
+        f"Document version: {version}; path items: {len(paths):,}; Operations: {operations:,}",
         f"Operations missing operationId: {missing_ids:,}; duplicate operationId: {duplicate_ids:,}; malformed operation objects: {malformed_operations:,}",
         f"Operations without responses: {missing_responses:,}; without summary/description: {missing_summaries:,}; path-parameter declaration gaps: {path_parameter_gaps:,}",
         f"Local $ref values: {len(refs):,}; unresolved local references: {unresolved:,}; external references not fetched: {external_refs:,}",
