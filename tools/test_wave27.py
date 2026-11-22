@@ -228,7 +228,7 @@ class Wave27DigitalPreservationTests(unittest.TestCase):
         source = """<premis xmlns="http://www.loc.gov/premis/v3">
 <object><objectIdentifier><objectIdentifierType>local</objectIdentifierType><objectIdentifierValue>secret-object</objectIdentifierValue></objectIdentifier></object>
 <event><eventIdentifier><eventIdentifierType>local</eventIdentifierType><eventIdentifierValue>secret-event</eventIdentifierValue></eventIdentifier><eventDateTime>2025-01-01T00:00:00Z</eventDateTime><linkingObjectIdentifier><linkingObjectIdentifierType>local</linkingObjectIdentifierType><linkingObjectIdentifierValue>secret-object</linkingObjectIdentifierValue></linkingObjectIdentifier></event>
-<agent><agentIdentifier><agentIdentifierType>local</agentIdentifierType><agentIdentifierValue>secret-agent</agentIdentifierValue></agent>
+<agent><agentIdentifier><agentIdentifierType>local</agentIdentifierType><agentIdentifierValue>secret-agent</agentIdentifierValue></agentIdentifier></agent>
 </premis>"""
         result = wave27.premis_event_audit(self.write("premis.xml", source))
         self.assert_report(result)
