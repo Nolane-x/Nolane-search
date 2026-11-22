@@ -3345,7 +3345,7 @@ schema { query: Query }
         path.write_text(json.dumps(payload),encoding="utf-8")
         result=runner.design_token_audit(path)
         report=result["summary"]
-        self.assertIn("tokens: 5",report)
+        self.assertIn("tokens: 6",report)
         self.assertIn("Alias references unresolved: 1",report)
         self.assertIn("alias cycles:",report)
         self.assertNotIn("#ffffff",report)
