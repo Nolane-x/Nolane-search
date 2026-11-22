@@ -5,7 +5,7 @@ describe("Nolane Tools registry", () => {
   it("contains uniquely identified, documented tools", () => {
     const ids = TOOL_CATALOG.map(tool => tool.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(TOOL_CATALOG).toHaveLength(345);
+    expect(TOOL_CATALOG).toHaveLength(352);
     expect(TOOL_CATALOG.every(tool => tool.ready && tool.description.length > 12 && tool.accepts.length > 0)).toBe(true);
     for (const id of ["text-extract-todo-comments", "text-extract-markdown-images", "text-strip-markdown-frontmatter", "text-markdown-to-plain", "text-sort-unique-words", "text-word-to-lines", "text-join-lines", "text-extract-domains", "text-extract-uuids", "text-extract-semver", "text-extract-ipv6", "text-redact-secrets", "text-extract-comment-lines", "text-tabs-to-spaces", "text-escape-regex", "text-unescape-regex", "json-merge-objects", "json-array-dedupe", "json-array-to-lines", "csv-trim-cells", "csv-remove-empty-columns", "csv-empty-cell-report"]) expect(getTool(id)?.ready).toBe(true);
     for (const id of ["text-translate","language-detect","text-uppercase","text-lowercase","text-title-case","text-sort-lines","text-reverse-lines","text-number-lines","text-remove-blank-lines","text-wrap","text-trim-lines","text-extract-emails","text-extract-urls","text-extract-hashtags","text-to-base64","base64-to-text","url-encode","url-decode","json-minify","json-sort-keys","text-slugify","text-word-frequency","text-extract-numbers","text-extract-dates","text-reverse-characters","text-snake-case","text-kebab-case","text-camel-case","text-swap-case","text-extract-ipv4","text-mask-emails","text-mask-phones","json-to-jsonl","jsonl-to-json","csv-to-tsv","tsv-to-csv","csv-to-markdown","html-minify","xml-minify","text-remove-emoji","text-collapse-whitespace","text-remove-punctuation","text-to-ascii","text-html-escape","text-html-unescape","text-extract-mentions","text-extract-hex-colors","text-extract-phones","text-dedupe-lines","text-count-report","text-quote-lines","text-unquote-lines","csv-transpose","csv-sort-rows","csv-dedupe-rows","csv-to-xml","csv-to-html","json-sort-array","json-remove-nulls","json-to-html-table","text-pascal-case","text-constant-case","text-dot-case","text-initials","text-normalize-unicode","text-remove-control-chars","text-remove-duplicate-words","text-extract-markdown-links","text-extract-markdown-headings","text-extract-quotes","text-paragraph-report","json-flatten","json-unflatten","json-keys-report","csv-remove-empty-rows","csv-add-row-numbers","csv-column-stats","csv-normalize-headers","csv-to-jsonl","jsonl-to-csv","text-indent-lines","text-unindent-lines","text-dedupe-paragraphs","text-tokenize-words","text-sentence-report","text-line-length-report","text-normalize-newlines","text-remove-zero-width","text-extract-file-paths","text-sort-words","html-extract-links","html-extract-images","html-extract-title","html-sanitize","xml-tree-report","json-to-xml","json-type-report","json-escape-string","json-unescape-string","csv-unique-values","text-sentence-case","text-normalize-quotes","text-normalize-dashes","text-reverse-word-order","text-extract-words","text-extract-sentences","text-dedupe-sentences","text-remove-markdown-formatting","text-markdown-toc","text-markdown-code-blocks","text-markdown-table-extract","text-extract-numbered-lists","text-join-hyphenated-lines","text-strip-bom","text-normalize-paragraph-spacing","csv-schema-infer","csv-duplicates-report","csv-sample-rows","json-array-stats","json-canonicalize"]) expect(getTool(id)?.ready).toBe(true);
@@ -37,6 +37,12 @@ describe("Nolane Tools registry", () => {
     expect(inferToolForUpload({ mimeType: "application/gpx+xml", fileName: "route.gpx" })).toBe("gpx-track-report");
     expect(inferToolForUpload({ mimeType: "application/geo+json", fileName: "map.geojson" })).toBe("geojson-audit");
     expect(inferToolForUpload({ mimeType: "application/vnd.tcpdump.pcap", fileName: "capture.pcap" })).toBe("pcap-network-audit");
+    expect(inferToolForUpload({ mimeType: "application/sql", fileName: "query.sql" })).toBe("sql-static-audit");
+    expect(inferToolForUpload({ mimeType: "application/graphql", fileName: "schema.graphql" })).toBe("graphql-schema-audit");
+    expect(inferToolForUpload({ mimeType: "application/x-ipynb+json", fileName: "analysis.ipynb" })).toBe("notebook-privacy-audit");
+    expect(inferToolForUpload({ mimeType: "application/vnd.google-earth.kml+xml", fileName: "map.kml" })).toBe("kml-kmz-audit");
+    expect(inferToolForUpload({ mimeType: "application/json", fileName: "theme.tokens.json" })).toBe("design-token-audit");
+    expect(inferToolForUpload({ mimeType: "text/plain", fileName: "schedule.cron" })).toBe("cron-schedule-audit");
     expect(inferToolForUpload({ mimeType: "application/rss+xml", fileName: "news.rss" })).toBe("rss-atom-audit");
     expect(inferToolForUpload({ mimeType: "text/plain", fileName: "robots.txt" })).toBe("robots-txt-audit");
     expect(inferToolForUpload({ mimeType: "image/svg+xml", fileName: "logo.svg" })).toBe("svg-safety-audit");
@@ -281,7 +287,7 @@ describe("Nolane Tools registry", () => {
       "text-normalize-unicode-nfkc","csv-to-sql-inserts","csv-to-yaml","csv-empty-row-report",
       "csv-row-width-report","json-remove-empty-values","json-to-typescript","json-nesting-report",
     ];
-    expect(TOOL_CATALOG).toHaveLength(345);
+    expect(TOOL_CATALOG).toHaveLength(352);
     for(const id of ids)expect(getTool(id)?.ready).toBe(true);
     expect(validateToolPipeline({mimeType:"text/plain",fileName:"macs.txt"},[{toolId:"text-extract-mac-addresses"},{toolId:"text-deduplicate"}]).ok).toBe(true);
     expect(validateToolPipeline({mimeType:"text/csv",fileName:"rows.csv"},[{toolId:"csv-to-yaml"},{toolId:"yaml-format"},{toolId:"yaml-to-json"}]).ok).toBe(true);
@@ -311,7 +317,7 @@ describe("Nolane Tools registry", () => {
 
   it("registers and infers the eight Wave 9 infrastructure and CI/CD auditors", () => {
     const ids=["github-actions-audit","kubernetes-manifest-audit","terraform-audit","nginx-config-audit","apache-config-audit","caddy-config-audit","systemd-unit-audit","shell-script-audit"];
-    expect(TOOL_CATALOG).toHaveLength(345);
+    expect(TOOL_CATALOG).toHaveLength(352);
     for(const id of ids)expect(getTool(id)?.ready).toBe(true);
     expect(inferToolForUpload({mimeType:"text/plain",fileName:"main.tf"})).toBe("terraform-audit");
     expect(inferToolForUpload({mimeType:"text/plain",fileName:"nginx.conf"})).toBe("nginx-config-audit");
@@ -429,6 +435,24 @@ describe("Nolane Tools registry", () => {
     }
   });
 
+
+  it("registers seven Wave 21 data, SQL, GraphQL and spatial tools", () => {
+    const cases=[
+      ["sql-static-audit","developer","application/sql","query.sql","text-clean"],
+      ["sql-format","developer","application/sql","query.sql","sql-static-audit"],
+      ["graphql-schema-audit","developer","application/graphql","schema.graphql","text-clean"],
+      ["notebook-privacy-audit","data","application/x-ipynb+json","analysis.ipynb","text-clean"],
+      ["kml-kmz-audit","data","application/vnd.google-earth.kml+xml","map.kml","text-clean"],
+      ["design-token-audit","image","application/json","theme.tokens.json","text-clean"],
+      ["cron-schedule-audit","utility","text/plain","schedule.cron","text-clean"],
+    ] as const;
+    for (const [id,category,mimeType,fileName,nextToolId] of cases) {
+      expect(getTool(id)?.category).toBe(category);
+      expect(getTool(id)?.ready).toBe(true);
+      expect(isToolCompatible(getTool(id)!,mimeType,fileName)).toBe(true);
+      expect(validateToolPipeline({mimeType,fileName},[{toolId:id},{toolId:nextToolId}]).ok).toBe(true);
+    }
+  });
 
   it("registers nine Wave 20 creator and content utilities", () => {
     const cases=[

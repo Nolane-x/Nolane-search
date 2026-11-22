@@ -377,6 +377,15 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "ssh-public-key-audit", name: "Kiểm tra SSH public keys", category: "developer", description: "Đọc authorized_keys/OpenSSH public keys/PEM public key, phát hiện duplicate, RSA/EC key yếu và DSA deprecated; không hỗ trợ private key, không kết nối SSH.", accepts: ["text/plain", ".pub", ".pem"], output: "Báo cáo SSH public key TXT", ready: true },
   { id: "archive-checksum-manifest", name: "Tạo checksum manifest cho ZIP", category: "utility", description: "Tính SHA-256 từng member ZIP và xuất CSV path/size/digest; chặn traversal, symlink, encrypted member và giới hạn số tệp/dung lượng, không giải nén ra thư mục.", accepts: ["application/zip", ".zip"], output: "SHA-256 manifest CSV", ready: true },
 
+
+  { id: "sql-static-audit", name: "Phân tích SQL tĩnh", category: "developer", description: "Parse SQL nhiều dialect và thống kê SELECT/JOIN/table, wildcard, UPDATE/DELETE thiếu WHERE, DROP/TRUNCATE/ALTER; không thực thi hoặc kết nối database.", accepts: ["application/sql", "text/x-sql", ".sql"], output: "Báo cáo SQL static audit TXT", ready: true },
+  { id: "sql-format", name: "Định dạng SQL", category: "developer", description: "Format và indent SQL nhiều statement bằng SQLGlot, hỗ trợ generic/PostgreSQL/MySQL/BigQuery/SQLite từ tên tệp; không thực thi hoặc đổi dialect.", accepts: ["application/sql", "text/x-sql", ".sql"], output: "SQL đã định dạng", ready: true },
+  { id: "graphql-schema-audit", name: "Kiểm định GraphQL schema", category: "developer", description: "Parse GraphQL SDL, build và validate schema, thống kê object/interface/union/scalar/enum/input fields và deprecated fields; không gọi API endpoint.", accepts: ["application/graphql", "text/graphql", ".graphql", ".gql"], output: "Báo cáo GraphQL schema TXT", ready: true },
+  { id: "notebook-privacy-audit", name: "Kiểm tra notebook Jupyter", category: "data", description: "Kiểm tra nbformat/cell IDs/execution counts/outputs/attachments, HTML-JS-image outputs và credential-like patterns; không chạy code hoặc tiết lộ cell content.", accepts: ["application/x-ipynb+json", ".ipynb"], output: "Báo cáo notebook privacy TXT", ready: true },
+  { id: "kml-kmz-audit", name: "Kiểm tra dữ liệu KML/KMZ", category: "data", description: "Đọc KML/KMZ offline, thống kê Placemark/Point/LineString/Polygon/Track và tọa độ sai miền; không xuất tên địa điểm/tọa độ hoặc fetch resource.", accepts: ["application/vnd.google-earth.kml+xml", "application/vnd.google-earth.kmz", ".kml", ".kmz"], output: "Báo cáo KML/KMZ TXT", ready: true },
+  { id: "design-token-audit", name: "Kiểm định W3C Design Tokens", category: "image", description: "Phân tích token groups/types, duplicate JSON keys, $type thiếu, alias chưa resolve và vòng lặp alias; không xuất token names hoặc style values.", accepts: ["application/json", ".tokens.json"], output: "Báo cáo design tokens TXT", ready: true },
+  { id: "cron-schedule-audit", name: "Kiểm tra lịch cron", category: "utility", description: "Validate biểu thức cron 5-field và xem trước ba lần chạy UTC kế tiếp, hỗ trợ nhiều dòng; không tạo lịch hoặc thực thi command.", accepts: ["text/plain", ".cron", ".txt"], output: "Báo cáo cron schedule TXT", ready: true },
+
 ];
 
 
@@ -716,6 +725,13 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "wcag-contrast-audit": ["text-clean", "text-stats"],
   "ssh-public-key-audit": ["text-clean", "text-stats"],
   "archive-checksum-manifest": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json"],
+  "sql-static-audit": ["text-clean", "text-stats"],
+  "sql-format": ["sql-static-audit", "text-clean"],
+  "graphql-schema-audit": ["text-clean", "text-stats"],
+  "notebook-privacy-audit": ["text-clean", "text-stats"],
+  "kml-kmz-audit": ["text-clean", "text-stats"],
+  "design-token-audit": ["text-clean", "text-stats"],
+  "cron-schedule-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
@@ -895,11 +911,15 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (mime === "application/x-ndjson" || mime === "application/jsonl" || name.endsWith(".jsonl")) return "jsonl-format";
   if (mime === "application/pdf" || name.endsWith(".pdf")) return "pdf-text";
   if (name.endsWith(".epub") || mime === "application/epub+zip") return "epub-text";
+  if (name.endsWith(".tokens.json")) return "design-token-audit";
+  if (name.endsWith(".sql") || mime === "application/sql" || mime === "text/x-sql") return "sql-static-audit";
+  if (name.endsWith(".graphql") || name.endsWith(".gql") || mime === "application/graphql" || mime === "text/graphql") return "graphql-schema-audit";
+  if (name.endsWith(".ipynb") || mime === "application/x-ipynb+json") return "notebook-privacy-audit";
+  if (name.endsWith(".kml") || name.endsWith(".kmz")) return "kml-kmz-audit";
+  if (name.endsWith(".cron") || name === "crontab") return "cron-schedule-audit";
   if (name.endsWith("robots.txt")) return "robots-txt-audit";
   if (name.endsWith(".rss") || name.endsWith(".atom") || mime === "application/rss+xml" || mime === "application/atom+xml") return "rss-atom-audit";
   if (name.endsWith(".pub") || name.endsWith(".authorized_keys")) return "ssh-public-key-audit";
-  if (name.endsWith("robots.txt")) return "robots-txt-audit";
-  if (name.endsWith(".rss") || name.endsWith(".atom") || mime === "application/rss+xml" || mime === "application/atom+xml") return "rss-atom-audit";
   if (name.endsWith(".svg") || mime === "image/svg+xml") return "svg-safety-audit";
   if (name.endsWith(".pcap") || name.endsWith(".pcapng")) return "pcap-network-audit";
   if (name.endsWith(".zone")) return "dns-zone-audit";

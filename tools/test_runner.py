@@ -3232,5 +3232,138 @@ Unknown-Directive: value
         self.assertEqual(by_path["folder/second.txt"]["sha256"],hashlib.sha256(second).hexdigest())
         self.assertNotIn("private file content",result["summary"])
 
+
+    def test_wave_twentyone_sql_static_audit_flags_unscoped_mutations_without_sql_values(self):
+        raw="""CREATE TABLE private_users (id INTEGER, secret TEXT);
+UPDATE private_users SET secret = 'hidden-value';
+DELETE FROM private_users;
+SELECT * FROM private_users JOIN audit_log ON private_users.id = audit_log.user_id;
+"""
+        path=self.write("review.sql",raw)
+        result=runner.sql_static_audit(path)
+        report=result["summary"]
+        self.assertIn("statements: 4",report)
+        self.assertIn("UPDATE without WHERE: 1",report)
+        self.assertIn("DELETE without WHERE: 1",report)
+        self.assertIn("wildcard projections: 1",report)
+        self.assertNotIn("private_users",report)
+        self.assertNotIn("hidden-value",report)
+
+    def test_wave_twentyone_sql_formatter_writes_formatted_file_without_execution(self):
+        path=self.write("query.sql","select id,name from users where active=1;select count(*) from orders;")
+        result=runner.sql_format_file(path)
+        output=Path(result["output_path"])
+        formatted=output.read_text(encoding="utf-8")
+        self.assertTrue(output.exists())
+        self.assertIn("SELECT",formatted)
+        self.assertIn("FROM",formatted)
+        self.assertIn(";",formatted)
+        self.assertIn("2 SQL statement(s)",result["summary"])
+
+    def test_wave_twentyone_graphql_schema_audit_counts_types_and_deprecations(self):
+        raw="""scalar Date
+interface Node { id: ID! }
+type User implements Node { id: ID!, email: String! @deprecated(reason: "use contact") }
+type Post implements Node { id: ID!, title: String! }
+union SearchResult = User | Post
+enum Role { ADMIN USER }
+input UserInput { email: String! }
+type Query { users: [User!]!, search: [SearchResult!]! }
+schema { query: Query }
+"""
+        path=self.write("schema.graphql",raw)
+        result=runner.graphql_schema_audit(path)
+        report=result["summary"]
+        self.assertIn("schema validation errors: 0",report)
+        self.assertIn("object=",report)
+        self.assertIn("interface=1",report)
+        self.assertIn("union=1",report)
+        self.assertIn("enum=1",report)
+        self.assertIn("deprecated fields: 1",report)
+        self.assertNotIn("UserInput",report)
+        self.assertNotIn("email",report)
+
+    def test_wave_twentyone_notebook_privacy_audit_never_emits_cell_contents(self):
+        notebook={
+            "nbformat":4,"nbformat_minor":5,
+            "metadata":{"kernelspec":{"name":"python3","display_name":"Private Kernel"},"language_info":{"name":"python"}},
+            "cells":[
+                {"cell_type":"code","id":"code-cell-1","execution_count":1,"metadata":{},"source":"api_key = 'sk-abcdefghijklmnopqrstuvwxyz123456'","outputs":[{"output_type":"stream","name":"stdout","text":"private notebook output"}]},
+                {"cell_type":"code","id":"code-cell-2","execution_count":2,"metadata":{},"source":"print('hidden')","outputs":[{"output_type":"display_data","data":{"text/html":"<b>private HTML</b>","image/png":"AAAA"},"metadata":{}}]},
+                {"cell_type":"code","id":"code-cell-2","execution_count":None,"metadata":{},"source":"password = 'another-private-value'","outputs":[]},
+                {"cell_type":"markdown","metadata":{},"source":"Private markdown notes","attachments":{"diagram":{"image/png":["AAAA"]}}}
+            ]
+        }
+        path=self.input_dir/"analysis.ipynb"
+        path.write_text(json.dumps(notebook),encoding="utf-8")
+        result=runner.notebook_privacy_audit(path)
+        report=result["summary"]
+        self.assertIn("cells: 4",report)
+        self.assertIn("duplicate cell IDs: 1",report)
+        self.assertIn("Missing cell IDs: 1",report)
+        self.assertIn("HTML outputs: 1",report)
+        self.assertIn("image outputs: 1",report)
+        self.assertIn("credential-like patterns",report)
+        for secret in ("sk-abcdefghijklmnopqrstuvwxyz123456","private notebook output","private HTML","Private markdown notes","Private Kernel"):
+            self.assertNotIn(secret,report)
+
+    def test_wave_twentyone_kml_audit_counts_geometry_and_invalid_coordinates(self):
+        raw="""<?xml version="1.0"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Folder>
+  <Placemark><name>Private House</name><Point><coordinates>105.8,21.0,5</coordinates></Point></Placemark>
+  <Placemark><name>Private Route</name><LineString><coordinates>105.8,21.0 205,95</coordinates></LineString></Placemark>
+</Folder></Document></kml>"""
+        path=self.write("map.kml",raw)
+        result=runner.kml_kmz_audit(path)
+        report=result["summary"]
+        self.assertIn("placemarks: 2",report)
+        self.assertIn("Point=1",report)
+        self.assertIn("LineString=1",report)
+        self.assertIn("valid coordinate tuples: 1",report)
+        self.assertIn("invalid/out-of-range tuples: 1",report)
+        self.assertNotIn("Private House",report)
+        self.assertNotIn("105.8",report)
+
+    def test_wave_twentyone_kml_kmz_audit_reads_single_document_from_zip(self):
+        path=self.input_dir/"map.kmz"
+        raw=b'<kml xmlns="http://www.opengis.net/kml/2.2"><Placemark><Point><coordinates>0,0</coordinates></Point></Placemark></kml>'
+        with zipfile.ZipFile(path,"w") as archive:
+            archive.writestr("doc.kml",raw)
+        result=runner.kml_kmz_audit(path)
+        self.assertIn("placemarks: 1",result["summary"])
+        self.assertIn("Point=1",result["summary"])
+
+    def test_wave_twentyone_design_token_audit_detects_missing_aliases_and_cycles_without_values(self):
+        payload={
+            "$version":"1.0",
+            "colors":{"$type":"color","primary":{"$value":"#ffffff"},"alias":{"$value":"{colors.primary}"},"missing":{"$value":"{colors.unknown}"}},
+            "spacing":{"$type":"dimension","small":{"$value":"4px"}},
+            "a":{"$value":"{b}"},
+            "b":{"$value":"{a}"}
+        }
+        path=self.input_dir/"theme.tokens.json"
+        path.write_text(json.dumps(payload),encoding="utf-8")
+        result=runner.design_token_audit(path)
+        report=result["summary"]
+        self.assertIn("tokens: 6",report)
+        self.assertIn("Alias references unresolved: 1",report)
+        self.assertIn("alias cycles:",report)
+        self.assertNotIn("#ffffff",report)
+        self.assertNotIn("colors.primary",report)
+
+    def test_wave_twentyone_cron_schedule_audit_previews_valid_entries_without_commands(self):
+        raw="""*/15 * * * * /usr/bin/private-job --token=secret-value
+61 * * * * /usr/bin/invalid-job
+0 0 * * 1-5
+"""
+        path=self.write("crontab",raw)
+        result=runner.cron_schedule_audit(path)
+        report=result["summary"]
+        self.assertIn("valid schedules: 2",report)
+        self.assertIn("invalid/unsupported lines: 1",report)
+        self.assertIn("Next UTC run previews",report)
+        self.assertNotIn("/usr/bin/private-job",report)
+        self.assertNotIn("secret-value",report)
+
 if __name__ == "__main__":
     unittest.main()
