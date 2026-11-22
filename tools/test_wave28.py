@@ -65,6 +65,8 @@ class Wave28Tests(unittest.TestCase):
         result = wave28.ocfl_object_audit(path)
         self.assert_report(result)
         self.assertIn("Content digest mismatches: 0", result["summary"])
+        self.assertIn("Inventory sidecars checked: 2", result["summary"])
+        self.assertIn("Inventory sidecars missing: 0", result["summary"])
         self.assertIn("Manifest files missing from archive: 0", result["summary"])
         self.assertNotIn("urn:secret-object-id", result["summary"])
 
@@ -83,8 +85,29 @@ class Wave28Tests(unittest.TestCase):
             "obj/inventory.json.sha512": b"deadbeef inventory.json\n",
         })
         result = wave28.ocfl_object_audit(path)
-        self.assertIn("Inventory sidecar digest mismatches or missing: 1", result["summary"])
+        self.assertIn("Inventory sidecar digest mismatches: 1", result["summary"])
         self.assertIn("Manifest files missing from archive: 1", result["summary"])
+
+    def test_ocfl_requires_a_sidecar_for_each_version_inventory(self):
+        digest = hashlib.sha512(b"payload").hexdigest()
+        inventory = {
+            "digestAlgorithm": "sha512",
+            "head": "v1",
+            "manifest": {digest: ["v1/content/file.bin"]},
+            "versions": {"v1": {"state": {digest: ["file.bin"]}}},
+        }
+        raw = json.dumps(inventory).encode()
+        sidecar = hashlib.sha512(raw).hexdigest() + " inventory.json\n"
+        path = self.zip_file("missing-version-sidecar.zip", {
+            "obj/0=ocfl_object_1.1": b"",
+            "obj/inventory.json": raw,
+            "obj/inventory.json.sha512": sidecar.encode(),
+            "obj/v1/inventory.json": raw,
+            "obj/v1/content/file.bin": b"payload",
+        })
+        result = wave28.ocfl_object_audit(path)
+        self.assertIn("Inventory sidecars checked: 1", result["summary"])
+        self.assertIn("Inventory sidecars missing: 1", result["summary"])
 
     def test_ocfl_rejects_unsafe_archive_paths(self):
         path = self.zip_file("unsafe-ocfl.zip", {"../escape.txt": b"x"})
