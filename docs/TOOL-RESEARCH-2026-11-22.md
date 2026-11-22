@@ -131,3 +131,29 @@ KML-to-GeoJSON, subtitle timing QA, JSON-LD structured-data auditing, HTML local
 - [python-babel/babel](https://github.com/python-babel/babel) (BSD-3-Clause) and [html5lib/html5lib-python](https://github.com/html5lib/html5lib-python) (MIT) were reviewed. Gettext parsing is handled by polib, and current HTML metadata/link metrics are handled by a bounded standard-library parser, so neither package was added.
 
 No upstream project source is vendored. Runtime packages are installed only when a matching tool is selected on the ephemeral GitHub Actions runner; CI installs the set for regression testing. The feature branch adds 17 processors, but they remain candidates until CI, Worker export/health smoke and Cloudflare deployment all pass.
+
+
+## Wave 23 — Scientific data, observability, music, manufacturing and schema tooling
+
+| Repository / specification | Scope reviewed | License / provenance | Design decision |
+|---|---|---|---|
+| [h5py/h5py](https://github.com/h5py/h5py) | Python interface to HDF5 scientific containers | BSD-3-Clause | Use h5py as a read-only metadata adapter; inspect shapes/dtypes/compression only, skip external/soft links, never load tensor values. |
+| [graphql-python/graphql-core](https://github.com/graphql-python/graphql-core) | GraphQL language parser and schema validator | MIT | Use graphql-core for local SDL parse/schema validation only; do not run resolvers or remote introspection. |
+| [mido/mido](https://github.com/mido/mido) | Standard MIDI File and MIDI message parsing | MIT | Implement a bounded read-only SMF chunk/event scanner; no hardware backend, synth or playback. |
+| [Prometheus alerting/recording rule docs](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/) | YAML groups, alert/record rules, expressions, labels and annotations | Official format documentation | Audit rule structure and common alert metadata; do not evaluate PromQL or expose labels/query text. |
+| [prometheus/prometheus](https://github.com/prometheus/prometheus) | Prometheus server, rule format and promtool validation workflows | Apache-2.0 | Use the documented rules model as a reference; no Prometheus binary or daemon is installed. |
+| [grafana/grafana](https://github.com/grafana/grafana) | Dashboard JSON model, panel nesting and datasource references | Upstream project reference; no source copied | Count dashboard structures and duplicate IDs only; withhold dashboard UID, datasource URLs, queries and text-panel values. |
+| [apache/avro](https://github.com/apache/avro) | Avro schema definitions and named types | Apache-2.0 | Add a bounded JSON structural audit for records, fields, enums, fixed, arrays, maps and union branches; label it as non-complete validation. |
+| [protocolbuffers/protobuf](https://github.com/protocolbuffers/protobuf) | Protocol Buffers language and field-number constraints | BSD-3-Clause | Add an independent lexical scan for declarations and invalid/reserved field-number ranges; do not compile with protoc. |
+| [Knio/pynmea2](https://github.com/Knio/pynmea2) | NMEA 0183 sentence parsing and checksum patterns | MIT | Implement checksum and RMC/GGA coordinate-format checks without persisting or printing positions/timestamps. |
+| [ansible/ansible-lint](https://github.com/ansible/ansible-lint) | Ansible playbook static review conventions | GPL-3.0; consulted only | Implement a small independent, value-redacting policy audit using the existing SafeLoader; no upstream code vendored and no playbook run. |
+| [MusicXML documentation](https://www.musicxml.com/) | MusicXML score-partwise and compressed MXL structure | Format specification | Parse XML metadata and count musical elements, reject DTD/entity declarations, and suppress score names/lyrics. |
+| [MarlinFirmware/Marlin](https://github.com/MarlinFirmware/Marlin) | Common G-code command families used by 3D printers | GPL-3.0; command conventions only | Add a static command/axis/feed/spindle counter; this is not a machine safety simulation or certification. |
+
+### Wave 23 architecture and safety
+
+All twelve processors live in the separate tools/wave23.py module to keep the mature runner's processor implementations organized. They return bounded text reports into the existing ephemeral runner input directory. The Python allowlist, handler map, pipeline transitions and TypeScript catalog are mirrored. h5py and graphql-core are conditional runner dependencies; PyYAML is installed for the two new YAML auditors by the existing YAML dependency step. No upstream implementation source is vendored.
+
+The report design intentionally avoids user payload disclosure: G-code axis values are aggregated to ranges; MIDI reports counts/ticks; MusicXML omits titles/lyrics/instrument names; BibTeX omits citations and DOI values; NMEA omits all positions and timestamps; Ansible omits task/module values; Prometheus omits alert names/PromQL/labels; Grafana omits UID/URL/query text; HDF5 omits object paths/attributes/data; Avro/GraphQL/Protobuf omit schema identifiers and field names. These controls do not replace user-side review of original files.
+
+The Wave 23 branch adds twelve processors and fourteen dedicated Python regression tests. Production status is not changed until PR CI, Worker export/health smoke and Cloudflare deployment all pass. Live Telegram upload/report/retry remains an owner-level end-to-end check.
