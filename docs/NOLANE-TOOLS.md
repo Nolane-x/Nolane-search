@@ -1,4 +1,22 @@
-Nolane Tools hiện có **345 công cụ đã triển khai trên production**; Wave 20 phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `8eeb9bd7-77f7-4205-898a-db49f35424ce`. Main CI, Worker export/production smoke và deployment đều đã thành công. Catalog TypeScript, Python runner allowlist, handler, text-output registry và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và các repository upstream đã xem được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
+Nolane Tools hiện có **345 công cụ đã triển khai trên production**. Nhánh Wave 21 đang bổ sung 9 processor ứng viên (354 ID trong nhánh), chưa được tính là production cho tới khi CI và deployment hoàn tất; Wave 20 phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `8eeb9bd7-77f7-4205-898a-db49f35424ce`. Main CI, Worker export/production smoke và deployment đều đã thành công. Catalog TypeScript, Python runner allowlist, handler, text-output registry và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và các repository upstream đã xem được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
+
+### Wave 21 — Broader file, data and productivity tools — candidate branch, not yet production
+
+The candidate branch adds nine registered processors, taking the branch catalog from 345 to 354. Production remains at 345 until CI, Worker export/health smoke and Cloudflare deployment pass.
+
+| ID | Công cụ | Nhóm | Chức năng |
+|---|---|---|---|
+| /tool pdf-table-extract | PDF table extraction | Tài liệu/dữ liệu | Trích các bảng có text/vector thành từng CSV trong ZIP; tối đa 200 trang, không OCR bảng scan. |
+| /tool json-jmespath-query | JSON JMESPath query | Dữ liệu | Lọc/chiếu JSON lồng nhau theo query expression trong envelope \`query\` + \`data\`; không thực thi code. |
+| /tool ip-network-report | IP/CIDR report | Network/developer | Chuẩn hóa IPv4/IPv6, prefix, address count, private/global và overlap; offline, không DNS/socket. |
+| /tool barcode-generate | Code 128 generator | Hình ảnh | Tạo tối đa 50 PNG barcode từ các dòng printable ASCII và đóng gói ZIP. |
+| /tool docx-to-markdown | DOCX to Markdown | Tài liệu | Chuyển heading, đoạn, danh sách phổ biến, inline formatting và bảng; không render hình/bố cục. |
+| /tool pptx-notes-extract | PPTX speaker notes | Tài liệu/thuyết trình | Trích speaker notes theo slide; không xuất slide-body hoặc media. |
+| /tool fuzzy-match-report | Fuzzy line matching | Dữ liệu | Dùng RapidFuzz tìm dòng gần trùng, xuất độ tương đồng và cặp nội dung; tối đa 1.200 dòng/5.000 cặp. |
+| /tool csv-to-parquet | CSV to Parquet | Dữ liệu | DuckDB chuyển CSV thành Parquet Zstandard, giữ dữ liệu cột dạng chuỗi để tránh mất số 0 đầu. |
+| /tool parquet-to-csv | Parquet to CSV | Dữ liệu | DuckDB chuyển Parquet sang CSV UTF-8; chỉ truy vấn cố định, không nhận SQL người dùng. |
+
+Giới hạn bổ sung: PDF 25 MiB/200 trang/200 bảng/20.000 hàng/500.000 ô; JMESPath 20 MiB input/output và query tối đa 4.096 ký tự; IP/CIDR 5 MiB/2.000 networks; barcode 2 MiB/50 payload/120 ký tự ASCII mỗi payload; DOCX 25 MiB/50.000 blocks/40 MiB output; PPTX 40 MiB/300 slides/20 MiB notes; fuzzy matching 5 MiB/1.200 dòng/5.000 cặp; Parquet conversions 20 MiB input/1.000.000 hàng/45 MiB output. Các phép chuyển đổi chỉ xử lý dữ liệu người dùng tải lên trên runner dùng một lần.
 
 ### Wave 20 — Creator, publishing and content utilities — deployed 2026-11-22
 
