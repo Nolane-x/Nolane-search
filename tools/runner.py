@@ -16,15 +16,15 @@ RUNNERS = {
     "office-text", "archive-inspect", "file-hash", "text-clean", "subtitle-text", "html-text",
     "audio-normalize", "video-audio", "video-gif", "image-resize", "image-webp", "image-palette",
     "pdf-compress", "pdf-to-images", "epub-text", "sqlite-inspect", "yaml-format", "xml-format",
-    "code-check", "video-contact-sheet", "video-compress", "audio-subtitles", "archive-safe-extract", "xlsx-profile",
+    "code-check", "video-contact-sheet", "video-compress", "audio-subtitles", "archive-safe-extract", "xlsx-profile", "xlsx-formula-report", "xlsx-to-markdown",
     "image-png", "csv-clean", "json-to-csv", "csv-to-xlsx", "xlsx-to-csv", "pdf-split", "audio-convert",
     "csv-to-json", "jsonl-format", "yaml-to-json", "xml-to-json", "sqlite-export", "xlsx-to-json",
     "pdf-extract-images", "archive-manifest", "text-stats", "image-grayscale",
-    "pdf-merge", "pdf-metadata-clean", "pdf-outline", "image-contact-sheet", "image-duplicates", "csv-split", "csv-join", "json-schema", "json-to-yaml", "sqlite-integrity", "audio-silence-report", "video-silence-report", "video-frames", "subtitle-convert", "text-deduplicate", "text-diff", "code-size-report",
-    "pdf-rotate-cw","pdf-remove-blank","image-trim-border","image-pixelate","image-diff",
+    "pdf-merge", "pdf-metadata-clean", "pdf-outline", "image-contact-sheet", "image-duplicates", "csv-split", "csv-join", "json-schema", "json-to-yaml", "sqlite-integrity", "audio-silence-report", "video-silence-report", "video-frames", "subtitle-convert", "subtitle-audit", "text-deduplicate", "text-diff", "code-size-report",
+    "pdf-rotate-cw","pdf-remove-blank","pdf-page-audit","image-favicon","image-trim-border","image-pixelate","image-diff",
     "audio-stereo-split","audio-metadata-clean","video-scene-frames","video-metadata-clean",
     "json-flatten-csv","csv-to-sqlite","log-insights","json-diff","text-join",
-    "markdown-outline","markdown-links","text-redact","text-extract","code-imports","code-todos","code-secret-scan","log-timeline",
+    "markdown-outline","markdown-links","markdown-toc","text-redact","text-extract","code-imports","code-todos","code-secret-scan","log-timeline",
     "repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-duplicates","repo-intelligence","repo-security-audit","repo-supply-chain",
     "text-translate", "language-detect", "text-uppercase", "text-lowercase", "text-title-case", "text-sort-lines", "text-reverse-lines", "text-number-lines", "text-remove-blank-lines", "text-wrap", "text-trim-lines", "text-extract-emails", "text-extract-urls", "text-extract-hashtags", "text-to-base64", "base64-to-text", "url-encode", "url-decode", "json-minify", "json-sort-keys",
     "text-slugify", "text-word-frequency", "text-extract-numbers", "text-extract-dates", "text-reverse-characters", "text-snake-case", "text-kebab-case", "text-camel-case", "text-swap-case", "text-extract-ipv4", "text-mask-emails", "text-mask-phones", "json-to-jsonl", "jsonl-to-json", "csv-to-tsv", "tsv-to-csv", "csv-to-markdown", "html-minify", "xml-minify", "text-remove-emoji",
@@ -154,7 +154,13 @@ PIPELINE_TRANSITIONS = {
     "csv-to-sqlite": {"sqlite-inspect","sqlite-integrity","sqlite-export"},
     "log-insights": {"text-clean","text-stats","text-deduplicate"},
     "json-diff": {"text-clean","text-stats","text-deduplicate"},
-    "markdown-outline": {"text-clean","text-stats"},
+        "xlsx-formula-report": {"text-clean","text-stats"},
+    "xlsx-to-markdown": {"markdown-outline","markdown-links","markdown-toc","text-clean"},
+    "subtitle-audit": {"subtitle-text","text-clean","text-stats"},
+    "image-favicon": {"image-info","file-hash"},
+    "pdf-page-audit": {"text-clean","text-stats"},
+    "markdown-toc": {"markdown-outline","markdown-links","text-clean"},
+"markdown-outline": {"text-clean","text-stats"},
     "markdown-links": {"csv-profile","csv-clean","csv-to-xlsx","csv-to-json"},
     "text-redact": {"text-clean","text-stats","text-deduplicate"},
     "text-extract": {"csv-profile","csv-clean","csv-to-xlsx"},
@@ -3481,6 +3487,201 @@ def archive_safe_extract(p):
     finally:
         shutil.rmtree(temp,ignore_errors=True)
     return {"summary":f"Đã giải nén an toàn {count} tệp ({total:,} bytes), loại bỏ metadata/link nguy hiểm và đóng gói ZIP sạch.","output_path":str(out)}
+
+
+
+def xlsx_formula_report(p):
+    from openpyxl import load_workbook
+    formulas=load_workbook(p,read_only=True,data_only=False)
+    cached=load_workbook(p,read_only=True,data_only=True)
+    reports=[]
+    total=external=volatile=errors=missing=0
+    try:
+        if len(formulas.worksheets)>20:
+            raise RuntimeError("Workbook vượt quá 20 sheets.")
+        for index,ws in enumerate(formulas.worksheets):
+            cache_ws=cached.worksheets[index]
+            samples=[]; sheet_total=0; cache_rows=cache_ws.iter_rows(values_only=True)
+            scanned=0
+            for row in ws.iter_rows():
+                cache_row=next(cache_rows,())
+                scanned+=1
+                if scanned>50000: raise RuntimeError("Formula report vượt quá 50.000 dòng mỗi sheet.")
+                for cell in row[:200]:
+                    value=cell.value
+                    if not isinstance(value,str) or not value.startswith("="): continue
+                    total+=1; sheet_total+=1
+                    if re.search(r"\[[^\]]+\]",value): external+=1
+                    if re.search(r"\b(NOW|TODAY|RAND|RANDBETWEEN|INDIRECT|OFFSET)\s*\(",value.upper()): volatile+=1
+                    if len(samples)<80: samples.append(f"{cell.coordinate}: "+re.sub(r"\s+"," ",value)[:180])
+                    cached_value=cache_row[cell.column-1] if len(cache_row)>=cell.column else None
+                    if isinstance(cached_value,str) and re.match(r"^#(REF!|DIV/0!|VALUE!|NAME\?|N/A|NUM!|NULL!)$",cached_value.strip(),re.I): errors+=1
+                    elif cached_value is None: missing+=1
+            reports.append(f"[{ws.title}] formulas={sheet_total:,}; scanned rows={min(scanned,50000):,}")
+            reports.extend("  "+sample for sample in samples)
+        lines=["XLSX formula report",f"Sheets inspected: {len(formulas.worksheets)}",f"Formula cells: {total:,}",
+               f"External-workbook reference formulas: {external:,}",f"Volatile-function formulas: {volatile:,}",
+               f"Cached formula errors: {errors:,}",f"Formula cells without cached result: {missing:,}","",
+               "Per-sheet details:",*reports,"",
+               "Formula calculation is not performed. Cached results may be stale or absent; formula cells and values are not modified."]
+    finally:
+        formulas.close(); cached.close()
+    return _write_text_artifact_ext(p,"formula-report",".txt","\n".join(lines)+"\n","Excel formula report",f"{total:,} formula cell(s)")
+
+
+def xlsx_to_markdown(p):
+    from openpyxl import load_workbook
+    workbook=load_workbook(p,read_only=True,data_only=True)
+    sections=[]; total_rows=0; sheet_count=len(workbook.worksheets)
+    try:
+        if sheet_count>20: raise RuntimeError("Workbook vượt quá 20 sheets.")
+        for ws in workbook.worksheets:
+            rows=[]
+            for row in ws.iter_rows(values_only=True):
+                total_rows+=1
+                if total_rows>5000: raise RuntimeError("XLSX-to-Markdown vượt quá 5.000 dòng tổng cộng.")
+                if len(row)>20: raise RuntimeError(f"Sheet {ws.title} vượt quá 20 cột.")
+                rows.append(list(row))
+            if not rows or not any(value is not None for value in rows[0]):
+                sections.extend([f"## {ws.title}","","(Sheet rỗng)",""]); continue
+            width=max(1,max(len(row) for row in rows))
+            headers=[str(rows[0][i]).strip() if i<len(rows[0]) and rows[0][i] is not None else f"Column {i+1}" for i in range(width)]
+            def cell(value):
+                if value is None: return ""
+                return str(value).replace("\r"," ").replace("\n"," ").replace("|","\\|")[:300]
+            sections.extend([f"## {ws.title}","","| "+" | ".join(cell(x) for x in headers)+" |","| "+" | ".join("---" for _ in headers)+" |"])
+            for row in rows[1:201]:
+                padded=list(row)+[None]*(width-len(row))
+                sections.append("| "+" | ".join(cell(x) for x in padded[:width])+" |")
+            if len(rows)>201: sections.append(f"> Display truncated: {len(rows)-1} data rows available; first 200 shown.")
+            sections.append("")
+    finally:
+        workbook.close()
+    content="# Workbook tables\n\n"+"\n".join(sections)
+    if len(content.encode("utf-8"))>10*1024*1024: raise RuntimeError("Markdown workbook output exceeds 10 MB.")
+    return _write_text_artifact_ext(p,"tables",".md",content,"Excel to Markdown",f"{sheet_count} sheet(s)")
+
+
+def pdf_page_audit(p):
+    import fitz
+    doc=fitz.open(p)
+    if doc.is_encrypted and doc.needs_pass:
+        doc.close(); raise RuntimeError("PDF được mã hóa bằng mật khẩu.")
+    count=doc.page_count
+    if count<1 or count>200:
+        doc.close(); raise RuntimeError(f"PDF page audit hỗ trợ từ 1 đến 200 trang; nhận {count}.")
+    lines=["PDF page audit",f"Total pages: {count}",""]; blank=scan=rotated=0; dimensions=set()
+    try:
+        for index,page in enumerate(doc,1):
+            text=page.get_text("text") or ""; words=len(re.findall(r"\S+",text)); chars=len(text.strip())
+            images=len(page.get_images(full=True)); drawings=len(page.get_drawings()); rect=page.rect; rotation=int(page.rotation or 0)
+            dimensions.add((round(rect.width,1),round(rect.height,1)))
+            if rotation: rotated+=1
+            is_blank=chars==0 and images==0 and drawings==0; is_scan=chars==0 and images>0
+            if is_blank: blank+=1
+            if is_scan: scan+=1
+            flags=[]
+            if is_blank: flags.append("possibly blank")
+            if is_scan: flags.append("image-only / OCR may be needed")
+            if words<5 and not is_blank: flags.append("very little text")
+            if rotation: flags.append(f"rotated {rotation}°")
+            lines.append(f"Page {index}: {words} words; {chars} text chars; {images} image XObject(s); {drawings} vector drawing(s); {rect.width:.1f} × {rect.height:.1f} pt; rotation {rotation}°"+("; flags: "+", ".join(flags) if flags else ""))
+    finally: doc.close()
+    lines.extend(["",f"Possibly blank pages: {blank}",f"Image-only / OCR candidates: {scan}",f"Rotated pages: {rotated}",f"Distinct page dimensions: {len(dimensions)}","Blank/scan labels are heuristics; vector artwork or unusual PDF structures may need visual review."])
+    return _write_text_artifact_ext(p,"page-audit",".txt","\n".join(lines)+"\n","PDF page audit",f"{count} page(s)")
+
+
+def image_favicon(p):
+    from PIL import Image,ImageOps
+    out=p.with_name(p.stem+"-favicon.ico"); sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)]
+    with Image.open(p) as raw:
+        _guard_image_dimensions(raw)
+        im=ImageOps.exif_transpose(raw).convert("RGBA")
+        if max(im.size)<16: raise RuntimeError("Ảnh nguồn quá nhỏ để tạo favicon rõ nét (cần ít nhất 16 px).")
+        im.thumbnail((1024,1024),Image.Resampling.LANCZOS)
+        im.save(out,format="ICO",sizes=sizes)
+    if out.stat().st_size>5*1024*1024:
+        out.unlink(missing_ok=True); raise RuntimeError("Favicon ICO vượt quá giới hạn 5 MB.")
+    return {"summary":f"Đã tạo favicon ICO đa kích thước 16, 32, 48, 64, 128 và 256 px từ ảnh nguồn {p.name}; alpha được giữ nếu có.","output_path":str(out)}
+
+
+def subtitle_audit(p):
+    raw=_read_small_text(p,limit=5*1024*1024).replace("\r\n","\n").replace("\r","\n")
+    blocks=re.split(r"\n[ \t]*\n",raw.strip())
+    stamp=re.compile(r"^\s*((?:(\d{1,2}):)?(\d{2}):(\d{2})[,.](\d{3}))\s*-->\s*((?:(\d{1,2}):)?(\d{2}):(\d{2})[,.](\d{3}))(?:\s+.*)?$")
+    cues=[]; malformed=0
+    for block in blocks:
+        block=block.strip()
+        if not block or block.startswith(("WEBVTT","NOTE","STYLE","REGION")): continue
+        lines=block.splitlines(); ti=next((i for i,line in enumerate(lines) if "-->" in line),None)
+        if ti is None: continue
+        match=stamp.match(lines[ti])
+        if not match: malformed+=1; continue
+        g=match.groups()
+        def millis(offset):
+            return ((int(g[offset] or 0)*60+int(g[offset+1]))*60+int(g[offset+2]))*1000+int(g[offset+3])
+        start=millis(1); end=millis(6)
+        caption=unescape(re.sub(r"<[^>]*>","", " ".join(lines[ti+1:])))
+        caption=re.sub(r"\s+"," ",caption).strip()
+        cues.append({"start":start,"end":end,"caption":caption})
+    invalid=sum(c["end"]<=c["start"] for c in cues)
+    ordered=overlap=duplicates=long_lines=long_cues=0; seen=set(); prev_start=None; prev_end=None
+    prior_intervals=[]
+    for cue in cues:
+        if prev_start is not None and cue["start"]<prev_start: ordered+=1
+        if cue["end"]>cue["start"] and any(cue["start"]<end and cue["end"]>start for start,end in prior_intervals): overlap+=1
+        if cue["end"]>cue["start"]: prior_intervals.append((cue["start"],cue["end"]))
+        if cue["caption"]:
+            key=unicodedata.normalize("NFKC",cue["caption"]).casefold()
+            if key in seen: duplicates+=1
+            else: seen.add(key)
+            if len(cue["caption"])>42: long_lines+=1
+            if cue["end"]>cue["start"] and cue["end"]-cue["start"]>7000: long_cues+=1
+        prev_start=cue["start"]; prev_end=cue["end"] if prev_end is None else max(prev_end,cue["end"])
+    findings=[("Malformed timestamp cues",malformed),("Non-positive cue durations",invalid),("Out-of-order cues",ordered),("Overlapping cues",overlap),("Repeated captions",duplicates),("Long caption lines (>42 characters)",long_lines),("Long cue durations (>7 seconds)",long_cues)]
+    total=sum(value for _,value in findings)
+    lines=["Subtitle quality audit",f"Format: {'WebVTT' if p.suffix.lower()=='.vtt' or raw.lstrip().startswith('WEBVTT') else 'SRT'}",f"Valid timestamp cues: {len(cues)}",*[f"{label}: {value}" for label,value in findings],"","Findings are heuristic. Long lines/durations may be intentional for some languages or accessibility workflows."]
+    if not cues: lines.append("No valid timestamp cues were found.")
+    return _write_text_artifact_ext(p,"subtitle-audit",".txt","\n".join(lines)+"\n","Subtitle audit",f"{len(cues)} cue(s); {total} finding(s)")
+
+
+def markdown_toc(p):
+    raw=_read_small_text(p); lines=raw.splitlines(); headings=[]; in_fence=False; fence_char=None; index=0
+    fence_start=re.escape(chr(96))
+    while index<len(lines):
+        line=lines[index]
+        fence=re.match(r"^\s{0,3}("+fence_start+r"{3,}|~{3,})",line)
+        if fence:
+            marker=fence.group(1)[0]
+            if not in_fence: in_fence=True; fence_char=marker
+            elif marker==fence_char: in_fence=False; fence_char=None
+            index+=1; continue
+        if in_fence: index+=1; continue
+        match=re.match(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$",line); level=0; title=""
+        if match: level=len(match.group(1)); title=match.group(2).strip()
+        elif index+1<len(lines) and line.strip() and re.match(r"^\s{0,3}(=+|-+)\s*$",lines[index+1]):
+            level=1 if lines[index+1].strip().startswith("=") else 2; title=line.strip(); index+=1
+        if level and title.casefold()!="table of contents":
+            plain=re.sub(r"\x60([^\x60]*)\x60",r"\1",title)
+            plain=re.sub(r"\[([^\]]+)\]\([^)]+\)",r"\1",plain)
+            plain=re.sub(r"<[^>]+>","",plain)
+            slug=unicodedata.normalize("NFKD",plain).encode("ascii","ignore").decode().lower()
+            slug=re.sub(r"[^a-z0-9\s-]","",slug); slug=re.sub(r"[\s-]+","-",slug).strip("-") or "section"
+            headings.append((level,title,slug))
+        index+=1
+    if not headings: raise RuntimeError("Không tìm thấy heading Markdown ngoài code fence.")
+    seen={}; entries=[]
+    for level,title,slug in headings:
+        count=seen.get(slug,0); seen[slug]=count+1
+        entries.append((level,title,slug if count==0 else f"{slug}-{count}"))
+    min_level=min(level for level,_,_ in entries); toc=["## Table of Contents",""]
+    for level,title,anchor in entries:
+        clean_title=re.sub(r"[\[\]]","",title)
+        toc.append("  "*max(0,level-min_level)+f"- [{clean_title}](#{anchor})")
+    output="\n".join(toc)+"\n\n---\n\n"+raw.lstrip("\ufeff")
+    if len(output.encode("utf-8"))>10*1024*1024: raise RuntimeError("Markdown TOC output exceeds 10 MB.")
+    return _write_text_artifact_ext(p,"with-toc",".md",output,"Markdown table of contents",f"{len(entries)} heading(s)")
+
 
 def xlsx_profile(p):
     from openpyxl import load_workbook
@@ -7983,19 +8184,19 @@ TOOLS={
  "pdf-compress":pdf_compress,"pdf-to-images":pdf_to_images,"epub-text":epub_text,"sqlite-inspect":sqlite_inspect,
  "yaml-format":yaml_format,"xml-format":xml_format,"code-check":code_check,
  "video-contact-sheet":video_contact_sheet,"video-compress":video_compress,"audio-subtitles":audio_subtitles,
- "archive-safe-extract":archive_safe_extract,"xlsx-profile":xlsx_profile,
- "image-png":image_png,"csv-clean":csv_clean,"json-to-csv":json_to_csv,"csv-to-xlsx":csv_to_xlsx,
+ "archive-safe-extract":archive_safe_extract,"xlsx-profile":xlsx_profile,"xlsx-formula-report":xlsx_formula_report,"xlsx-to-markdown":xlsx_to_markdown,
+ "image-png":image_png,"image-favicon":image_favicon,"csv-clean":csv_clean,"json-to-csv":json_to_csv,"csv-to-xlsx":csv_to_xlsx,
  "xlsx-to-csv":xlsx_to_csv,"pdf-split":pdf_split,"audio-convert":audio_convert,
  "csv-to-json":csv_to_json,"jsonl-format":jsonl_format,"yaml-to-json":yaml_to_json,"xml-to-json":xml_to_json,
  "sqlite-export":sqlite_export,"xlsx-to-json":xlsx_to_json,"pdf-extract-images":pdf_extract_images,
  "archive-manifest":archive_manifest,"text-stats":text_stats,"image-grayscale":image_grayscale,
- "pdf-merge":pdf_merge, "pdf-metadata-clean":pdf_metadata_clean, "pdf-outline":pdf_outline, "image-contact-sheet":image_contact_sheet, "image-duplicates":image_duplicates, "csv-split":csv_split, "csv-join":csv_join, "json-schema":json_schema, "json-to-yaml":json_to_yaml, "sqlite-integrity":sqlite_integrity, "audio-silence-report":audio_silence_report, "video-silence-report":video_silence_report, "video-frames":video_frames, "subtitle-convert":subtitle_convert, "text-deduplicate":text_deduplicate, "text-diff":text_diff, "code-size-report":code_size_report,
- "pdf-rotate-cw":pdf_rotate_cw,"pdf-remove-blank":pdf_remove_blank,
+ "pdf-merge":pdf_merge, "pdf-metadata-clean":pdf_metadata_clean, "pdf-outline":pdf_outline, "image-contact-sheet":image_contact_sheet, "image-duplicates":image_duplicates, "csv-split":csv_split, "csv-join":csv_join, "json-schema":json_schema, "json-to-yaml":json_to_yaml, "sqlite-integrity":sqlite_integrity, "audio-silence-report":audio_silence_report, "video-silence-report":video_silence_report, "video-frames":video_frames, "subtitle-convert":subtitle_convert,"subtitle-audit":subtitle_audit, "text-deduplicate":text_deduplicate, "text-diff":text_diff, "code-size-report":code_size_report,
+ "pdf-rotate-cw":pdf_rotate_cw,"pdf-remove-blank":pdf_remove_blank,"pdf-page-audit":pdf_page_audit,
  "image-trim-border":image_trim_border,"image-pixelate":image_pixelate,"image-diff":image_diff,
  "audio-stereo-split":audio_stereo_split,"audio-metadata-clean":audio_metadata_clean,
  "video-scene-frames":video_scene_frames,"video-metadata-clean":video_metadata_clean,
  "json-flatten-csv":json_flatten_csv,"csv-to-sqlite":csv_to_sqlite,"log-insights":log_insights,"json-diff":json_diff,"text-join":text_join,
- "markdown-outline":markdown_outline,"markdown-links":markdown_links,"text-redact":text_redact,"text-extract":text_extract,
+ "markdown-outline":markdown_outline,"markdown-links":markdown_links,"markdown-toc":markdown_toc,"text-redact":text_redact,"text-extract":text_extract,
  "code-imports":code_imports,"code-todos":code_todos,"code-secret-scan":code_secret_scan,"log-timeline":log_timeline,
  "repo-inventory":repo_inventory,"repo-dependencies":repo_dependencies,"repo-license-report":repo_license_report,"repo-secret-scan":repo_secret_scan,
  "repo-todo-scan":repo_todo_scan,"repo-code-stats":repo_code_stats,"repo-config-audit":repo_config_audit,"repo-duplicates":repo_duplicates,"repo-intelligence":repo_intelligence,

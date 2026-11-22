@@ -1173,6 +1173,76 @@ class ToolRunnerUnitTests(unittest.TestCase):
         self.assertIn('"empty": 2',report)
         self.assertIn("Total empty cells: 2",report)
 
+
+    def test_wave_thirteen_xlsx_formula_report_and_markdown_export(self):
+        from openpyxl import Workbook
+        path=self.input_dir/"finance.xlsx"
+        wb=Workbook()
+        ws=wb.active
+        ws.title="Forecast"
+        ws.append(["Item","Value","Formula"])
+        ws.append(["Revenue",100,"=SUM(B2:B2)"])
+        ws.append(["Growth",0.2,"=NOW()"])
+        ws.append(["External",None,"='[other.xlsx]Sheet1'!A1"])
+        wb.save(path)
+        report=Path(runner.xlsx_formula_report(path)["output_path"]).read_text(encoding="utf-8")
+        markdown=Path(runner.xlsx_to_markdown(path)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Formula cells: 3",report)
+        self.assertIn("External-workbook reference formulas: 1",report)
+        self.assertIn("Volatile-function formulas: 1",report)
+        self.assertIn("Forecast",report)
+        self.assertIn("| Revenue | 100 |",markdown)
+        self.assertIn("| Formula |",markdown)
+        self.assertNotIn("=SUM",markdown)
+
+    def test_wave_thirteen_subtitle_audit_finds_timing_and_caption_issues(self):
+        source=(
+            "1\n00:00:02,000 --> 00:00:04,000\nA repeated caption that is deliberately very long for testing\n\n"
+            "2\n00:00:03,000 --> 00:00:05,000\nA repeated caption that is deliberately very long for testing\n\n"
+            "3\n00:00:01,000 --> 00:00:01,500\nEarlier cue\n"
+        )
+        path=self.write("quality.srt",source)
+        report=Path(runner.subtitle_audit(path)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Out-of-order cues: 1",report)
+        self.assertIn("Overlapping cues: 1",report)
+        self.assertIn("Repeated captions: 1",report)
+        self.assertIn("Long caption lines (>42 characters): 2",report)
+
+    def test_wave_thirteen_favicon_and_pdf_page_audit(self):
+        from PIL import Image
+        import fitz
+        image_path=self.input_dir/"source.png"
+        Image.new("RGBA",(128,128),(20,120,220,180)).save(image_path)
+        icon=runner.image_favicon(image_path)
+        with Image.open(icon["output_path"]) as favicon:
+            self.assertEqual(favicon.format,"ICO")
+            self.assertIn((16,16),favicon.info.get("sizes",set()))
+            self.assertIn((32,32),favicon.info.get("sizes",set()))
+
+        pdf_path=self.input_dir/"pages.pdf"
+        doc=fitz.open()
+        page=doc.new_page()
+        page.insert_text((72,72),"Page with searchable content")
+        doc.new_page()
+        doc.save(pdf_path)
+        doc.close()
+        audit=Path(runner.pdf_page_audit(pdf_path)["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("Total pages: 2",audit)
+        self.assertIn("Page 1:",audit)
+        self.assertIn("Page 2:",audit)
+        self.assertIn("Possibly blank pages: 1",audit)
+
+    def test_wave_thirteen_markdown_toc_ignores_fences_and_disambiguates_slugs(self):
+        fence=chr(96)*3
+        path=self.write("guide.md",
+            "# Guide\n\n## Setup\n\n## Setup\n\n"+fence+"md\n# Hidden section\n"+fence+"\n\nEnd.\n")
+        result=runner.markdown_toc(path)
+        output=Path(result["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("[Guide](#guide)",output)
+        self.assertIn("[Setup](#setup)",output)
+        self.assertIn("[Setup](#setup-1)",output)
+        self.assertNotIn("[Hidden section]",output)
+
     def test_runner_catalog_allowlist_and_docs_stay_in_sync(self):
         self.assertEqual(runner.RUNNERS,set(runner.TOOLS))
 
