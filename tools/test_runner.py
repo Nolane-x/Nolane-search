@@ -2456,5 +2456,73 @@ dependencies = ["requests>=2.0", "httpx"]
                 self.assertIn(name,names)
 
 
+    def test_wave_fourteen_docx_pptx_csv_privacy_and_archive_security_auditors(self):
+        import zipfile
+        from docx import Document
+        from pptx import Presentation
+        from pptx.util import Inches, Pt
+
+        doc_path=self.input_dir/"quality.docx"
+        document=Document()
+        document.add_paragraph("Confidential paragraph must not be copied",style="Heading 2")
+        document.add_paragraph("Secondary section",style="Heading 4")
+        document.add_paragraph("A normal paragraph with some text.")
+        table=document.add_table(rows=2,cols=2)
+        table.cell(1,0).text="value"
+        document.save(doc_path)
+        docx_result=runner.docx_audit(doc_path)
+        docx_report=Path(docx_result["output_path"]).read_text(encoding="utf-8") if docx_result.get("output_path") else docx_result["summary"]
+        self.assertIn("First heading is not Heading 1",docx_report)
+        self.assertIn("Heading hierarchy jumps",docx_report)
+        self.assertIn("empty first row",docx_report)
+        self.assertNotIn("Confidential paragraph",docx_report)
+
+        pptx_path=self.input_dir/"quality.pptx"
+        presentation=Presentation()
+        slide=presentation.slides.add_slide(presentation.slide_layouts[6])
+        textbox=slide.shapes.add_textbox(Inches(0.5),Inches(0.5),Inches(5),Inches(1))
+        run=textbox.text_frame.paragraphs[0].add_run()
+        run.text="Small text"
+        run.font.size=Pt(9)
+        presentation.slides.add_slide(presentation.slide_layouts[6])
+        presentation.save(pptx_path)
+        pptx_result=runner.pptx_audit(pptx_path)
+        pptx_report=Path(pptx_result["output_path"]).read_text(encoding="utf-8") if pptx_result.get("output_path") else pptx_result["summary"]
+        self.assertIn("Slides without a title",pptx_report)
+        self.assertIn("smaller than 12 pt: 1",pptx_report)
+        self.assertIn("no detected text or picture content: 1",pptx_report)
+        self.assertNotIn("Small text",pptx_report)
+
+        csv_path=self.write("private.csv",
+            "id,email,credit_card,api_token,phone_number\n"
+            "1,person@example.test,4111111111111111,super-secret-value,+84901234567\n"
+            "2,not-an-email,123,another-secret,+84987654321\n")
+        csv_result=runner.csv_privacy_audit(csv_path)
+        csv_report=Path(csv_result["output_path"]).read_text(encoding="utf-8") if csv_result.get("output_path") else csv_result["summary"]
+        self.assertIn("email-like",csv_report)
+        self.assertIn("payment-card-like (Luhn)",csv_report)
+        self.assertIn("sensitive-column",csv_report)
+        self.assertIn("phone-like",csv_report)
+        self.assertNotIn("person@example.test",csv_report)
+        self.assertNotIn("4111111111111111",csv_report)
+        self.assertNotIn("super-secret-value",csv_report)
+
+        archive_path=self.input_dir/"unsafe.zip"
+        with zipfile.ZipFile(archive_path,"w",compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("../outside.txt","outside")
+            archive.writestr("Case/File.txt","one")
+            archive.writestr("case/file.txt","two")
+            archive.writestr("run.exe","binary-placeholder")
+            archive.writestr("nested.zip","placeholder")
+            archive.writestr("large.txt","A"*(2*1024*1024))
+        archive_result=runner.archive_security_audit(archive_path)
+        archive_report=Path(archive_result["output_path"]).read_text(encoding="utf-8") if archive_result.get("output_path") else archive_result["summary"]
+        self.assertIn("path traversal segment",archive_report)
+        self.assertIn("case-insensitive path collision",archive_report)
+        self.assertIn("executable or script file",archive_report)
+        self.assertIn("nested archive",archive_report)
+        self.assertIn("extreme compression ratio",archive_report)
+
+
 if __name__ == "__main__":
     unittest.main()

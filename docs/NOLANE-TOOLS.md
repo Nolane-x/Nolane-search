@@ -1,6 +1,17 @@
 # Nolane Tools
 
-Nolane Tools hiện có **302 công cụ đã được triển khai trên production**. Wave 7 và Wave 8 đưa catalog lên 275 công cụ; Wave 9 thêm 8 auditor hạ tầng/CI/CD; Wave 10 thêm 8 repository engineering analyzers, Wave 11 thêm 6 analyzer cho environment contracts, architecture cycles, change impact, OpenAPI, container và CI reliability, Wave 12 thêm 5 HTML quality auditors cho SEO, accessibility, links, forms và images. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+Nolane Tools hiện có **312 công cụ đã đăng ký trong mã nguồn**; Wave 13 đã triển khai 308 công cụ và Wave 14 bổ sung bốn auditor file mới, đang chờ CI/deploy trước khi được tính là production. Wave 7 và Wave 8 đưa catalog lên 275 công cụ; Wave 9 thêm 8 auditor hạ tầng/CI/CD; Wave 10 thêm 8 repository engineering analyzers, Wave 11 thêm 6 analyzer cho environment contracts, architecture cycles, change impact, OpenAPI, container và CI reliability, Wave 12 thêm 5 HTML quality auditors cho SEO, accessibility, links, forms và images; Wave 13 thêm 6 productivity processors; Wave 14 thêm 4 auditor DOCX/PPTX/CSV/archive. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
+
+### Wave 14 — File quality, privacy and archive security
+
+| ID | Công cụ | Chức năng | Đầu ra |
+|---|---|---|---|
+| /tool docx-audit | Kiểm tra chất lượng DOCX | Kiểm tra heading hierarchy, bảng thiếu hàng đầu, ảnh thiếu alt text, link dùng scheme nguy hiểm và dấu vết sửa đổi; không xuất nội dung đoạn văn. | TXT |
+| /tool pptx-audit | Kiểm tra chất lượng PPTX | Tóm tắt từng slide, tiêu đề thiếu/lặp, slide trống, mật độ chữ, run font dưới 12 pt và ảnh thiếu alt text. Không render hoặc đánh giá overflow thực tế. | TXT |
+| /tool csv-privacy-audit | Kiểm toán riêng tư CSV | Phát hiện email, thẻ thanh toán qua Luhn, IPv4, phone-like values theo header và cột có tên nhạy cảm; báo cột/loại/số dòng, không ghi giá trị ô. | TXT |
+| /tool archive-security-audit | Kiểm toán an toàn ZIP/TAR | Kiểm tra đường dẫn tuyệt đối/traversal, entry trùng/collision, link/special entry, mã hóa, compression ratio bất thường, tệp lớn, archive lồng nhau và đuôi thực thi. Không giải nén. | TXT |
+
+Giới hạn Wave 14: DOCX/PPTX chỉ đọc cấu trúc và counters, không render, không chấm WCAG đầy đủ và không hiển thị nội dung tài liệu. PPTX font-size chỉ kiểm tra kích thước khai báo trực tiếp, không suy ra font kế thừa từ theme/master. CSV giới hạn 50.000 dòng và 200 cột; phát hiện điện thoại/header là heuristic. Archive kiểm tra tối đa 10.000 entry, không giải nén hay đọc nội dung thành viên; extension thực thi là tín hiệu cần xem xét chứ không chứng minh malware. Không có D1 migration hoặc secret mới.
 
 ## Sử dụng
 

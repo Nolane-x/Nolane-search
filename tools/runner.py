@@ -84,6 +84,7 @@ RUNNERS = {
     "repo-api-spec-audit",
     "repo-container-audit",
     "repo-ci-reliability",
+    "docx-audit", "pptx-audit", "csv-privacy-audit", "archive-security-audit",
 
 }
 
@@ -378,13 +379,17 @@ PIPELINE_TRANSITIONS = {
     "repo-api-spec-audit": {"text-clean", "text-stats"},
     "repo-container-audit": {"text-clean", "text-stats"},
     "repo-ci-reliability": {"text-clean", "text-stats"},
+    "docx-audit": {"text-clean", "text-stats"},
+    "pptx-audit": {"text-clean", "text-stats"},
+    "csv-privacy-audit": {"text-clean", "text-stats"},
+    "archive-security-audit": {"text-clean", "text-stats"},
     "csv-to-sql-inserts": set(),
 
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -8174,6 +8179,252 @@ def shell_script_audit(p):
     return _audit_write(p,"shell-audit","Shell script static audit",findings,[f"Lines: {len(raw.splitlines())}",f"Shebang: {str(raw.startswith('#!')).lower()}"])
 
 
+def docx_audit(p):
+    from docx import Document
+    doc=Document(p); paragraphs=doc.paragraphs
+    if len(paragraphs)>20000 or len(doc.tables)>1000 or len(doc.inline_shapes)>2000:
+        raise RuntimeError("DOCX vượt giới hạn cấu trúc kiểm tra.")
+    heading_levels=[]; empty_headings=0; long_paragraphs=0
+    for index,paragraph in enumerate(paragraphs,1):
+        match=re.search(r"heading\s*([1-9])",str(getattr(paragraph.style,"name","") or ""),re.I)
+        if match:
+            if paragraph.text.strip(): heading_levels.append((index,int(match.group(1))))
+            else: empty_headings+=1
+        if len(paragraph.text)>1200: long_paragraphs+=1
+    jumps=[]; previous=None
+    for index,level in heading_levels:
+        if previous is not None and level>previous[1]+1: jumps.append(f"paragraph {index}: Heading {previous[1]} -> Heading {level}")
+        previous=(index,level)
+    empty_tables=0; empty_headers=0; large_tables=0
+    for table in doc.tables:
+        if not table.rows: empty_tables+=1; continue
+        if not any(cell.text.strip() for cell in table.rows[0].cells): empty_headers+=1
+        if len(table.columns)>20 or len(table.rows)>2000: large_tables+=1
+    images=len(doc.inline_shapes); missing_alt=0
+    for shape in doc.inline_shapes:
+        props=getattr(getattr(shape,"_inline",None),"docPr",None)
+        if not str(getattr(props,"descr","") or "").strip() and not str(getattr(props,"title","") or "").strip(): missing_alt+=1
+    links=[]; unsafe=0
+    for relation in doc.part.rels.values():
+        if not str(getattr(relation,"reltype","")).endswith("/hyperlink") or not getattr(relation,"is_external",False): continue
+        links.append(relation)
+        scheme=urllib.parse.urlsplit(str(getattr(relation,"target_ref","") or "")).scheme.lower()
+        if scheme in {"javascript","data","file","vbscript"}: unsafe+=1
+    try:
+        insertions=len(doc.element.xpath(".//w:ins")); deletions=len(doc.element.xpath(".//w:del")); comments=len(doc.element.xpath(".//w:commentRangeStart"))
+    except Exception:
+        insertions=deletions=comments=0
+    warnings=[]
+    if not str(getattr(doc.core_properties,"title","") or "").strip(): warnings.append("Document title metadata is missing")
+    if heading_levels and heading_levels[0][1]>1: warnings.append("First heading is not Heading 1")
+    if not any(level==1 for _,level in heading_levels): warnings.append("No Heading 1 style found")
+    if empty_headings: warnings.append(f"Empty heading paragraphs: {empty_headings}")
+    if jumps: warnings.append(f"Heading hierarchy jumps: {len(jumps)}")
+    if empty_headers: warnings.append(f"Tables with an empty first row: {empty_headers}")
+    if empty_tables: warnings.append(f"Empty tables: {empty_tables}")
+    if large_tables: warnings.append(f"Unusually large tables: {large_tables}")
+    if missing_alt: warnings.append(f"Images missing alternative text: {missing_alt}/{images}")
+    if unsafe: warnings.append(f"External hyperlinks with unsafe schemes: {unsafe}")
+    if insertions or deletions: warnings.append("Tracked insertions/deletions are present")
+    if comments: warnings.append(f"Comment range markers: {comments}")
+    lines=[
+        "DOCX structure and accessibility audit",
+        f"Paragraphs: {len(paragraphs):,}; headings: {len(heading_levels):,}; tables: {len(doc.tables):,}; inline images: {images:,}",
+        f"External hyperlinks: {len(links):,}; long paragraphs (>1,200 chars): {long_paragraphs:,}",
+        f"Tables with empty first row: {empty_headers:,}; empty tables: {empty_tables:,}; unusually large tables: {large_tables:,}",
+        f"Images without alt text: {missing_alt:,}; unsafe hyperlink schemes: {unsafe:,}",
+        f"Tracked insertions: {insertions:,}; tracked deletions: {deletions:,}; comment range markers: {comments:,}",
+        f"Heading hierarchy jumps: {len(jumps):,}","", "Review findings:"
+    ]
+    lines.extend("- "+item for item in warnings)
+    if not warnings: lines.append("- No configured structural warning was detected.")
+    lines.extend(["","Static structure check only; not a Word renderer or full WCAG certification. Paragraph and table contents are omitted."])
+    return tool_text("\n".join(lines),"DOCX audit")
+
+
+def pptx_audit(p):
+    from pptx import Presentation
+    from pptx.enum.shapes import MSO_SHAPE_TYPE
+    presentation=Presentation(p)
+    if len(presentation.slides)>300: raise RuntimeError("PPTX vượt giới hạn 300 slide.")
+    missing_titles=[]; empty_slides=[]; dense=[]; long_titles=[]; repeated={}
+    small_runs=0; images=0; missing_alt=0; total_words=0; slide_rows=[]
+    for number,slide in enumerate(presentation.slides,1):
+        title_shape=slide.shapes.title
+        title=str(title_shape.text or "").strip() if title_shape is not None else ""
+        if not title: missing_titles.append(number)
+        elif len(title)>100: long_titles.append(number)
+        else: repeated[title.casefold()]=repeated.get(title.casefold(),0)+1
+        words=0; text_shapes=0; slide_images=0; slide_small=0
+        for shape in slide.shapes:
+            if getattr(shape,"has_text_frame",False):
+                value=str(getattr(shape,"text","") or "").strip()
+                if value:
+                    text_shapes+=1; words+=len(re.findall(r"\b[\w'-]+\b",value,re.UNICODE))
+                for paragraph in shape.text_frame.paragraphs:
+                    for run in paragraph.runs:
+                        size=getattr(getattr(run,"font",None),"size",None)
+                        if size is not None and getattr(size,"pt",99)<12: slide_small+=1
+            if getattr(shape,"shape_type",None)==MSO_SHAPE_TYPE.PICTURE:
+                images+=1; slide_images+=1
+                try:
+                    nodes=shape._element.xpath(".//p:cNvPr")
+                    if nodes and not any((node.get("descr") or node.get("title") or "").strip() for node in nodes): missing_alt+=1
+                except Exception: missing_alt+=1
+        total_words+=words; small_runs+=slide_small
+        if words==0 and slide_images==0: empty_slides.append(number)
+        if words>150: dense.append(number)
+        slide_rows.append(f"Slide {number}: title={'present' if title else 'missing'}; words={words}; text-shapes={text_shapes}; images={slide_images}; explicit font runs <12pt={slide_small}")
+    repeated_titles=sum(1 for count in repeated.values() if count>1)
+    lines=[
+        "PPTX slide structure and readability audit",
+        f"Slides: {len(presentation.slides):,}; total words: {total_words:,}; images: {images:,}",
+        f"Slides without a title placeholder/text: {len(missing_titles):,}",
+        f"Slides with no detected text or picture content: {len(empty_slides):,}",
+        f"Slides over 150 words (density heuristic): {len(dense):,}",
+        f"Repeated non-empty slide titles: {repeated_titles:,}",
+        f"Titles over 100 characters: {len(long_titles):,}",
+        f"Explicit text runs smaller than 12 pt: {small_runs:,}",
+        f"Images without alternative text: {missing_alt:,}/{images:,}","",
+        "Per-slide summary:",*slide_rows,"",
+        "Flagged slide numbers (1-based):",
+        "Missing titles: "+(", ".join(map(str,missing_titles[:100])) if missing_titles else "none"),
+        "No detected text/picture: "+(", ".join(map(str,empty_slides[:100])) if empty_slides else "none"),
+        "Dense text: "+(", ".join(map(str,dense[:100])) if dense else "none"),
+        "Long titles: "+(", ".join(map(str,long_titles[:100])) if long_titles else "none"),"",
+        "Static audit only: no rendering, theme/master font inheritance, overlap or text clipping is evaluated. Density and 12 pt thresholds are review heuristics; slide text is omitted."
+    ]
+    return tool_text("\n".join(lines),"PPTX audit")
+
+
+def csv_privacy_audit(p):
+    import ipaddress
+    email_re=re.compile(r"(?i)(?<![\w.+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}(?![\w.-])")
+    card_re=re.compile(r"(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)")
+    ipv4_re=re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
+    sensitive_re=re.compile(r"(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|email|e[_-]?mail|phone|mobile|telephone|address|street|postal|date[_-]?of[_-]?birth|dob|birth|passport|national[_-]?id|citizen[_-]?id|ssn|credit[_-]?card|card[_-]?number|iban|bank[_-]?account|tax[_-]?id|full[_-]?name|first[_-]?name|last[_-]?name)",re.I)
+    phone_re=re.compile(r"(?:phone|mobile|telephone|tel)",re.I)
+    counts={}; row_samples={}; sensitive_columns=[]
+    def add(index,kind,row_number):
+        key=(index,kind); counts[key]=counts.get(key,0)+1
+        rows=row_samples.setdefault(key,[])
+        if len(rows)<5 and row_number not in rows: rows.append(row_number)
+    with p.open("r",encoding="utf-8-sig",errors="replace",newline="") as source:
+        sample=source.read(65536); source.seek(0)
+        try: dialect=csv.Sniffer().sniff(sample,delimiters=",;\t|")
+        except csv.Error: dialect=csv.excel
+        reader=csv.reader(source,dialect)
+        headers=next(reader,None)
+        if not headers: raise RuntimeError("CSV không có header.")
+        if len(headers)>200: raise RuntimeError("CSV vượt giới hạn 200 cột.")
+        normalized=[]
+        for index,header in enumerate(headers):
+            label=str(header or "").strip()[:80] or f"Column {index+1}"
+            normalized.append(label)
+            if sensitive_re.search(re.sub(r"([a-z])([A-Z])",r"\1_\2",label)): sensitive_columns.append(index)
+        seen_rows=0
+        for row_number,row in enumerate(reader,2):
+            seen_rows+=1
+            if seen_rows>50000: raise RuntimeError("CSV privacy audit vượt giới hạn 50.000 dòng.")
+            if len(row)>200: raise RuntimeError("CSV có dòng vượt giới hạn 200 cột.")
+            for index,value in enumerate(row[:len(headers)]):
+                value=str(value or "").strip()
+                if not value: continue
+                header=normalized[index]; candidate=value[:10000]
+                if index in sensitive_columns: add(index,"sensitive-column",row_number)
+                if email_re.search(candidate): add(index,"email-like",row_number)
+                for match in card_re.finditer(candidate):
+                    digits=re.sub(r"\D","",match.group(0))
+                    if not 13<=len(digits)<=19: continue
+                    total=0; parity=len(digits)%2
+                    for position,char in enumerate(digits):
+                        number=int(char)
+                        if position%2==parity:
+                            number*=2
+                            if number>9: number-=9
+                        total+=number
+                    if total%10==0: add(index,"payment-card-like (Luhn)",row_number)
+                for match in ipv4_re.finditer(candidate):
+                    try: ipaddress.ip_address(match.group(0)); add(index,"IPv4 address",row_number)
+                    except ValueError: pass
+                if phone_re.search(header):
+                    digits=re.sub(r"\D","",candidate)
+                    if 9<=len(digits)<=15 and len(set(digits))>1: add(index,"phone-like",row_number)
+    lines=["CSV privacy / sensitive-data audit",f"Rows scanned: {seen_rows:,}; columns: {len(headers):,}",
+        "Detected values are never copied into this report.","","Findings by column:"]
+    findings=0
+    for index,label in enumerate(normalized):
+        items=[(kind,count) for (column,kind),count in counts.items() if column==index]
+        if not items: continue
+        findings+=len(items)
+        lines.append(f"- Column {index+1} [{label}]: "+", ".join(f"{kind}={count:,} (rows {','.join(map(str,row_samples[(index,kind)]))})" for kind,count in sorted(items)))
+    if not findings: lines.append("- No supported pattern or sensitive-header signal detected.")
+    lines.extend(["",f"Columns with sensitive-looking headers: {len(sensitive_columns):,}",
+        "Detection is heuristic: phone-like matches and sensitive headers are not proof of personal data; unsupported formats may be missed. Raw cell values are never included."])
+    return tool_text("\n".join(lines),"CSV privacy audit")
+
+
+def archive_security_audit(p):
+    findings=[]; counters={}; seen_exact={}; seen_folded={}; total_uncompressed=0; scanned=0
+    def add(kind,level,name,detail=""):
+        counters[kind]=counters.get(kind,0)+1
+        if len(findings)<250: findings.append(f"[{level}] {kind}: {str(name)[:180]}"+(f" — {detail}" if detail else ""))
+    def inspect_name(raw):
+        raw=str(raw or ""); normalized=raw.replace("\\","/")
+        parts=[part for part in normalized.split("/") if part not in ("",".")]
+        canonical="/".join(parts).rstrip("/")
+        if "\x00" in raw: add("NUL byte in path","HIGH",raw)
+        if normalized.startswith("/") or re.match(r"^[A-Za-z]:",normalized): add("absolute or drive-qualified path","HIGH",raw)
+        if ".." in parts: add("path traversal segment","HIGH",raw)
+        folded=canonical.casefold()
+        if canonical in seen_exact: add("duplicate archive path","MEDIUM",raw)
+        elif folded in seen_folded: add("case-insensitive path collision","MEDIUM",raw,f"collides with {seen_folded[folded][:120]}")
+        if canonical: seen_exact[canonical]=True; seen_folded.setdefault(folded,canonical)
+        suffixes={suffix.lower() for suffix in Path(normalized).suffixes}
+        if suffixes.intersection({".exe",".dll",".sys",".scr",".bat",".cmd",".ps1",".vbs"}): add("executable or script file","MEDIUM",raw)
+        if suffixes.intersection({".zip",".tar",".gz",".tgz",".7z",".rar"}): add("nested archive","INFO",raw)
+    is_zip=zipfile.is_zipfile(p)
+    try:
+        if is_zip:
+            with zipfile.ZipFile(p) as archive:
+                infos=archive.infolist()
+                if len(infos)>10000: raise RuntimeError("Archive vượt giới hạn 10.000 entry; từ chối quét.")
+                for item in infos:
+                    scanned+=1; inspect_name(item.filename)
+                    if item.is_dir(): continue
+                    total_uncompressed+=max(0,int(item.file_size))
+                    mode=(item.external_attr>>16)&0xFFFF
+                    if stat.S_ISLNK(mode): add("symbolic link","HIGH",item.filename)
+                    elif stat.S_IFMT(mode) and not (stat.S_ISREG(mode) or stat.S_ISDIR(mode)): add("special filesystem entry","HIGH",item.filename)
+                    if item.flag_bits&0x1: add("encrypted member","HIGH",item.filename)
+                    if item.file_size>100*1024*1024: add("member exceeds 100 MiB","HIGH",item.filename)
+                    if item.file_size>=1024*1024 and item.file_size/max(1,item.compress_size)>100:
+                        add("extreme compression ratio","HIGH",item.filename,f"{item.file_size/max(1,item.compress_size):.1f}:1")
+        else:
+            with tarfile.open(p,"r:*") as archive:
+                for item in archive:
+                    scanned+=1
+                    if scanned>10000: raise RuntimeError("Archive vượt giới hạn 10.000 entry; từ chối quét.")
+                    inspect_name(item.name)
+                    if item.issym() or item.islnk(): add("link entry","HIGH",item.name)
+                    elif not (item.isfile() or item.isdir()): add("special filesystem entry","HIGH",item.name)
+                    if item.isfile():
+                        total_uncompressed+=max(0,int(item.size))
+                        if item.size>100*1024*1024: add("member exceeds 100 MiB","HIGH",item.name)
+    except RuntimeError: raise
+    except (zipfile.BadZipFile,tarfile.TarError,OSError) as exc:
+        raise RuntimeError("Tệp không phải ZIP/TAR được hỗ trợ hoặc archive bị lỗi.") from exc
+    if total_uncompressed>500*1024*1024: add("declared expanded size exceeds 500 MiB","HIGH",p.name,f"{total_uncompressed:,} bytes")
+    lines=["Archive security preflight (no extraction performed)",f"Format: {'ZIP' if is_zip else 'TAR'}; entries inspected: {scanned:,}",
+        f"Archive bytes: {p.stat().st_size:,}; declared uncompressed file bytes: {total_uncompressed:,}",
+        f"Finding records: {len(findings):,}; finding categories: {len(counters):,}","","Counts by category:"]
+    lines.extend(f"- {kind}: {count:,}" for kind,count in sorted(counters.items()))
+    lines.extend(["","Findings (paths only; no file content read):"])
+    lines.extend(findings or ["- No configured archive-risk signals detected."])
+    lines.extend(["","Bounded metadata preflight, not malware scanning. Executable/script extensions are review signals, not proof of malicious content."])
+    return tool_text("\n".join(lines),"Archive security audit")
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -8285,6 +8536,10 @@ TOOLS={
  "repo-api-spec-audit":repo_api_spec_audit,
  "repo-container-audit":repo_container_audit,
  "repo-ci-reliability":repo_ci_reliability,
+ "docx-audit":docx_audit,
+ "pptx-audit":pptx_audit,
+ "csv-privacy-audit":csv_privacy_audit,
+ "archive-security-audit":archive_security_audit,
 
 }
 
