@@ -70,3 +70,33 @@ Nine tools were selected: RSS/Atom feed audit, XML sitemap audit, robots.txt aud
 No new third-party runtime package is required. RSS/Atom, sitemap, robots, JSONL, SVG and checksum use Python standard-library modules; image metadata reuses Pillow; SSH public keys reuse the cryptography package already installed for X.509.
 
 The SVG sanitizer project and GPL-3.0 RSS parser were deliberately not integrated. The new SVG processor reports risky structures only; it is not a sanitizer.
+
+## Wave 21 repositories reviewed
+
+| Repository | Scope examined | License observed | Integration decision |
+|---|---|---|---|
+| [jsvine/pdfplumber](https://github.com/jsvine/pdfplumber) | PDF text geometry and table extraction | MIT (\`LICENSE.txt\`) | Added bounded extraction of detected text/vector tables to CSV; no OCR of scanned tables and no upstream source copied. |
+| [jmespath/jmespath.py](https://github.com/jmespath/jmespath.py) | Declarative JSON query language and Python runtime | MIT | Added a query+data envelope processor; expression execution is declarative and bounded, not arbitrary Python evaluation. |
+| [WhyNotHugo/python-barcode](https://github.com/WhyNotHugo/python-barcode) | Standards-based 1D barcode generation | MIT (project metadata) | Added Code 128 PNG generation for bounded printable-ASCII payloads; Pillow was already available. |
+| [duckdb/duckdb](https://github.com/duckdb/duckdb) | Embedded analytical SQL engine and Parquet/CSV interchange | MIT | Added fixed CSV ↔ Parquet conversion only. No SQL text is accepted from the user; CSV columns remain strings on import to preserve leading zeros. |
+| [rapidfuzz/RapidFuzz](https://github.com/rapidfuzz/RapidFuzz) | High-performance string similarity and matching | MIT | Added bounded near-duplicate line pairs with similarity scores; CSV output intentionally contains compared user-provided lines. |
+| [python-openxml/python-docx](https://github.com/python-openxml/python-docx) | DOCX document object model | MIT | Reused existing runner dependency for DOCX-to-Markdown conversion; no new package required by the runner. |
+| [scanny/python-pptx](https://github.com/scanny/python-pptx) | PowerPoint slide and notes access | MIT | Reused existing runner dependency to extract speaker notes only. |
+| Python \`ipaddress\` | IP address, network and subnet primitives | Python Software Foundation License | Uses the standard library for local IPv4/IPv6/CIDR normalization and overlap reporting; no DNS or network activity. |
+
+### Wave 21 selection rationale
+
+The nine candidates were selected to add capabilities that were absent from the 345-tool Wave 20 catalog rather than creating more cosmetic text aliases. They span PDF information extraction, declarative data selection, network planning, barcode generation, Office interoperability, fuzzy matching and columnar data interchange.
+
+The integrations call upstream libraries through their public APIs; they do not copy upstream project source into Nolane Search. Each optional dependency is installed only when a matching processor is requested, while CI installs the complete test dependency set.
+
+### Wave 21 exclusions and limits
+
+- PDF table extraction uses text/vector geometry and does not claim reliable table recognition on scanned images.
+- JMESPath is a JSON selection language, not a code execution engine.
+- IP/CIDR reports are offline; no DNS, socket or remote reachability checks are performed.
+- Barcode generation is limited to Code 128 printable ASCII; 2D barcode formats remain a separate candidate.
+- DOCX-to-Markdown is structural conversion, not pixel-faithful page rendering.
+- PPTX extraction reads presenter notes and intentionally excludes slide-body text.
+- Fuzzy matching is bounded to 1,200 lines and reports source strings in its CSV output.
+- Parquet conversions use fixed DuckDB operations, with a one-million-row ceiling and no user SQL.
