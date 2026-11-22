@@ -71,7 +71,7 @@ class Wave25BuildObservabilityBinaryTests(unittest.TestCase):
         self.assert_report(result)
         self.assertIn("Results: 2", result["summary"])
         self.assertIn("error=1", result["summary"])
-        self.assertIn("Results referencing undeclared rule IDs: 1", result["summary"])
+        self.assertIn("Results referencing undeclared rule IDs (when rule list is present): 1", result["summary"])
         self.assertNotIn("PrivateScanner", result["summary"])
         self.assertNotIn("Private finding text", result["summary"])
         self.assertNotIn("secret.py", result["summary"])
