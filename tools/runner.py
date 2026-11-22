@@ -9817,7 +9817,9 @@ def image_similarity_audit(p):
         raise RuntimeError("Gửi ZIP chứa bộ ảnh cần tìm ảnh gần giống.")
     def phash_16(image):
         size=32
-        pixels=list(image.convert("L").resize((size,size),Image.Resampling.LANCZOS).getdata())
+        resized=image.convert("L").resize((size,size),Image.Resampling.LANCZOS)
+        flattened=getattr(resized,"get_flattened_data",None)
+        pixels=list(flattened() if flattened else resized.getdata())
         matrix=[pixels[row*size:(row+1)*size] for row in range(size)]
         cosine=[[math.cos(math.pi*(2*position+1)*frequency/(2*size)) for position in range(size)] for frequency in range(16)]
         horizontal=[[sum(matrix[row][x]*cosine[u][x] for x in range(size)) for u in range(16)] for row in range(size)]
@@ -10515,7 +10517,7 @@ def image_privacy_audit(p):
             exif=image.getexif()
             names={str(ExifTags.TAGS.get(key,key)).casefold() for key in exif.keys()}
             date_tags={"datetime","datetimeoriginal","datetimedigitized"}
-            identity_tags={"bodyserialnumber","cameraserialnumber","serialnumber","lensserialnumber","ownername","cameraownername","artist","usercomment"}
+            identity_tags={"make","model","bodyserialnumber","cameraserialnumber","serialnumber","lensserialnumber","ownername","cameraownername","artist","usercomment"}
             gps_present=34853 in exif
             dates=len(names&date_tags)
             identity=sum(1 for key in names if key.replace(" ","") in {item.replace(" ","") for item in identity_tags})
