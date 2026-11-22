@@ -105,6 +105,13 @@ RUNNERS = {
     "wcag-contrast-audit",
     "ssh-public-key-audit",
     "archive-checksum-manifest",
+    "sql-static-audit",
+    "sql-format",
+    "graphql-schema-audit",
+    "notebook-privacy-audit",
+    "kml-kmz-audit",
+    "design-token-audit",
+    "cron-schedule-audit",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -436,11 +443,18 @@ PIPELINE_TRANSITIONS = {
     "wcag-contrast-audit":{"text-clean","text-stats"},
     "ssh-public-key-audit":{"text-clean","text-stats"},
     "archive-checksum-manifest":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json"},
+    "sql-static-audit":{"text-clean","text-stats"},
+    "sql-format":{"sql-static-audit","text-clean"},
+    "graphql-schema-audit":{"text-clean","text-stats"},
+    "notebook-privacy-audit":{"text-clean","text-stats"},
+    "kml-kmz-audit":{"text-clean","text-stats"},
+    "design-token-audit":{"text-clean","text-stats"},
+    "cron-schedule-audit":{"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sql-static-audit","graphql-schema-audit","notebook-privacy-audit","kml-kmz-audit","design-token-audit","cron-schedule-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -10803,6 +10817,454 @@ def archive_checksum_manifest(p):
         writer.writerows([(_spreadsheet_safe(name),count,digest) for name,count,digest in rows])
     return {"summary":f"Đã tạo SHA-256 manifest cho {len(rows):,} tệp, {sum(row[1] for row in rows):,} byte nội dung. Archive không được giải nén ra filesystem; kết quả là CSV.","output_path":str(out)}
 
+
+
+def sql_static_audit(p):
+    import sqlglot
+    from sqlglot import exp
+    size=p.stat().st_size
+    if size>5*1024*1024:
+        raise RuntimeError("SQL audit giới hạn input 5 MiB.")
+    try:
+        raw=p.read_text(encoding="utf-8-sig")
+    except UnicodeError as exc:
+        raise RuntimeError("SQL source phải là UTF-8.") from exc
+    suffix=p.name.lower()
+    dialect="bigquery" if ".bigquery." in suffix else "postgres" if ".postgres." in suffix else "mysql" if ".mysql." in suffix else "sqlite" if ".sqlite." in suffix else None
+    try:
+        statements=sqlglot.parse(raw,read=dialect)
+    except Exception as exc:
+        line_numbers=[]
+        for error in getattr(exc,"errors",[])[:20]:
+            line=(error.get("line") if isinstance(error,dict) else None)
+            if isinstance(line,int): line_numbers.append(line)
+        detail=(" at source line(s) "+", ".join(map(str,line_numbers)) if line_numbers else "")
+        raise RuntimeError("SQL parse failed"+detail+"; SQL source and parser excerpts are withheld.") from exc
+    statements=[statement for statement in statements if statement is not None]
+    if len(statements)>2000:
+        raise RuntimeError("SQL file vượt giới hạn 2.000 statements.")
+    kinds={}
+    select_nodes=join_nodes=star_nodes=table_nodes=0
+    update_without_where=delete_without_where=drop_nodes=truncate_nodes=alter_nodes=insert_nodes=0
+    transaction_nodes=procedure_nodes=0
+    for statement in statements:
+        kind=statement.key.upper()
+        kinds[kind]=kinds.get(kind,0)+1
+        select_nodes+=sum(1 for _ in statement.find_all(exp.Select))
+        join_nodes+=sum(1 for _ in statement.find_all(exp.Join))
+        star_nodes+=sum(1 for _ in statement.find_all(exp.Star))
+        table_nodes+=sum(1 for _ in statement.find_all(exp.Table))
+        if isinstance(statement,exp.Update) and statement.args.get("where") is None: update_without_where+=1
+        if isinstance(statement,exp.Delete) and statement.args.get("where") is None: delete_without_where+=1
+        if isinstance(statement,exp.Drop): drop_nodes+=1
+        if isinstance(statement,exp.TruncateTable): truncate_nodes+=1
+        if isinstance(statement,exp.Alter): alter_nodes+=1
+        if isinstance(statement,exp.Insert): insert_nodes+=1
+        if kind in {"COMMIT","ROLLBACK","TRANSACTION","BEGIN"}: transaction_nodes+=1
+        if kind in {"CREATE","PROCEDURE","FUNCTION"} and any(token in kind for token in ("PROCEDURE","FUNCTION")): procedure_nodes+=1
+    lines=[
+        "SQL static analysis",
+        f"Dialect selected: {dialect or 'generic'}; bytes: {size:,}; statements: {len(statements):,}",
+        "Statement types: "+(", ".join(f"{name}={count:,}" for name,count in sorted(kinds.items())) or "none"),
+        f"SELECT AST nodes: {select_nodes:,}; JOIN nodes: {join_nodes:,}; wildcard projections: {star_nodes:,}; table references: {table_nodes:,}",
+        f"UPDATE without WHERE: {update_without_where:,}; DELETE without WHERE: {delete_without_where:,}",
+        f"DROP statements: {drop_nodes:,}; TRUNCATE statements: {truncate_nodes:,}; ALTER statements: {alter_nodes:,}; INSERT statements: {insert_nodes:,}",
+        f"Transaction statements: {transaction_nodes:,}; procedure/function statement roots: {procedure_nodes:,}",
+        "This is read-only AST analysis: SQL is never executed, connected to a database, or printed. WHERE detection is syntactic and does not prove a mutation is safely scoped."
+    ]
+    return tool_text("\n".join(lines),"SQL static audit")
+
+
+def sql_format_file(p):
+    import sqlglot
+    size=p.stat().st_size
+    if size>5*1024*1024:
+        raise RuntimeError("SQL formatter giới hạn input 5 MiB.")
+    try:
+        raw=p.read_text(encoding="utf-8-sig")
+    except UnicodeError as exc:
+        raise RuntimeError("SQL source phải là UTF-8.") from exc
+    suffix=p.name.lower()
+    dialect="bigquery" if ".bigquery." in suffix else "postgres" if ".postgres." in suffix else "mysql" if ".mysql." in suffix else "sqlite" if ".sqlite." in suffix else None
+    try:
+        formatted=sqlglot.transpile(raw,read=dialect,pretty=True,identify=False)
+    except Exception as exc:
+        raise RuntimeError("Không thể parse SQL để format; source không được ghi vào job log.") from exc
+    if not formatted:
+        raise RuntimeError("SQL file không có statement hợp lệ.")
+    output="\n\n".join(statement.rstrip().rstrip(";")+";" for statement in formatted)+"\n"
+    if len(output.encode("utf-8"))>MAX_PIPELINE_OUTPUT:
+        raise RuntimeError("Formatted SQL vượt giới hạn output 45 MiB.")
+    out=p.with_name(p.stem+"-formatted.sql")
+    out.write_text(output,encoding="utf-8")
+    return {"summary":f"Đã format {len(formatted):,} SQL statement(s) theo dialect {dialect or 'generic'}; không thực thi SQL.","output_path":str(out)}
+
+
+def graphql_schema_audit(p):
+    from graphql import (
+        GraphQLObjectType,GraphQLInterfaceType,GraphQLUnionType,
+        GraphQLScalarType,GraphQLEnumType,GraphQLInputObjectType,
+        build_ast_schema,parse,validate_schema
+    )
+    size=p.stat().st_size
+    if size>5*1024*1024:
+        raise RuntimeError("GraphQL schema audit giới hạn input 5 MiB.")
+    try:
+        raw=p.read_text(encoding="utf-8-sig")
+    except UnicodeError as exc:
+        raise RuntimeError("GraphQL SDL phải là UTF-8.") from exc
+    try:
+        document=parse(raw)
+        if len(document.definitions)>20000:
+            raise RuntimeError("GraphQL document vượt giới hạn 20.000 definitions.")
+        schema=build_ast_schema(document)
+        errors=validate_schema(schema)
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        locations=getattr(exc,"locations",None) or []
+        suffix=(" at line "+", ".join(str(location.line) for location in locations[:10]) if locations else "")
+        raise RuntimeError("GraphQL SDL parse/build failed"+suffix+"; schema text and field names are withheld.") from exc
+    counts={"object":0,"interface":0,"union":0,"scalar":0,"enum":0,"input-object":0}
+    fields=deprecated_fields=deprecated_values=0
+    for name,definition in schema.type_map.items():
+        if name.startswith("__"):
+            continue
+        if isinstance(definition,GraphQLObjectType):
+            counts["object"]+=1
+            fields+=len(definition.fields)
+            deprecated_fields+=sum(1 for item in definition.fields.values() if item.deprecation_reason is not None)
+        elif isinstance(definition,GraphQLInterfaceType):
+            counts["interface"]+=1
+            fields+=len(definition.fields)
+            deprecated_fields+=sum(1 for item in definition.fields.values() if item.deprecation_reason is not None)
+        elif isinstance(definition,GraphQLUnionType): counts["union"]+=1
+        elif isinstance(definition,GraphQLScalarType): counts["scalar"]+=1
+        elif isinstance(definition,GraphQLEnumType):
+            counts["enum"]+=1
+            deprecated_values+=sum(1 for item in definition.values.values() if item.deprecation_reason is not None)
+        elif isinstance(definition,GraphQLInputObjectType):
+            counts["input-object"]+=1
+            fields+=len(definition.fields)
+    lines=[
+        "GraphQL schema audit",
+        f"Bytes: {size:,}; SDL definitions: {len(document.definitions):,}; schema validation errors: {len(errors):,}",
+        "Type counts: "+(", ".join(f"{name}={count:,}" for name,count in sorted(counts.items()))),
+        f"Fields/input fields: {fields:,}; deprecated fields: {deprecated_fields:,}; deprecated enum values: {deprecated_values:,}",
+        f"Query root defined: {int(schema.query_type is not None)}; mutation root defined: {int(schema.mutation_type is not None)}; subscription root defined: {int(schema.subscription_type is not None)}",
+        "Type names, field names, descriptions, default values and resolver data are withheld; no GraphQL endpoint is contacted."
+    ]
+    return tool_text("\n".join(lines),"GraphQL schema audit")
+
+
+def notebook_privacy_audit(p):
+    size=p.stat().st_size
+    if size>20*1024*1024:
+        raise RuntimeError("Notebook audit giới hạn input 20 MiB.")
+    try:
+        data=json.loads(p.read_text(encoding="utf-8-sig"))
+    except (UnicodeError,json.JSONDecodeError) as exc:
+        raise RuntimeError("Jupyter notebook phải là JSON UTF-8 hợp lệ.") from exc
+    if not isinstance(data,dict):
+        raise RuntimeError("Notebook root phải là JSON object.")
+    cells=data.get("cells",[])
+    if not isinstance(cells,list) or len(cells)>50000:
+        raise RuntimeError("Notebook cells phải là mảng tối đa 50.000 cells.")
+    cell_counts={}
+    duplicate_ids=missing_ids=unexecuted=missing_execution_count=output_count=error_outputs=html_outputs=javascript_outputs=image_outputs=attachments=0
+    source_chars=output_chars=0
+    secret_hits=0
+    seen_ids=set()
+    secret_patterns=[
+        re.compile(r"(?i)\b(?:api[_-]?key|access[_-]?token|client[_-]?secret|password|passwd|secret)\s*[:=]\s*['\"]?[A-Za-z0-9_./+=-]{8,}"),
+        re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
+        re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+        re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{20,}")
+    ]
+    scanned=0
+    def scan_text(value):
+        nonlocal secret_hits,scanned
+        if not isinstance(value,str) or scanned>=2*1024*1024:
+            return
+        sample=value[:max(0,2*1024*1024-scanned)]
+        scanned+=len(sample)
+        secret_hits+=sum(len(pattern.findall(sample)) for pattern in secret_patterns)
+    for cell in cells:
+        if not isinstance(cell,dict):
+            continue
+        kind=str(cell.get("cell_type","unknown"))
+        cell_counts[kind]=cell_counts.get(kind,0)+1
+        cell_id=cell.get("id")
+        if not isinstance(cell_id,str) or not cell_id:
+            missing_ids+=1
+        elif cell_id in seen_ids:
+            duplicate_ids+=1
+        else:
+            seen_ids.add(cell_id)
+        source=cell.get("source","")
+        if isinstance(source,list): source="".join(str(item) for item in source)
+        if isinstance(source,str):
+            source_chars+=len(source)
+            scan_text(source)
+        cell_attachments=cell.get("attachments")
+        if isinstance(cell_attachments,dict):
+            attachments+=len(cell_attachments)
+        if kind=="code":
+            execution=cell.get("execution_count")
+            outputs=cell.get("outputs",[])
+            if execution is None: unexecuted+=1
+            elif not isinstance(execution,int) or execution<0: missing_execution_count+=1
+            if not isinstance(outputs,list):
+                continue
+            output_count+=len(outputs)
+            for output in outputs:
+                if not isinstance(output,dict):
+                    continue
+                output_type=output.get("output_type")
+                if output_type=="error": error_outputs+=1
+                payload=output.get("text","")
+                if isinstance(payload,list): payload="".join(str(item) for item in payload)
+                if isinstance(payload,str):
+                    output_chars+=len(payload)
+                    scan_text(payload)
+                bundle=output.get("data")
+                if isinstance(bundle,dict):
+                    for mime,value in bundle.items():
+                        if str(mime).startswith("image/"):
+                            image_outputs+=1
+                        elif str(mime)=="text/html":
+                            html_outputs+=1
+                        elif str(mime)=="application/javascript" or str(mime)=="text/javascript":
+                            javascript_outputs+=1
+                        if isinstance(value,list):
+                            value="".join(str(item) for item in value)
+                        if isinstance(value,str):
+                            output_chars+=len(value)
+                            scan_text(value)
+                traceback=output.get("traceback")
+                if isinstance(traceback,list):
+                    scan_text("\n".join(str(item) for item in traceback))
+    metadata=data.get("metadata",{})
+    kernelspec=metadata.get("kernelspec",{}) if isinstance(metadata,dict) else {}
+    language=metadata.get("language_info",{}) if isinstance(metadata,dict) else {}
+    version=data.get("nbformat")
+    minor=data.get("nbformat_minor")
+    lines=[
+        "Jupyter notebook structure and privacy audit",
+        f"Bytes: {size:,}; nbformat: {version}.{minor}; cells: {len(cells):,}; cell types: "+(", ".join(f"{name}={count:,}" for name,count in sorted(cell_counts.items())) or "none"),
+        f"Missing cell IDs: {missing_ids:,}; duplicate cell IDs: {duplicate_ids:,}; code cells without execution count: {unexecuted:,}; invalid execution counts: {missing_execution_count:,}",
+        f"Outputs: {output_count:,}; error outputs: {error_outputs:,}; HTML outputs: {html_outputs:,}; JavaScript outputs: {javascript_outputs:,}; image outputs: {image_outputs:,}; attachments: {attachments:,}",
+        f"Source characters: {source_chars:,}; output characters: {output_chars:,}; credential-like patterns in bounded scan: {secret_hits:,}",
+        f"Kernel metadata present: {int(isinstance(kernelspec,dict) and bool(kernelspec))}; language metadata present: {int(isinstance(language,dict) and bool(language))}",
+        "Cell source, outputs, embedded images, kernel names and metadata values are never included. Code cells are inspected but never executed."
+    ]
+    return tool_text("\n".join(lines),"Notebook privacy audit")
+
+
+def kml_kmz_audit(p):
+    import xml.etree.ElementTree as ET
+    size=p.stat().st_size
+    if size>20*1024*1024:
+        raise RuntimeError("KML/KMZ audit giới hạn input 20 MiB.")
+    if p.suffix.lower()==".kmz":
+        try:
+            with zipfile.ZipFile(p) as archive:
+                infos=archive.infolist()
+                if len(infos)>1000 or sum(item.file_size for item in infos)>120*1024*1024:
+                    raise RuntimeError("KMZ vượt 1.000 entries hoặc 120 MiB uncompressed.")
+                kml_candidates=[]
+                seen=set()
+                for info in infos:
+                    if info.is_dir(): continue
+                    _safe_archive_parts(info.filename)
+                    if info.filename in seen: raise RuntimeError("KMZ chứa entry path trùng.")
+                    seen.add(info.filename)
+                    mode=(info.external_attr>>16)&0o170000
+                    if mode==stat.S_IFLNK: raise RuntimeError("KMZ chứa symlink.")
+                    if info.flag_bits&0x1: continue
+                    if info.filename.lower().endswith(".kml"): kml_candidates.append(info)
+                if not kml_candidates: raise RuntimeError("KMZ không chứa KML entry.")
+                if len(kml_candidates)>1: raise RuntimeError("KMZ chứa nhiều KML documents; hãy tách từng document.")
+                if kml_candidates[0].file_size>10*1024*1024: raise RuntimeError("KML entry vượt 10 MiB.")
+                raw=archive.read(kml_candidates[0])
+        except RuntimeError: raise
+        except Exception as exc: raise RuntimeError("Không thể đọc KMZ an toàn.") from exc
+    else:
+        raw=p.read_bytes()
+    if re.search(rb"<!\s*(DOCTYPE|ENTITY)\b",raw,re.I):
+        raise RuntimeError("KML DTD/ENTITY bị chặn.")
+    try:
+        root=ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise RuntimeError("KML XML không hợp lệ.") from exc
+    def local(tag): return tag.rsplit("}",1)[-1].casefold()
+    placemarks=folders=documents=points=linestrings=polygons=multigeometries=tracks=coordinate_nodes=coordinate_pairs=invalid_pairs=0
+    for node in root.iter():
+        name=local(node.tag)
+        if name=="placemark": placemarks+=1
+        elif name=="folder": folders+=1
+        elif name=="document": documents+=1
+        elif name=="point": points+=1
+        elif name=="linestring": linestrings+=1
+        elif name=="polygon": polygons+=1
+        elif name=="multigeometry": multigeometries+=1
+        elif name=="track": tracks+=1
+        elif name in {"coordinates","coord"}:
+            coordinate_nodes+=1
+            raw_value=(node.text or "").strip()
+            tokens=raw_value.split() if name=="coord" else raw_value.split()
+            for token in tokens:
+                try:
+                    if name=="coord":
+                        parts=token.split()
+                    else:
+                        parts=token.split(",")
+                    if len(parts)<2: raise ValueError
+                    longitude=float(parts[0]); latitude=float(parts[1])
+                    if not (-180<=longitude<=180 and -90<=latitude<=90): invalid_pairs+=1
+                    elif len(parts)>2 and parts[2] and not math.isfinite(float(parts[2])): invalid_pairs+=1
+                    coordinate_pairs+=1
+                except (ValueError,OverflowError):
+                    invalid_pairs+=1
+                if coordinate_pairs+invalid_pairs>1000000:
+                    raise RuntimeError("KML vượt giới hạn một triệu coordinate tuples.")
+    lines=[
+        "KML/KMZ spatial structure audit",
+        f"Archive/file bytes: {size:,}; placemarks: {placemarks:,}; folders: {folders:,}; documents: {documents:,}",
+        f"Geometry counts: Point={points:,}; LineString={linestrings:,}; Polygon={polygons:,}; MultiGeometry={multigeometries:,}; gx:Track={tracks:,}",
+        f"Coordinate elements: {coordinate_nodes:,}; valid coordinate tuples: {coordinate_pairs:,}; invalid/out-of-range tuples: {invalid_pairs:,}",
+        "Placemark names, descriptions, style IDs, coordinates, altitude, timestamps and embedded assets are withheld; no map services or external links are accessed."
+    ]
+    return tool_text("\n".join(lines),"KML/KMZ audit")
+
+
+def design_token_audit(p):
+    size=p.stat().st_size
+    if size>10*1024*1024:
+        raise RuntimeError("Design token audit giới hạn JSON input 10 MiB.")
+    duplicate_keys=0
+    def pairs_hook(pairs):
+        nonlocal duplicate_keys
+        result={}
+        for key,value in pairs:
+            if key in result: duplicate_keys+=1
+            result[key]=value
+        return result
+    try:
+        root=json.loads(p.read_text(encoding="utf-8-sig"),object_pairs_hook=pairs_hook)
+    except (UnicodeError,json.JSONDecodeError) as exc:
+        raise RuntimeError("Design tokens phải là JSON UTF-8 hợp lệ.") from exc
+    if not isinstance(root,dict):
+        raise RuntimeError("Design token document root phải là object.")
+    token_paths=set()
+    token_types={}
+    aliases={}
+    group_count=missing_value=untyped=empty_names=0
+    metadata_keys={"$type","$description","$deprecated","$extensions","$version","$schema","$root"}
+    def walk(node,path="",inherited_type=None):
+        nonlocal group_count,missing_value,untyped,empty_names
+        if not isinstance(node,dict): return
+        current_type=node.get("$type",inherited_type)
+        if "$value" in node:
+            token_paths.add(path)
+            token_type=str(current_type or "untyped")
+            token_types[token_type]=token_types.get(token_type,0)+1
+            if current_type is None: untyped+=1
+            value=node.get("$value")
+            references=[]
+            def scan_value(item):
+                if isinstance(item,str): references.extend(re.findall(r"\{([A-Za-z0-9_.\\-/]+)\}",item))
+                elif isinstance(item,list):
+                    for child in item: scan_value(child)
+                elif isinstance(item,dict):
+                    for child in item.values(): scan_value(child)
+            scan_value(value)
+            aliases[path]=references
+            return
+        children=[(key,value) for key,value in node.items() if key not in metadata_keys]
+        if children: group_count+=1
+        for key,value in children:
+            key=str(key)
+            if not key or key.startswith("$"): empty_names+=1
+            child_path=(path+"."+key).strip(".")
+            walk(value,child_path,current_type)
+    walk(root)
+    unresolved=0
+    graph={}
+    for source,references in aliases.items():
+        resolved=[]
+        for reference in references:
+            if reference not in token_paths:
+                unresolved+=1
+            else:
+                resolved.append(reference)
+        graph[source]=resolved
+    cycles=0
+    state={}
+    def visit(name):
+        nonlocal cycles
+        if state.get(name)==1:
+            cycles+=1
+            return
+        if state.get(name)==2: return
+        state[name]=1
+        for target in graph.get(name,[]):
+            visit(target)
+        state[name]=2
+    for name in graph:
+        if state.get(name) is None: visit(name)
+    lines=[
+        "W3C Design Tokens structure audit",
+        f"File bytes: {size:,}; groups: {group_count:,}; tokens: {len(token_paths):,}; duplicate JSON keys: {duplicate_keys:,}",
+        f"Tokens without inherited/explicit $type: {untyped:,}; invalid/empty token path segments: {empty_names:,}",
+        "Token type counts: "+(", ".join(f"{name}={count:,}" for name,count in sorted(token_types.items())) or "none"),
+        f"Alias references unresolved: {unresolved:,}; alias cycles: {cycles:,}",
+        "Token names, descriptions, values, color strings, typography values and extension payloads are withheld. Alias resolution is limited to simple {path.to.token} references."
+    ]
+    return tool_text("\n".join(lines),"Design token audit")
+
+
+def cron_schedule_audit(p):
+    from datetime import datetime,timezone
+    from croniter import croniter
+    size=p.stat().st_size
+    if size>2*1024*1024:
+        raise RuntimeError("Cron schedule audit giới hạn input 2 MiB.")
+    try:
+        raw=p.read_text(encoding="utf-8-sig")
+    except UnicodeError as exc:
+        raise RuntimeError("Cron file phải là UTF-8.") from exc
+    if len(raw.splitlines())>10000:
+        raise RuntimeError("Cron schedule vượt 10.000 dòng.")
+    base=datetime.now(timezone.utc).replace(second=0,microsecond=0)
+    valid=invalid=0
+    previews=[]
+    for line_number,line in enumerate(raw.splitlines(),1):
+        cleaned=line.split("#",1)[0].strip()
+        if not cleaned: continue
+        parts=cleaned.split()
+        if len(parts)<5:
+            invalid+=1
+            continue
+        expression=" ".join(parts[:5])
+        try:
+            iterator=croniter(expression,base,max_years_between_matches=5)
+            next_times=[iterator.get_next(datetime) for _ in range(3)]
+            valid+=1
+            if len(previews)<100:
+                previews.append((line_number,next_times))
+        except Exception:
+            invalid+=1
+    lines=[
+        "Cron schedule audit",
+        f"Base time: {base.isoformat()}; valid schedules: {valid:,}; invalid/unsupported lines: {invalid:,}",
+        "Next UTC run previews (first 100 schedules):"
+    ]
+    for line_number,times in previews:
+        lines.append(f"- Line {line_number}: "+", ".join(value.isoformat() for value in times))
+    lines.append("Commands, environment variables and inline comments are not shown. Times are UTC previews; they may differ from a scheduler's configured timezone and DST policy.")
+    return tool_text("\n".join(lines),"Cron schedule audit")
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -10951,6 +11413,13 @@ TOOLS={
  "wcag-contrast-audit":wcag_contrast_audit,
  "ssh-public-key-audit":ssh_public_key_audit,
  "archive-checksum-manifest":archive_checksum_manifest,
+ "sql-static-audit":sql_static_audit,
+ "sql-format":sql_format_file,
+ "graphql-schema-audit":graphql_schema_audit,
+ "notebook-privacy-audit":notebook_privacy_audit,
+ "kml-kmz-audit":kml_kmz_audit,
+ "design-token-audit":design_token_audit,
+ "cron-schedule-audit":cron_schedule_audit,
 
 }
 
