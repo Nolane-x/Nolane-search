@@ -8995,9 +8995,11 @@ def jwt_security_audit(p):
         raise RuntimeError("JWT input vượt giới hạn 5 MiB.")
     raw=p.read_text(encoding="utf-8-sig",errors="replace")
     token_re=re.compile(r"(?<![A-Za-z0-9_-])([A-Za-z0-9_-]{8,4096})\.([A-Za-z0-9_-]{8,16384})\.([A-Za-z0-9_-]{0,4096})(?![A-Za-z0-9_-])")
-    matches=list(token_re.finditer(raw))
-    if len(matches)>1000:
-        raise RuntimeError("JWT input vượt giới hạn 1.000 token-like strings.")
+    matches=[]
+    for match in token_re.finditer(raw):
+        matches.append(match)
+        if len(matches)>1000:
+            raise RuntimeError("JWT input vượt giới hạn 1.000 token-like strings.")
     unique_tokens={}
     for match in matches:
         token=match.group(0)
