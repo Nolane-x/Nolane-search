@@ -890,13 +890,13 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (isPhoto) return "image-ocr";
   const mime = (file.mimeType || "").toLowerCase();
   const name = (file.fileName || "").toLowerCase();
+  if (name.endsWith(".svg") || mime === "image/svg+xml") return "svg-safety-audit";
   if (mime.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(name)) return "image-ocr";
   if (mime === "application/x-ndjson" || mime === "application/jsonl" || name.endsWith(".jsonl")) return "jsonl-format";
   if (mime === "application/pdf" || name.endsWith(".pdf")) return "pdf-text";
   if (name.endsWith(".epub") || mime === "application/epub+zip") return "epub-text";
   if (name.endsWith("robots.txt")) return "robots-txt-audit";
   if (name.endsWith(".rss") || name.endsWith(".atom") || mime === "application/rss+xml" || mime === "application/atom+xml") return "rss-atom-audit";
-  if (name.endsWith(".svg") || mime === "image/svg+xml") return "svg-safety-audit";
   if (name.endsWith(".pub") || name.endsWith(".authorized_keys")) return "ssh-public-key-audit";
   if (name.endsWith("robots.txt")) return "robots-txt-audit";
   if (name.endsWith(".rss") || name.endsWith(".atom") || mime === "application/rss+xml" || mime === "application/atom+xml") return "rss-atom-audit";
