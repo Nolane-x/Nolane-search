@@ -9,7 +9,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 - Source tree is committed and CI has passed type-checking, unit tests and Cloudflare build validation.
 - Cloudflare Worker `nolane-search` is deployed from `main`; its live `/health` endpoint returns `ok: true` and `database: reachable`.
 - D1 migrations `0001_core.sql` through `0004_remove_request_rate_limits.sql` are applied. The main Queue, dead-letter Queue, consumers and 30-minute Cron trigger are configured.
-- Latest production deployment: Worker version `8c86c559-30c2-4ba4-a7e4-5365751df737` (version 71, 100% traffic; deployment `9194f2a0-9974-4961-8433-9109066cf4b1`), from main commit `ccd74ad52825c498413622e571cfb2970da4b995`; Telegram webhook (`message` + `callback_query`) and command menu were registered successfully.
+- Latest production deployment: Worker version `ec64a6ca-e7a8-402b-88c4-e06f0d50c294` (version 72, 100% traffic; deployment `23d28228-ab44-41e7-a0ee-a9eeb5fb0641`), from main commit `f94cc153936de383e629ed92fcd0fab011883b41`; Telegram webhook (`message` + `callback_query`) and command menu were registered successfully.
 - GitHub Actions deployment has succeeded, including runtime-secret upload, Telegram webhook registration and Telegram command-menu registration.
 - The AI Router accepts the owner's multi-provider `AI_ROUTER_CONFIG` secret plus the legacy OpenRouter fallback. A successful configuration check shows loaded routes, not proof that every upstream model key or quota is currently healthy.
 - CI, Worker build, deployment and health smoke checks passed. Real Telegram command execution and live provider-key acceptance still need owner-level end-to-end testing.
@@ -38,7 +38,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Personal memory | /remember, /memories, /forget | Explicit owner-controlled memories shared by Telegram and Web AI chat |
 | Status | /status | Provider configuration and compact index counters |
-| Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | 314 registered file processors (312 production; Wave 15 XLSX/PDF privacy auditors pending deployment) including Markdown/code hygiene, secret redaction, SQL/YAML export, JSON structure analysis, configuration/DevOps, CI/CD and infrastructure audits, HTML SEO/accessibility/link/form/image audits, Excel formula/Markdown exports, PDF page audits, subtitle validation, favicon generation and Markdown TOC, interactive Telegram Tool Center and ephemeral GitHub Actions runners |
+| Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | 314 production file processors (Wave 15 XLSX/PDF privacy auditors deployed 2026-11-22; Cloudflare Worker v72) including Markdown/code hygiene, secret redaction, SQL/YAML export, JSON structure analysis, configuration/DevOps, CI/CD and infrastructure audits, HTML SEO/accessibility/link/form/image audits, Excel formula/Markdown exports, Excel/PDF privacy audits, PDF page audits, subtitle validation, favicon generation and Markdown TOC, interactive Telegram Tool Center and ephemeral GitHub Actions runners |
 | Workflow Intelligence | /workflow_plan, /workflow_plan_save, /workflow_plan_discard | AI designs validated pipelines and parallel DAGs with controlled text fan-in; preview, save and execution are separate |
 | GitHub Repository Intelligence | /repo URL, /repo_compare URL base...head | Analyze a public repository directly: static module/import graph, commit/branch history, dependency and lockfile inventory, license evidence, secret-pattern scan with values withheld, TODO markers, plus static CI/CD, Docker, Kubernetes and Terraform security checks. Reports include SARIF findings and supply-chain metadata; source code and workflows are never executed. |
 
@@ -114,4 +114,4 @@ The command returns a preview with its assumptions, warnings, self-reported conf
 Latest release handoff: docs/HANDOFF-WAVE-FOURTEEN-2026-11-22.md.
 
 
-Current development handoff: docs/HANDOFF-WAVE-FIFTEEN-2026-11-22.md.
+Latest release handoff: docs/HANDOFF-WAVE-FIFTEEN-2026-11-22.md.
