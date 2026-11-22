@@ -10963,8 +10963,8 @@ def notebook_privacy_audit(p):
         raise RuntimeError("Notebook audit giới hạn input 20 MiB.")
     try:
         data=json.loads(p.read_text(encoding="utf-8-sig"))
-    except (UnicodeError,json.JSONDecodeError) as exc:
-        raise RuntimeError("Jupyter notebook phải là JSON UTF-8 hợp lệ.") from exc
+    except (UnicodeError,json.JSONDecodeError,RecursionError) as exc:
+        raise RuntimeError("Jupyter notebook phải là JSON UTF-8 hợp lệ với nesting an toàn.") from exc
     if not isinstance(data,dict):
         raise RuntimeError("Notebook root phải là JSON object.")
     cells=data.get("cells",[])
@@ -11062,6 +11062,7 @@ def notebook_privacy_audit(p):
 
 
 def kml_kmz_audit(p):
+    import math
     import xml.etree.ElementTree as ET
     size=p.stat().st_size
     if size>20*1024*1024:
@@ -11163,34 +11164,40 @@ def design_token_audit(p):
     aliases={}
     group_count=missing_value=untyped=empty_names=0
     metadata_keys={"$type","$description","$deprecated","$extensions","$version","$schema","$root"}
-    def walk(node,path="",inherited_type=None):
-        nonlocal group_count,missing_value,untyped,empty_names
-        if not isinstance(node,dict): return
+    stack=[(root,"",None,0)]
+    while stack:
+        node,path,inherited_type,depth=stack.pop()
+        if depth>64:
+            raise RuntimeError("Design token group nesting exceeds 64 levels.")
+        if not isinstance(node,dict):
+            continue
         current_type=node.get("$type",inherited_type)
         if "$value" in node:
             token_paths.add(path)
+            if len(token_paths)>100000:
+                raise RuntimeError("Design token file exceeds 100,000 tokens.")
             token_type=str(current_type or "untyped")
             token_types[token_type]=token_types.get(token_type,0)+1
             if current_type is None: untyped+=1
-            value=node.get("$value")
             references=[]
-            def scan_value(item):
-                if isinstance(item,str): references.extend(re.findall(r"\{([A-Za-z0-9_.\\-/]+)\}",item))
+            value_stack=[node.get("$value")]
+            while value_stack:
+                item=value_stack.pop()
+                if isinstance(item,str):
+                    references.extend(re.findall(r"\{([A-Za-z0-9_.\\-/]+)\}",item))
                 elif isinstance(item,list):
-                    for child in item: scan_value(child)
+                    value_stack.extend(item)
                 elif isinstance(item,dict):
-                    for child in item.values(): scan_value(child)
-            scan_value(value)
+                    value_stack.extend(item.values())
             aliases[path]=references
-            return
+            continue
         children=[(key,value) for key,value in node.items() if key not in metadata_keys]
         if children: group_count+=1
         for key,value in children:
             key=str(key)
             if not key or key.startswith("$"): empty_names+=1
             child_path=(path+"."+key).strip(".")
-            walk(value,child_path,current_type)
-    walk(root)
+            stack.append((value,child_path,current_type,depth+1))
     unresolved=0
     graph={}
     for source,references in aliases.items():
