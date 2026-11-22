@@ -2,6 +2,22 @@
 
 Nolane Tools hiện có **318 công cụ đã triển khai trên production**; Wave 17 phát hành ngày 2026-11-22 trên Cloudflare Worker Version ID `f3180bcc-896d-4fef-9887-c81146865265`. Catalog TypeScript, Python runner allowlist, handler và pipeline transitions được đối chiếu trong CI. Catalog TypeScript, Python runner allowlist, handler và pipeline transitions được đối chiếu tự động. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp. Wave 7 và Wave 8 đưa catalog lên 275 công cụ; Wave 9 thêm 8 auditor hạ tầng/CI/CD; Wave 10 thêm 8 repository engineering analyzers, Wave 11 thêm 6 analyzer cho environment contracts, architecture cycles, change impact, OpenAPI, container và CI reliability, Wave 12 thêm 5 HTML quality auditors cho SEO, accessibility, links, forms và images; Wave 13 thêm 6 productivity processors; Wave 14 thêm 4 auditor DOCX/PPTX/CSV/archive. Đợt Wave 7 bổ sung 14 processor cho developer/network text, CSV, SQL/YAML và JSON; toàn bộ catalog có handler trên Python runner, được nối với AI direct processing ở các processor phù hợp và được đối chiếu tự động trong CI. Lệnh Telegram xử lý tệp trên GitHub-hosted runner dùng một lần; Worker lưu trạng thái tác vụ, không lưu nội dung tệp.
 
+### Wave 18 — Cross-domain everyday, data and media tools (in development)
+
+| ID | Công cụ | Nhóm | Chức năng |
+|---|---|---|---|
+| /tool har-privacy-audit | HAR privacy audit | Network / privacy | Đếm header, cookie, query/form keys và token patterns nhạy cảm trong browser capture; không xuất URL/giá trị. |
+| /tool ics-calendar-audit | iCalendar audit | Lịch | Kiểm tra event UID, thời gian, recurrence, timezone, alarm và attendee counts; không xuất dữ liệu event. |
+| /tool vcard-privacy-audit | vCard privacy audit | Danh bạ | Thống kê contact, email/phone trùng, trường địa chỉ/ảnh và dữ liệu thiếu; không xuất PII. |
+| /tool gpx-track-report | GPX track report | Bản đồ / thể thao | Tính quãng đường, độ cao, trackpoint, segment và khoảng thời gian; không tiết lộ tọa độ. |
+| /tool geojson-audit | GeoJSON audit | Dữ liệu địa lý | Thống kê geometry và kiểm tra longitude/latitude ngoài miền; không xuất tọa độ/property. |
+| /tool qr-code-generate | QR generator | Hình ảnh | Tạo PNG từ payload văn bản UTF-8; không đưa payload vào job summary. |
+| /tool font-inspect | Font inspector | Thiết kế | Đọc family, version, glyph/cmap, variable axes và embedding flags. |
+| /tool subtitle-fix | Subtitle repair | Media | Sắp xếp cue SRT/VTT, đánh lại số SRT, bỏ cue rỗng/lỗi và sửa thời lượng không dương. |
+| /tool openapi-contract-audit | OpenAPI audit | API | Kiểm tra operationId, responses, path parameters, local refs và HTTP server URLs; không fetch remote refs. |
+| /tool color-convert | Color converter | Thiết kế | Chuyển HEX/RGB sang HEX, RGB, HSL và CMYK cho danh sách nhiều dòng. |
+
+Wave 18 đang chờ CI/deploy; không tính 10 tool này vào production trước khi main CI, Worker export/smoke và deploy hoàn tất. Giới hạn: HAR tối đa 20 MiB/100.000 entries và chỉ quét tối đa 2 MiB body; iCalendar/vCard tối đa 10 MiB; GPX/GeoJSON tối đa 20 MiB; QR payload tối đa 4 KiB; font tối đa 20 MiB; subtitle tối đa 10 MiB; OpenAPI tối đa 10 MiB; color input tối đa 2 MiB. Các auditor trả số liệu và tín hiệu heuristic, không phải chứng nhận tuân thủ hay xác thực bảo mật toàn diện.
 ### Wave 17 — Email and JWT security audits — deployed 2026-11-22
 
 | ID | Công cụ | Chức năng | Đầu ra |
