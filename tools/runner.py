@@ -11248,7 +11248,7 @@ def sqlglot_format(p):
     if p.stat().st_size > 5 * 1024 * 1024:
         raise RuntimeError("SQL formatter giới hạn input 5 MiB.")
     raw=p.read_text(encoding="utf-8-sig")
-    read_dialect="ansi"; write_dialect="ansi"; sql=raw
+    read_dialect="auto"; write_dialect="auto"; sql=raw
     if p.suffix.lower()==".json":
         try:
             envelope=json.loads(raw)
@@ -11259,16 +11259,18 @@ def sqlglot_format(p):
         sql=envelope["sql"]
         read_dialect=str(envelope.get("read_dialect","ansi")).lower()
         write_dialect=str(envelope.get("write_dialect",read_dialect)).lower()
-    allowed={"ansi","bigquery","clickhouse","databricks","duckdb","mysql","postgres","presto","redshift","snowflake","spark","sqlite","trino","tsql"}
+    allowed={"auto","bigquery","clickhouse","databricks","duckdb","mysql","postgres","presto","redshift","snowflake","spark","sqlite","trino","tsql"}
     if read_dialect not in allowed or write_dialect not in allowed:
         raise RuntimeError("Dialect chưa được hỗ trợ; dùng một dialect được công bố trong tool description.")
     if not sql.strip() or len(sql)>1_000_000:
         raise RuntimeError("SQL phải có nội dung và tối đa 1.000.000 ký tự.")
     try:
-        statements=sqlglot.parse(sql,read=read_dialect)
+        read_arg=None if read_dialect=="auto" else read_dialect
+        write_arg=None if write_dialect=="auto" else write_dialect
+        statements=sqlglot.parse(sql,read=read_arg)
         if not statements or len(statements)>200:
             raise RuntimeError("SQL cần từ 1 đến 200 statement.")
-        converted=sqlglot.transpile(sql,read=read_dialect,write=write_dialect,pretty=True)
+        converted=sqlglot.transpile(sql,read=read_arg,write=write_arg,pretty=True)
     except RuntimeError:
         raise
     except Exception as exc:
