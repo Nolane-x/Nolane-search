@@ -3502,19 +3502,18 @@ Unknown-Directive: value
         self.assertAlmostEqual(first[0],0,places=5)
         self.assertAlmostEqual(first[1],0,places=5)
 
-    def test_wave22_html_seo_audit_counts_core_metadata_without_copying_values(self):
+    def test_wave22_html_structured_data_audit_checks_jsonld_without_copying_values(self):
         path=self.write("page.html",
-            '<html lang="vi"><head><title>Private title</title>'
-            '<meta name="description" content="Private description">'
-            '<link rel="canonical" href="https://example.test/">'
-            '<meta property="og:title" content="Private OG">'
-            '<meta property="og:description" content="Private OG description">'
-            '<script type="application/ld+json">{}</script></head>'
-            '<body><h1>Heading</h1><img src="a.png" alt="image"><a href="/x">link</a></body></html>')
-        result=runner.html_seo_audit(path)
-        self.assertIn("Meta descriptions: 1",result["summary"])
-        self.assertIn("JSON-LD blocks: 1",result["summary"])
-        self.assertNotIn("Private title",result["summary"])
+            '<html><head>'
+            '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","@id":"https://example.test/#org","name":"Private organization"}</script>'
+            '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","@id":"https://example.test/#org"}</script>'
+            '<script type="application/ld+json">{broken}</script>'
+            '</head></html>')
+        result=runner.html_structured_data_audit(path)
+        self.assertIn("JSON-LD script blocks: 3",result["summary"])
+        self.assertIn("Duplicate @id values: 1",result["summary"])
+        self.assertIn("Malformed JSON/non-object entries: 1",result["summary"])
+        self.assertNotIn("Private organization",result["summary"])
 
     def test_wave22_html_local_link_audit_finds_missing_file_and_fragment(self):
         path=self.input_dir/"site.zip"
