@@ -95,7 +95,7 @@ jobs:
         if: contains(steps.job.outputs.tool_ids, 'dns-zone-audit')
         run: python -m pip install --disable-pip-version-check dnspython
       - name: Install X.509 certificate parser
-        if: contains(steps.job.outputs.tool_ids, 'x509-certificate-audit')
+        if: contains(steps.job.outputs.tool_ids, 'x509-certificate-audit') || contains(steps.job.outputs.tool_ids, 'ssh-public-key-audit')
         run: python -m pip install --disable-pip-version-check cryptography
       - name: Install calendar and contact parsers
         if: contains(steps.job.outputs.tool_ids, 'ics-calendar-audit') || contains(steps.job.outputs.tool_ids, 'vcard-privacy-audit')
