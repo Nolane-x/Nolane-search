@@ -10828,8 +10828,8 @@ def pdf_table_extract(p):
         import pdfplumber
     except ImportError as exc:
         raise RuntimeError("Thiếu pdfplumber; runner cần cài dependency của pdf-table-extract.") from exc
-    if p.stat().st_size > 25 * 1024 * 1024:
-        raise RuntimeError("PDF table extraction giới hạn input 25 MiB.")
+    if p.stat().st_size > 20 * 1024 * 1024:
+        raise RuntimeError("PDF table extraction giới hạn input 20 MiB.")
     out = p.with_name(p.stem + "-tables.zip")
     total_tables = 0
     total_rows = 0
@@ -11009,8 +11009,8 @@ def docx_to_markdown(p):
         from docx.text.paragraph import Paragraph
     except ImportError as exc:
         raise RuntimeError("Thiếu python-docx để chuyển DOCX sang Markdown.") from exc
-    if p.stat().st_size > 25 * 1024 * 1024:
-        raise RuntimeError("DOCX to Markdown giới hạn input 25 MiB.")
+    if p.stat().st_size > 20 * 1024 * 1024:
+        raise RuntimeError("DOCX to Markdown giới hạn input 20 MiB.")
     try:
         document = Document(str(p))
         chunks = []
@@ -11081,8 +11081,8 @@ def pptx_notes_extract(p):
         from pptx import Presentation
     except ImportError as exc:
         raise RuntimeError("Thiếu python-pptx để trích speaker notes.") from exc
-    if p.stat().st_size > 40 * 1024 * 1024:
-        raise RuntimeError("PPTX speaker notes giới hạn input 40 MiB.")
+    if p.stat().st_size > 20 * 1024 * 1024:
+        raise RuntimeError("PPTX speaker notes giới hạn input 20 MiB.")
     try:
         presentation = Presentation(str(p))
         if len(presentation.slides) > 300:
