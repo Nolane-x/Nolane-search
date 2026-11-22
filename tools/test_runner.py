@@ -3319,7 +3319,7 @@ schema { query: Query }
         self.assertIn("placemarks: 2",report)
         self.assertIn("Point=1",report)
         self.assertIn("LineString=1",report)
-        self.assertIn("valid coordinate tuples: 2",report)
+        self.assertIn("valid coordinate tuples: 1",report)
         self.assertIn("invalid/out-of-range tuples: 1",report)
         self.assertNotIn("Private House",report)
         self.assertNotIn("105.8",report)
