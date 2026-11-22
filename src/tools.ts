@@ -414,6 +414,18 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "avro-schema-audit", name: "Kiểm tra Avro Schema", category: "data", description: "Rà cấu trúc record/enum/fixed/array/map, field trùng, union branch trùng và khai báo thiếu; không in tên schema, field hay default values.", accepts: ["application/json", ".avsc"], output: "Báo cáo Avro TXT", ready: true },
   { id: "graphql-schema-audit", name: "Kiểm tra GraphQL SDL Schema", category: "developer", description: "Parse và validate GraphQL SDL offline; thống kê type, field, argument, enum, deprecated và schema errors; không thực thi resolver/query/mutation.", accepts: ["text/graphql", ".graphql", ".gql"], output: "Báo cáo GraphQL TXT", ready: true },
   { id: "protobuf-schema-audit", name: "Kiểm tra Protocol Buffers .proto", category: "developer", description: "Rà syntax/package/message/enum/service/RPC, field number và reserved range bằng scanner tĩnh; không chạy protoc hay biên dịch schema.", accepts: ["text/plain", ".proto"], output: "Báo cáo Protobuf TXT", ready: true },
+  { id: "odf-package-audit", name: "Kiểm tra gói OpenDocument ODT/ODS/ODP", category: "document", description: "Kiểm tra ZIP mimetype, manifest, file thiếu/chưa khai báo, encryption, script và cấu trúc paragraph/table/slide; không xuất nội dung tài liệu.", accepts: ["application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet", "application/vnd.oasis.opendocument.presentation", ".odt", ".ods", ".odp"], output: "Báo cáo OpenDocument TXT", ready: true },
+  { id: "xliff-audit", name: "Kiểm tra chất lượng bản dịch XLIFF", category: "document", description: "Phân tích XLIFF 1.x/2.x: unit/segment, source-target, target rỗng, trạng thái và placeholder mismatch; không tiết lộ bản dịch.", accepts: ["application/xliff+xml", "text/xml", ".xlf", ".xliff"], output: "Báo cáo XLIFF TXT", ready: true },
+  { id: "mbox-audit", name: "Kiểm tra mailbox MBOX và quyền riêng tư", category: "document", description: "Đếm email, MIME part, file đính kèm, header presence và ngày lỗi; tuyệt đối không in địa chỉ, subject, body hoặc tên file.", accepts: ["application/mbox", "application/x-mbox", ".mbox", ".mbx"], output: "Báo cáo MBOX TXT", ready: true },
+  { id: "geopackage-audit", name: "Kiểm tra GeoPackage GIS", category: "data", description: "Rà SQLite metadata tables, feature/geometry columns, CRS, row counts và quick_check; không đọc geometry, bounds hoặc attribute values.", accepts: ["application/geopackage+sqlite3", "application/x-sqlite3", ".gpkg"], output: "Báo cáo GeoPackage TXT", ready: true },
+  { id: "mbtiles-audit", name: "Kiểm tra MBTiles bản đồ", category: "data", description: "Xác minh metadata/tiles schema, số tile, zoom range, duplicate coordinates và tọa độ ngoài miền; không đọc tile payload hoặc bounds.", accepts: ["application/x-sqlite3", ".mbtiles"], output: "Báo cáo MBTiles TXT", ready: true },
+  { id: "openraster-audit", name: "Kiểm tra dự án OpenRaster ORA", category: "image", description: "Kiểm tra ZIP stack.xml, canvas, layer/group, visibility, composite mode, missing layer source, thumbnail và merged preview; không giải mã pixel.", accepts: ["image/openraster", ".ora"], output: "Báo cáo OpenRaster TXT", ready: true },
+  { id: "krita-project-audit", name: "Kiểm tra dự án hội họa Krita KRA", category: "image", description: "Đọc maindoc.xml để thống kê canvas, color model/depth, layer/node, hidden/locked và preview; không mở pixel hoặc tiết lộ tên layer.", accepts: ["application/x-krita", ".kra"], output: "Báo cáo Krita project TXT", ready: true },
+  { id: "gltf-audit", name: "Kiểm tra asset 3D glTF/GLB", category: "developer", description: "Rà GLB chunks hoặc glTF JSON, scenes/nodes/meshes/materials/accessors, extensions và external/data URI; không tải texture/buffer từ mạng.", accepts: ["model/gltf+json", "model/gltf-binary", ".gltf", ".glb"], output: "Báo cáo glTF TXT", ready: true },
+  { id: "drawio-audit", name: "Kiểm tra sơ đồ draw.io", category: "developer", description: "Giải nén raw-DEFLATE/base64 pages và đếm mxCell, vertices, edges, duplicate IDs, dangling parent/source/target; không in labels hoặc URLs.", accepts: ["application/vnd.jgraph.mxfile", "application/xml", ".drawio", ".drawio.xml"], output: "Báo cáo draw.io TXT", ready: true },
+  { id: "n8n-workflow-audit", name: "Kiểm tra workflow automation n8n", category: "developer", description: "Rà nodes, connections, duplicate/dangling references, credential links, execution-sensitive nodes và hardcoded-secret fields; không chạy workflow hoặc xuất secret.", accepts: ["application/json", ".n8n.json", ".workflow.json"], output: "Báo cáo n8n workflow TXT", ready: true },
+  { id: "design-token-audit", name: "Kiểm tra Design Tokens DTCG 2025.10", category: "developer", description: "Rà group/token, $type/$value, token naming, alias/reference chưa resolve và circular paths; không in token names, values hoặc descriptions.", accepts: ["application/json", ".tokens.json"], output: "Báo cáo Design Tokens TXT", ready: true },
+  { id: "warc-archive-audit", name: "Kiểm tra Web Archive WARC", category: "data", description: "Đọc WARC 1.0/1.1 hoặc gzip để đếm records/types/content-types và kiểm tra Content-Length/truncation; không in URL, headers hay archived payload.", accepts: ["application/warc", "application/warc+gzip", ".warc", ".warc.gz"], output: "Báo cáo WARC TXT", ready: true },
 
 ];
 
@@ -782,6 +794,18 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "avro-schema-audit": ["text-clean", "text-stats"],
   "graphql-schema-audit": ["text-clean", "text-stats"],
   "protobuf-schema-audit": ["text-clean", "text-stats"],
+  "odf-package-audit": ["text-clean", "text-stats"],
+  "xliff-audit": ["text-clean", "text-stats"],
+  "mbox-audit": ["text-clean", "text-stats"],
+  "geopackage-audit": ["text-clean", "text-stats"],
+  "mbtiles-audit": ["text-clean", "text-stats"],
+  "openraster-audit": ["text-clean", "text-stats"],
+  "krita-project-audit": ["text-clean", "text-stats"],
+  "gltf-audit": ["text-clean", "text-stats"],
+  "drawio-audit": ["text-clean", "text-stats"],
+  "n8n-workflow-audit": ["text-clean", "text-stats"],
+  "design-token-audit": ["text-clean", "text-stats"],
+  "warc-archive-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
@@ -968,6 +992,18 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (name.endsWith(".avsc")) return "avro-schema-audit";
   if (/\.(?:graphql|gql)$/i.test(name) || mime === "text/graphql") return "graphql-schema-audit";
   if (name.endsWith(".proto")) return "protobuf-schema-audit";
+  if (/\.(?:odt|ods|odp)$/i.test(name) || mime.startsWith("application/vnd.oasis.opendocument.")) return "odf-package-audit";
+  if (/\.(?:xlf|xliff)$/i.test(name) || mime === "application/xliff+xml") return "xliff-audit";
+  if (/\.(?:mbox|mbx)$/i.test(name) || mime.includes("mbox")) return "mbox-audit";
+  if (name.endsWith(".gpkg")) return "geopackage-audit";
+  if (name.endsWith(".mbtiles")) return "mbtiles-audit";
+  if (name.endsWith(".ora") || mime === "image/openraster") return "openraster-audit";
+  if (name.endsWith(".kra") || mime === "application/x-krita") return "krita-project-audit";
+  if (/\.(?:gltf|glb)$/i.test(name) || mime.startsWith("model/gltf")) return "gltf-audit";
+  if (name.endsWith(".drawio") || name.endsWith(".drawio.xml")) return "drawio-audit";
+  if (name === "workflow.json" || name === "n8n.json" || name.endsWith(".n8n.json") || name.endsWith(".workflow.json")) return "n8n-workflow-audit";
+  if (/(?:design[_.-]?tokens|tokens)\.json$/i.test(name)) return "design-token-audit";
+  if (/\.warc(?:\.gz)?$/i.test(name) || mime.includes("warc")) return "warc-archive-audit";
   if (name.endsWith(".svg") || mime === "image/svg+xml") return "svg-safety-audit";
   if (mime.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(name)) return "image-ocr";
   if (mime === "application/x-ndjson" || mime === "application/jsonl" || name.endsWith(".jsonl")) return "jsonl-format";

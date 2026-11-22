@@ -12,6 +12,11 @@ from wave23 import (
     grafana_dashboard_audit, graphql_schema_audit, hdf5_audit, midi_audit,
     musicxml_audit, nmea_track_audit, prometheus_rules_audit, protobuf_schema_audit,
 )
+from wave24 import (
+    drawio_audit, design_token_audit, geopackage_audit, gltf_audit,
+    krita_project_audit, mbox_audit, mbtiles_audit, n8n_workflow_audit,
+    odf_package_audit, openraster_audit, warc_archive_audit, xliff_audit,
+)
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
@@ -140,6 +145,7 @@ RUNNERS = {
     "gcode-audit", "midi-audit", "musicxml-audit", "bibtex-audit", "nmea-track-audit",
     "ansible-playbook-audit", "prometheus-rules-audit", "grafana-dashboard-audit",
     "hdf5-audit", "avro-schema-audit", "graphql-schema-audit", "protobuf-schema-audit",
+    "odf-package-audit", "xliff-audit", "mbox-audit", "geopackage-audit", "mbtiles-audit", "openraster-audit", "krita-project-audit", "gltf-audit", "drawio-audit", "n8n-workflow-audit", "design-token-audit", "warc-archive-audit",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -499,11 +505,23 @@ PIPELINE_TRANSITIONS = {
     "avro-schema-audit":{"text-clean","text-stats"},
     "graphql-schema-audit":{"text-clean","text-stats"},
     "protobuf-schema-audit":{"text-clean","text-stats"},
+    "odf-package-audit":{"text-clean","text-stats"},
+    "xliff-audit":{"text-clean","text-stats"},
+    "mbox-audit":{"text-clean","text-stats"},
+    "geopackage-audit":{"text-clean","text-stats"},
+    "mbtiles-audit":{"text-clean","text-stats"},
+    "openraster-audit":{"text-clean","text-stats"},
+    "krita-project-audit":{"text-clean","text-stats"},
+    "gltf-audit":{"text-clean","text-stats"},
+    "drawio-audit":{"text-clean","text-stats"},
+    "n8n-workflow-audit":{"text-clean","text-stats"},
+    "design-token-audit":{"text-clean","text-stats"},
+    "warc-archive-audit":{"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-structured-data-audit","css-quality-audit","gcode-audit","midi-audit","musicxml-audit","bibtex-audit","nmea-track-audit","ansible-playbook-audit","prometheus-rules-audit","grafana-dashboard-audit","hdf5-audit","avro-schema-audit","graphql-schema-audit","protobuf-schema-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-structured-data-audit","css-quality-audit","gcode-audit","midi-audit","musicxml-audit","bibtex-audit","nmea-track-audit","ansible-playbook-audit","prometheus-rules-audit","grafana-dashboard-audit","hdf5-audit","avro-schema-audit","graphql-schema-audit","protobuf-schema-audit","odf-package-audit","xliff-audit","mbox-audit","geopackage-audit","mbtiles-audit","openraster-audit","krita-project-audit","gltf-audit","drawio-audit","n8n-workflow-audit","design-token-audit","warc-archive-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -12241,6 +12259,18 @@ TOOLS={
  "avro-schema-audit":avro_schema_audit,
  "graphql-schema-audit":graphql_schema_audit,
  "protobuf-schema-audit":protobuf_schema_audit,
+ "odf-package-audit":odf_package_audit,
+ "xliff-audit":xliff_audit,
+ "mbox-audit":mbox_audit,
+ "geopackage-audit":geopackage_audit,
+ "mbtiles-audit":mbtiles_audit,
+ "openraster-audit":openraster_audit,
+ "krita-project-audit":krita_project_audit,
+ "gltf-audit":gltf_audit,
+ "drawio-audit":drawio_audit,
+ "n8n-workflow-audit":n8n_workflow_audit,
+ "design-token-audit":design_token_audit,
+ "warc-archive-audit":warc_archive_audit,
 
 }
 

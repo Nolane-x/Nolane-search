@@ -1,5 +1,26 @@
 Nolane Tools hiện có **383 công cụ đã triển khai trên production** sau Wave 23, phát hành ngày 2026-11-22 trên Cloudflare Worker Version 80 (`f30ef26b-02c1-4d57-922a-acf3e698669d`). PR #75 đã merge thành commit `32f2fbb4e6936a5caea0bf552e337c852797a1e7`; main CI (175 Python runner tests, 25 Vitest files), Worker export/smoke và Cloudflare deployment đều thành công. Cloudflare xác nhận 100% traffic trên version này; Telegram webhook đã được xác minh cho `message` và `callback_query`. Catalog TypeScript, Python runner allowlist, handler và pipeline transitions được đối chiếu tự động trong CI. Tệp tải lên được xử lý trên GitHub-hosted runner dùng một lần; nội dung tệp không được lưu vào D1. Nguồn nghiên cứu và giấy phép các dự án upstream được ghi tại `docs/TOOL-RESEARCH-2026-11-22.md`.
 
+### Wave 24 — Document interoperability, GIS, creative projects and workflow formats — candidate branch
+
+Wave 24 adds 12 candidate processors to the existing 383-tool production catalog. The candidate branch contains **395 registered tools**; production remains at 383 until CI, Worker export/smoke and Cloudflare deployment pass.
+
+| ID | Công cụ | Nhóm | Chức năng |
+|---|---|---|---|
+| /tool odf-package-audit | OpenDocument package audit | Document | Kiểm tra ZIP mimetype/manifest, thành viên thiếu/chưa khai báo, encryption, script paths và số lượng paragraph/table/page; không xuất nội dung. |
+| /tool xliff-audit | XLIFF translation QA | Localization | Đếm units/segments, target rỗng, trạng thái và placeholder mismatch; không hiển thị source/translation text. |
+| /tool mbox-audit | MBOX privacy audit | Email/archive | Đếm message, MIME parts, attachment và header presence; không xuất địa chỉ, subject, body hoặc tên attachment. |
+| /tool geopackage-audit | GeoPackage audit | GIS | Xác minh SQLite metadata, feature tables, geometry types, CRS counts và row counts; không đọc geometry, tọa độ hay thuộc tính. |
+| /tool mbtiles-audit | MBTiles tileset audit | GIS/maps | Kiểm tra schema metadata/tiles, zoom levels, tile count, duplicate coordinates và phạm vi tile; không giải mã tile payload. |
+| /tool openraster-audit | OpenRaster layered image audit | Image/design | Đọc stack.xml, canvas, layers/groups, visibility, composite mode và missing layer sources; không mở pixel. |
+| /tool krita-project-audit | Krita KRA project audit | Image/design | Thống kê canvas/color model/depth và layer/node/hidden/locked; không giải mã artwork pixels hoặc xuất layer names. |
+| /tool gltf-audit | glTF/GLB asset audit | 3D/developer | Kiểm tra JSON/chunk structure, scenes, nodes, meshes, materials, accessors và resource URI; không tải texture/buffer từ mạng. |
+| /tool drawio-audit | draw.io diagram audit | Diagrams/developer | Giải mã compressed pages và đếm mxCell/vertices/edges, duplicate IDs, dangling references; không xuất labels/styles/URLs. |
+| /tool n8n-workflow-audit | n8n workflow static audit | Automation/developer | Rà nodes/connections/credentials references, sensitive node types và hardcoded-secret fields; không chạy workflow, không xuất secret. |
+| /tool design-token-audit | Design Tokens DTCG audit | Design systems | Kiểm tra groups/tokens, $type/$value, missing type, alias resolution và circular references; không xuất token names/values. |
+| /tool warc-archive-audit | WARC archive audit | Web archive/data | Đọc WARC 1.0/1.1 và gzip, đếm record/content types, kiểm tra Content-Length/truncation; không hiển thị URLs, headers hoặc archived payload. |
+
+Giới hạn Wave 24: ZIP input tối đa 20 MiB, tối đa 1.000 members và mặc định 120 MiB expanded; ORA tối đa 150 MiB expanded và KRA tối đa 180 MiB. OpenDocument XML tối đa 12 MiB; XLIFF tối đa 10 MiB; MBOX tối đa 20.000 messages/100.000 MIME parts; GeoPackage/MBTiles tối đa 20 MiB và chỉ mở SQLite read-only; glTF/GLB tối đa 20 MiB; draw.io decoded XML tối đa 12 MiB; n8n/Design Tokens tối đa 10 MiB với giới hạn node/depth; WARC tối đa 20 MiB compressed/120 MiB expanded/50.000 records. Các processor dùng Python standard library/SQLite only; không thêm runtime package. Đây là structural/static audits, không phải full conformance certification, email malware scan, GIS geometry validation, image rendering, workflow execution hay schema validation đầy đủ.
+
 ### Wave 23 — Science, observability, music, manufacturing and schema tools — deployed 2026-11-22
 
 Wave 23 adds 12 processors to the existing 371-tool catalog, bringing production to **383 tools**. [PR #75](https://github.com/Nolane-x/Nolane-search/pull/75) merged as `32f2fbb4e6936a5caea0bf552e337c852797a1e7`. Main CI [45013947086](https://github.com/Nolane-x/Nolane-search/actions/runs/45013947086), Worker export [45013946991](https://github.com/Nolane-x/Nolane-search/actions/runs/45013946991) and Cloudflare deployment [45013946981](https://github.com/Nolane-x/Nolane-search/actions/runs/45013946981) all passed. Worker Version 80 is receiving 100% traffic. Owner-level Telegram upload/report/retry checks remain outstanding.
