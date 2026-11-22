@@ -2,6 +2,16 @@
 
 Last verified: 2026-11-22. This document distinguishes production deployment and configuration checks from user-level behavior that still requires a real Telegram interaction.
 
+## In review — Wave 22 candidate (2026-11-22)
+
+- Branch: \`feat/wave-twenty-two-multidomain-tool-suite\`.
+- Seventeen additional processors are registered in the branch TypeScript catalog, Python RUNNERS allowlist, Python handler map and mirrored pipeline transitions. Branch catalog: **371 candidate tools**; production remains **354**.
+- New domains: SQL format/lint, Python static security, physical units, 3D mesh and CAD, shapefile/GIS, gettext localization, Jupyter Notebook, HEIC conversion, subtitle QA, KML/GeoJSON, EPSG coordinate transforms, static HTML SEO/local-link and CSS quality analysis.
+- Upstream licenses and selection rationale are recorded in \`docs/TOOL-RESEARCH-2026-11-22.md\`. Optional dependencies are installed only for a selected processor on the ephemeral runner; CI installs them for regression tests.
+- Seventeen Python regression tests cover all new processors. PR CI, Worker export/smoke and Cloudflare deployment have **not yet been reported as passing** for this branch.
+- Production remains on Wave 21 / 354 tools until the Wave 22 PR passes all checks and Cloudflare deployment succeeds.
+- Owner-level E2E after release: representative SQL/Python/unit/CAD/3D/GIS/PO/Notebook/HEIC/subtitle/KML/HTML/CSS uploads and /tool_retry; automated tests do not prove those Telegram journeys.
+
 ## Latest production release — Wave 21 (2026-11-22)
 
 - [PR #73](https://github.com/Nolane-x/Nolane-search/pull/73) merged into \`main\` as commit \`7709aac8173a90a661cea8ea99240ca34526ef8f\`; nine processors increase the catalog from 345 to **354 production tools**.
