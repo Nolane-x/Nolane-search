@@ -123,25 +123,37 @@ def ocfl_object_audit(path: Path) -> dict:
         raw = _read_bounded(archive, members[inventory_name], 8 * 1024 * 1024)
         inventory = _json_bytes(raw, "OCFL inventory")
         algorithm = str(inventory.get("digestAlgorithm", "")).lower()
-        if algorithm not in {"sha512", "sha256", "sha1", "md5"}:
+        if algorithm not in {"sha512", "sha256", "sha1", "md5", "blake2b-512"}:
             raise RuntimeError("OCFL inventory declares an unsupported digest algorithm.")
+        inventory_sidecars_checked = 0
+        inventory_sidecars_missing = 0
+        inventory_sidecar_mismatches = 0
+        for candidate_name in inventories:
+            candidate_raw = _read_bounded(archive, members[candidate_name], 8 * 1024 * 1024)
+            candidate_inventory = _json_bytes(candidate_raw, "OCFL version inventory")
+            candidate_algorithm = str(candidate_inventory.get("digestAlgorithm", "")).lower()
+            if candidate_algorithm not in {"sha512", "sha256", "sha1", "md5", "blake2b-512"}:
+                inventory_sidecar_mismatches += 1
+                continue
+            sidecar_name = candidate_name + "." + candidate_algorithm
+            sidecar_info = members.get(sidecar_name)
+            if sidecar_info is None:
+                inventory_sidecars_missing += 1
+                continue
+            sidecar_raw = _read_bounded(archive, sidecar_info, 4096).decode("ascii", errors="replace").strip().split()
+            expected = sidecar_raw[0].lower() if sidecar_raw else ""
+            filename = sidecar_raw[1] if len(sidecar_raw) > 1 else ""
+            if candidate_algorithm == "blake2b-512":
+                actual = hashlib.blake2b(candidate_raw, digest_size=64).hexdigest().lower()
+            else:
+                actual = hashlib.new(candidate_algorithm, candidate_raw).hexdigest().lower()
+            inventory_sidecars_checked += 1
+            inventory_sidecar_mismatches += int(expected != actual or filename != "inventory.json")
         current = inventory.get("head")
         versions = inventory.get("versions")
         manifest = inventory.get("manifest")
         if not isinstance(current, str) or not isinstance(versions, dict) or not versions or not isinstance(manifest, dict):
             raise RuntimeError("OCFL inventory is missing head, versions or manifest structures.")
-        sidecar_name = inventory_name + "." + algorithm
-        sidecar_checked = 0
-        sidecar_mismatch = 0
-        if sidecar_name in members:
-            sidecar = _read_bounded(archive, members[sidecar_name], 4096).decode("ascii", errors="replace").strip().split()
-            expected = sidecar[0].lower() if sidecar else ""
-            filename = sidecar[1] if len(sidecar) > 1 else ""
-            actual = hashlib.new(algorithm, raw).hexdigest().lower()
-            sidecar_checked = 1
-            sidecar_mismatch = int(expected != actual or filename != "inventory.json")
-        else:
-            sidecar_mismatch = 1
         manifest_digests = {}
         unsafe_paths = missing_files = digest_mismatches = 0
         files_checked = 0
@@ -203,8 +215,9 @@ def ocfl_object_audit(path: Path) -> dict:
         head_missing = int(current not in versions)
         lines = [
             f"OCFL specification declaration: {version}",
-            f"Inventory sidecar checked: {sidecar_checked:,}",
-            f"Inventory sidecar digest mismatches or missing: {sidecar_mismatch:,}",
+            f"Inventory sidecars checked: {inventory_sidecars_checked:,}",
+            f"Inventory sidecars missing: {inventory_sidecars_missing:,}",
+            f"Inventory sidecar digest mismatches: {inventory_sidecar_mismatches:,}",
             f"Current head resolves to a version: {not bool(head_missing)}",
             f"Object versions: {len(versions):,}",
             f"Manifest digest entries: {len(manifest_digests):,}",
