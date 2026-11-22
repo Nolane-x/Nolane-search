@@ -3273,7 +3273,8 @@ Unknown-Directive: value
         with Path(result["output_path"]).open(encoding="utf-8-sig", newline="") as handle:
             rows = list(csv.DictReader(handle))
         self.assertEqual(len(rows), 4)
-        self.assertEqual(rows[0]["overlap_count"], "2")
+        self.assertEqual(rows[0]["overlap_count"], "1")
+        self.assertEqual(rows[1]["overlap_count"], "2")
         self.assertEqual(rows[3]["ip_version"], "6")
         self.assertIn("1 dòng không hợp lệ", result["summary"])
 
