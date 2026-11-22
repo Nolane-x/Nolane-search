@@ -694,6 +694,8 @@ def stac_catalog_audit(path: Path) -> dict:
     if stac_type not in {"Catalog", "Collection", "Feature"}:
         raise RuntimeError("STAC JSON type must be Catalog, Collection or Feature/Item.")
     version = str(document.get("stac_version", ""))
+    version_valid = bool(re.fullmatch(r"\d+\.\d+\.\d+", version))
+    version_display = version if version_valid else "unspecified/invalid"
     extensions = document.get("stac_extensions", [])
     links = document.get("links", [])
     assets = document.get("assets", {})
@@ -742,7 +744,7 @@ def stac_catalog_audit(path: Path) -> dict:
     temporal_ranges = extent_temporal.get("interval", []) if isinstance(extent_temporal.get("interval"), list) else []
     lines = [
         f"STAC object type: {stac_type}",
-        f"STAC version: {version if re.fullmatch(r'\\d+\\.\\d+\\.\\d+', version) else 'unspecified/invalid'}",
+        f"STAC version: {version_display}",
         f"STAC extension references: {len(extensions) if isinstance(extensions, list) else 0}",
         f"Link entries: {len(links):,}",
         f"Invalid link records/refs: {invalid_links:,}",
