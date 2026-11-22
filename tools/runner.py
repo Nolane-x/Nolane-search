@@ -114,6 +114,23 @@ RUNNERS = {
     "fuzzy-match-report",
     "csv-to-parquet",
     "parquet-to-csv",
+    "sqlglot-format",
+    "sqlfluff-lint",
+    "python-security-audit",
+    "unit-convert",
+    "mesh-inspect",
+    "dxf-audit",
+    "shapefile-audit",
+    "gettext-catalog-audit",
+    "notebook-audit",
+    "notebook-strip-outputs",
+    "heic-convert",
+    "subtitle-quality-audit",
+    "kml-to-geojson",
+    "coordinate-transform",
+    "html-structured-data-audit",
+    "html-local-link-audit",
+    "css-quality-audit",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -454,11 +471,18 @@ PIPELINE_TRANSITIONS = {
     "fuzzy-match-report":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
     "csv-to-parquet":{"parquet-to-csv"},
     "parquet-to-csv":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
+    "sqlglot-format":{"sqlfluff-lint"},
+    "heic-convert":{"image-info","image-clean-exif","image-compress","image-resize","image-webp","image-palette"},
+    "kml-to-geojson":{"geojson-audit"},
+    "coordinate-transform":{"geojson-audit"},
+    "html-local-link-audit":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
+    "subtitle-quality-audit":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
+    "unit-convert":{"csv-profile","csv-clean","csv-to-xlsx","csv-to-json","csv-to-parquet"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-structured-data-audit","css-quality-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -11215,6 +11239,801 @@ def parquet_to_csv(p):
     return {"summary": f"Đã chuyển {row_count:,} hàng Parquet sang CSV UTF-8; ô có thể bị hiểu là công thức bảng tính đã được trung hòa.", "output_path": str(out)}
 
 
+
+def sqlglot_format(p):
+    try:
+        import sqlglot
+    except ImportError as exc:
+        raise RuntimeError("Thiếu sqlglot để parse/format SQL.") from exc
+    if p.stat().st_size > 5 * 1024 * 1024:
+        raise RuntimeError("SQL formatter giới hạn input 5 MiB.")
+    raw=p.read_text(encoding="utf-8-sig")
+    read_dialect="auto"; write_dialect="auto"; sql=raw
+    if p.suffix.lower()==".json":
+        try:
+            envelope=json.loads(raw)
+        except (UnicodeError,json.JSONDecodeError) as exc:
+            raise RuntimeError("JSON SQL envelope không hợp lệ.") from exc
+        if not isinstance(envelope,dict) or not isinstance(envelope.get("sql"),str):
+            raise RuntimeError('JSON cần trường "sql" dạng chuỗi.')
+        sql=envelope["sql"]
+        read_dialect=str(envelope.get("read_dialect","auto")).lower()
+        write_dialect=str(envelope.get("write_dialect",read_dialect)).lower()
+    allowed={"auto","bigquery","clickhouse","databricks","duckdb","mysql","postgres","presto","redshift","snowflake","spark","sqlite","trino","tsql"}
+    if read_dialect not in allowed or write_dialect not in allowed:
+        raise RuntimeError("Dialect chưa được hỗ trợ; dùng một dialect được công bố trong tool description.")
+    if not sql.strip() or len(sql)>1_000_000:
+        raise RuntimeError("SQL phải có nội dung và tối đa 1.000.000 ký tự.")
+    try:
+        read_arg=None if read_dialect=="auto" else read_dialect
+        write_arg=None if write_dialect=="auto" else write_dialect
+        statements=sqlglot.parse(sql,read=read_arg)
+        if not statements or len(statements)>200:
+            raise RuntimeError("SQL cần từ 1 đến 200 statement.")
+        converted=sqlglot.transpile(sql,read=read_arg,write=write_arg,pretty=True)
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("SQL không parse được với dialect đã chọn.") from exc
+    if not converted:
+        raise RuntimeError("SQL không tạo ra câu lệnh sau khi parse.")
+    content=";\n\n".join(item.rstrip().rstrip(";") for item in converted)+";\n"
+    if len(content.encode("utf-8"))>10*1024*1024:
+        raise RuntimeError("SQL formatter output vượt 10 MiB.")
+    out=p.with_name(p.stem+"-formatted.sql")
+    out.write_text(content,encoding="utf-8")
+    return {"summary":f"Đã parse và format {len(converted)} SQL statement từ {read_dialect} sang {write_dialect}; không thực thi truy vấn.","output_path":str(out)}
+
+
+def sqlfluff_lint(p):
+    try:
+        from sqlfluff.core import Linter
+    except ImportError as exc:
+        raise RuntimeError("Thiếu sqlfluff để kiểm tra chất lượng SQL.") from exc
+    if p.stat().st_size>5*1024*1024:
+        raise RuntimeError("SQL lint giới hạn input 5 MiB.")
+    raw=p.read_text(encoding="utf-8-sig")
+    if len(raw)>1_000_000:
+        raise RuntimeError("SQL lint giới hạn 1.000.000 ký tự.")
+    dialect="ansi"
+    first_line=raw.splitlines()[0] if raw.splitlines() else ""
+    match=re.match(r"\s*--\s*nolane-dialect:\s*([a-z0-9_]+)\s*$",first_line,re.I)
+    if match: dialect=match.group(1).lower()
+    allowed={"ansi","bigquery","clickhouse","databricks","duckdb","mysql","postgres","redshift","snowflake","sparksql","sqlite","trino","tsql"}
+    if dialect not in allowed:
+        raise RuntimeError("SQL dialect không nằm trong danh sách hỗ trợ.")
+    try:
+        lint=Linter(dialect=dialect).lint_string(raw)
+        violations=lint.get_violations()
+    except Exception as exc:
+        raise RuntimeError("SQLFluff không thể phân tích SQL; kiểm tra dialect hoặc cú pháp.") from exc
+    lines=[f"Dialect: {dialect}",f"Violations: {len(violations):,}"]
+    counts={}
+    for issue in violations[:1000]:
+        code=issue.rule_code() or "UNKNOWN"
+        counts[code]=counts.get(code,0)+1
+    for code,count in sorted(counts.items()):
+        lines.append(f"- {code}: {count:,}")
+    lines.append("First findings (line/column/rule only; SQL source text is not copied):")
+    for issue in violations[:200]:
+        lines.append(f"- L{issue.line_no or 0}:C{issue.line_pos or 0} · {issue.rule_code() or 'UNKNOWN'} · {issue.description[:180]}")
+    if len(violations)>200: lines.append(f"- {len(violations)-200:,} additional findings omitted.")
+    return tool_text("\n".join(lines),"SQLFluff lint report")
+
+
+def python_security_audit(p):
+    if p.suffix.lower()!=".py":
+        raise RuntimeError("Python security audit chỉ nhận một tệp .py; mã nguồn được phân tích tĩnh và không chạy.")
+    if p.stat().st_size>10*1024*1024:
+        raise RuntimeError("Python security audit giới hạn input 10 MiB.")
+    command=[sys.executable,"-m","bandit","-f","json","-q","--exit-zero",str(p)]
+    try:
+        process=subprocess.run(command,capture_output=True,text=True,timeout=120,stdin=subprocess.DEVNULL,check=False)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Bandit vượt giới hạn thời gian 120 giây.") from exc
+    if process.returncode not in (0,1) or not process.stdout.strip():
+        raise RuntimeError("Bandit không tạo được báo cáo JSON hợp lệ.")
+    try:
+        report=json.loads(process.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("Bandit trả về báo cáo không hợp lệ.") from exc
+    issues=report.get("results",[])
+    if len(issues)>10000:
+        raise RuntimeError("Python source có hơn 10.000 finding; đã dừng để giới hạn output.")
+    counts={}
+    for issue in issues:
+        key=(str(issue.get("issue_severity","UNKNOWN")).upper(),str(issue.get("issue_confidence","UNKNOWN")).upper())
+        counts[key]=counts.get(key,0)+1
+    lines=[f"Static findings: {len(issues):,}","Source code was not executed."]
+    for (severity,confidence),count in sorted(counts.items()):
+        lines.append(f"- {severity} severity / {confidence} confidence: {count:,}")
+    for issue in issues[:200]:
+        lines.append(
+            f"- L{int(issue.get('line_number') or 0)} · {issue.get('test_id','UNKNOWN')} · "
+            f"{str(issue.get('issue_severity','UNKNOWN')).upper()} / {str(issue.get('issue_confidence','UNKNOWN')).upper()}"
+        )
+    if len(issues)>200: lines.append(f"- {len(issues)-200:,} additional findings omitted.")
+    return tool_text("\n".join(lines),"Bandit Python security report")
+
+
+def unit_convert(p):
+    import math
+    try:
+        import pint
+    except ImportError as exc:
+        raise RuntimeError("Thiếu Pint để quy đổi đơn vị đo.") from exc
+    if p.stat().st_size>2*1024*1024:
+        raise RuntimeError("Unit conversion giới hạn input 2 MiB.")
+    registry=pint.UnitRegistry(autoconvert_offset_to_baseunit=True)
+    rows=[]; invalid=0
+    for line_number,raw in enumerate(p.read_text(encoding="utf-8-sig",errors="replace").splitlines(),1):
+        line=raw.strip()
+        if not line or line.startswith("#"): continue
+        if "->" not in line: invalid+=1; continue
+        left,right=(part.strip() for part in line.split("->",1))
+        if not left or not right or len(left)>160 or len(right)>100:
+            invalid+=1; continue
+        if not re.fullmatch(r"[0-9eE+\-*/^. \tA-Za-zµμ°_]+",left) or not re.fullmatch(r"[A-Za-zµμ°_*/^. \t0-9]+",right):
+            invalid+=1; continue
+        try:
+            quantity=registry.Quantity(left)
+            converted=quantity.to(right)
+            magnitude=float(converted.magnitude)
+            if not math.isfinite(magnitude): raise ValueError("non-finite")
+            result=f"{magnitude:.12g} {converted.units:~}"
+            rows.append((line_number,left,right,result))
+        except Exception:
+            invalid+=1
+        if len(rows)+invalid>1000:
+            raise RuntimeError("Unit conversion giới hạn 1.000 dòng.")
+    if not rows:
+        raise RuntimeError("Không có dòng quy đổi hợp lệ. Định dạng: 1 kilometer -> meter")
+    out=p.with_name(p.stem+"-converted.csv")
+    with out.open("w",encoding="utf-8-sig",newline="") as handle:
+        writer=csv.writer(handle,lineterminator="\n")
+        writer.writerow(["line","quantity","target_unit","result"])
+        for row in rows: writer.writerow([row[0],_spreadsheet_safe(row[1]),_spreadsheet_safe(row[2]),_spreadsheet_safe(row[3])])
+    return {"summary":f"Đã quy đổi {len(rows):,} dòng đơn vị bằng Pint; {invalid:,} dòng không hợp lệ hoặc không tương thích đơn vị.","output_path":str(out)}
+
+
+def mesh_inspect(p):
+    import math
+    try:
+        import trimesh
+    except ImportError as exc:
+        raise RuntimeError("Thiếu trimesh để đọc mô hình 3D.") from exc
+    allowed={".stl",".obj",".ply",".off",".glb",".gltf",".3mf"}
+    if p.suffix.lower() not in allowed:
+        raise RuntimeError("Mesh inspector hỗ trợ STL, OBJ, PLY, OFF, GLB, GLTF và 3MF.")
+    if p.stat().st_size>20*1024*1024:
+        raise RuntimeError("3D mesh inspector giới hạn input 20 MiB.")
+    try:
+        mesh=trimesh.load(str(p),force="mesh",process=False,maintain_order=True)
+    except Exception as exc:
+        raise RuntimeError("Không thể parse mô hình 3D; tệp có thể hỏng hoặc không được hỗ trợ.") from exc
+    if not hasattr(mesh,"vertices") or not hasattr(mesh,"faces"):
+        raise RuntimeError("Tệp không chứa triangle mesh được hỗ trợ.")
+    vertices=len(mesh.vertices); faces=len(mesh.faces)
+    if vertices>2_000_000 or faces>4_000_000:
+        raise RuntimeError("Mesh vượt giới hạn 2 triệu vertices hoặc 4 triệu faces.")
+    try:
+        extents=[float(value) for value in mesh.extents]
+        bounds=[[float(value) for value in row] for row in mesh.bounds]
+    except Exception:
+        extents=[]; bounds=[]
+    watertight=None; volume=None
+    if faces<=500_000:
+        try:
+            topology=mesh.copy()
+            # STL commonly repeats every triangle vertex; weld exact duplicates
+            # only in this analysis copy so topology statistics reflect the surface.
+            topology.merge_vertices()
+            watertight=bool(topology.is_watertight)
+            if watertight:
+                value=float(topology.volume)
+                if math.isfinite(value): volume=value
+        except Exception: pass
+    lines=[
+        f"Geometry: {mesh.__class__.__name__}",
+        f"Vertices: {vertices:,}",f"Faces: {faces:,}",
+        f"Watertight: {watertight if watertight is not None else 'not computed (mesh too large or unsupported)'}",
+        f"Extents (model units): {extents if extents else 'unavailable'}",
+        f"Bounds (model units): {bounds if bounds else 'unavailable'}",
+        f"Volume (model units cubed): {volume if volume is not None else 'not available'}",
+        "Watertight/volume use an in-memory analysis copy with duplicate vertices merged; the input file is never modified or repaired."
+    ]
+    return tool_text("\n".join(lines),"3D mesh inspection")
+
+
+def dxf_audit(p):
+    try:
+        import ezdxf
+        from collections import Counter
+    except ImportError as exc:
+        raise RuntimeError("Thiếu ezdxf để đọc bản vẽ DXF.") from exc
+    if p.suffix.lower()!=".dxf" or p.stat().st_size>20*1024*1024:
+        raise RuntimeError("DXF audit chỉ nhận .dxf tối đa 20 MiB.")
+    try:
+        document=ezdxf.readfile(str(p))
+        auditor=document.audit()
+        modelspace=document.modelspace()
+        counts=Counter(entity.dxftype() for entity in modelspace)
+        if len(modelspace)>1_000_000:
+            raise RuntimeError("DXF có hơn một triệu entity trong modelspace.")
+        error_count=len(auditor.errors); fix_count=len(auditor.fixes)
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("Không thể parse hoặc audit DXF; bản vẽ có thể không hợp lệ.") from exc
+    lines=[
+        f"DXF version: {document.dxfversion}",
+        f"Modelspace entities: {len(modelspace):,}",
+        f"Layers: {len(document.layers):,}",
+        f"Blocks: {len(document.blocks):,}",
+        f"INSUNITS code: {document.header.get('$INSUNITS',0)} (0 means unitless)",
+        f"Audit errors: {error_count:,}",
+        f"Auto-fixes reported by ezdxf auditor: {fix_count:,}",
+        "Entity types:"
+    ]
+    lines.extend(f"- {kind}: {count:,}" for kind,count in counts.most_common(40))
+    if len(counts)>40: lines.append(f"- {len(counts)-40:,} less common entity types omitted.")
+    return tool_text("\n".join(lines),"DXF CAD audit")
+
+
+def shapefile_audit(p):
+    import struct
+    try:
+        import shapefile
+        from io import BytesIO
+    except ImportError as exc:
+        raise RuntimeError("Thiếu pyshp để đọc ESRI Shapefile.") from exc
+    if p.suffix.lower()!=".zip" or p.stat().st_size>20*1024*1024:
+        raise RuntimeError("Shapefile audit yêu cầu ZIP chứa .shp/.shx/.dbf; input tối đa 20 MiB.")
+    try:
+        with zipfile.ZipFile(p) as archive:
+            infos=[item for item in archive.infolist() if not item.is_dir()]
+            if len(infos)>100: raise RuntimeError("Shapefile ZIP giới hạn 100 file.")
+            total=sum(item.file_size for item in infos)
+            if total>100*1024*1024: raise RuntimeError("Shapefile ZIP vượt 100 MiB dữ liệu giải nén.")
+            groups={}
+            for item in infos:
+                parts=_safe_archive_parts(item.filename)
+                mode=(item.external_attr>>16)&0xFFFF
+                if stat.S_ISLNK(mode) or item.flag_bits&1:
+                    raise RuntimeError("Shapefile ZIP chứa symlink hoặc entry mã hóa.")
+                path="/".join(parts)
+                suffix=Path(path).suffix.lower()
+                if suffix in (".shp",".shx",".dbf",".prj"):
+                    key=str(Path(path).with_suffix("")).casefold()
+                    groups.setdefault(key,{})[suffix]=item
+            candidates=[group for group in groups.values() if all(ext in group for ext in (".shp",".shx",".dbf"))]
+            if not candidates: raise RuntimeError("Không tìm thấy bộ .shp + .shx + .dbf đầy đủ trong ZIP.")
+            if len(candidates)>20: raise RuntimeError("Shapefile ZIP chứa hơn 20 bộ dữ liệu.")
+            reports=[]
+            for group in candidates:
+                shp_data=archive.read(group[".shp"]); shx_data=archive.read(group[".shx"]); dbf_data=archive.read(group[".dbf"])
+                reader=shapefile.Reader(shp=BytesIO(shp_data),shx=BytesIO(shx_data),dbf=BytesIO(dbf_data))
+                try:
+                    fields=[field for field in reader.fields[1:]]
+                    bbox=[float(value) for value in reader.bbox] if reader.bbox else []
+                    name=Path(group[".shp"].filename).name if hasattr(group[".shp"],"filename") else "dataset"
+                    reports.append((name,reader.shapeTypeName,len(reader),len(fields),bbox,[field[0] for field in fields[:40]],".prj" in group))
+                finally:
+                    reader.close()
+    except RuntimeError:
+        raise
+    except (zipfile.BadZipFile,shapefile.ShapefileException,ValueError,struct.error) as exc:
+        raise RuntimeError("Shapefile archive hỏng hoặc thiếu thành phần bắt buộc.") from exc
+    lines=[f"Shapefile datasets: {len(reports)}","Attribute values are not included in this report."]
+    for name,shape_type,records,field_count,bbox,field_names,has_prj in reports:
+        lines.extend([
+            f"\n{name}",
+            f"- Geometry: {shape_type}; records: {records:,}; fields: {field_count}",
+            f"- Bounding box: {bbox if bbox else 'not available'}",
+            f"- PRJ present: {has_prj}",
+            f"- Field names (first 40): {', '.join(field_names)}"
+        ])
+    return tool_text("\n".join(lines),"Shapefile inventory")
+
+
+def gettext_catalog_audit(p):
+    try:
+        import polib
+    except ImportError as exc:
+        raise RuntimeError("Thiếu polib để kiểm tra gettext PO/POT.") from exc
+    if p.suffix.lower() not in (".po",".pot") or p.stat().st_size>10*1024*1024:
+        raise RuntimeError("Gettext audit nhận .po/.pot tối đa 10 MiB.")
+    try:
+        catalog=polib.pofile(str(p),check_for_duplicates=True)
+    except Exception as exc:
+        raise RuntimeError("Gettext catalog không parse được hoặc có duplicate msgid.") from exc
+    entries=list(catalog)
+    if len(entries)>100_000:
+        raise RuntimeError("Gettext catalog vượt giới hạn 100.000 entry.")
+    untranslated=0; fuzzy=0; obsolete=0; placeholder_mismatch=0; plural_missing=0
+    pattern=re.compile(r"%(?:\([^)]+\))?[#0 +\-]?(?:\d+|\*)?(?:\.\d+)?[diouxXeEfFgGcrsa]|\{[A-Za-z_][A-Za-z0-9_.]*\}")
+    findings=[]
+    for entry in entries:
+        if entry.obsolete: obsolete+=1; continue
+        if "fuzzy" in entry.flags: fuzzy+=1
+        values=list(entry.msgstr_plural.values()) if entry.msgid_plural else [entry.msgstr]
+        if not any(values): untranslated+=1
+        if entry.msgid_plural and len(values)<2: plural_missing+=1
+        source_tokens=sorted(pattern.findall(entry.msgid)+(pattern.findall(entry.msgid_plural or "")))
+        target_tokens=sorted(token for value in values for token in pattern.findall(value or ""))
+        if source_tokens and source_tokens!=target_tokens:
+            placeholder_mismatch+=1
+            if len(findings)<100: findings.append(f"- line {entry.linenum}: placeholder set differs")
+    lines=[
+        f"Active entries: {len(entries)-obsolete:,}",
+        f"Untranslated: {untranslated:,}",
+        f"Fuzzy: {fuzzy:,}",
+        f"Obsolete: {obsolete:,}",
+        f"Plural entries missing forms: {plural_missing:,}",
+        f"Placeholder mismatches: {placeholder_mismatch:,}",
+        "Source/translation strings are not copied into this report."
+    ]+findings
+    return tool_text("\n".join(lines),"Gettext localization audit")
+
+
+def notebook_audit(p):
+    try:
+        import nbformat
+    except ImportError as exc:
+        raise RuntimeError("Thiếu nbformat để kiểm tra Jupyter Notebook.") from exc
+    if p.suffix.lower()!=".ipynb" or p.stat().st_size>20*1024*1024:
+        raise RuntimeError("Notebook audit nhận .ipynb tối đa 20 MiB.")
+    try:
+        notebook=nbformat.read(str(p),as_version=4)
+        nbformat.validate(notebook)
+    except Exception as exc:
+        raise RuntimeError("Notebook JSON/schema không hợp lệ.") from exc
+    cells=list(notebook.cells)
+    if len(cells)>20_000: raise RuntimeError("Notebook vượt giới hạn 20.000 cell.")
+    code=sum(cell.cell_type=="code" for cell in cells)
+    markdown=sum(cell.cell_type=="markdown" for cell in cells)
+    raw=sum(cell.cell_type=="raw" for cell in cells)
+    outputs=sum(len(cell.get("outputs",[])) for cell in cells if cell.cell_type=="code")
+    executed=sum(cell.get("execution_count") is not None for cell in cells if cell.cell_type=="code")
+    missing_ids=sum(not bool(cell.get("id")) for cell in cells)
+    attachments=sum(len(cell.get("attachments",{})) for cell in cells)
+    lines=[
+        f"Notebook format: nbformat {notebook.nbformat}.{notebook.nbformat_minor}",
+        f"Cells: {len(cells):,} (code {code:,}; markdown {markdown:,}; raw {raw:,})",
+        f"Executed code cells: {executed:,}/{code:,}",
+        f"Stored outputs: {outputs:,}",
+        f"Cells missing IDs: {missing_ids:,}",
+        f"Markdown attachments: {attachments:,}",
+        f"Kernel language: {notebook.metadata.get('kernelspec',{}).get('language','unknown')}",
+        "Cell source and execution output contents are not included."
+    ]
+    return tool_text("\n".join(lines),"Jupyter Notebook audit")
+
+
+def notebook_strip_outputs(p):
+    try:
+        import nbformat
+    except ImportError as exc:
+        raise RuntimeError("Thiếu nbformat để làm sạch Jupyter Notebook.") from exc
+    if p.suffix.lower()!=".ipynb" or p.stat().st_size>20*1024*1024:
+        raise RuntimeError("Notebook cleaner nhận .ipynb tối đa 20 MiB.")
+    try:
+        notebook=nbformat.read(str(p),as_version=4)
+        nbformat.validate(notebook)
+    except Exception as exc:
+        raise RuntimeError("Notebook JSON/schema không hợp lệ.") from exc
+    if len(notebook.cells)>20_000: raise RuntimeError("Notebook vượt giới hạn 20.000 cell.")
+    removed_outputs=0; removed_execution=0
+    for cell in notebook.cells:
+        if cell.cell_type!="code": continue
+        removed_outputs+=len(cell.get("outputs",[]))
+        removed_execution+=cell.get("execution_count") is not None
+        cell["outputs"]=[]
+        cell["execution_count"]=None
+    out=p.with_name(p.stem+"-clean.ipynb")
+    content=nbformat.writes(notebook,version=4)
+    if len(content.encode("utf-8"))>45*1024*1024:
+        raise RuntimeError("Clean Notebook output vượt 45 MiB.")
+    out.write_text(content,encoding="utf-8")
+    return {"summary":f"Đã xóa {removed_outputs:,} execution output và reset {removed_execution:,} execution count; giữ nguyên cell source và cấu trúc notebook.","output_path":str(out)}
+
+
+
+def subtitle_quality_audit(p):
+    if p.suffix.lower() not in (".srt",".vtt") or p.stat().st_size>10*1024*1024:
+        raise RuntimeError("Subtitle quality audit nhận SRT/VTT tối đa 10 MiB.")
+    raw=p.read_text(encoding="utf-8-sig",errors="replace").replace("\r\n","\n").replace("\r","\n")
+    stamp=re.compile(r"^\s*(?:(\d{1,3}):)?(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(?:(\d{1,3}):)?(\d{2}):(\d{2})[,.](\d{1,3})(?:\s+.*)?$")
+    def parse(groups,offset):
+        hours=int(groups[offset] or 0); minutes=int(groups[offset+1]); seconds=int(groups[offset+2])
+        fraction=int(groups[offset+3].ljust(3,"0"))
+        if minutes>59 or seconds>59: raise ValueError()
+        return ((hours*60+minutes)*60+seconds)*1000+fraction
+    cues=[]
+    for block in re.split(r"\n[ \t]*\n",raw.strip()):
+        lines=block.splitlines()
+        index=next((i for i,line in enumerate(lines) if "-->" in line),None)
+        if index is None: continue
+        match=stamp.match(lines[index])
+        if not match: continue
+        try:
+            groups=match.groups(); start=parse(groups,0); end=parse(groups,4)
+        except (ValueError,TypeError): continue
+        text_content="\n".join(lines[index+1:])
+        text_content=re.sub(r"<[^>]{0,200}>","",text_content)
+        text_content=unescape(text_content)
+        visible=re.sub(r"\s+"," ",text_content).strip()
+        if end<=start or not visible: continue
+        longest=max((len(line.strip()) for line in text_content.splitlines()),default=0)
+        chars=len(re.sub(r"\s","",visible))
+        cps=chars/max((end-start)/1000,0.001)
+        cues.append({"line":index+1,"start":start,"end":end,"duration":end-start,"chars":chars,"cps":cps,"longest":longest,"overlap":False})
+        if len(cues)>20000: raise RuntimeError("Subtitle audit giới hạn 20.000 cue.")
+    if not cues: raise RuntimeError("Không tìm thấy cue SRT/VTT hợp lệ.")
+    chronological=sorted(cues,key=lambda cue:(cue["start"],cue["end"]))
+    max_end=-1
+    for cue in chronological:
+        cue["overlap"]=cue["start"]<max_end
+        max_end=max(max_end,cue["end"])
+    long_cues=sum(cue["longest"]>42 for cue in cues)
+    fast_cues=sum(cue["cps"]>20 for cue in cues)
+    overlap_cues=sum(cue["overlap"] for cue in cues)
+    short_cues=sum(cue["duration"]<500 for cue in cues)
+    out=p.with_name(p.stem+"-subtitle-quality.csv")
+    with out.open("w",encoding="utf-8-sig",newline="") as handle:
+        writer=csv.writer(handle,lineterminator="\n")
+        writer.writerow(["timestamp_line","start_ms","end_ms","duration_ms","visible_chars","chars_per_second","longest_line_chars","overlaps_previous"])
+        for cue in sorted(cues,key=lambda item:item["line"]):
+            writer.writerow([cue["line"],cue["start"],cue["end"],cue["duration"],cue["chars"],round(cue["cps"],2),cue["longest"],int(cue["overlap"])])
+    return {"summary":f"Đã phân tích {len(cues):,} cue; >20 CPS: {fast_cues:,}; dòng dài hơn 42 ký tự: {long_cues:,}; cue overlap: {overlap_cues:,}; cue ngắn hơn 0,5 giây: {short_cues:,}. CSV chỉ chứa timing và số liệu, không chứa lời thoại.","output_path":str(out)}
+
+
+def kml_to_geojson(p):
+    import math
+    import xml.etree.ElementTree as ET
+    if p.suffix.lower() not in (".kml",".xml") or p.stat().st_size>20*1024*1024:
+        raise RuntimeError("KML converter nhận .kml/.xml tối đa 20 MiB.")
+    raw=p.read_bytes()
+    if re.search(rb"<!\s*(DOCTYPE|ENTITY)\b",raw,re.I):
+        raise RuntimeError("KML DTD/ENTITY bị chặn.")
+    try:
+        root=ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise RuntimeError("KML XML không hợp lệ.") from exc
+    def local(tag): return tag.rsplit("}",1)[-1]
+    coordinate_count=0
+    def coordinates(text_value):
+        nonlocal coordinate_count
+        result=[]
+        for token in (text_value or "").split():
+            parts=token.split(",")
+            if len(parts)<2: continue
+            try: values=[float(value) for value in parts[:3] if value!=""]
+            except ValueError: continue
+            if len(values)<2 or not all(math.isfinite(value) for value in values): continue
+            if not -180<=values[0]<=180 or not -90<=values[1]<=90: continue
+            result.append(values)
+            coordinate_count+=1
+            if coordinate_count>500000: raise RuntimeError("KML vượt giới hạn 500.000 tọa độ.")
+        return result
+    def find_child(node,name):
+        return next((child for child in node.iter() if child is not node and local(child.tag)==name),None)
+    def geometry(node):
+        kind=local(node.tag)
+        if kind=="Point":
+            item=find_child(node,"coordinates")
+            points=coordinates(item.text if item is not None else "")
+            return {"type":"Point","coordinates":points[0]} if points else None
+        if kind=="LineString":
+            item=find_child(node,"coordinates")
+            points=coordinates(item.text if item is not None else "")
+            return {"type":"LineString","coordinates":points} if len(points)>=2 else None
+        if kind=="LinearRing":
+            item=find_child(node,"coordinates")
+            points=coordinates(item.text if item is not None else "")
+            return {"type":"LinearRing","coordinates":points} if len(points)>=4 else None
+        if kind=="Polygon":
+            rings=[]
+            for boundary in node.iter():
+                if local(boundary.tag)!="LinearRing": continue
+                ring=geometry(boundary)
+                if ring: rings.append(ring["coordinates"])
+            if not rings: return None
+            if rings[0][0]!=rings[0][-1]: rings[0].append(rings[0][0])
+            return {"type":"Polygon","coordinates":rings}
+        if kind=="MultiGeometry":
+            members=[]
+            for child in list(node):
+                result=geometry(child)
+                if result: members.append(result)
+            return {"type":"GeometryCollection","geometries":members} if members else None
+        return None
+    features=[]
+    for placemark in (node for node in root.iter() if local(node.tag)=="Placemark"):
+        geometry_node=next((child for child in placemark.iter() if local(child.tag) in ("Point","LineString","Polygon","MultiGeometry")),None)
+        if geometry_node is None: continue
+        result=geometry(geometry_node)
+        if not result: continue
+        props={}
+        for child in list(placemark):
+            name=local(child.tag)
+            if name in ("name","description") and child.text:
+                props[name]=child.text[:2000]
+        features.append({"type":"Feature","geometry":result,"properties":props})
+        if len(features)>20000: raise RuntimeError("KML vượt giới hạn 20.000 Placemark feature.")
+    if not features: raise RuntimeError("Không tìm thấy Point/LineString/Polygon/MultiGeometry hợp lệ trong KML.")
+    output={"type":"FeatureCollection","features":features}
+    serialized=json.dumps(output,ensure_ascii=False,separators=(",",":"))
+    if len(serialized.encode("utf-8"))>MAX_PIPELINE_OUTPUT:
+        raise RuntimeError("GeoJSON output vượt 45 MiB.")
+    out=p.with_name(p.stem+".geojson")
+    out.write_text(json.dumps(output,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    return {"summary":f"Đã chuyển {len(features):,} Placemark và {coordinate_count:,} tọa độ KML sang GeoJSON; external NetworkLink không được tải.","output_path":str(out)}
+
+
+def coordinate_transform(p):
+    import math
+    try:
+        import pyproj
+    except ImportError as exc:
+        raise RuntimeError("Thiếu pyproj để chuyển hệ tọa độ.") from exc
+    if p.stat().st_size>10*1024*1024:
+        raise RuntimeError("Coordinate transform giới hạn input 10 MiB.")
+    try: data=json.loads(p.read_text(encoding="utf-8-sig"))
+    except (UnicodeError,json.JSONDecodeError) as exc: raise RuntimeError("Input phải là JSON coordinate envelope hợp lệ.") from exc
+    if not isinstance(data,dict) or not isinstance(data.get("coordinates"),list):
+        raise RuntimeError('JSON cần source_crs, target_crs và coordinates: [[x,y], ...].')
+    source=str(data.get("source_crs","")).upper()
+    target=str(data.get("target_crs","")).upper()
+    if not re.fullmatch(r"EPSG:[0-9]{3,6}",source) or not re.fullmatch(r"EPSG:[0-9]{3,6}",target):
+        raise RuntimeError("Chỉ hỗ trợ CRS dạng EPSG:xxxx; CRS tùy chỉnh và URL bị chặn.")
+    coords=data["coordinates"]
+    if not 1<=len(coords)<=10000: raise RuntimeError("Cần từ 1 đến 10.000 coordinate.")
+    try:
+        pyproj.network.set_network_enabled(active=False)
+        transformer=pyproj.Transformer.from_crs(source,target,always_xy=True)
+        output=[]
+        for point in coords:
+            if not isinstance(point,list) or len(point) not in (2,3): raise ValueError("coordinate")
+            values=[float(item) for item in point]
+            if not all(math.isfinite(value) for value in values): raise ValueError("non-finite")
+            if len(values)==3:
+                x,y,z=transformer.transform(values[0],values[1],values[2],errcheck=True)
+                converted=[x,y,z]
+            else:
+                x,y=transformer.transform(values[0],values[1],errcheck=True)
+                converted=[x,y]
+            if not all(math.isfinite(value) for value in converted): raise ValueError("non-finite output")
+            output.append(converted)
+    except Exception as exc:
+        raise RuntimeError("Không thể chuyển tọa độ; CRS không tương thích hoặc coordinate nằm ngoài miền hợp lệ.") from exc
+    result={"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":point},"properties":{"index":index+1}} for index,point in enumerate(output)],"source_crs":source,"target_crs":target}
+    out=p.with_name(p.stem+"-transformed.geojson")
+    out.write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    return {"summary":f"Đã chuyển {len(output):,} coordinate từ {source} sang {target} bằng pyproj; truy cập mạng PROJ bị tắt.","output_path":str(out)}
+
+
+def html_structured_data_audit(p):
+    if p.suffix.lower() not in (".html",".htm") or p.stat().st_size>10*1024*1024:
+        raise RuntimeError("JSON-LD audit nhận .html/.htm tối đa 10 MiB.")
+    class Parser(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.in_jsonld=False
+            self.buffer=[]
+            self.blocks=[]
+        def handle_starttag(self,tag,attrs):
+            if tag.lower()=="script":
+                attrs_map={key.lower():value for key,value in attrs if key}
+                if (attrs_map.get("type") or "").lower()=="application/ld+json":
+                    self.in_jsonld=True
+                    self.buffer=[]
+        def handle_endtag(self,tag):
+            if tag.lower()=="script" and self.in_jsonld:
+                self.blocks.append("".join(self.buffer))
+                self.in_jsonld=False
+                self.buffer=[]
+        def handle_data(self,data):
+            if self.in_jsonld: self.buffer.append(data)
+    parser=Parser()
+    try:
+        parser.feed(p.read_text(encoding="utf-8-sig",errors="replace"))
+        parser.close()
+    except Exception as exc:
+        raise RuntimeError("Không thể parse HTML để trích JSON-LD blocks.") from exc
+    malformed=0; missing_context=0; missing_type=0; array_roots=0; graph_roots=0; schema_org=0
+    seen_ids=set(); duplicate_ids=0; objects=0
+    for raw in parser.blocks:
+        try:
+            data=json.loads(raw)
+        except (ValueError,TypeError):
+            malformed+=1
+            continue
+        objects_to_check=data if isinstance(data,list) else [data]
+        if isinstance(data,list): array_roots+=1
+        for obj in objects_to_check:
+            if not isinstance(obj,dict):
+                malformed+=1
+                continue
+            objects+=1
+            context=obj.get("@context")
+            if not context: missing_context+=1
+            contexts=context if isinstance(context,list) else [context]
+            if any(isinstance(value,str) and "schema.org" in value.lower() for value in contexts):
+                schema_org+=1
+            if obj.get("@graph") is not None: graph_roots+=1
+            if not obj.get("@type"): missing_type+=1
+            identifier=obj.get("@id")
+            if isinstance(identifier,str) and identifier:
+                if identifier in seen_ids: duplicate_ids+=1
+                seen_ids.add(identifier)
+    lines=[
+        f"JSON-LD script blocks: {len(parser.blocks):,}",
+        f"Parsed JSON objects: {objects:,}",
+        f"Malformed JSON/non-object entries: {malformed:,}",
+        f"Objects missing @context: {missing_context:,}",
+        f"Objects missing @type: {missing_type:,}",
+        f"Objects referencing schema.org context: {schema_org:,}",
+        f"Blocks with root arrays: {array_roots:,}",
+        f"Objects containing @graph: {graph_roots:,}",
+        f"Duplicate @id values: {duplicate_ids:,}",
+        "JSON-LD contents, names, URLs and identifiers are not copied into this report."
+    ]
+    return tool_text("\n".join(lines),"JSON-LD structured data audit")
+
+
+def html_local_link_audit(p):
+    from urllib.parse import unquote,urlsplit
+    if p.suffix.lower()!=".zip" or p.stat().st_size>20*1024*1024:
+        raise RuntimeError("HTML local link audit yêu cầu ZIP site bundle tối đa 20 MiB.")
+    class PageParser(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True); self.fragments=set(); self.links=[]
+        def handle_starttag(self,tag,attrs):
+            values={key.lower():value for key,value in attrs if key}
+            if values.get("id"): self.fragments.add(values["id"])
+            if tag.lower()=="a" and values.get("name"): self.fragments.add(values["name"])
+            for key in ("href","src","poster"):
+                value=values.get(key)
+                if value: self.links.append((self.getpos()[0],key,value))
+    pages={}; members={}; total=0
+    try:
+        with zipfile.ZipFile(p) as archive:
+            infos=[item for item in archive.infolist() if not item.is_dir()]
+            if len(infos)>500: raise RuntimeError("HTML site ZIP giới hạn 500 file.")
+            for item in infos:
+                parts=_safe_archive_parts(item.filename)
+                mode=(item.external_attr>>16)&0xFFFF
+                if stat.S_ISLNK(mode) or item.flag_bits&1: raise RuntimeError("HTML ZIP chứa symlink hoặc entry mã hóa.")
+                total+=item.file_size
+                if total>100*1024*1024: raise RuntimeError("HTML ZIP vượt 100 MiB dữ liệu giải nén.")
+                path="/".join(parts); members[path]=item
+            html_paths=[path for path in members if Path(path).suffix.lower() in (".html",".htm")]
+            if len(html_paths)>200: raise RuntimeError("HTML site ZIP giới hạn 200 trang HTML.")
+            for path in html_paths:
+                parser=PageParser()
+                try: parser.feed(archive.read(members[path]).decode("utf-8-sig","replace")); parser.close()
+                except Exception: pass
+                pages[path]=parser
+            findings=[]; skipped_external=0
+            for source_path,parser in pages.items():
+                for line,key,value in parser.links:
+                    if len(findings)>=5000: break
+                    raw_value=unescape(value.strip())
+                    try: parts=urlsplit(raw_value)
+                    except ValueError:
+                        findings.append((source_path,line,"malformed-url")); continue
+                    if parts.scheme or parts.netloc or raw_value.startswith("//"):
+                        skipped_external+=1; continue
+                    decoded=unquote(parts.path)
+                    if decoded.startswith("/"):
+                        target=posixpath.normpath(decoded.lstrip("/"))
+                        if target==".": target="index.html"
+                    elif decoded: target=posixpath.normpath(posixpath.join(posixpath.dirname(source_path),decoded))
+                    else: target=source_path
+                    if target=="." : target=source_path
+                    if target==".." or target.startswith("../") or target.startswith("/"):
+                        findings.append((source_path,line,"path-escapes-site")); continue
+                    if target.endswith("/"): target=target+"index.html"
+                    if target not in members:
+                        if target in ("","./"): target=source_path
+                        if target not in members:
+                            findings.append((source_path,line,"missing-local-resource")); continue
+                    fragment=unquote(parts.fragment)
+                    if fragment and target in pages and fragment not in pages[target].fragments:
+                        findings.append((source_path,line,"missing-fragment"))
+        out=p.with_name(p.stem+"-local-link-audit.csv")
+        with out.open("w",encoding="utf-8-sig",newline="") as handle:
+            writer=csv.writer(handle,lineterminator="\n")
+            writer.writerow(["source_file","line","issue"])
+            for row in findings: writer.writerow([_spreadsheet_safe(row[0]),row[1],row[2]])
+    except RuntimeError:
+        raise
+    except (zipfile.BadZipFile,OSError) as exc: raise RuntimeError("HTML site ZIP hỏng hoặc không đọc được.") from exc
+    return {"summary":f"Đã kiểm tra {len(pages):,} HTML page; {sum(len(item.links) for item in pages.values()):,} local/external references; external refs skipped: {skipped_external:,}; internal issues: {len(findings):,}. CSV chỉ chứa source path, line và loại lỗi; không fetch URL.","output_path":str(out)}
+
+
+def css_quality_audit(p):
+    try:
+        import tinycss2
+    except ImportError as exc:
+        raise RuntimeError("Thiếu tinycss2 để parse CSS.") from exc
+    if p.suffix.lower()!=".css" or p.stat().st_size>10*1024*1024:
+        raise RuntimeError("CSS audit nhận .css tối đa 10 MiB.")
+    raw=p.read_text(encoding="utf-8-sig",errors="replace")
+    try:
+        rules=tinycss2.parse_stylesheet(raw,skip_comments=True,skip_whitespace=True)
+        errors=sum(rule.type=="error" for rule in rules)
+        selectors={}; duplicate_properties=0; important=0; declarations=0; imports=0
+        for rule in rules:
+            if rule.type=="at-rule":
+                if rule.lower_at_keyword=="import": imports+=1
+                continue
+            if rule.type!="qualified-rule": continue
+            selector=tinycss2.serialize(rule.prelude).strip()
+            selectors[selector]=selectors.get(selector,0)+1
+            parsed=tinycss2.parse_declaration_list(rule.content,skip_comments=True,skip_whitespace=True)
+            seen=set()
+            for item in parsed:
+                if item.type=="error": errors+=1
+                elif item.type=="declaration":
+                    declarations+=1
+                    if item.name.lower() in seen: duplicate_properties+=1
+                    seen.add(item.name.lower())
+                    if item.important: important+=1
+        duplicate_selectors=sum(count-1 for count in selectors.values() if count>1)
+        remote_refs=len(re.findall(r"url\(\s*['\"]?(?:https?:)?//",raw,re.I))
+        lines=[
+            f"Qualified rules: {sum(selectors.values()):,}",
+            f"Unique selectors: {len(selectors):,}",
+            f"Duplicate selector blocks: {duplicate_selectors:,}",
+            f"Declarations: {declarations:,}",
+            f"Repeated properties within a rule: {duplicate_properties:,}",
+            f"!important declarations: {important:,}",
+            f"@import rules: {imports:,}",
+            f"External URL references: {remote_refs:,}",
+            f"Parser errors: {errors:,}",
+            "Selector and declaration values are not copied into this report."
+        ]
+    except Exception as exc:
+        raise RuntimeError("CSS parser không thể hoàn thành audit.") from exc
+    return tool_text("\n".join(lines),"CSS quality audit")
+
+
+def heic_convert(p):
+    try:
+        import pillow_heif
+        from PIL import Image,ImageOps
+    except ImportError as exc:
+        raise RuntimeError("Thiếu pillow-heif/Pillow để chuyển HEIC/HEIF.") from exc
+    if p.suffix.lower() not in (".heic",".heif") or p.stat().st_size>20*1024*1024:
+        raise RuntimeError("HEIC converter nhận .heic/.heif tối đa 20 MiB.")
+    try:
+        pillow_heif.register_heif_opener()
+        with Image.open(p) as raw:
+            _guard_image_dimensions(raw)
+            frames=getattr(raw,"n_frames",1)
+            raw.seek(0)
+            oriented=ImageOps.exif_transpose(raw)
+            has_alpha=("A" in oriented.getbands()) or ("transparency" in oriented.info)
+            if has_alpha:
+                pixels=oriented.convert("RGBA")
+                clean=Image.new("RGBA",pixels.size); clean.paste(pixels)
+                out=p.with_name(p.stem+"-converted.png")
+                clean.save(out,"PNG",optimize=True)
+            else:
+                pixels=oriented.convert("RGB")
+                clean=Image.new("RGB",pixels.size); clean.paste(pixels)
+                out=p.with_name(p.stem+"-converted.jpg")
+                clean.save(out,"JPEG",quality=90,optimize=True,progressive=True)
+    except Exception as exc:
+        raise RuntimeError("Không thể giải mã HEIC/HEIF; tệp có thể hỏng hoặc codec không hỗ trợ.") from exc
+    if out.stat().st_size>MAX_PIPELINE_OUTPUT:
+        out.unlink(missing_ok=True)
+        raise RuntimeError("Converted image vượt 45 MiB.")
+    return {"summary":f"Đã chuyển HEIC/HEIF thành {out.suffix.upper()[1:]}; {pixels.width}×{pixels.height}; chọn frame đầu tiên trong {frames} frame; metadata camera/GPS không được giữ.","output_path":str(out)}
+
+
 TOOLS={
  "image-ocr":image_ocr,"image-info":image_info,"image-clean-exif":image_clean,"image-compress":image_compress,
  "image-to-pdf":image_pdf,"qr-read":qr_read,"pdf-text":pdf_text,"pdf-info":pdf_info,
@@ -11372,6 +12191,23 @@ TOOLS={
  "fuzzy-match-report":fuzzy_match_report,
  "csv-to-parquet":csv_to_parquet,
  "parquet-to-csv":parquet_to_csv,
+ "sqlglot-format":sqlglot_format,
+ "sqlfluff-lint":sqlfluff_lint,
+ "python-security-audit":python_security_audit,
+ "unit-convert":unit_convert,
+ "mesh-inspect":mesh_inspect,
+ "dxf-audit":dxf_audit,
+ "shapefile-audit":shapefile_audit,
+ "gettext-catalog-audit":gettext_catalog_audit,
+ "notebook-audit":notebook_audit,
+ "notebook-strip-outputs":notebook_strip_outputs,
+ "heic-convert":heic_convert,
+ "subtitle-quality-audit":subtitle_quality_audit,
+ "kml-to-geojson":kml_to_geojson,
+ "coordinate-transform":coordinate_transform,
+ "html-structured-data-audit":html_structured_data_audit,
+ "html-local-link-audit":html_local_link_audit,
+ "css-quality-audit":css_quality_audit,
 
 }
 

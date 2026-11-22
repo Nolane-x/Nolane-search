@@ -3351,5 +3351,188 @@ Unknown-Directive: value
         self.assertIn("002,Bob", csv_text)
         self.assertIn("'=1+1", csv_text)
 
+
+    def test_wave22_sqlglot_format_parses_and_formats_without_execution(self):
+        path=self.write("query.sql","select id,name from users where id = 7")
+        result=runner.sqlglot_format(path)
+        output=Path(result["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("SELECT",output)
+        self.assertIn("FROM",output)
+        self.assertIn("7",output)
+
+    def test_wave22_sqlfluff_lint_reports_rule_locations_without_query_text(self):
+        path=self.write("query.sql","select id from users\n")
+        result=runner.sqlfluff_lint(path)
+        self.assertIn("Dialect: ansi",result["summary"])
+        self.assertIn("Violations:",result["summary"])
+        self.assertNotIn("select id from users",result["summary"].lower())
+
+    def test_wave22_python_security_audit_detects_shell_execution_pattern(self):
+        path=self.write("unsafe.py",'import subprocess\nsubprocess.Popen("echo hi", shell=True)\n')
+        result=runner.python_security_audit(path)
+        self.assertIn("B602",result["summary"])
+        self.assertIn("Source code was not executed",result["summary"])
+
+    def test_wave22_unit_convert_handles_metric_and_temperature(self):
+        path=self.write("units.txt","1 kilometer -> meter\n0 degree_Celsius -> degree_Fahrenheit\n")
+        result=runner.unit_convert(path)
+        output=Path(result["output_path"]).read_text(encoding="utf-8-sig")
+        self.assertIn("1000",output)
+        self.assertIn("32",output)
+
+    def test_wave22_mesh_inspect_reports_watertight_box(self):
+        import trimesh
+        path=self.input_dir/"box.stl"
+        trimesh.creation.box(extents=(2,3,4)).export(str(path))
+        result=runner.mesh_inspect(path)
+        self.assertIn("Vertices: 36",result["summary"])
+        self.assertIn("Watertight: True",result["summary"])
+        self.assertIn("Volume (model units cubed): 24",result["summary"])
+
+    def test_wave22_dxf_audit_reports_entities_and_layers(self):
+        import ezdxf
+        path=self.input_dir/"drawing.dxf"
+        document=ezdxf.new("R2010")
+        document.modelspace().add_line((0,0),(10,10))
+        document.saveas(path)
+        result=runner.dxf_audit(path)
+        self.assertIn("Modelspace entities: 1",result["summary"])
+        self.assertIn("LINE: 1",result["summary"])
+
+    def test_wave22_shapefile_audit_reads_components_and_hides_attribute_values(self):
+        import shapefile
+        base=self.input_dir/"districts"
+        writer=shapefile.Writer(str(base),shapeType=shapefile.POINT)
+        writer.field("NAME","C")
+        writer.point(105.8,20.9)
+        writer.record("Private district label")
+        writer.close()
+        archive_path=self.input_dir/"districts.zip"
+        with zipfile.ZipFile(archive_path,"w") as archive:
+            for extension in (".shp",".shx",".dbf"):
+                archive.write(str(base)+extension,"districts"+extension)
+        result=runner.shapefile_audit(archive_path)
+        self.assertIn("POINT",result["summary"])
+        self.assertIn("records: 1",result["summary"])
+        self.assertNotIn("Private district label",result["summary"])
+
+    def test_wave22_gettext_catalog_audit_finds_untranslated_and_placeholder_drift(self):
+        content=(
+            'msgid ""\nmsgstr ""\n"Content-Type: text/plain; charset=UTF-8\\\\n"\n\n'
+            'msgid "Hello %s"\nmsgstr "Xin chào"\n\n'
+            'msgid "Pending"\nmsgstr ""\n\n'
+            '#, fuzzy\nmsgid "Files {count}"\nmsgstr "Tệp"\n'
+        )
+        path=self.write("vi.po",content)
+        result=runner.gettext_catalog_audit(path)
+        self.assertIn("Untranslated: 1",result["summary"])
+        self.assertIn("Fuzzy: 1",result["summary"])
+        self.assertIn("Placeholder mismatches: 2",result["summary"])
+        self.assertNotIn("Hello %s",result["summary"])
+
+    def test_wave22_notebook_audit_validates_schema_and_counts_outputs(self):
+        import nbformat
+        path=self.input_dir/"analysis.ipynb"
+        notebook=nbformat.v4.new_notebook(cells=[
+            nbformat.v4.new_code_cell("1 + 1",execution_count=1,outputs=[nbformat.v4.new_output("stream",name="stdout",text="2")]),
+            nbformat.v4.new_markdown_cell("# Notes")
+        ])
+        nbformat.write(notebook,path)
+        result=runner.notebook_audit(path)
+        self.assertIn("Cells: 2",result["summary"])
+        self.assertIn("Stored outputs: 1",result["summary"])
+
+    def test_wave22_notebook_strip_outputs_preserves_source_and_resets_execution(self):
+        import nbformat
+        path=self.input_dir/"private.ipynb"
+        notebook=nbformat.v4.new_notebook(cells=[
+            nbformat.v4.new_code_cell("print('keep source')",execution_count=3,outputs=[nbformat.v4.new_output("stream",name="stdout",text="private output")])
+        ])
+        nbformat.write(notebook,path)
+        result=runner.notebook_strip_outputs(path)
+        cleaned=nbformat.read(result["output_path"],as_version=4)
+        self.assertEqual(cleaned.cells[0].source,"print('keep source')")
+        self.assertEqual(cleaned.cells[0].outputs,[])
+        self.assertIsNone(cleaned.cells[0].execution_count)
+
+    def test_wave22_heic_convert_produces_jpeg_without_exif(self):
+        import pillow_heif
+        from PIL import Image
+        path=self.input_dir/"photo.heic"
+        heif=pillow_heif.from_bytes(mode="RGB",size=(8,6),data=bytes([120,80,40])*48)
+        heif.save(str(path),quality=85)
+        result=runner.heic_convert(path)
+        with Image.open(result["output_path"]) as converted:
+            self.assertEqual(converted.format,"JPEG")
+            self.assertEqual(converted.size,(8,6))
+            self.assertFalse(bool(converted.getexif()))
+
+    def test_wave22_subtitle_quality_audit_reports_overlap_and_fast_reading(self):
+        path=self.write("captions.vtt",
+            "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n"
+            "This subtitle line is intentionally extremely long to exceed the normal reading limit.\n\n"
+            "00:00:01.500 --> 00:00:03.000\nSecond overlapping subtitle.\n")
+        result=runner.subtitle_quality_audit(path)
+        with Path(result["output_path"]).open(encoding="utf-8-sig",newline="") as handle:
+            rows=list(csv.DictReader(handle))
+        self.assertEqual(len(rows),2)
+        self.assertEqual(rows[1]["overlaps_previous"],"1")
+        self.assertIn("cue overlap: 1",result["summary"])
+        self.assertIn("CPS",result["summary"])
+
+    def test_wave22_kml_to_geojson_converts_point_and_linestring(self):
+        path=self.write("map.kml",
+            '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
+            '<Placemark><name>Point A</name><Point><coordinates>105.8,20.9,0</coordinates></Point></Placemark>'
+            '<Placemark><LineString><coordinates>105.0,20.0 106.0,21.0</coordinates></LineString></Placemark>'
+            '</Document></kml>')
+        result=runner.kml_to_geojson(path)
+        data=json.loads(Path(result["output_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(len(data["features"]),2)
+        self.assertEqual(data["features"][0]["geometry"]["type"],"Point")
+        self.assertEqual(data["features"][1]["geometry"]["type"],"LineString")
+
+    def test_wave22_coordinate_transform_converts_wgs84_origin_to_web_mercator(self):
+        path=self.write("coordinates.json",json.dumps({
+            "source_crs":"EPSG:4326","target_crs":"EPSG:3857","coordinates":[[0,0],[10,10]]
+        }))
+        result=runner.coordinate_transform(path)
+        data=json.loads(Path(result["output_path"]).read_text(encoding="utf-8"))
+        first=data["features"][0]["geometry"]["coordinates"]
+        self.assertAlmostEqual(first[0],0,places=5)
+        self.assertAlmostEqual(first[1],0,places=5)
+
+    def test_wave22_html_structured_data_audit_checks_jsonld_without_copying_values(self):
+        path=self.write("page.html",
+            '<html><head>'
+            '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","@id":"https://example.test/#org","name":"Private organization"}</script>'
+            '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","@id":"https://example.test/#org"}</script>'
+            '<script type="application/ld+json">{broken}</script>'
+            '</head></html>')
+        result=runner.html_structured_data_audit(path)
+        self.assertIn("JSON-LD script blocks: 3",result["summary"])
+        self.assertIn("Duplicate @id values: 1",result["summary"])
+        self.assertIn("Malformed JSON/non-object entries: 1",result["summary"])
+        self.assertNotIn("Private organization",result["summary"])
+
+    def test_wave22_html_local_link_audit_finds_missing_file_and_fragment(self):
+        path=self.input_dir/"site.zip"
+        with zipfile.ZipFile(path,"w") as archive:
+            archive.writestr("index.html",'<!doctype html><a href="about.html#team">About</a><img src="missing.png"><a href="#absent">Jump</a>')
+            archive.writestr("about.html",'<html><body><h1 id="team">Team</h1></body></html>')
+        result=runner.html_local_link_audit(path)
+        with Path(result["output_path"]).open(encoding="utf-8-sig",newline="") as handle:
+            rows=list(csv.DictReader(handle))
+        issues={row["issue"] for row in rows}
+        self.assertIn("missing-local-resource",issues)
+        self.assertIn("missing-fragment",issues)
+
+    def test_wave22_css_quality_audit_detects_duplicates_and_important(self):
+        path=self.write("style.css",".card{color:red;color:blue!important}.card{margin:0}")
+        result=runner.css_quality_audit(path)
+        self.assertIn("Duplicate selector blocks: 1",result["summary"])
+        self.assertIn("Repeated properties within a rule: 1",result["summary"])
+        self.assertIn("!important declarations: 1",result["summary"])
+
 if __name__ == "__main__":
     unittest.main()

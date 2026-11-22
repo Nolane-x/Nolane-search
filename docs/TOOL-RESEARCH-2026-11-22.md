@@ -100,3 +100,34 @@ The integrations call upstream libraries through their public APIs; they do not 
 - PPTX extraction reads presenter notes and intentionally excludes slide-body text.
 - Fuzzy matching is bounded to 1,200 lines and reports source strings in its CSV output.
 - Parquet conversions use fixed DuckDB operations, with a one-million-row ceiling and no user SQL.
+
+
+## Wave 22 repositories reviewed
+
+| Repository | Scope examined | License verified | Integration decision |
+|---|---|---|---|
+| [tobymao/sqlglot](https://github.com/tobymao/sqlglot) | SQL parsing, formatting and transpilation across dialects | MIT | Added SQLGlot formatter/transpiler; supports a bounded dialect allowlist and never executes SQL. |
+| [sqlfluff/sqlfluff](https://github.com/sqlfluff/sqlfluff) | SQL linting and dialect-aware style rules | MIT | Added SQL lint report with rule/line/column metadata; source query is not copied into the report. |
+| [PyCQA/bandit](https://github.com/PyCQA/bandit) | Static Python security pattern scanning | Apache-2.0 | Added single-file Bandit scan through a fixed subprocess invocation; Python source is parsed but never executed. |
+| [hgrecco/pint](https://github.com/hgrecco/pint) | Physical quantities, unit registry and dimensional conversion | BSD-3-Clause | Added bounded quantity-to-target conversion with dimensionality checking and a restricted input grammar. |
+| [mikedh/trimesh](https://github.com/mikedh/trimesh) | Triangle mesh loading, topology and geometry inspection | MIT | Added offline STL/OBJ/PLY/OFF/GLB/GLTF/3MF inspection with vertex/face and expensive-operation limits. |
+| [mozman/ezdxf](https://github.com/mozman/ezdxf) | DXF CAD document parsing and auditor | MIT | Added DXF layer/entity/block inventory and local audit; does not render or resolve external references. |
+| [GeospatialPython/pyshp](https://github.com/GeospatialPython/pyshp) | ESRI Shapefile reader and writer | MIT | Added ZIP-based .shp/.shx/.dbf structure audit; attribute record values are not emitted. |
+| [izimobil/polib](https://github.com/izimobil/polib) | GNU gettext PO/POT catalog parsing | MIT | Added localization completeness, plural and placeholder consistency audit without copying translation strings. |
+| [jupyter/nbformat](https://github.com/jupyter/nbformat) | Jupyter Notebook schema and in-memory cell model | BSD-3-Clause | Added schema/cell/output audit and a separate output-stripping conversion; no notebook cells are executed. |
+| [bigcat88/pillow_heif](https://github.com/bigcat88/pillow_heif) | HEIF/HEIC decoding and Pillow integration | BSD-3-Clause | Added HEIC/HEIF to JPEG/PNG conversion; only frame zero is kept and camera/GPS metadata is not copied. |
+| [pyproj4/pyproj](https://github.com/pyproj4/pyproj) | PROJ coordinate reference systems and transformations | MIT | Added EPSG-to-EPSG transformation for bounded coordinate arrays; PROJ network access is disabled. |
+| [Kozea/tinycss2](https://github.com/Kozea/tinycss2) | CSS tokenization and syntax parsing | BSD-3-Clause | Added CSS rule/declaration quality counts, parser errors, duplicate selectors and external reference counts. |
+
+### Standard-library processors
+
+KML-to-GeoJSON, subtitle timing QA, JSON-LD structured-data auditing, HTML local-link checking and CSS-free HTML parsing use Python's standard library (ElementTree, HTMLParser, json, csv, zipfile, urllib.parse and regular expressions). KML rejects DTD/entity declarations; HTML and local-link tools do not fetch external URLs; archive members are inspected in memory under explicit count/expanded-size limits.
+
+### Wave 22 exclusions and selection notes
+
+- [frictionlessdata/frictionless-py](https://github.com/frictionlessdata/frictionless-py) (MIT) was reviewed for Data Package/Table Schema validation. It was deferred because the framework brings a broad dependency graph; a narrower, explicit schema-contract use case should be selected before adding it.
+- [Breakthrough/PySceneDetect](https://github.com/Breakthrough/PySceneDetect) (BSD-3-Clause) was reviewed but not added because Nolane already has FFmpeg-based scene/frame extraction; the incremental capability did not justify another video-processing dependency in this wave.
+- [nschloe/meshio](https://github.com/nschloe/meshio) (MIT) was reviewed for mesh format conversion. The initial 3D capability uses trimesh for inspection only; a separate mesh conversion workflow can be evaluated later if format conversion proves useful.
+- [python-babel/babel](https://github.com/python-babel/babel) (BSD-3-Clause) and [html5lib/html5lib-python](https://github.com/html5lib/html5lib-python) (MIT) were reviewed. Gettext parsing is handled by polib, and current HTML metadata/link metrics are handled by a bounded standard-library parser, so neither package was added.
+
+No upstream project source is vendored. Runtime packages are installed only when a matching tool is selected on the ephemeral GitHub Actions runner; CI installs the set for regression testing. The feature branch adds 17 processors, but they remain candidates until CI, Worker export/health smoke and Cloudflare deployment all pass.

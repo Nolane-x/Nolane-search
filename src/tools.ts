@@ -385,6 +385,23 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "fuzzy-match-report", name: "Tìm dòng gần trùng", category: "data", description: "Dùng RapidFuzz so khớp các dòng gần giống, báo độ tương đồng và vị trí; giới hạn 1.200 dòng và 5.000 cặp.", accepts: ["text/plain", ".txt", ".md", ".csv", ".log"], output: "CSV fuzzy matches", ready: true },
   { id: "csv-to-parquet", name: "CSV sang Parquet", category: "data", description: "Chuyển CSV thành Parquet Zstandard bằng DuckDB; giữ cột dạng chuỗi để bảo toàn số 0 đầu và giới hạn một triệu hàng.", accepts: ["text/csv", ".csv"], output: "Tệp Parquet", ready: true },
   { id: "parquet-to-csv", name: "Parquet sang CSV", category: "data", description: "Đọc Parquet và xuất CSV UTF-8 bằng DuckDB; không nhận SQL do người dùng cung cấp và giới hạn một triệu hàng.", accepts: ["application/vnd.apache.parquet", ".parquet"], output: "Tệp CSV", ready: true },
+  { id: "sqlglot-format", name: "Format và chuyển dialect SQL", category: "developer", description: "Parse, format và chuyển SQL giữa ANSI, PostgreSQL, MySQL, BigQuery, Snowflake, DuckDB, SQLite và dialect được hỗ trợ; không thực thi truy vấn.", accepts: ["text/plain", ".sql", "application/json", ".json"], output: "Tệp SQL đã format", ready: true },
+  { id: "sqlfluff-lint", name: "Lint chất lượng SQL", category: "developer", description: "Phân tích SQL theo dialect ANSI/PostgreSQL/MySQL/BigQuery/Snowflake/DuckDB và báo rule, dòng, cột; không hiển thị source query.", accepts: ["text/plain", ".sql"], output: "Báo cáo SQL lint TXT", ready: true },
+  { id: "python-security-audit", name: "Phân tích bảo mật Python Bandit", category: "developer", description: "Quét tĩnh một tệp Python bằng Bandit để tìm pattern rủi ro; chỉ báo rule, severity, confidence và dòng; tuyệt đối không chạy source code.", accepts: ["text/x-python", ".py"], output: "Báo cáo Python security TXT", ready: true },
+  { id: "unit-convert", name: "Quy đổi đơn vị đo", category: "utility", description: "Quy đổi hàng loạt đại lượng vật lý bằng Pint; mỗi dòng theo dạng 1 kilometer -> meter; kiểm tra dimensional compatibility và không thực thi biểu thức.", accepts: ["text/plain", ".txt", ".csv"], output: "CSV kết quả quy đổi", ready: true },
+  { id: "mesh-inspect", name: "Kiểm tra mô hình 3D mesh", category: "developer", description: "Đọc STL/OBJ/PLY/OFF/GLB/GLTF/3MF, thống kê vertices, faces, bounds, watertight và volume khi an toàn; không sửa hoặc render mesh.", accepts: ["model/stl", ".stl", ".obj", ".ply", ".off", ".glb", ".gltf", ".3mf"], output: "Báo cáo 3D mesh TXT", ready: true },
+  { id: "dxf-audit", name: "Kiểm toán bản vẽ CAD DXF", category: "developer", description: "Đọc DXF offline, thống kê entity/layer/block/INSUNITS và lỗi từ ezdxf auditor; không render, sửa hay tải external reference.", accepts: ["image/vnd.dxf", ".dxf"], output: "Báo cáo DXF TXT", ready: true },
+  { id: "shapefile-audit", name: "Kiểm tra bộ dữ liệu Shapefile", category: "developer", description: "Kiểm tra ZIP có .shp/.shx/.dbf, geometry type, record count, fields, bounding box và PRJ; không xuất attribute values.", accepts: ["application/zip", ".zip"], output: "Báo cáo Shapefile TXT", ready: true },
+  { id: "gettext-catalog-audit", name: "Kiểm tra bản dịch gettext PO/POT", category: "document", description: "Đếm untranslated/fuzzy/obsolete, kiểm tra plural forms và placeholder drift trong PO/POT; không sao chép source text hoặc bản dịch vào báo cáo.", accepts: ["text/plain", ".po", ".pot"], output: "Báo cáo localization TXT", ready: true },
+  { id: "notebook-audit", name: "Kiểm tra Jupyter Notebook", category: "developer", description: "Validate schema ipynb, đếm code/markdown/output, execution count, missing cell IDs và attachment; không in cell source hay output data.", accepts: ["application/x-ipynb+json", ".ipynb"], output: "Báo cáo Notebook TXT", ready: true },
+  { id: "notebook-strip-outputs", name: "Xóa output Jupyter Notebook", category: "document", description: "Xóa execution outputs và reset execution_count trong ipynb, giữ nguyên cell source, markdown attachments và notebook metadata.", accepts: ["application/x-ipynb+json", ".ipynb"], output: "Notebook đã làm sạch", ready: true },
+  { id: "heic-convert", name: "Chuyển HEIC/HEIF sang JPEG/PNG", category: "image", description: "Chuyển ảnh HEIC/HEIF sang JPEG hoặc PNG, áp dụng orientation và loại metadata camera/GPS; animation giữ frame đầu tiên.", accepts: ["image/heic", "image/heif", ".heic", ".heif"], output: "Ảnh JPEG hoặc PNG", ready: true },
+  { id: "subtitle-quality-audit", name: "Kiểm tra chất lượng phụ đề", category: "audio-video", description: "Phân tích SRT/VTT về tốc độ đọc, dòng quá dài, overlap và cue quá ngắn; CSV chỉ chứa timing và số liệu, không chứa lời thoại.", accepts: ["text/vtt", ".srt", ".vtt"], output: "CSV subtitle quality", ready: true },
+  { id: "kml-to-geojson", name: "KML sang GeoJSON", category: "developer", description: "Chuyển Placemark Point/LineString/Polygon/MultiGeometry từ KML thành GeoJSON; chặn DTD/ENTITY và không tải NetworkLink.", accepts: ["application/vnd.google-earth.kml+xml", ".kml", ".xml"], output: "Tệp GeoJSON", ready: true },
+  { id: "coordinate-transform", name: "Chuyển hệ tọa độ EPSG", category: "developer", description: "Chuyển tối đa 10.000 coordinate giữa các CRS EPSG bằng pyproj, luôn giữ trục x/y và tắt PROJ network; input JSON gồm source_crs/target_crs/coordinates.", accepts: ["application/json", ".json"], output: "GeoJSON transformed", ready: true },
+  { id: "html-structured-data-audit", name: "Kiểm tra JSON-LD Structured Data", category: "developer", description: "Phân tích script application/ld+json, kiểm tra JSON hợp lệ, @context, @type, schema.org và @id trùng; không xuất nội dung hay identifier.", accepts: ["text/html", ".html", ".htm"], output: "Báo cáo HTML SEO TXT", ready: true },
+  { id: "html-local-link-audit", name: "Tìm liên kết hỏng trong website ZIP", category: "developer", description: "Quét liên kết nội bộ và fragment trong HTML bundle ZIP, tìm resource/anchor thiếu; bỏ qua external URLs và không crawl hoặc fetch mạng.", accepts: ["application/zip", ".zip"], output: "CSV local link audit", ready: true },
+  { id: "css-quality-audit", name: "Kiểm tra chất lượng CSS", category: "developer", description: "Parse CSS và thống kê parser errors, duplicate selectors/properties, !important, @import và external URL references; không xuất selector/value.", accepts: ["text/css", ".css"], output: "Báo cáo CSS audit TXT", ready: true },
 
 ];
 
@@ -734,6 +751,13 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "fuzzy-match-report": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json", "csv-to-parquet"],
   "csv-to-parquet": ["parquet-to-csv"],
   "parquet-to-csv": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json", "csv-to-parquet"],
+  "sqlglot-format": ["sqlfluff-lint"],
+  "heic-convert": ["image-info", "image-clean-exif", "image-compress", "image-resize", "image-webp", "image-palette"],
+  "kml-to-geojson": ["geojson-audit"],
+  "coordinate-transform": ["geojson-audit"],
+  "html-local-link-audit": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json", "csv-to-parquet"],
+  "subtitle-quality-audit": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json", "csv-to-parquet"],
+  "unit-convert": ["csv-profile", "csv-clean", "csv-to-xlsx", "csv-to-json", "csv-to-parquet"],
 };
 
 export type ToolPipelineValidation =
