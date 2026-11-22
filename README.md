@@ -38,7 +38,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Personal memory | /remember, /memories, /forget | Explicit owner-controlled memories shared by Telegram and Web AI chat |
 | Status | /status | Provider configuration and compact index counters |
-| Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | 336 production file processors, including PCAP, audio-tag, perceptual image, JSON Schema, EPUB, Markdown, DNS zone and X.509 tools from Wave 19 including Markdown/code hygiene, secret redaction, SQL/YAML export, JSON structure analysis, configuration/DevOps, CI/CD and infrastructure audits, HTML SEO/accessibility/link/form/image audits, Excel formula/Markdown exports, Excel/PDF privacy audits, Office/PDF active-content security audits, email/JWT security audits, HAR privacy checks, calendar/contact audits, GPX/GeoJSON analysis, QR generation, font inspection, OpenAPI checks, subtitle repair, color conversion, packet-capture analysis, audio-tag completeness, perceptual image matching, JSON Schema, EPUB structure, Markdown quality, DNS zone and X.509 audits, PDF page audits, subtitle validation, favicon generation and Markdown TOC, interactive Telegram Tool Center and ephemeral GitHub Actions runners |
+| Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | 336 production processors; 345 registered with nine Wave 20 creator/content utilities pending validation/deployment. Categories include file and media conversion, image privacy/similarity, RSS/Atom, sitemap/robots, JSONL/data validation, SVG safety, WCAG contrast, SSH keys, checksum manifests, PCAP/network, calendars/contacts, geospatial, QR, font, subtitle, PDF/Office, OpenAPI and repository analysis. Jobs run on ephemeral GitHub Actions runners. |
 | Workflow Intelligence | /workflow_plan, /workflow_plan_save, /workflow_plan_discard | AI designs validated pipelines and parallel DAGs with controlled text fan-in; preview, save and execution are separate |
 | GitHub Repository Intelligence | /repo URL, /repo_compare URL base...head | Analyze a public repository directly: static module/import graph, commit/branch history, dependency and lockfile inventory, license evidence, secret-pattern scan with values withheld, TODO markers, plus static CI/CD, Docker, Kubernetes and Terraform security checks. Reports include SARIF findings and supply-chain metadata; source code and workflows are never executed. |
 
@@ -111,7 +111,6 @@ Use `/workflow_plan mục tiêu` to ask the AI planner to design a processor pip
 The command returns a preview with its assumptions, warnings, self-reported confidence and graph workload (processor count, critical-path length and maximum parallelism). The workload is graph-derived, not a runtime guarantee. DAG plans may fan out and then merge 2–3 text branches through the dedicated `text-join` processor; ordinary processors remain single-input. Drafts are private to the owner/chat and expire after 15 minutes. Review the result, then use `/workflow_plan_save PLAN_ID Name` to save it into the existing Workflow Library; use `/workflow_plan_discard PLAN_ID` to discard it. Saving does not start a job. Run it later with `/workflow_run WORKFLOW_ID` and upload a compatible file. The uploaded MIME type and extension are checked again before dispatch.
 
 
-Latest release handoff: docs/HANDOFF-WAVE-FOURTEEN-2026-11-22.md.
-
-
 Latest release handoff: docs/HANDOFF-WAVE-NINETEEN-2026-11-22.md.
+
+Current development handoff: docs/HANDOFF-WAVE-TWENTY-2026-11-22.md.
