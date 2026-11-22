@@ -1,4 +1,4 @@
-# Wave 18 handoff — Cross-domain everyday, data and media tools
+# Wave 18 release handoff — Cross-domain everyday, data and media tools
 
 Date: 2026-11-22
 Repository: https://github.com/Nolane-x/Nolane-search
@@ -42,3 +42,12 @@ Adds ten focused processors to diversify beyond developer and security tools:
 6. Live Telegram upload/report/retry for representative HAR, ICS, VCF, GPX, GeoJSON, TXT, font, SRT/VTT and OpenAPI files remains owner-level E2E.
 
 Research notes and upstream repository links: docs/TOOL-RESEARCH-2026-11-22.md
+## Production rollout — 2026-11-22
+
+- PR #68 merged into `main`: https://github.com/Nolane-x/Nolane-search/pull/68
+- Main commit: `374f4c011a59e50e30ac0ace5891d458b32407ff`.
+- Main CI [44980373517](https://github.com/Nolane-x/Nolane-search/actions/runs/44980373517), Worker export and production health smoke [44980373519](https://github.com/Nolane-x/Nolane-search/actions/runs/44980373519), and production deployment [44980373529](https://github.com/Nolane-x/Nolane-search/actions/runs/44980373529) all passed.
+- Main CI passed type-check, Vitest, deployment-script checks, 119 Python runner tests and Worker build.
+- Deployment verified bundle, runtime-secret upload and Telegram webhook/command-menu registration. D1 migration was correctly skipped because no schema changed.
+- Production catalog: 328 processors. Cloudflare Worker Version ID: `1271380c-e118-4731-ad33-5f38adcd20c8`.
+- Still required: owner-level private Telegram E2E upload/report/retry across representative formats. CI/deployment do not verify the end-to-end chat interaction.
