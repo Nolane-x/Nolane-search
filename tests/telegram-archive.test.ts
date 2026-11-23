@@ -190,7 +190,7 @@ describe("Telegram archive import update integration", () => {
         this.values = values;
         return this;
       },
-      run: async () => {
+      async run() {
         prepared.push({ sql, values: this.values });
         return { meta: { changes: 1 } };
       },
