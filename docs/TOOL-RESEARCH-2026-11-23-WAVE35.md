@@ -12,7 +12,7 @@ Scope: six new local-file processors proposed for Nolane Tools. This is a source
 | [huggingface/hub-docs](https://github.com/huggingface/hub-docs) | Hugging Face model-card convention | hf-model-card-audit | Review README YAML front matter and documentation coverage for intended use, limitations, training data and evaluation. |
 | [OpenAI supervised fine-tuning guide](https://developers.openai.com/api/docs/guides/supervised-fine-tuning) | Chat Completions JSONL | chat-dataset-audit | Catch malformed message examples, roles, tool-call structures and duplicate lines before upload to a training service. |
 | [promptfoo/promptfoo](https://github.com/promptfoo/promptfoo) | Prompt/model evaluation configuration | promptfoo-config-audit | Validate the local structure of providers, prompts, test cases, variables, assertions and scenarios. |
-| [3MF Consortium Core Specification](https://github.com/3MFConsortium/spec_core) | 3MF ZIP/OPC package and mesh XML | 3mf-package-audit | Inspect the package relationships, primary model XML, objects, mesh vertices and triangle indices. |
+| [3MF Consortium Core Specification](https://github.com/3MFConsortium/spec_core) | 3MF ZIP/OPC package and mesh XML | three-mf-package-audit | Inspect the package relationships, primary model XML, objects, mesh vertices and triangle indices. |
 
 ### Source-format findings
 
