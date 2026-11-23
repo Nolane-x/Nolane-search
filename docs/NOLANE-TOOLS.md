@@ -11,7 +11,7 @@ Wave 35 proposes six processors, taking the branch catalog from 450 to 456 IDs. 
 | /tool hf-model-card-audit | Hugging Face model-card reviewer | Inspects README YAML front matter and common sections for model description, intended use, limitations, training data and evaluation. It does not query the Hub or verify claims. |
 | /tool chat-dataset-audit | Chat fine-tuning JSONL validator | Checks message roles/content, basic tool-call structure, malformed lines, exact duplicates and the documented minimum example count. All prompt/completion content is withheld. |
 | /tool promptfoo-config-audit | Promptfoo config reviewer | Checks local YAML/JSON providers, prompts, tests, vars, assertions and scenarios. It does not resolve references, contact providers or run evaluations. |
-| /tool 3mf-package-audit | 3MF package / mesh auditor | Checks OPC ZIP relationships, the primary model XML part, object/build/mesh counts, vertex coordinates and triangle indices without extracting or rendering the package. |
+| /tool three-mf-package-audit | 3MF package / mesh auditor | Checks OPC ZIP relationships, the primary model XML part, object/build/mesh counts, vertex coordinates and triangle indices without extracting or rendering the package. |
 
 The shared 20 MiB upload limit remains unchanged. The 3MF reader limits expanded archive size to 100 MiB and rejects duplicate/path-traversal/encrypted/excessively compressed entries. The six processors add no Cloudflare service, secret, D1 migration or persistent process. PyYAML is installed only for the two YAML processors when selected. See [Wave 35 upstream research](TOOL-RESEARCH-2026-11-23-WAVE35.md) and [implementation handoff](HANDOFF-WAVE-THIRTY-FIVE-2026-11-23.md).
 
