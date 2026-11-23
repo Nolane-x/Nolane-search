@@ -6,15 +6,15 @@ The Wave 39 branch contains **472 registered tools** (+10 over the Wave 38 produ
 
 | ID | Công cụ | Chức năng |
 |---|---|---|
-| `bill-split-calculator` | Chia hóa đơn | Thuế, tip và chia tiền chính xác giữa nhiều người |
-| `loan-payment-calculator` | Tính khoản trả góp | Khoản trả dự kiến và lịch trả nợ CSV |
-| `date-calculator` | Tính ngày | Cộng/trừ ngày, khoảng thời gian, ngày trong tuần |
-| `timezone-converter` | Đổi múi giờ | Chuyển giờ quốc tế, xử lý DST |
-| `recipe-scaler` | Điều chỉnh công thức | Quy đổi nguyên liệu theo khẩu phần |
-| `grade-calculator` | Tính điểm | Điểm trung bình có trọng số và mục tiêu |
-| `paint-calculator` | Ước tính sơn | Diện tích tường, cửa, số lớp và lượng sơn |
-| `fuel-trip-calculator` | Chi phí xăng | Nhiên liệu và chia chi phí chuyến đi |
-| `discount-calculator` | Giá sau giảm | Nhiều mức giảm, thuế và số lượng |
-| `unit-price-comparator` | So sánh giá | Giá theo đơn vị g/kg, mL/L, cm/m hoặc từng món |
+| `/tool bill-split-calculator` | Chia hóa đơn | Thuế, tip và chia tiền chính xác giữa nhiều người |
+| `/tool loan-payment-calculator` | Tính khoản trả góp | Khoản trả dự kiến và lịch trả nợ CSV |
+| `/tool date-calculator` | Tính ngày | Cộng/trừ ngày, khoảng thời gian, ngày trong tuần |
+| `/tool timezone-converter` | Đổi múi giờ | Chuyển giờ quốc tế, xử lý DST |
+| `/tool recipe-scaler` | Điều chỉnh công thức | Quy đổi nguyên liệu theo khẩu phần |
+| `/tool grade-calculator` | Tính điểm | Điểm trung bình có trọng số và mục tiêu |
+| `/tool paint-calculator` | Ước tính sơn | Diện tích tường, cửa, số lớp và lượng sơn |
+| `/tool fuel-trip-calculator` | Chi phí xăng | Nhiên liệu và chia chi phí chuyến đi |
+| `/tool discount-calculator` | Giá sau giảm | Nhiều mức giảm, thuế và số lượng |
+| `/tool unit-price-comparator` | So sánh giá | Giá theo đơn vị g/kg, mL/L, cm/m hoặc từng món |
 
 See [upstream research](TOOL-RESEARCH-2026-11-23-WAVE39.md) and [implementation handoff](HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md).
