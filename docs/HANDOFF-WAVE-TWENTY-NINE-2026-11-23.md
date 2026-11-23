@@ -2,13 +2,13 @@
 
 ## Final production release checkpoint — deployed 2026-11-23
 
-- [PR #81](https://github.com/Nolane-x/Nolane-search/pull/81) merged into `main` as `a1cbf013170d6bd9e8d1877b85a71ac5acd942e0`.
+- PR #81 implementation merged as `a1cbf013170d6bd9e8d1877b85a71ac5acd942e0`. PR #82 added test-only processUpdate-level integration coverage and merged as `c621264baa2d832c621d5732bb991921353987c7`.
 - Production remains **434 Tool Center processors**; Wave 29 adds archive reliability commands, not a processor.
-- Main CI [45116557845](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557845) passed type-check, 25 Vitest files / 248 tests, deployment-script checks, 270 Python runner tests and Worker build.
-- Worker export/health smoke [45116557888](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557888) passed; the health response reported `ok: true`, database `reachable`, archive enabled.
-- Cloudflare deploy [45116557917](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557917) passed; Worker Version ID `12307dcf-6344-4130-8d80-5b1ed75a4ec9`. Telegram webhook (message + callback_query) verified and command menu successfully registered `archive_export` and `archive_import`.
+- Latest main CI [45117251696](https://github.com/Nolane-x/Nolane-search/actions/runs/45117251696) passed type-check, 25 Vitest files / 251 tests, deployment-script checks, 270 Python runner tests and Worker build. The three added integration tests verify private/allowlisted import success and reject supergroup and non-allowlisted-user uploads before getFile/D1 import.
+- Latest Worker export/health smoke [45117251681](https://github.com/Nolane-x/Nolane-search/actions/runs/45117251681) passed; the health response returned `ok: true`, database `reachable`, archive enabled.
+- Latest Cloudflare deploy [45117251720](https://github.com/Nolane-x/Nolane-search/actions/runs/45117251720) passed; Worker Version ID `68ebc068-23aa-4f08-8ff4-d0985926383a`. Telegram webhook (message + callback_query) verified and command menu successfully registered `archive_export` and `archive_import`.
 - D1 migration skipped correctly; no schema change, new secret, provider or paid resource.
-- The commands are deployed, but owner-level live E2E has not yet been performed. Next: run `/archive_export` privately, verify the JSON contains metadata only, import it with caption `/archive_import`, confirm existing references are skipped, then test a restore against a staging/empty D1 index before relying on disaster recovery.
+- The commands are deployed, but owner-level live E2E has not yet been performed. Next: run `/archive_export` privately, verify the JSON contains metadata only, import it with caption `/archive_import`, confirm duplicate-skip counts, then test a restore against a staging/empty D1 index before relying on disaster recovery.
 
 ## Current checkpoint
 
