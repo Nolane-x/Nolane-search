@@ -175,7 +175,10 @@ class Wave31Tests(unittest.TestCase):
             result = wave31.file_format_identify(source)
             report = result["summary"]
             self.assertIn("Siegfried engine: 1.11.9", report)
-            self.assertIn("Distinct signature matches:", report)
+            match_line = next((line for line in report.splitlines() if line.startswith("Distinct signature matches:")), "")
+            self.assertTrue(match_line, "The real engine report must include a match count.")
+            self.assertGreater(int(match_line.split(":", 1)[1].strip()), 0, "The synthetic ZIP must match a real pinned PRONOM signature.")
+            self.assertNotIn("UNKNOWN —", report)
             self.assertNotIn("private-archive-name.zip", report)
             self.assertNotIn(temp, report)
 
