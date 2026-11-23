@@ -53,13 +53,13 @@ describe("Nolane AI callable tools", () => {
     expect(schema.properties?.offset).toBeDefined();
     expect(schema.properties?.limit).toBeDefined();
 
-    const repository = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "repository", limit: 30 })) as {tools:Array<{id:string}>};
+    const repository = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "repository", query: "repo-security-audit", limit: 20 })) as {tools:Array<{id:string}>};
     expect(repository.tools.some(tool => tool.id === "repo-security-audit")).toBe(true);
     const supplyChain = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "repository", query: "repo-supply-chain" })) as {tools:Array<{id:string}>};
     expect(supplyChain.tools.some(tool => tool.id === "repo-supply-chain")).toBe(true);
-    const developer = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "developer", limit: 30 })) as {tools:Array<{id:string}>};
+    const developer = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "developer", query: "code-imports", limit: 20 })) as {tools:Array<{id:string}>};
     expect(developer.tools.some(tool => tool.id === "code-imports")).toBe(true);
-    const audioVideo = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "audio-video", limit: 30 })) as {tools:Array<{id:string}>};
+    const audioVideo = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "audio-video", query: "audio-convert", limit: 20 })) as {tools:Array<{id:string}>};
     expect(audioVideo.tools.some(tool => tool.id === "audio-convert")).toBe(true);
   });
 
