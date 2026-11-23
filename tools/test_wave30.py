@@ -95,9 +95,9 @@ class Wave30Tests(unittest.TestCase):
             "store/scale0/zarr.json": json.dumps(array).encode(),
         })
         result = wave30.ome_ngff_audit(path)
-        self.assertIn("Invalid scale/identity/sequence transformations: 1", result["summary"])
+        self.assertIn("Invalid dataset array metadata: 1", result["summary"])
 
-    def test_ome_ngff_rejects_non_descending_resolution_and_missing_array(self):
+    def test_ome_ngff_rejects_missing_dataset_array_metadata(self):
         root = self.ome_group()
         root["attributes"]["ome"]["multiscales"][0]["datasets"].append({
             "path": "scale1",
@@ -116,6 +116,27 @@ class Wave30Tests(unittest.TestCase):
         result = wave30.ome_ngff_audit(path)
         self.assertIn("Dataset arrays missing from metadata hierarchy: 1", result["summary"])
         self.assertNotIn("scale1", result["summary"])
+
+    def test_ome_ngff_flags_non_descending_resolution_levels(self):
+        root = self.ome_group()
+        root["attributes"]["ome"]["multiscales"][0]["datasets"].append({
+            "path": "scale1",
+            "coordinateTransformations": [{
+                "type": "scale",
+                "scale": [2.0, 2.0, 2.0],
+                "input": {"path": "scale1"},
+                "output": {"name": "physical"},
+            }],
+        })
+        coarse = {"zarr_format": 3, "node_type": "array", "shape": [8, 16, 16], "data_type": "uint16"}
+        fine = {"zarr_format": 3, "node_type": "array", "shape": [16, 32, 32], "data_type": "uint16"}
+        path = self.zip_file("inverted.ome.zarr.zip", {
+            "store/zarr.json": json.dumps(root).encode(),
+            "store/scale0/zarr.json": json.dumps(coarse).encode(),
+            "store/scale1/zarr.json": json.dumps(fine).encode(),
+        })
+        result = wave30.ome_ngff_audit(path)
+        self.assertIn("Non-descending multiscale resolution steps: 1", result["summary"])
 
     def test_ome_ngff_rejects_unsafe_zip_paths(self):
         path = self.zip_file("unsafe.ome.zarr.zip", {
