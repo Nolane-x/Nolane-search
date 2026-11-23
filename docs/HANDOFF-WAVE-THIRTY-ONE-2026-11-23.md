@@ -1,13 +1,15 @@
 # Wave 31 handoff — PRONOM file format identification (2026-11-23)
 
-## Current checkpoint
+## Final production checkpoint — deployed 2026-11-23
 
-- Repository: `Nolane-x/Nolane-search`
-- Production baseline: **437 tools**, latest deployed Worker Version ID `8f9ca4bf-21ac-4fb7-9e11-fcaaaa3f3d2b`.
-- Candidate branch: `feat/wave-thirty-one-pronom-file-identification`
-- Candidate processors: 1; candidate catalog **438** (437 production + 1 unmerged).
-- PR is not yet open. Run CI on the exact latest head before opening/merging.
-- No D1 schema change, secret, provider or paid Cloudflare resource is expected.
+- PR [#84](https://github.com/Nolane-x/Nolane-search/pull/84) merged into `main` as `bfc107d1f299b9ae4b7c557fbe4fea0e3eee6599`.
+- Production catalog: **438 tools** (437 before Wave 31 + 1 PRONOM file-format processor).
+- Latest Worker Version ID: `679e4cfc-08a8-4832-92cc-459e79df6763`.
+- Main CI [45127497703](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497703) passed type-check, 25 Vitest files / 253 tests, deployment-script checks, 293 Python runner tests and Worker build.
+- Worker export/health [45127497583](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497583) passed; live health returned `ok: true`, D1 `reachable`, archive enabled.
+- Cloudflare deployment [45127497651](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497651) passed; Telegram webhook (message + callback_query) and bot command menu registered successfully.
+- No D1 migration, new secret, provider or paid Cloudflare resource. Siegfried binary and PRONOM signatures are pinned by SHA-256 and installed only for the selected tool.
+- Owner-level Telegram acceptance remains manual: upload synthetic ZIP, an unknown binary and a known document; inspect PUID/format/MIME, unknown behaviour, privacy and `/tool_retry`.
 
 ## Wave 31 processor
 
