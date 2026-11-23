@@ -20,7 +20,7 @@ describe("Nolane AI callable tools", () => {
       tools: Array<{id:string;category:string}>;
     };
     expect(first.total).toBe(TOOL_CATALOG.length);
-    expect(first.total).toBe(462);
+    expect(first.total).toBe(472);
     expect(first.tools).toHaveLength(20);
     expect(first.nextOffset).toBe(20);
     expect(first.tools.every(tool => tool.category === "image")).toBe(true);
@@ -43,6 +43,45 @@ describe("Nolane AI callable tools", () => {
     expect(ids.has("video-compress")).toBe(true);
     await expect(executeAgentTool(env, "list_nolane_tools", { offset: -1 })).rejects.toThrow("offset");
     await expect(executeAgentTool(env, "list_nolane_tools", { limit: 21 })).rejects.toThrow("page size");
+  });
+
+  it("exposes and runs all Wave 39 everyday calculators through the normal AI tool", async () => {
+    const schema = AGENT_TOOL_DEFINITIONS.find(tool => tool.function.name === "process_text_content")?.function.parameters as {
+      properties?: { tool_id?: { enum?: string[] } };
+    };
+    const ids = [
+      "bill-split-calculator", "loan-payment-calculator", "date-calculator", "timezone-converter",
+      "recipe-scaler", "grade-calculator", "paint-calculator", "fuel-trip-calculator",
+      "discount-calculator", "unit-price-comparator",
+    ];
+    expect(schema.properties?.tool_id?.enum).toEqual(expect.arrayContaining(ids));
+    expect(TOOL_CATALOG.filter(tool => ids.includes(tool.id) && tool.ready)).toHaveLength(10);
+
+    const run = (tool_id: string, value: unknown) => executeAgentTool(env, "process_text_content", {
+      tool_id, content: JSON.stringify(value),
+    });
+    expect(await run("bill-split-calculator", {bill_amount:100,tip_percent:10,tax_percent:10,people:3,currency:"USD"}))
+      .toContain("Total: USD 120.00");
+    expect(await run("loan-payment-calculator", {principal:1200,annual_rate_percent:0,term_months:12,currency:"USD"}))
+      .toContain("Scheduled payment: USD 100.00");
+    expect(await run("date-calculator", {start_date:"2026-11-20",end_date:"2026-11-23"}))
+      .toContain("Elapsed days: 3");
+    expect(await run("timezone-converter", {local_datetime:"2026-11-23T12:00",from_timezone:"Asia/Ho_Chi_Minh",to_timezone:"Europe/London"}))
+      .toContain("Europe/London");
+    expect(await run("recipe-scaler", {original_servings:2,target_servings:4,ingredients:[{name:"flour",amount:250,unit:"g"}]}))
+      .toContain("500 g flour");
+    expect(await run("grade-calculator", {components:[{name:"Homework",score:80,weight_percent:40}],target_overall_percent:85}))
+      .toContain("Required average across remaining work: 88.33%");
+    expect(await run("paint-calculator", {length_m:4,width_m:3,height_m:2.5,coats:2}))
+      .toContain("Estimated paint:");
+    expect(await run("fuel-trip-calculator", {distance_km:120,round_trip:true,consumption_l_per_100km:6,fuel_price_per_liter:25000,currency:"VND"}))
+      .toContain("Fuel cost: VND 360000");
+    expect(await run("discount-calculator", {original_price:100,discount_percent:20,extra_discount_percent:10,tax_percent:10,currency:"USD"}))
+      .toContain("Final unit price: USD 79.20");
+    expect(await run("unit-price-comparator", {currency:"VND",items:[
+      {name:"Small",price:25000,quantity:500,unit:"g"},
+      {name:"Large",price:46000,quantity:1,unit:"kg"},
+    ]})).toContain("Best unit price: Large");
   });
 
   it("keeps technical tools available by explicit category without prioritizing them by default", async () => {
