@@ -46,6 +46,9 @@ const TEXT_TOOL_IDS = new Set([
   "caddy-config-audit",
   "systemd-unit-audit",
   "shell-script-audit",
+  "bill-split-calculator", "loan-payment-calculator", "date-calculator", "timezone-converter",
+  "recipe-scaler", "grade-calculator", "paint-calculator", "fuel-trip-calculator",
+  "discount-calculator", "unit-price-comparator",
 ]);
 
 export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
