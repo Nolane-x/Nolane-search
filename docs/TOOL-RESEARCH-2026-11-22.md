@@ -342,7 +342,12 @@ The branch `feat/wave-thirty-format-and-science-auditors` adds `ome-ngff-audit`,
 - COG uses rio-cogeo/Rasterio against a local upload path only. URL-based validation is not exposed. The optional runtime dependency is installed only when `cog-geotiff-audit` is selected.
 - All three tools are structural/metadata diagnostics, not a guarantee of full format/schema conformance or scientific/geospatial correctness.
 
-### Wave 30 candidate CI — 2026-11-23
+### Wave 30 production release evidence — 2026-11-23
 
-- PR [#83](https://github.com/Nolane-x/Nolane-search/pull/83) current-head CI [45118748674](https://github.com/Nolane-x/Nolane-search/actions/runs/45118748674) passed type-check, 25 Vitest files / 252 tests, deployment-script checks, 283 Python runner tests and Worker build.
-- Worker export/health smoke and production deployment remain pending until merge.
+- [PR #83](https://github.com/Nolane-x/Nolane-search/pull/83) merged as main commit `44dc33b71f7317d54e9fa9ae1ac6a48b84a06797`; production catalog is **437 tools**.
+- Main CI [45124586861](https://github.com/Nolane-x/Nolane-search/actions/runs/45124586861) passed 25 Vitest files / 252 tests, 283 Python runner tests, type-check, deployment-script checks and Worker build.
+- Worker export/health [45124586793](https://github.com/Nolane-x/Nolane-search/actions/runs/45124586793) passed; health returned `ok: true`, D1 reachable and archive enabled.
+- Cloudflare deploy [45124586883](https://github.com/Nolane-x/Nolane-search/actions/runs/45124586883) passed; Worker Version ID `8f9ca4bf-21ac-4fb7-9e11-fcaaaa3f3d2b`. Telegram webhook and bot command registration passed.
+- D1 migration skipped; no schema change, new secret or paid resource was introduced.
+- Owner-level Telegram uploads and retry flows remain a separate manual acceptance check.
+
