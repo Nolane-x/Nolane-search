@@ -21,7 +21,7 @@ Uses Trafilatura to extract the article body, title, author/date/site metadata a
 
 ### rego-policy-check
 
-Uses the pinned OPA binary with `opa check --strict --format=json --rego-v1` to parse and compile one Rego file or a ZIP of modules. It does not run `opa eval`, instantiate a policy decision, call policy built-ins or load remote bundles/data. ZIP packages must contain only UTF-8 .rego modules, at most 60 files, 1 MiB each and 4 MiB combined. Processing is limited to 45 seconds. Source text and raw compiler diagnostics are withheld from the report.
+Uses the pinned OPA binary with `opa check --strict --format=json --rego-v1` to parse and compile against OPA's Rego v0/v1-compatible language set one Rego file or a ZIP of modules. It does not run `opa eval`, instantiate a policy decision, call policy built-ins or load remote bundles/data. ZIP packages must contain only UTF-8 .rego modules, at most 60 files, 1 MiB each and 4 MiB combined. Processing is limited to 45 seconds. Source text and raw compiler diagnostics are withheld from the report.
 
 OPA 1.22.4 Linux static binary SHA-256: `35e3b352e715e80624ead6c89930d8585f6f7d94cdc409eb2a9fe36620dcccba`.
 
