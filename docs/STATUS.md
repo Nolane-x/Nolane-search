@@ -2,28 +2,17 @@
 
 Last verified: 2026-11-22. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## In review — Wave 28 candidate (2026-11-22)
+## Latest production release — Wave 28 (2026-11-23)
 
-- Branch: `feat/wave-twenty-eight-scientific-format-tools`; [PR #80](https://github.com/Nolane-x/Nolane-search/pull/80).
-- Eight processors are registered in the TypeScript catalog, Python runner allowlist, handlers, pipeline transitions and upload inference. Candidate catalog: **434 tools**; production remains **426** until PR CI, Worker export/health smoke and Cloudflare deployment all pass.
-- Domains: OCFL 1.0/1.1 object inventory and fixity, Zarr v2/v3, NIfTI-1/2 headers, DICOM privacy-risk screen, LAS 1.0–1.4 LiDAR headers, JPEG 2000 JP2 boxes with codestream skipping, NetCDF classic CDF-1/CDF-2 with seek-based payload skipping and NWB/HDF5 hierarchy.
-- Twenty focused Python regression tests cover OCFL inventory and sidecar fixity, unsafe ZIP paths, Zarr metadata/chunk privacy, NIfTI endian/header/gzip, DICOM identifier suppression, LAS bounds, JP2 box framing, NetCDF header parsing and NWB metadata-only inspection.
-- Runtime extras are selected conditionally for the runner: `pydicom` only for DICOM and existing `h5py` for NWB/HDF5. No D1 migration or schema changes.
-- Data outputs intentionally suppress patient identifiers, voxel/pixel/point-cloud data, scientific arrays, paths and descriptive values. These are structural/header diagnostics, not de-identification, clinical validation or full format conformance.
-- PR CI is pending for current Wave 28 code; do not merge or count the candidate as production until the latest commit's check suite, Worker build/export and deployment succeed.
-- Owner-level E2E remains separate: test with synthetic/non-sensitive DICOM/NIfTI/LAS/Zarr/NetCDF/NWB/OCFL/JP2 samples through the private Telegram bot, inspect reports and test `/tool_retry`.
-
-## Latest production release — Wave 27 (2026-11-22)
-
-- [PR #79](https://github.com/Nolane-x/Nolane-search/pull/79) merged into `main` as commit `408beb47bf3eeceeb4f0bb5a33f8e3bb23d9ad1d`; nine processors raised production from 417 to **426 tools**.
-- Main CI [45037484505](https://github.com/Nolane-x/Nolane-search/actions/runs/45037484505) passed TypeScript type-check, all 25 Vitest files, deployment-script checks, the Python runner suite and Worker build.
-- Worker export and production health smoke [45037484786](https://github.com/Nolane-x/Nolane-search/actions/runs/45037484786) passed.
-- Cloudflare deployment [45037484485](https://github.com/Nolane-x/Nolane-search/actions/runs/45037484485) passed on rerun attempt 2, including source verification, build, bundle validation, Worker/runtime-secret upload and Telegram webhook plus command-menu registration. The initial deployment attempt hit a network timeout at Telegram registration; rerun succeeded. D1 migration was skipped because no schema changed.
-- Deployed Worker Version ID: `3f0d1279-321b-4438-8a93-28960781dddf`. Deployment logs report "Deploy complete", verified the webhook for `message` and `callback_query`, and confirmed Telegram bot commands registered.
-- Added BagIt, Frictionless Data Package, RO-Crate, IIIF, DataCite, METS, PREMIS, STAC and TEI processors.
-- Registry parity was checked by CI; 21 Wave 27 focused Python regression tests cover preservation archives, metadata and cross-reference edge cases.
-- No D1 migration or new runtime dependency was needed.
-- Owner-level E2E remains separate: test synthetic/non-sensitive examples via private Telegram, inspect reports and exercise `/tool_retry`. CI and webhook registration do not prove every user-level upload journey.
+- [PR #80](https://github.com/Nolane-x/Nolane-search/pull/80) merged into `main` as commit `61f389df0f9d797af74b27130cfaeb9e5662c47a`; eight processors raised production from 426 to **434 tools**.
+- Main CI [45040057467](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057467) passed type-check, all **25 Vitest files / 238 tests**, deployment-script checks, **270 Python runner tests** and Worker build.
+- Worker export and production health smoke [45040057426](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057426) passed. The health response returned `ok: true`, database `reachable`, archive enabled and configured provider/AI route counts.
+- Cloudflare deployment [45040057437](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057437) passed source verification, build, bundle validation, Worker/runtime-secret upload and Telegram webhook plus command-menu registration. The webhook was confirmed for `message` and `callback_query`; the command menu was registered successfully.
+- Deployed Worker Version ID: `34fad733-fef3-4b93-bc58-e480bb3c082f`. D1 migration was correctly skipped because Wave 28 made no schema changes.
+- Added OCFL, Zarr, NIfTI, DICOM privacy-risk screening, LAS/LiDAR, JPEG 2000 JP2, NetCDF classic and NWB/HDF5 structural auditors. All eight are present in the TypeScript catalog, Python runner, handlers, pipeline graph and upload inference.
+- The Wave 28 pre-merge CI [45039867377](https://github.com/Nolane-x/Nolane-search/actions/runs/45039867377) passed. Its 20 focused regression tests are included in the 270-test Python suite.
+- No D1 migration or new runtime secret was required. DICOM is a limited metadata risk screen, not de-identification or clinical validation.
+- Owner-level E2E remains separate: test representative synthetic/non-sensitive files through the private Telegram bot, inspect generated reports, and exercise `/tool_retry`. CI, Worker health and webhook registration do not prove every individual upload journey.
 
 ## Previous production release — Wave 25 (2026-11-22)
 
