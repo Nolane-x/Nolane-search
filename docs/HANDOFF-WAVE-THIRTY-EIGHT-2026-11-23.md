@@ -1,8 +1,12 @@
 # Wave 38 — direct file attachments in Nolane Web Chat
 
 Date: 2026-11-23  
-Status: candidate implementation in [PR #91](https://github.com/Nolane-x/Nolane-search/pull/91); not yet production.  
-Branch: `feat/wave38-web-ai-file-upload-20261123`.  
+Status: merged and deployed production release via [PR #91](https://github.com/Nolane-x/Nolane-search/pull/91).  
+Main merge commit: `5bfe1160c84c0da2be9df4df37ae7ef52725b14b`.  
+Worker Version ID: `a6e8b852-cad9-4f87-961b-35de6ac67cf6`.  
+Main CI: [45195995372](https://github.com/Nolane-x/Nolane-search/actions/runs/45195995372).  
+Worker export/build: [45195995222](https://github.com/Nolane-x/Nolane-search/actions/runs/45195995222).  
+Cloudflare deploy: [45195995178](https://github.com/Nolane-x/Nolane-search/actions/runs/45195995178).  
 Production base: Wave 37, catalog remains 462 processors.
 
 ## Goal
