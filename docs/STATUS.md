@@ -2,6 +2,14 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+## In development — Wave 39 (2026-11-23)
+
+- Branch [`feat/wave-thirty-nine-everyday-life-tools`](https://github.com/Nolane-x/Nolane-search/tree/feat/wave-thirty-nine-everyday-life-tools) adds 10 ordinary-user calculators and extends the branch catalog to **472 tools**. The production catalog remains **462** until PR CI, merge and Cloudflare deployment are verified.
+- New categories of utility: bill splitting, loan repayment estimates, date arithmetic, timezone conversion, recipe scaling, weighted grades, paint coverage, fuel trip estimates, discount calculations and unit-price comparison.
+- Python implementations use only the standard library; direct AI chat execution is exposed through the existing bounded `process_text_content` function. No paid API, D1 migration, secret or new Cloudflare resource is introduced.
+- PR CI and deployment are pending. Keep this section as development status until verified checks and production health are recorded.
+- Research: [TOOL-RESEARCH-2026-11-23-WAVE39.md](TOOL-RESEARCH-2026-11-23-WAVE39.md). Handoff: [HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md](HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md).
+
 ## Latest production release — Wave 38 (2026-11-23)
 
 - [PR #91](https://github.com/Nolane-x/Nolane-search/pull/91) merged into `main` as `5bfe1160c84c0da2be9df4df37ae7ef52725b14b`. This is a Web AI file-intake integration release; the catalog remains **462 processors**.
