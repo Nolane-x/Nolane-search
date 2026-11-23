@@ -82,6 +82,12 @@ jobs:
       - name: Install COG GeoTIFF validator
         if: contains(steps.job.outputs.tool_ids, 'cog-geotiff-audit')
         run: python -m pip install --disable-pip-version-check 'rio-cogeo==7.0.4'
+      - name: Install pinned PRONOM format identification engine
+        if: contains(steps.job.outputs.tool_ids, 'file-format-identify')
+        run: bash scripts/install-siegfried.sh
+      - name: Install pinned PRONOM format identification engine
+        if: contains(steps.job.outputs.tool_ids, 'file-format-identify')
+        run: bash scripts/install-siegfried.sh
       - name: Install SQLGlot
         if: contains(steps.job.outputs.tool_ids, 'sqlglot-format')
         run: python -m pip install --disable-pip-version-check sqlglot

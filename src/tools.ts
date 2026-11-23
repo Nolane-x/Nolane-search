@@ -468,6 +468,7 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "ome-ngff-audit", name: "Kiểm tra OME-NGFF Bioimaging Zarr", category: "data", description: "Rà OME-Zarr 0.6 multiscales, axes, coordinate systems, resolution datasets và scale/translation references trong ZIP; không đọc ảnh/voxel chunks, không xuất tên kênh hay tọa độ.", accepts: ["application/zip", ".ome.zarr.zip"], output: "Báo cáo OME-NGFF TXT", ready: true },
   { id: "parquet-metadata-audit", name: "Kiểm toán metadata Apache Parquet", category: "data", description: "Rà footer, row groups, schema types, compression/encodings và GeoParquet key; không xuất column names, min/max statistics, custom metadata values hay row data.", accepts: ["application/vnd.apache.parquet", ".parquet"], output: "Báo cáo Parquet Metadata TXT", ready: true },
   { id: "cog-geotiff-audit", name: "Kiểm tra Cloud Optimized GeoTIFF", category: "data", description: "Kiểm tra COG tile/overview/IFD/data-offset layout bằng rio-cogeo trên file GeoTIFF cục bộ; không truy cập URL hoặc đọc raster pixel values.", accepts: ["image/tiff", "image/geotiff", ".cog.tif", ".cog.tiff", ".tif", ".tiff"], output: "Báo cáo COG TXT", ready: true },
+  { id: "file-format-identify", name: "Nhận diện định dạng file bằng PRONOM", category: "data", description: "Nhận diện định dạng theo chữ ký PRONOM bằng Siegfried đã pin phiên bản/database; trả PUID, format và MIME, không lộ tên file, đường dẫn hoặc nội dung. Không phải malware scan.", accepts: ["*"], output: "Báo cáo File Format TXT", ready: true },
 
 ];
 
@@ -890,6 +891,7 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "ome-ngff-audit": ["text-clean", "text-stats"],
   "parquet-metadata-audit": ["text-clean", "text-stats"],
   "cog-geotiff-audit": ["text-clean", "text-stats"],
+  "file-format-identify": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
@@ -1187,7 +1189,7 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (mime.includes("json") || name.endsWith(".json")) return "json-format";
   if (/\.(docx|pptx|xlsx)$/i.test(name) || mime.includes("officedocument")) return "office-text";
   if (/\.(zip|tar|tgz|gz)$/i.test(name) || mime.includes("zip") || mime.includes("tar")) return "archive-inspect";
-  return "file-hash";
+  return "file-format-identify";
 }
 
 export function toolCategoryLabel(category: ToolCategory): string {
