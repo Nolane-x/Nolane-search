@@ -501,8 +501,8 @@ def _local_name(tag: str) -> str:
 
 
 def _safe_3mf_member(name: str) -> bool:
-    normalized = name.replace("\\", "/")
-    return bool(normalized) and not normalized.startswith("/") and "\x00" not in normalized and all(part not in ("", ".", "..") for part in normalized.split("/"))
+    normalized = name.rstrip("/")
+    return bool(normalized) and "\\" not in name and not normalized.startswith("/") and "\\x00" not in normalized and all(part not in ("", ".", "..") for part in normalized.split("/"))
 
 
 def _read_3mf_xml(archive: zipfile.ZipFile, members: dict[str, zipfile.ZipInfo], name: str) -> ET.Element:
