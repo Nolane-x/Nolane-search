@@ -14,6 +14,19 @@ Wave 30 safety and bounds: all inputs are capped at 20 MiB. OME-NGFF ZIP inspect
 
 
 
+### Wave 34 — Robotics telemetry, lakehouse metadata, ONNX models and OpenTelemetry traces — active development
+
+Wave 34 is being developed on branch `feat/wave-thirty-four-robotics-ml-observability`. The branch contains **450 catalog entries**, but production remains **446 tools** until PR CI, Worker export/health smoke and Cloudflare deployment pass after merge.
+
+| ID / command | Processor | Capability |
+|---|---|---|
+| /tool mcap-recording-audit | MCAP Python 1.6.0 | Inspect robotics recording header/footer and indexed summary, count messages/channels/schemas/chunks/attachments; do not decode payloads or decompress chunks. |
+| /tool iceberg-metadata-audit | PyIceberg 0.12.0 | Parse local Iceberg v1/v2/v3 metadata JSON; inspect schemas, partition specs, snapshots, refs and internal ID consistency; no catalog/object-storage calls. |
+| /tool onnx-model-audit | ONNX 1.23.2 | Check model protobuf/graph/opset consistency; no inference, custom operators or external tensor loading. |
+| /tool otel-trace-audit | OpenTelemetry Proto 1.11.1 | Validate OTLP/JSON trace/span identifiers, timestamp ordering, status/kind enums, duplicates and aggregate counts while withholding identifiers and values. |
+
+Runtime dependencies are version-pinned and installed only when a selected job requires them. The OTLP processor uses Python's standard library. See [Wave 34 upstream research](TOOL-RESEARCH-2026-11-23-WAVE34.md) and [implementation handoff](HANDOFF-WAVE-THIRTY-FOUR-2026-11-23.md). These tools are development-branch entries only; production remains **446**.
+
 ### Wave 33 — Article extraction, policy compilation, Kubernetes schema and artifact provenance — deployed 2026-11-23
 
 Wave 33 was merged through [PR #86](https://github.com/Nolane-x/Nolane-search/pull/86), increasing production from **442 to 446 tools**. Main CI [45150195124](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195124), Worker export/health smoke [45150195535](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195535) and Cloudflare deployment [45150195611](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195611) passed. Worker Version ID: `016b7d5b-629d-400a-bf86-0c0f5b70913a`.

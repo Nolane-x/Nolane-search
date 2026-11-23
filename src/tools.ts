@@ -476,7 +476,11 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "web-article-extract", name: "Trích xuất nội dung bài viết từ HTML", category: "document", description: "Dùng Trafilatura để tách nội dung chính, tiêu đề, tác giả và ngày từ HTML đã tải sẵn; không tự truy cập URL, xuất Markdown.", accepts: ["text/html", ".html", ".htm", ".xhtml"], output: "Bài viết Markdown", ready: true },
   { id: "rego-policy-check", name: "Kiểm tra policy Rego bằng OPA", category: "developer", description: "Phân tích cú pháp và biên dịch strict theo tập cú pháp tương thích Rego v1; không evaluate policy, query hay built-in, không truy cập nguồn ngoài.", accepts: ["text/plain", ".rego", ".zip"], output: "Báo cáo Rego TXT", ready: true },
   { id: "k8s-schema-validate", name: "Xác thực Kubernetes theo JSON Schema", category: "developer", description: "Kiểm định YAML nhiều resource bằng Kubeconform với Kubernetes OpenAPI schema v1.34.0 được pin commit; không kết nối cluster, không bao gồm CRD/admission.", accepts: ["application/yaml", "text/yaml", ".yaml", ".yml"], output: "Báo cáo Kubernetes Schema TXT", ready: true },
-  { id: "cosign-verify-blob", name: "Xác minh chữ ký artifact Sigstore", category: "developer", description: "Xác minh blob bằng Sigstore bundle, PEM public key và trusted root cục bộ; không dùng KMS/keyless, không tự tải trust material.", accepts: ["application/zip", ".zip"], output: "Báo cáo Sigstore Verify TXT", ready: true }
+  { id: "cosign-verify-blob", name: "Xác minh chữ ký artifact Sigstore", category: "developer", description: "Xác minh blob bằng Sigstore bundle, PEM public key và trusted root cục bộ; không dùng KMS/keyless, không tự tải trust material.", accepts: ["application/zip", ".zip"], output: "Báo cáo Sigstore Verify TXT", ready: true },
+  { id: "mcap-recording-audit", name: "Kiểm tra MCAP Robotics Recording", category: "data", description: "Đọc cấu trúc header/footer và summary index của MCAP robotics; đếm message/channel/schema/chunk/attachment, không giải mã message payload.", accepts: ["application/mcap", ".mcap"], output: "Báo cáo MCAP TXT", ready: true },
+  { id: "iceberg-metadata-audit", name: "Kiểm tra metadata bảng Apache Iceberg", category: "data", description: "Xác thực metadata JSON Iceberg v1/v2/v3; kiểm tra schema, partition spec, snapshot và ref IDs, không truy cập catalog, manifest hay data storage.", accepts: ["application/json", ".metadata.json"], output: "Báo cáo Iceberg Metadata TXT", ready: true },
+  { id: "onnx-model-audit", name: "Kiểm định mô hình ONNX", category: "developer", description: "Dùng ONNX checker kiểm tra protobuf, graph và opset consistency; không chạy inference, custom operators hoặc tải external weights.", accepts: ["application/onnx", ".onnx"], output: "Báo cáo ONNX Model TXT", ready: true },
+  { id: "otel-trace-audit", name: "Kiểm tra OpenTelemetry Trace Export", category: "developer", description: "Kiểm tra OTLP JSON resourceSpans, trace/span IDs, kind/status, timestamp ordering, duplicate IDs và thống kê event/link, không lộ IDs hay attribute values.", accepts: ["application/json", ".otlp.json"], output: "Báo cáo OTLP Trace TXT", ready: true }
 
 ];
 
@@ -908,6 +912,10 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "rego-policy-check": ["text-clean", "text-stats"],
   "k8s-schema-validate": ["text-clean", "text-stats"],
   "cosign-verify-blob": ["text-clean", "text-stats"],
+  "mcap-recording-audit": ["text-clean", "text-stats"],
+  "iceberg-metadata-audit": ["text-clean", "text-stats"],
+  "onnx-model-audit": ["text-clean", "text-stats"],
+  "otel-trace-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
@@ -1083,6 +1091,10 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   const mime = (file.mimeType || "").toLowerCase();
   const name = (file.fileName || "").toLowerCase();
   if (/\.cron$/i.test(name)) return "cron-schedule-audit";
+  if (/\.mcap$/i.test(name) || mime === "application/mcap") return "mcap-recording-audit";
+  if (/\.metadata\.json$/i.test(name)) return "iceberg-metadata-audit";
+  if (/\.onnx$/i.test(name) || mime === "application/onnx") return "onnx-model-audit";
+  if (/(?:^|[-_.])(?:otlp|otel|opentelemetry)(?:[-_.].*)?\.json$/i.test(name)) return "otel-trace-audit";
   if (/\.(?:ttl|nt|nq|trig)$/i.test(name)) return "rdf-graph-audit";
   if (/\.(?:gcode|gco|tap)$/i.test(name)) return "gcode-audit";
   if (/\.(?:mid|midi)$/i.test(name) || mime.includes("midi")) return "midi-audit";
