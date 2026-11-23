@@ -31,7 +31,7 @@ KUBERNETES_SCHEMA_COMMIT = "0c4dd99d9873f7b4c2da24c008476f5841adbe2d"
 KUBERNETES_SCHEMA_TEMPLATE = (
     "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/"
     + KUBERNETES_SCHEMA_COMMIT
-    + "/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}.json"
+    + "/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json"
 )
 
 
@@ -181,7 +181,7 @@ def rego_policy_check(path: Path) -> dict:
     passed = result.returncode == 0
     return _report(path, "rego-policy-check", "OPA Rego static compilation", [
         f"Modules inspected: {len(source_files):,}",
-        f"Rego v1 strict compilation: {'passed' if passed else 'failed'}",
+        f"Rego v1-compatible strict compilation: {'passed' if passed else 'failed'}",
         "Execution boundary: rules, queries and built-ins are never evaluated; no input document or network source is loaded.",
         "Privacy: source text, package identifiers and raw compiler diagnostics are withheld.",
         "Scope: parse/compile validation is not a proof of policy correctness, authorization safety or runtime behavior.",
