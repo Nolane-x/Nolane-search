@@ -56,7 +56,7 @@ class Wave35Tests(unittest.TestCase):
             encoded = value.encode("utf-8")
             return struct.pack("<Q", len(encoded)) + encoded
         payload += gguf_string("general.alignment") + struct.pack("<II", 4, 32)
-        payload += gguf_string("PRIVATE_TENSOR_NAME") + struct.pack("<IQQQI", 2, 4, 4, 1, 0) + struct.pack("<Q", 0)
+        payload += gguf_string("PRIVATE_TENSOR_NAME") + struct.pack("<IQQIQ", 2, 4, 4, 1, 0)
         payload += b"\x00" * ((-len(payload)) % 32)
         payload += b"\x00" * 32
         report = self.report(wave35.gguf_model_audit(self.write("model.gguf", bytes(payload))))
