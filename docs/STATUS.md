@@ -2,16 +2,21 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## In review — Wave 31 PRONOM file format identification (2026-11-23)
+## Latest production release — Wave 31 (2026-11-23)
 
-- Branch: `feat/wave-thirty-one-pronom-file-identification`; candidate catalog **438 IDs** (437 production + 1 candidate).
-- Adds `file-format-identify` using Siegfried v1.11.9 and the release-pinned PRONOM `default.sig` database. It becomes the fallback for uploads that do not match an existing specialist parser; explicitly selected parsers continue to take priority.
-- Binary and signature-data downloads are pinned and SHA-256 verified: static Linux asset `c8cb3ec3c536863bd477cea7cd1b1213843b4bcad7e9d64bcea4d131e2bb9a01`; data archive `1a284a57d102996ab99e393dc40e7e213039ab44e1573c55fa9d9935840515cf`.
-- Runtime install is conditional on the selected tool; CI installs the same pinned release to exercise a real ZIP fixture. No unpinned `sf -update` is used.
-- Existing 20 MiB input cap; 30-second process timeout; one local file only; archive recursion disabled; maximum 1 MiB JSON result and 128 matches. Report includes PUID/format/version/MIME only and withholds filename, runner path, raw stderr and content.
-- Eight synthetic parser/privacy tests plus a real Siegfried ZIP fixture test are included. PR CI, Worker build and deployment are pending. Production remains **437 tools**.
+- [PR #84](https://github.com/Nolane-x/Nolane-search/pull/84) merged into `main` as `bfc107d1f299b9ae4b7c557fbe4fea0e3eee6599`; production catalog increased from 437 to **438 tools**.
+- Main CI [45127497703](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497703) passed type-check, all **25 Vitest files / 253 tests**, deployment-script checks, **293 Python runner tests** and Worker build.
+- Worker export/build and production health smoke [45127497583](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497583) passed. The live health response returned `ok: true`, database `reachable`, archive enabled and configured provider/AI route counts.
+- Cloudflare deployment [45127497651](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497651) passed source verification, build, bundle validation, Worker/runtime-secret upload and Telegram webhook plus command-menu registration. Webhook `message` + `callback_query` verified; bot commands registered successfully.
+- Deployed Worker Version ID: `679e4cfc-08a8-4832-92cc-459e79df6763`. D1 migration was correctly skipped because Wave 31 made no schema changes.
+- Added `file-format-identify` as a PRONOM/Siegfried fallback for uploads without an existing specialist parser. The engine is v1.11.9 and both the static binary and signature-data archive are pinned to upstream release SHA-256 digests.
+- Runner uses neutral stdin name `nolane-upload`, so the submitted filename/path is not passed to Siegfried and extension-only hints are avoided. Reports expose PUID/format/version/MIME and withhold path, filename, raw stderr, file bytes and raw signature diagnostics.
+- No D1 schema change, new secret, provider or paid Cloudflare resource was required. Binary/signature assets are installed only for jobs selecting `file-format-identify`; no automatic `sf -update` occurs.
+- Owner-level acceptance remains separate: upload a synthetic ZIP, unknown binary and known document through the private Telegram bot, inspect the identification results and test `/tool_retry`. CI and deployment do not prove every Telegram upload journey.
 
-## Latest production release — Wave 30 (2026-11-23)
+## Previous production release — Wave 30 (2026-11-23)
+
+
 
 - [PR #83](https://github.com/Nolane-x/Nolane-search/pull/83) merged into `main` as `44dc33b71f7317d54e9fa9ae1ac6a48b84a06797`; catalog increased from 434 to **437 production tools**.
 - Main CI [45124586861](https://github.com/Nolane-x/Nolane-search/actions/runs/45124586861) passed type-check, all **25 Vitest files / 252 tests**, deployment-script checks, **283 Python runner tests** and Worker build.
