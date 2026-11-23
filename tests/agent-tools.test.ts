@@ -335,14 +335,14 @@ describe("Nolane AI callable tools", () => {
       if (requests.length === 1) {
         return new Response(JSON.stringify({
           choices: [{ message: { content: null, tool_calls: [
-            { id: "call_catalog", type: "function", function: { name: "list_nolane_tools", arguments: JSON.stringify({ category: "document", limit: 30 }) } },
+            { id: "call_catalog", type: "function", function: { name: "list_nolane_tools", arguments: JSON.stringify({ category: "document", query: "pdf-split", limit: 30 }) } },
           ] } }],
         }), { status: 200 });
       }
       const messages = body.messages as Array<{role:string;content:string}>;
       const toolResult = messages.find(message => message.role === "tool")?.content || "";
       expect(toolResult).toContain("pdf-split");
-      expect(toolResult).toContain('"total":47');
+      expect(toolResult).toContain('"total":1');
       expect(toolResult).toContain('"nextOffset":null');
       return new Response(JSON.stringify({
         choices: [{ message: { content: "Nolane có catalog công cụ nâng cao." } }],
