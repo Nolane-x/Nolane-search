@@ -2,6 +2,14 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+## Candidate implementation — Wave 37 (PR #90; not yet production)
+
+- [PR #90](https://github.com/Nolane-x/Nolane-search/pull/90) targets the 462-tool production baseline; it does not add processors or change the catalog count.
+- AI catalog discovery is paginated and bounded, with all active tools reachable by category/query/offset. Everyday categories are ordered before developer/repository categories, which remain explicitly discoverable.
+- Telegram `/ai` and authenticated Web chat expose a guarded `prepare_file_processing` function only when the owner/private-chat context is valid. It writes the existing owner/chat-bound five-minute pending upload key; it does not start processing before a file arrives.
+- The upload planner's function schema is generated from all ready catalog IDs. MIME compatibility and pipeline transition validation remain mandatory, and actual processors still run on isolated GitHub Actions runners.
+- The PR adds tests for complete paginated catalog traversal, category reachability, tool-call exposure, owner/private context gating and upload preparation. PR CI and deployment have not yet been verified; production stays on Wave 36 until merge and deployment succeed.
+
 ## Latest production release — Wave 36 (2026-11-23)
 
 - [PR #89](https://github.com/Nolane-x/Nolane-search/pull/89) merged into main as `f1ca98ba55a664ceff52a920f84ea65090e1e214`; production catalog increased from **456 to 462 tools**.

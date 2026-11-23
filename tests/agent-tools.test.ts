@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { executeAgentTool, AGENT_TOOL_DEFINITIONS, runAgentLoop } from "../src/agent-tools";
+import { executeAgentTool, AGENT_TOOL_DEFINITIONS, getAgentToolDefinitions, runAgentLoop } from "../src/agent-tools";
+import type { AgentToolContext } from "../src/agent-tools";
+import { TOOL_CATALOG } from "../src/tools";
 import type { Env } from "../src/types";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -12,21 +14,69 @@ describe("Nolane AI callable tools", () => {
     ]);
   });
 
-  it("returns all registered file processors from the catalog tool", async () => {
-    const result = JSON.parse(await executeAgentTool(env, "list_nolane_tools", {})) as Array<{id:string}>;
-    expect(result.length).toBeGreaterThanOrEqual(45);
-    expect(result.some(tool => tool.id === "video-compress")).toBe(true);
+  it("discovers the complete catalog in bounded, non-overlapping pages", async () => {
+    const first = JSON.parse(await executeAgentTool(env, "list_nolane_tools", {})) as {
+      total: number; offset: number; limit: number; nextOffset: number | null;
+      tools: Array<{id:string;category:string}>;
+    };
+    expect(first.total).toBe(TOOL_CATALOG.length);
+    expect(first.total).toBe(462);
+    expect(first.tools).toHaveLength(20);
+    expect(first.nextOffset).toBe(20);
+    expect(first.tools.every(tool => tool.category === "image")).toBe(true);
+
+    const ids = new Set(first.tools.map(tool => tool.id));
+    let offset = first.nextOffset;
+    while (offset !== null) {
+      const page = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { offset, limit: 20 })) as {
+        total: number; nextOffset: number | null; tools: Array<{id:string}>;
+      };
+      expect(page.total).toBe(first.total);
+      for (const tool of page.tools) {
+        expect(ids.has(tool.id)).toBe(false);
+        ids.add(tool.id);
+      }
+      offset = page.nextOffset;
+    }
+    expect(ids.size).toBe(TOOL_CATALOG.length);
+    expect(ids).toEqual(new Set(TOOL_CATALOG.map(tool => tool.id)));
+    expect(ids.has("video-compress")).toBe(true);
+    await expect(executeAgentTool(env, "list_nolane_tools", { offset: -1 })).rejects.toThrow("offset");
+    await expect(executeAgentTool(env, "list_nolane_tools", { limit: 21 })).rejects.toThrow("page size");
   });
 
-  it("exposes Developer and Repository categories to the AI tool-discovery interface", async () => {
+  it("keeps technical tools available by explicit category without prioritizing them by default", async () => {
     const definition = AGENT_TOOL_DEFINITIONS.find(tool => tool.function.name === "list_nolane_tools");
-    const schema = definition?.function.parameters as { properties?: { category?: { enum?: string[] } } };
-    expect(schema.properties?.category?.enum).toEqual(expect.arrayContaining(["developer", "repository"]));
-    const repository = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "repository" })) as Array<{id:string}>;
-    expect(repository.some(tool => tool.id === "repo-security-audit")).toBe(true);
-    expect(repository.some(tool => tool.id === "repo-supply-chain")).toBe(true);
-    const developer = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "developer" })) as Array<{id:string}>;
-    expect(developer.some(tool => tool.id === "code-imports")).toBe(true);
+    const schema = definition?.function.parameters as { properties?: { category?: { enum?: string[] }; offset?: unknown; limit?: unknown } };
+    expect(schema.properties?.category && (schema.properties.category as {enum?:string[]}).enum)
+      .toEqual(expect.arrayContaining(["image", "document", "audio-video", "data", "utility", "developer", "repository"]));
+    expect(schema.properties?.offset).toBeDefined();
+    expect(schema.properties?.limit).toBeDefined();
+
+    const repository = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "repository", query: "repo-security-audit", limit: 20 })) as {tools:Array<{id:string}>};
+    expect(repository.tools.some(tool => tool.id === "repo-security-audit")).toBe(true);
+    const supplyChain = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "repository", query: "repo-supply-chain" })) as {tools:Array<{id:string}>};
+    expect(supplyChain.tools.some(tool => tool.id === "repo-supply-chain")).toBe(true);
+    const developer = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "developer", query: "code-imports", limit: 20 })) as {tools:Array<{id:string}>};
+    expect(developer.tools.some(tool => tool.id === "code-imports")).toBe(true);
+    const audioVideo = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "audio-video", query: "audio-convert", limit: 20 })) as {tools:Array<{id:string}>};
+    expect(audioVideo.tools.some(tool => tool.id === "audio-convert")).toBe(true);
+  });
+
+  it("exposes file preparation only when a verified private-chat callback is supplied", async () => {
+    const callback = vi.fn(async (goal: string) => "Ready for upload: " + goal);
+    const context: AgentToolContext = { canPrepareFileProcessing: true, prepareFileProcessing: callback };
+    expect(getAgentToolDefinitions().some(tool => tool.function.name === "prepare_file_processing")).toBe(false);
+    expect(getAgentToolDefinitions(context).some(tool => tool.function.name === "prepare_file_processing")).toBe(true);
+    await expect(executeAgentTool(env, "prepare_file_processing", {goal:"Extract text from this PDF"})).rejects.toThrow("authorized private");
+    await expect(executeAgentTool(env, "prepare_file_processing", {goal:"Extract text from this PDF"}, {
+      canPrepareFileProcessing: false, prepareFileProcessing: callback,
+    })).rejects.toThrow("authorized private");
+    await expect(executeAgentTool(env, "prepare_file_processing", {goal:"tiny"}, context)).rejects.toThrow("clear file-processing goal");
+    await expect(executeAgentTool(env, "prepare_file_processing", {goal:"Extract text from this PDF"}, context))
+      .resolves.toBe("Ready for upload: Extract text from this PDF");
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenCalledWith("Extract text from this PDF");
   });
 
   it("formats JSON and cleans text through bounded processor calls", async () => {
@@ -286,14 +336,15 @@ describe("Nolane AI callable tools", () => {
       if (requests.length === 1) {
         return new Response(JSON.stringify({
           choices: [{ message: { content: null, tool_calls: [
-            { id: "call_catalog", type: "function", function: { name: "list_nolane_tools", arguments: "{}" } },
+            { id: "call_catalog", type: "function", function: { name: "list_nolane_tools", arguments: JSON.stringify({ category: "document", query: "pdf-split", limit: 20 }) } },
           ] } }],
         }), { status: 200 });
       }
       const messages = body.messages as Array<{role:string;content:string}>;
       const toolResult = messages.find(message => message.role === "tool")?.content || "";
       expect(toolResult).toContain("pdf-split");
-      expect(toolResult).toContain("audio-convert");
+      expect(toolResult).toContain('"total":1');
+      expect(toolResult).toContain('"nextOffset":null');
       return new Response(JSON.stringify({
         choices: [{ message: { content: "Nolane có catalog công cụ nâng cao." } }],
       }), { status: 200 });
@@ -313,6 +364,48 @@ describe("Nolane AI callable tools", () => {
     expect(result.toolsUsed).toEqual(["list_nolane_tools"]);
     expect(requests).toHaveLength(2);
     expect(requests[0]?.tool_choice).toBe("auto");
+  });
+
+  it("lets the Telegram agent arm file processing through a real model tool call", async () => {
+    const requests: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      requests.push(body);
+      if (requests.length === 1) {
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: null, tool_calls: [
+            { id: "call_prepare", type: "function", function: {
+              name: "prepare_file_processing",
+              arguments: JSON.stringify({goal:"Extract all text and tables from my PDF"}),
+            } },
+          ] } }],
+        }), { status: 200 });
+      }
+      const messages = body.messages as Array<{role:string;content:string}>;
+      expect(messages.some(message => message.role === "tool" && message.content.includes("upload session")))
+        .toBe(true);
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: "Đã sẵn sàng, hãy gửi PDF trong chat riêng Telegram." } }],
+      }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const config = {
+      strategy: "priority",
+      providers: [{ id: "agent-file-test", protocol: "openai-compatible", baseUrl: "https://api.example.ai/v1",
+        apiKey: "agent-file-test-secret", models: ["agent-model"] }],
+    };
+    const prepareFileProcessing = vi.fn(async (_goal: string) => "A private Telegram upload session is ready; no file has been processed yet.");
+    const context: AgentToolContext = { canPrepareFileProcessing: true, prepareFileProcessing };
+    const result = await runAgentLoop({
+      ...env, AI_ROUTER_CONFIG: JSON.stringify(config),
+    } as Env, {
+      task: "chat", messages: [{role:"user",content:"I want you to extract the text and tables from my PDF."}],
+    }, { context });
+    const firstTools = requests[0]?.tools as Array<{function:{name:string}}>;
+    expect(firstTools.some(tool => tool.function.name === "prepare_file_processing")).toBe(true);
+    expect(prepareFileProcessing).toHaveBeenCalledWith("Extract all text and tables from my PDF");
+    expect(result.toolsUsed).toEqual(["prepare_file_processing"]);
+    expect(result.completion.text).toContain("Đã sẵn sàng");
   });
 
   it("rejects arbitrary tools, invalid arguments and oversized content", async () => {
