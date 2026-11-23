@@ -2,14 +2,19 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## Active development — Wave 32 (not production)
+## Latest production release — Wave 32 (2026-11-23)
 
-- Branch: feat/wave-thirty-two-semantic-and-pdf-tools.
-- Four new processors are staged on the branch: pdf-ocr-searchable, rdf-graph-audit, shacl-validate and cron-schedule-audit.
-- The production count remains **438** until the branch passes PR CI, Worker export/health smoke and Cloudflare deployment after merge.
+- [PR #85](https://github.com/Nolane-x/Nolane-search/pull/85) merged into main as `f9359406a25043220e51a90e33cc9a72c6fc7321`; production catalog increased from **438 to 442 tools**.
+- Main CI [45145755895](https://github.com/Nolane-x/Nolane-search/actions/runs/45145755895) passed TypeScript type-check, all **25 Vitest files / 253 tests**, deployment checks, **306 Python runner tests** and Cloudflare Worker build.
+- Worker export/build and production health smoke [45145756137](https://github.com/Nolane-x/Nolane-search/actions/runs/45145756137) passed. Health returned `ok: true`, database `reachable`, and archive enabled.
+- Cloudflare deployment [45145755910](https://github.com/Nolane-x/Nolane-search/actions/runs/45145755910) passed source verification, build, bundle validation, Worker/runtime-secret upload, Telegram webhook verification and command-menu registration.
+- Deployed Worker Version ID: `ddfedcef-6feb-42da-97a3-e29c4fcfaa3e`. D1 migration was correctly skipped because Wave 32 made no schema changes.
+- Added `pdf-ocr-searchable`, `rdf-graph-audit`, `shacl-validate` and `cron-schedule-audit`. They are present in the TypeScript catalog, Python runner allowlist, handler map and mirrored pipeline transitions. Static parity: 442 catalog IDs, 442 runner IDs and 442 handlers; no duplicates or omissions.
+- OCR dependencies are installed only for OCR jobs. RDF/SHACL/cron dependencies are pinned; reports are bounded and avoid exposing graph values, validation focus nodes or raw parser diagnostics. No new Cloudflare secret, paid resource or persistent service was introduced.
+- Owner-level acceptance remains separate: upload representative non-sensitive PDF, RDF, SHACL and cron fixtures through private Telegram, inspect outputs and test `/tool_retry`. CI, health smoke and webhook verification do not prove each individual upload journey.
 - Implementation handoff: [HANDOFF-WAVE-THIRTY-TWO-2026-11-23.md](HANDOFF-WAVE-THIRTY-TWO-2026-11-23.md); upstream review: [TOOL-RESEARCH-2026-11-23.md](TOOL-RESEARCH-2026-11-23.md).
 
-## Latest production release — Wave 31 (2026-11-23)
+## Previous production release — Wave 31 (2026-11-23)
 
 - [PR #84](https://github.com/Nolane-x/Nolane-search/pull/84) merged into `main` as `bfc107d1f299b9ae4b7c557fbe4fea0e3eee6599`; production catalog increased from 437 to **438 tools**.
 - Main CI [45127497703](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497703) passed type-check, all **25 Vitest files / 253 tests**, deployment-script checks, **293 Python runner tests** and Worker build.
