@@ -6,22 +6,11 @@ Last verified: 2026-11-23. Production deployment evidence is separated from owne
 
 - Branch: `feat/wave-thirty-format-and-science-auditors`; candidate catalog **437 IDs** (434 production + 3 candidate processors).
 - Adds `ome-ngff-audit` for OME-Zarr 0.6 metadata-only validation, `parquet-metadata-audit` for footer/schema/row-group/GeoParquet metadata without column names/statistics/row values, and `cog-geotiff-audit` for local COG layout validation.
-- Existing DuckDB is reused for Parquet. `rio-cogeo==7.0.4` is installed only for the selected COG job; it is also installed in CI so synthetic raster fixtures can exercise the validator. OME-NGFF uses the existing standard-library ZIP/JSON helpers.
-- Input and metadata bounds: 20 MiB per file; OME ZIP archive retains existing 10,000-member / 180 MiB expanded limits, per-document JSON 2 MiB and 10 MiB aggregate. No row data, TIFF pixels, Zarr chunks, source paths, column names, statistics values or custom metadata values are exposed.
-- Wave 30 has 13 synthetic Python regression tests covering OME axes/array references/transforms/resolution order, Parquet metadata privacy and COG layout/error handling.
-- Candidate upload inference: `.ome.zarr.zip`, `.parquet`, and explicit `.cog.tif/.cog.tiff`; generic TIFF uploads retain the existing image flow. Parquet now defaults to metadata audit; conversion remains available with `/tool parquet-to-csv`.
-- PR CI and Worker build/deployment are pending. Production remains **434 tools** until current-head CI, Worker export/health smoke and Cloudflare deployment all pass.
-- No D1 schema change, new secret or paid resource is expected. COG validation is local-file-only; the underlying rio-cogeo API can accept URLs but this wrapper never passes one.
-
-## In review — Wave 30 format and scientific metadata auditors (2026-11-23)
-
-- Branch: `feat/wave-thirty-format-and-science-auditors`; candidate catalog **437 IDs** (434 production + 3 candidate processors).
-- Adds `ome-ngff-audit` for OME-Zarr 0.6 metadata-only validation, `parquet-metadata-audit` for footer/schema/row-group/GeoParquet metadata without column names/statistics/row values, and `cog-geotiff-audit` for local COG layout validation.
 - Existing DuckDB is reused for Parquet. `rio-cogeo==7.0.4` is installed only for the selected COG job; it is also installed in CI for synthetic raster fixtures. OME-NGFF uses existing standard-library ZIP/JSON helpers.
 - Input and metadata bounds: 20 MiB per file; OME ZIP retains existing 10,000-member / 180 MiB expanded limits, per-document JSON 2 MiB and 10 MiB aggregate. No row data, TIFF pixels, Zarr chunks, source paths, column names, statistics values or custom metadata values are exposed.
 - Wave 30 has 13 synthetic Python regression tests covering OME axes/array references/transforms/resolution order, Parquet metadata privacy and COG layout/error handling.
 - Candidate upload inference: `.ome.zarr.zip`, `.parquet`, and explicit `.cog.tif/.cog.tiff`; generic TIFF uploads retain the existing image flow. Parquet now defaults to metadata audit; conversion remains available with `/tool parquet-to-csv`.
-- PR CI and Worker build/deployment are pending. Production remains **434 tools** until current-head CI, Worker export/health smoke and Cloudflare deployment all pass.
+- PR [#83](https://github.com/Nolane-x/Nolane-search/pull/83) current-head CI [45118748674](https://github.com/Nolane-x/Nolane-search/actions/runs/45118748674) passed: type-check, 25 Vitest files / 252 tests, deployment-script checks, 283 Python runner tests and Worker build. Worker export/health smoke and Cloudflare deployment remain pending after merge. Production remains **434 tools**.
 - No D1 schema change, new secret or paid resource is expected. COG validation is local-file-only; this wrapper never passes a URL.
 
 ## Latest production release — Wave 29 (2026-11-23)
