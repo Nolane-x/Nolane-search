@@ -1622,7 +1622,7 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
       throw new Error("File processing can only be prepared in an authorized private Telegram chat.");
     }
     const goal = requireString(args, "goal", 6000).normalize("NFKC").trim();
-    if (goal.length < 6 || /[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]/.test(goal)) {
+    if (goal.length < 6 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(goal)) {
       throw new Error("Please provide a clear file-processing goal.");
     }
     return await context.prepareFileProcessing(goal);
