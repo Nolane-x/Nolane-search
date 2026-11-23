@@ -2,7 +2,7 @@
 
 Repository: https://github.com/Nolane-x/Nolane-search
 Branch: feat/wave-thirty-four-robotics-ml-observability
-Status: implementation branch; not merged or deployed. Production remains **446 tools** until all post-merge release gates pass.
+Status: implemented, merged through [PR #87](https://github.com/Nolane-x/Nolane-search/pull/87) and deployed to production on 2026-11-23. Production catalog: **450 tools**; Worker Version ID: d68926f5-045a-46d4-a197-f1e030e1e747.
 
 Wave 34 adds four data/observability ecosystems not represented in the current production catalog.
 
@@ -50,7 +50,7 @@ Input is capped at 10 MiB, 1,000 ResourceSpans groups and 100,000 spans. Trace/s
 
 1. TypeScript catalog IDs, Python `RUNNERS`, Python handler map, text-output registry, pipeline transitions and `docs/NOLANE-TOOLS.md` must match exactly.
 2. CI must pass type-check, all Vitest files, Python unittest discovery and Worker build. The MCAP, Iceberg and ONNX tests use actual upstream libraries and locally generated fixtures.
-3. After merge, Worker export/health smoke and Cloudflare deployment must pass before raising production from **446 to 450**.
+3. Release verification: PR #87 merged as 667ce654c440092e199a33b1a8a4538218b4bb2e; Main CI 45167290956, Worker export/health smoke 45167290969 and Cloudflare deployment 45167291256 all passed. Production is now 450 tools.
 4. Owner-level Telegram E2E remains separate: send a small MCAP recording, a synthetic Iceberg metadata JSON, a valid/invalid ONNX model and an OTLP trace export; inspect reports and exercise `/tool_retry`.
 5. Telegram Archive export/import/restore E2E is a separate owner-level recovery check and is not changed by Wave 34.
 
