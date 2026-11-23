@@ -50,22 +50,26 @@
 - Existing dedicated PDF/image/audio/video/scientific parsers retain precedence. Fallback changes from `file-hash` to `file-format-identify`; `file-hash` stays available explicitly.
 - The PRONOM signature database is a frozen v1.11.9 release snapshot. Updating it requires an intentional version/hash change and a refreshed real-engine test.
 
-## Release gates
+## Remaining owner-level acceptance
 
-1. Open PR and run CI on the exact latest head.
-2. Confirm the pinned asset download, SHA checks and `sf -version` succeed in CI.
-3. Confirm type-check, Vitest, deployment scripts, full Python suite and Worker build pass.
-4. Confirm catalog/runner/handler/pipeline parity is 438 unique IDs and upload fallback tests preserve specialist parser precedence.
-5. Merge only when current-head CI passes.
-6. Confirm main CI, Worker export/health smoke and Cloudflare deployment.
-7. Owner acceptance after deployment: send a synthetic ZIP, an unknown binary and a known document through the private bot; confirm PUID/format/MIME results, unknown handling, no path/filename leakage, and `/tool_retry`.
+Automated CI, pinned asset verification, real-engine ZIP identification, Worker health and production deployment all passed. The remaining checks require sending files through the private Telegram bot:
+
+1. Upload a synthetic ZIP with a misleading filename and confirm the content signature is identified independently of the extension.
+2. Upload an unknown binary and confirm the report says unknown without inventing a format.
+3. Upload a known document (for example PDF) with a neutral filename and confirm PUID/format/MIME are reported.
+4. Confirm the generated report and Telegram message do not reveal the submitted filename or runner path.
+5. Exercise `/tool_job` and `/tool_retry` on the new processor.
+
+These checks were not performed in the user's live Telegram session. Do not describe them as owner-verified until tested.
 
 ## Production checkpoint
 
-- Wave 30 main code commit: `44dc33b71f7317d54e9fa9ae1ac6a48b84a06797`
-- Worker deploy: [45124586883](https://github.com/Nolane-x/Nolane-search/actions/runs/45124586883)
-- Worker export/health: [45124586793](https://github.com/Nolane-x/Nolane-search/actions/runs/45124586793)
-- Main CI: [45124586861](https://github.com/Nolane-x/Nolane-search/actions/runs/45124586861)
-- Latest Worker Version ID: `8f9ca4bf-21ac-4fb7-9e11-fcaaaa3f3d2b`
+- Wave 31 main code commit: `bfc107d1f299b9ae4b7c557fbe4fea0e3eee6599`
+- PR: [#84](https://github.com/Nolane-x/Nolane-search/pull/84)
+- Main CI: [45127497703](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497703) — 25 Vitest files / 253 tests and 293 Python runner tests.
+- Worker export/health: [45127497583](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497583)
+- Cloudflare deploy: [45127497651](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497651)
+- Production Tool Center: 438 tools.
+- Latest Worker Version ID: `679e4cfc-08a8-4832-92cc-459e79df6763`
 
 Use this file as the continuation checkpoint; inspect current branch/PR/CI before any merge.
