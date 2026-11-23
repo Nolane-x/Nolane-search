@@ -14,6 +14,20 @@ Wave 30 safety and bounds: all inputs are capped at 20 MiB. OME-NGFF ZIP inspect
 
 
 
+### Wave 31 — PRONOM file format identification — candidate branch
+
+Wave 31 adds one universal format-identification processor to the 437-tool production catalog. The candidate registry has **438 tools**; production remains at 437 until PR CI, Worker export/health smoke and Cloudflare deployment pass.
+
+| ID | Công cụ | Nhóm | Chức năng |
+|---|---|---|---|
+| /tool file-format-identify | PRONOM/Siegfried file format identification | Digital preservation / file forensics | Nhận diện định dạng bằng chữ ký file qua Siegfried 1.11.9 và PRONOM default signature database đã pin; trả PUID, format/version và MIME; phân biệt unknown/ambiguous. Dùng làm fallback cho file chưa có parser chuyên biệt. Không phải malware scan. |
+
+The runner downloads the upstream Linux static binary and signature-data release assets only for this selected job. Both downloads are SHA-256 verified against pinned GitHub release digests before unpacking. No automatic `sf -update` is allowed, so repeated jobs use the same `v1.11.9` engine and signature data. Input limit is the existing 20 MiB tool cap and execution has a 30-second subprocess timeout. Only one uploaded local file is scanned; archive recursion is disabled. The wrapper suppresses the submitted filename/path, modification time, raw stderr, file contents and arbitrary match diagnostics.
+
+Upstream: [Siegfried](https://github.com/richardlehane/siegfried), Apache-2.0; release [v1.11.9](https://github.com/richardlehane/siegfried/releases/tag/v1.11.9) includes the static Linux binary and versioned signature-data archive. The signature database is pinned to the release digest; no network signature updates occur during jobs.
+
+
+
 ### Wave 28 — Scientific, medical imaging, spatial and research-data auditors — deployed 2026-11-23
 
 Wave 28 adds eight processors to the existing 426-tool production catalog, bringing production to **434 tools**. [PR #80](https://github.com/Nolane-x/Nolane-search/pull/80) merged as `61f389df0f9d797af74b27130cfaeb9e5662c47a`; main CI [45040057467](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057467), Worker export/health smoke [45040057426](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057426) and Cloudflare deployment [45040057437](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057437) passed. Worker Version ID: `34fad733-fef3-4b93-bc58-e480bb3c082f`.
