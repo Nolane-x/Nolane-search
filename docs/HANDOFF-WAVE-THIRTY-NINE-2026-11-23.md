@@ -1,10 +1,12 @@
 # Wave 39 — everyday-user utilities
 
 Date: 2026-11-23  
-Status: implementation branch opened; PR/CI/deployment verification pending.  
-Branch: \`feat/wave-thirty-nine-everyday-life-tools\`  
-Production baseline remains Wave 38: **462 processors**.  
-Branch target: **472 processors** (+10).
+Status: **merged and deployed to production**.  
+PR: [#92](https://github.com/Nolane-x/Nolane-search/pull/92)  
+Merge commit: `b81dfde15bf5d63846cac0d92378cb62eefcb2ec`  
+Production catalog: **472 tools** (+10 from Wave 38).  
+Worker Version ID: `10cdb714-b7f7-464b-9b75-f6390dde0b4c`  
+Worker: https://nolane-search.nolane-file.workers.dev
 
 ## User direction
 
@@ -25,14 +27,26 @@ Favor tools ordinary people immediately understand and can use. Avoid filling th
 
 ## Changed integration points
 
-- \`tools/wave39.py\`: standard-library-only calculation implementations.
-- \`tools/test_wave39.py\`: focused Python fixtures.
-- \`tools/runner.py\`: imports, allowlist and handler map.
-- \`src/tools.ts\`: ten ready catalog definitions in the utility category.
-- \`src/everyday-tools.ts\`: bounded direct text/JSON calculator implementations for the AI chat.
-- \`src/agent-tools.ts\`: adds calculator IDs to the AI callable allowlist, dispatches to the calculator module and updates the tool-discovery count to 472.
-- \`tests/agent-tools.test.ts\`: checks the 472-item paginated catalog and exercises all ten direct AI calculators.
-- Existing CI auto-discovers \`tools/test_wave39.py\`; no new CI dependency is required.
+- `tools/wave39.py`: standard-library-only calculation implementations.
+- `tools/test_wave39.py`: 12 focused Python fixtures.
+- `tools/runner.py`: imports, allowlist and handler map.
+- `src/tools.ts`: ten ready catalog definitions in the utility category.
+- `src/everyday-tools.ts`: bounded direct text/JSON calculator implementations for AI chat.
+- `src/agent-tools.ts`: calculator IDs in the AI callable allowlist, direct dispatch and documented JSON input shapes.
+- `tests/agent-tools.test.ts`, `tests/tools.test.ts`, `tests/telegram.test.ts`: test direct AI use, catalog size and the current Tool Center total.
+- `docs/TOOL-RESEARCH-2026-11-23-WAVE39.md`: upstream product-category research and license review.
+- `docs/NOLANE-TOOLS.md`, `README.md`, `docs/STATUS.md`: updated release state and inventory.
+
+## Validation and deployment — passed
+
+- PR CI [45201821609](https://github.com/Nolane-x/Nolane-search/actions/runs/45201821609) passed type-check, **25 Vitest files / 261 tests**, deployment-script validation, **366 Python runner tests**, and Worker build.
+- Main CI [45202094613](https://github.com/Nolane-x/Nolane-search/actions/runs/45202094613) passed the same checks after merge.
+- Worker export and production health smoke [45202094578](https://github.com/Nolane-x/Nolane-search/actions/runs/45202094578) passed.
+- Cloudflare deploy [45202094802](https://github.com/Nolane-x/Nolane-search/actions/runs/45202094802) passed required-secret validation, bundle validation and Worker upload.
+- The live `/health` smoke check reported success.
+- Telegram webhook was verified for `message` and `callback_query`; bot commands were registered.
+- D1 migration was skipped because there are no schema changes.
+- All 472 catalog IDs match the runner allowlist and handler map; the docs parity test checks the exact registered IDs.
 
 ## Resource and privacy impact
 
@@ -46,12 +60,6 @@ Favor tools ordinary people immediately understand and can use. Avoid filling th
 
 See [TOOL-RESEARCH-2026-11-23-WAVE39.md](TOOL-RESEARCH-2026-11-23-WAVE39.md). Reviewed MIT-licensed OmniTools, PrivaTools and LifeHack Toolbox repositories as product/category references, without copying source code. Also reviewed Czkawka as a candidate for a future duplicate/similar-file utility.
 
-## Remaining verification
+## Remaining owner-level acceptance
 
-1. Confirm Python unit tests, TypeScript type-check/tests and Worker build all pass in PR CI.
-2. Fix any failures before merge.
-3. Merge only after green PR checks, then confirm main CI and Cloudflare deployment.
-4. Verify production catalog returns 472 and health remains green.
-5. Owner-side smoke test: exercise selected calculator commands and one JSON-file upload/result via the real private Telegram account; GitHub CI cannot validate the owner's Telegram account interaction.
-
-Until those checks complete, **472 is the branch catalog count, not a production count**.
+Exercise selected calculator commands and one non-sensitive JSON-file upload/result using the actual private Telegram account. The CI and webhook checks verify deployment/configuration but cannot prove the owner client's end-to-end upload experience.
