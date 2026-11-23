@@ -148,12 +148,12 @@ def file_format_identify(path: Path) -> dict:
                 [binary, "-json", "-multi", "1", "-sig", signature, "-name", "nolane-upload", "-"],
                 stdin=source,
                 capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=SIEGFRIED_TIMEOUT_SECONDS,
-            check=False,
-        )
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=SIEGFRIED_TIMEOUT_SECONDS,
+                check=False,
+            )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("Siegfried identification exceeded the 30-second time limit.") from exc
     except OSError as exc:
