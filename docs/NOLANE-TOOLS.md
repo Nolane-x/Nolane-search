@@ -14,6 +14,19 @@ Wave 30 safety and bounds: all inputs are capped at 20 MiB. OME-NGFF ZIP inspect
 
 
 
+### Wave 33 — Article extraction, policy compilation, Kubernetes schema and artifact provenance — active development
+
+Wave 33 is being developed on branch `feat/wave-thirty-three-content-policy-provenance`. The branch contains **446 catalog entries**, but production remains **442 tools** until CI, Worker health smoke and Cloudflare deployment pass after merge.
+
+| ID / command | Processor | Capability |
+|---|---|---|
+| /tool web-article-extract | Trafilatura 2.3.1 | Extract main article body and selected metadata from an already-downloaded HTML/XHTML file; write Markdown. No URL fetching. |
+| /tool rego-policy-check | OPA 1.22.4 | Strict Rego v1 parse/compile only. Never evaluates policy rules or built-ins. |
+| /tool k8s-schema-validate | Kubeconform 0.8.0 | Strict Kubernetes 1.34.0 OpenAPI/JSON-Schema validation using a pinned schema-repository commit; no cluster connection. |
+| /tool cosign-verify-blob | Cosign 3.1.4 | Verify a blob using a Sigstore bundle, local PEM public key and user-provided TrustedRoot. No KMS or keyless mode. |
+
+The three CLI binaries are downloaded only for selected jobs and checked against pinned SHA-256 digests. Trafilatura is installed only for the HTML article processor. No new D1 schema, secret or persistent service is required. See [Wave 33 upstream research](TOOL-RESEARCH-2026-11-23-WAVE33.md) and [implementation handoff](HANDOFF-WAVE-THIRTY-THREE-2026-11-23.md). Tool behavior and security limitations are documented there; production count remains unchanged until release gates pass.
+
 ### Wave 32 — Semantic data, searchable PDF and scheduling tools — deployed 2026-11-23
 
 Wave 32 adds four additional processors through [PR #85](https://github.com/Nolane-x/Nolane-search/pull/85), increasing production from **438 to 442 tools**. Main CI [45145755895](https://github.com/Nolane-x/Nolane-search/actions/runs/45145755895), Worker export/health smoke [45145756137](https://github.com/Nolane-x/Nolane-search/actions/runs/45145756137) and Cloudflare deployment [45145755910](https://github.com/Nolane-x/Nolane-search/actions/runs/45145755910) passed. Worker Version ID: `ddfedcef-6feb-42da-97a3-e29c4fcfaa3e`.
