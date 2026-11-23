@@ -2,13 +2,18 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## In development — Wave 39 (2026-11-23)
+## Latest production release — Wave 39 (2026-11-23)
 
-- Branch [`feat/wave-thirty-nine-everyday-life-tools`](https://github.com/Nolane-x/Nolane-search/tree/feat/wave-thirty-nine-everyday-life-tools) adds 10 ordinary-user calculators and extends the branch catalog to **472 tools**. The production catalog remains **462** until PR CI, merge and Cloudflare deployment are verified.
-- New categories of utility: bill splitting, loan repayment estimates, date arithmetic, timezone conversion, recipe scaling, weighted grades, paint coverage, fuel trip estimates, discount calculations and unit-price comparison.
-- Python implementations use only the standard library; direct AI chat execution is exposed through the existing bounded `process_text_content` function. No paid API, D1 migration, secret or new Cloudflare resource is introduced.
-- PR CI and deployment are pending. Keep this section as development status until verified checks and production health are recorded.
-- Research: [TOOL-RESEARCH-2026-11-23-WAVE39.md](TOOL-RESEARCH-2026-11-23-WAVE39.md). Handoff: [HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md](HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md).
+- [PR #92](https://github.com/Nolane-x/Nolane-search/pull/92) merged into `main` as `b81dfde15bf5d63846cac0d92378cb62eefcb2ec`. Production Tool Center catalog: **472 processors** (+10 over Wave 38).
+- Main CI [45202094613](https://github.com/Nolane-x/Nolane-search/actions/runs/45202094613) passed TypeScript type-check, **25 Vitest files / 261 tests**, deployment-script checks, **366 Python runner tests** and Worker build.
+- Worker export/build and live `/health` smoke [45202094578](https://github.com/Nolane-x/Nolane-search/actions/runs/45202094578) passed.
+- Cloudflare deployment [45202094802](https://github.com/Nolane-x/Nolane-search/actions/runs/45202094802) passed required-secret validation, source and bundle checks, Worker upload, Telegram webhook verification (message + callback_query) and bot command registration. Worker Version ID: `10cdb714-b7f7-464b-9b75-f6390dde0b4c`.
+- D1 migration was correctly skipped because Wave 39 adds no schema changes, data tables or persistent file storage.
+- Ten ordinary-user calculators are now registered in the catalog, runner allowlist and handler map and callable directly from Nolane AI chat: bill splitting, loan payment estimates, date arithmetic, timezone conversion, recipe scaling, weighted grades, paint coverage, fuel-trip cost, discounts and unit-price comparison. Python runner implementations use the standard library only; no new paid API, secret or Cloudflare resource was added.
+- Upstream research: [TOOL-RESEARCH-2026-11-23-WAVE39.md](TOOL-RESEARCH-2026-11-23-WAVE39.md). Release handoff: [HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md](HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md).
+- Owner-level acceptance remains separate: test selected calculator commands and one non-sensitive JSON upload/result using the real private Telegram account. CI and webhook registration do not prove end-to-end interaction in the owner's client.
+
+
 
 ## Latest production release — Wave 38 (2026-11-23)
 
