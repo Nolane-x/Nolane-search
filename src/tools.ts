@@ -480,7 +480,13 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "mcap-recording-audit", name: "Kiểm tra MCAP Robotics Recording", category: "data", description: "Đọc cấu trúc header/footer và summary index của MCAP robotics; đếm message/channel/schema/chunk/attachment, không giải mã message payload.", accepts: ["application/mcap", ".mcap"], output: "Báo cáo MCAP TXT", ready: true },
   { id: "iceberg-metadata-audit", name: "Kiểm tra metadata bảng Apache Iceberg", category: "data", description: "Xác thực metadata JSON Iceberg v1/v2/v3; kiểm tra schema, partition spec, snapshot và ref IDs, không truy cập catalog, manifest hay data storage.", accepts: ["application/json", ".metadata.json"], output: "Báo cáo Iceberg Metadata TXT", ready: true },
   { id: "onnx-model-audit", name: "Kiểm định mô hình ONNX", category: "developer", description: "Dùng ONNX checker kiểm tra protobuf, graph và opset consistency; không chạy inference, custom operators hoặc tải external weights.", accepts: ["application/onnx", ".onnx"], output: "Báo cáo ONNX Model TXT", ready: true },
-  { id: "otel-trace-audit", name: "Kiểm tra OpenTelemetry Trace Export", category: "developer", description: "Kiểm tra OTLP JSON resourceSpans, trace/span IDs, kind/status, timestamp ordering, duplicate IDs và thống kê event/link, không lộ IDs hay attribute values.", accepts: ["application/json", ".otlp.json"], output: "Báo cáo OTLP Trace TXT", ready: true }
+  { id: "otel-trace-audit", name: "Kiểm tra OpenTelemetry Trace Export", category: "developer", description: "Kiểm tra OTLP JSON resourceSpans, trace/span IDs, kind/status, timestamp ordering, duplicate IDs và thống kê event/link, không lộ IDs hay attribute values.", accepts: ["application/json", ".otlp.json"], output: "Báo cáo OTLP Trace TXT", ready: true },
+  { id: "safetensors-audit", name: "Kiểm tra header SafeTensors", category: "developer", description: "Đọc header JSON, dtype/shape, byte ranges và chồng lấn tensor; không tải tensor weights hoặc làm lộ metadata values.", accepts: ["application/octet-stream", ".safetensors"], output: "Báo cáo SafeTensors TXT", ready: true },
+  { id: "gguf-model-audit", name: "Kiểm tra cấu trúc GGUF", category: "developer", description: "Kiểm tra header GGUF v2/v3, metadata index, tensor descriptors, alignment và offset bounds; không đọc weights hay chạy inference.", accepts: ["application/octet-stream", ".gguf"], output: "Báo cáo GGUF TXT", ready: true },
+  { id: "hf-model-card-audit", name: "Đánh giá Hugging Face Model Card", category: "developer", description: "Kiểm tra YAML front matter, license/tags metadata và độ bao phủ các mục mô tả, intended use, limitations, training data và evaluation; không gọi Hub API.", accepts: ["text/markdown", ".md", ".markdown"], output: "Báo cáo Model Card TXT", ready: true },
+  { id: "chat-dataset-audit", name: "Kiểm định JSONL Chat Fine-tuning", category: "data", description: "Kiểm tra từng example messages, role, content, tool calls, dòng lỗi và bản ghi trùng; chỉ trả số liệu tổng hợp, không lộ prompt/completion.", accepts: ["application/x-ndjson", ".jsonl", ".ndjson"], output: "Báo cáo Chat Dataset TXT", ready: true },
+  { id: "promptfoo-config-audit", name: "Kiểm tra cấu hình Promptfoo", category: "developer", description: "Kiểm tra cấu trúc YAML/JSON providers, prompts, tests, vars, assertions và scenarios; không resolve file/HTTP refs, không chạy model evaluation.", accepts: ["application/yaml", "text/yaml", "application/json", ".yaml", ".yml", ".json"], output: "Báo cáo Promptfoo Config TXT", ready: true },
+  { id: "three-mf-package-audit", name: "Kiểm định gói 3MF cho in 3D", category: "utility", description: "Kiểm tra ZIP/OPC relationships, primary model XML, object/mesh counts, vertex coordinates và triangle indices; không giải nén hay render.", accepts: ["application/octet-stream", ".3mf"], output: "Báo cáo 3MF TXT", ready: true }
 
 ];
 
@@ -916,6 +922,13 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "iceberg-metadata-audit": ["text-clean", "text-stats"],
   "onnx-model-audit": ["text-clean", "text-stats"],
   "otel-trace-audit": ["text-clean", "text-stats"],
+  "safetensors-audit": ["text-clean", "text-stats"],
+  "gguf-model-audit": ["text-clean", "text-stats"],
+  "hf-model-card-audit": ["text-clean", "text-stats"],
+  "chat-dataset-audit": ["text-clean", "text-stats"],
+  "promptfoo-config-audit": ["text-clean", "text-stats"],
+  "three-mf-package-audit": ["text-clean", "text-stats"],
+
 };
 
 export type ToolPipelineValidation =
@@ -1090,6 +1103,12 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (isPhoto) return "image-ocr";
   const mime = (file.mimeType || "").toLowerCase();
   const name = (file.fileName || "").toLowerCase();
+  if (/\.safetensors$/i.test(name)) return "safetensors-audit";
+  if (/\.gguf$/i.test(name)) return "gguf-model-audit";
+  if (/\.3mf$/i.test(name)) return "three-mf-package-audit";
+  if (/^(?:promptfooconfig|promptfoo\.config)\.(?:yaml|yml|json)$/i.test(name)) return "promptfoo-config-audit";
+  if (/^(?:training|train|finetune|fine-tuning|chat-dataset|sft)(?:[-_.].*)?\.(?:jsonl|ndjson)$/i.test(name)) return "chat-dataset-audit";
+  if (/^(?:model-card|modelcard|README\.model)\.(?:md|markdown)$/i.test(name)) return "hf-model-card-audit";
   if (/\.cron$/i.test(name)) return "cron-schedule-audit";
   if (/\.mcap$/i.test(name) || mime === "application/mcap") return "mcap-recording-audit";
   if (/\.metadata\.json$/i.test(name)) return "iceberg-metadata-audit";

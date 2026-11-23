@@ -1,5 +1,21 @@
 Nolane Tools hiện có **450 công cụ đang được đăng ký trên production** sau Wave 34, phát hành ngày 2026-11-23 trên Cloudflare Worker `nolane-search`. [PR #87](https://github.com/Nolane-x/Nolane-search/pull/87) đã merge vào `main` bằng commit `667ce654c440092e199a33b1a8a4538218b4bb2e`. Main CI [45167290956](https://github.com/Nolane-x/Nolane-search/actions/runs/45167290956), Worker export/health smoke [45167290969](https://github.com/Nolane-x/Nolane-search/actions/runs/45167290969) và Cloudflare deployment [45167291256](https://github.com/Nolane-x/Nolane-search/actions/runs/45167291256) đều thành công. Latest Worker Version ID: `d68926f5-045a-46d4-a197-f1e030e1e747`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema. Tệp đầu vào được xử lý trên GitHub-hosted runner dùng một lần; D1 chỉ giữ dữ liệu chỉ mục/cache nhỏ, Telegram archive giữ snapshot documents. Nguồn upstream và giới hạn triển khai được ghi tại docs/TOOL-RESEARCH-2026-11-23-WAVE34.md.
 
+### Wave 35 — AI model artifacts, training data, evaluation configs and 3D manufacturing — candidate, not production
+
+Wave 35 proposes six processors, taking the branch catalog from 450 to 456 IDs. The current production catalog remains **450 tools** until this branch passes CI, merges and the Cloudflare deployment is verified.
+
+| ID / command | Processor | Capability |
+|---|---|---|
+| /tool safetensors-audit | SafeTensors header auditor | Validates JSON header, duplicate keys, dtype/shape byte lengths, data offsets and overlapping tensor ranges. It never reads tensor weights or reports tensor names/metadata values. |
+| /tool gguf-model-audit | GGUF v2/v3 header auditor | Checks magic/version, metadata uniqueness/types, tensor dimensions, alignment and offset bounds. It does not decode quantized tensors, read model weights or run inference. |
+| /tool hf-model-card-audit | Hugging Face model-card reviewer | Inspects README YAML front matter and common sections for model description, intended use, limitations, training data and evaluation. It does not query the Hub or verify claims. |
+| /tool chat-dataset-audit | Chat fine-tuning JSONL validator | Checks message roles/content, basic tool-call structure, malformed lines, exact duplicates and the documented minimum example count. All prompt/completion content is withheld. |
+| /tool promptfoo-config-audit | Promptfoo config reviewer | Checks local YAML/JSON providers, prompts, tests, vars, assertions and scenarios. It does not resolve references, contact providers or run evaluations. |
+| /tool three-mf-package-audit | 3MF package / mesh auditor | Checks OPC ZIP relationships, the primary model XML part, object/build/mesh counts, vertex coordinates and triangle indices without extracting or rendering the package. |
+
+The shared 20 MiB upload limit remains unchanged. The 3MF reader limits expanded archive size to 100 MiB and rejects duplicate/path-traversal/encrypted/excessively compressed entries. The six processors add no Cloudflare service, secret, D1 migration or persistent process. PyYAML is installed only for the two YAML processors when selected. See [Wave 35 upstream research](TOOL-RESEARCH-2026-11-23-WAVE35.md) and [implementation handoff](HANDOFF-WAVE-THIRTY-FIVE-2026-11-23.md).
+
+
 ### Wave 30 — File format, microscopy and geospatial metadata auditors — deployed 2026-11-23
 
 Wave 30 adds three processors to the existing 434-tool production catalog, bringing production to **437 tools**. [PR #83](https://github.com/Nolane-x/Nolane-search/pull/83) merged as `44dc33b71f7317d54e9fa9ae1ac6a48b84a06797`; main CI [45124586861](https://github.com/Nolane-x/Nolane-search/actions/runs/45124586861), Worker export/health smoke [45124586793](https://github.com/Nolane-x/Nolane-search/actions/runs/45124586793) and Cloudflare deployment [45124586883](https://github.com/Nolane-x/Nolane-search/actions/runs/45124586883) passed. Worker Version ID: `8f9ca4bf-21ac-4fb7-9e11-fcaaaa3f3d2b`.

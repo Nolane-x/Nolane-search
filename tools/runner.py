@@ -41,6 +41,10 @@ from wave31 import file_format_identify
 from wave32 import cron_schedule_audit, pdf_ocr_searchable, rdf_graph_audit, shacl_validate
 from wave33 import cosign_verify_blob, kubernetes_schema_validate, rego_policy_check, web_article_extract
 from wave34 import iceberg_metadata_audit, mcap_recording_audit, onnx_model_audit, otel_trace_audit
+from wave35 import (
+    chat_dataset_audit, gguf_model_audit, hf_model_card_audit,
+    promptfoo_config_audit, safetensors_audit, three_mf_package_audit,
+)
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
@@ -176,6 +180,12 @@ RUNNERS = {
     "ocfl-object-audit", "zarr-store-audit", "nifti-header-audit", "dicom-privacy-audit",
     "las-pointcloud-audit", "jp2-box-audit", "netcdf-classic-audit", "nwb-structure-audit",
     "ome-ngff-audit", "parquet-metadata-audit", "cog-geotiff-audit", "file-format-identify", "pdf-ocr-searchable", "rdf-graph-audit", "shacl-validate", "cron-schedule-audit", "web-article-extract", "rego-policy-check", "k8s-schema-validate", "cosign-verify-blob", "mcap-recording-audit", "iceberg-metadata-audit", "onnx-model-audit", "otel-trace-audit",
+    "safetensors-audit",
+    "gguf-model-audit",
+    "hf-model-card-audit",
+    "chat-dataset-audit",
+    "promptfoo-config-audit",
+    "three-mf-package-audit",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -602,11 +612,17 @@ PIPELINE_TRANSITIONS = {
     "iceberg-metadata-audit":{"text-clean","text-stats"},
     "onnx-model-audit":{"text-clean","text-stats"},
     "otel-trace-audit":{"text-clean","text-stats"},
+    "safetensors-audit":{"text-clean","text-stats"},
+    "gguf-model-audit":{"text-clean","text-stats"},
+    "hf-model-card-audit":{"text-clean","text-stats"},
+    "chat-dataset-audit":{"text-clean","text-stats"},
+    "promptfoo-config-audit":{"text-clean","text-stats"},
+    "three-mf-package-audit":{"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-structured-data-audit","css-quality-audit","gcode-audit","midi-audit","musicxml-audit","bibtex-audit","nmea-track-audit","ansible-playbook-audit","prometheus-rules-audit","grafana-dashboard-audit","hdf5-audit","avro-schema-audit","graphql-schema-audit","protobuf-schema-audit","odf-package-audit","xliff-audit","mbox-audit","geopackage-audit","mbtiles-audit","openraster-audit","krita-project-audit","gltf-audit","drawio-audit","n8n-workflow-audit","design-token-audit","warc-archive-audit","wasm-module-audit","sarif-report-audit","sbom-audit","junit-xml-audit","coverage-xml-audit","fits-audit","step-cad-audit","otel-collector-audit","godot-project-audit","unity-package-audit","unreal-project-audit","fasta-sequence-audit","fastq-quality-audit","vcf-variant-audit","sam-alignment-audit","gff3-annotation-audit","bed-interval-audit","genbank-record-audit","pdb-structure-audit","gfa-assembly-audit","newick-tree-audit","sequence-alignment-audit","bagit-archive-audit","frictionless-package-audit","ro-crate-audit","iiif-manifest-audit","datacite-metadata-audit","mets-package-audit","premis-event-audit","stac-catalog-audit","tei-document-audit","ocfl-object-audit","zarr-store-audit","nifti-header-audit","dicom-privacy-audit","las-pointcloud-audit","jp2-box-audit","netcdf-classic-audit","nwb-structure-audit","ome-ngff-audit","parquet-metadata-audit","cog-geotiff-audit","file-format-identify","rdf-graph-audit","shacl-validate","cron-schedule-audit","web-article-extract","rego-policy-check","k8s-schema-validate","cosign-verify-blob","mcap-recording-audit","iceberg-metadata-audit","onnx-model-audit","otel-trace-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-structured-data-audit","css-quality-audit","gcode-audit","midi-audit","musicxml-audit","bibtex-audit","nmea-track-audit","ansible-playbook-audit","prometheus-rules-audit","grafana-dashboard-audit","hdf5-audit","avro-schema-audit","graphql-schema-audit","protobuf-schema-audit","odf-package-audit","xliff-audit","mbox-audit","geopackage-audit","mbtiles-audit","openraster-audit","krita-project-audit","gltf-audit","drawio-audit","n8n-workflow-audit","design-token-audit","warc-archive-audit","wasm-module-audit","sarif-report-audit","sbom-audit","junit-xml-audit","coverage-xml-audit","fits-audit","step-cad-audit","otel-collector-audit","godot-project-audit","unity-package-audit","unreal-project-audit","fasta-sequence-audit","fastq-quality-audit","vcf-variant-audit","sam-alignment-audit","gff3-annotation-audit","bed-interval-audit","genbank-record-audit","pdb-structure-audit","gfa-assembly-audit","newick-tree-audit","sequence-alignment-audit","bagit-archive-audit","frictionless-package-audit","ro-crate-audit","iiif-manifest-audit","datacite-metadata-audit","mets-package-audit","premis-event-audit","stac-catalog-audit","tei-document-audit","ocfl-object-audit","zarr-store-audit","nifti-header-audit","dicom-privacy-audit","las-pointcloud-audit","jp2-box-audit","netcdf-classic-audit","nwb-structure-audit","ome-ngff-audit","parquet-metadata-audit","cog-geotiff-audit","file-format-identify","rdf-graph-audit","shacl-validate","cron-schedule-audit","web-article-extract","rego-policy-check","k8s-schema-validate","cosign-verify-blob","mcap-recording-audit","iceberg-metadata-audit","onnx-model-audit","otel-trace-audit","safetensors-audit","gguf-model-audit","hf-model-card-audit","chat-dataset-audit","promptfoo-config-audit","three-mf-package-audit"}
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -12411,6 +12427,12 @@ TOOLS={
  "iceberg-metadata-audit":iceberg_metadata_audit,
  "onnx-model-audit":onnx_model_audit,
  "otel-trace-audit":otel_trace_audit,
+ "safetensors-audit":safetensors_audit,
+ "gguf-model-audit":gguf_model_audit,
+ "hf-model-card-audit":hf_model_card_audit,
+ "chat-dataset-audit":chat_dataset_audit,
+ "promptfoo-config-audit":promptfoo_config_audit,
+ "three-mf-package-audit":three_mf_package_audit,
 
 }
 

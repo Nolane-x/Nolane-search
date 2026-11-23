@@ -2,6 +2,14 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+## Candidate development — Wave 35 (not production)
+
+- Branch: feat/wave-thirty-five-ai-model-and-3mf-tools. Six new processors raise the candidate branch catalog from 450 to 456 IDs.
+- Added SafeTensors and GGUF header/index audits, Hugging Face model-card review, chat fine-tuning JSONL validation, Promptfoo config review and 3MF package/mesh validation.
+- The candidate is not deployed. Latest verified production remains Wave 34 at **450 tools** until PR checks, main merge, Worker health smoke and Cloudflare deployment all pass.
+- No D1 schema, Cloudflare secret, paid service or persistent runtime change. PyYAML is installed only in selected on-demand jobs that need it.
+- Handoff: [HANDOFF-WAVE-THIRTY-FIVE-2026-11-23.md](HANDOFF-WAVE-THIRTY-FIVE-2026-11-23.md); source review: [TOOL-RESEARCH-2026-11-23-WAVE35.md](TOOL-RESEARCH-2026-11-23-WAVE35.md).
+
 ## Latest production release — Wave 34 (2026-11-23)
 
 - [PR #87](https://github.com/Nolane-x/Nolane-search/pull/87) merged into main as 667ce654c440092e199a33b1a8a4538218b4bb2e; production catalog increased from **446 to 450 tools**.
