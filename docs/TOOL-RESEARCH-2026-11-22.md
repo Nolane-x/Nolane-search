@@ -335,9 +335,14 @@ This backup repairs only the snapshot index. It cannot recreate deleted source m
 
 ### Wave 30 scope and limits
 
-The branch `feat/wave-thirty-format-and-science-auditors` adds `ome-ngff-audit`, `parquet-metadata-audit` and `cog-geotiff-audit`. Candidate count is 437 (434 production + 3 candidates); production remains 434 until current-head CI, Worker export/health smoke and Cloudflare deployment pass.
+The branch `feat/wave-thirty-format-and-science-auditors` adds `ome-ngff-audit`, `parquet-metadata-audit` and `cog-geotiff-audit`. [PR #83](https://github.com/Nolane-x/Nolane-search/pull/83) is open. Candidate count is 437 (434 production + 3 candidates); production remains 434 until merge, Worker export/health smoke and Cloudflare deployment pass.
 
 - OME-NGFF reads only `zarr.json` metadata under bounded ZIP limits. It does not support arbitrary remote Zarr stores, fetch cloud assets, parse embedded OME-XML content or validate pixel chunks.
 - Parquet uses DuckDB metadata table functions and does not read table rows. Reports suppress column names, min/max/null statistics, key/value metadata values and file paths. The file-size cap is 20 MiB and metadata record counts are bounded.
 - COG uses rio-cogeo/Rasterio against a local upload path only. URL-based validation is not exposed. The optional runtime dependency is installed only when `cog-geotiff-audit` is selected.
 - All three tools are structural/metadata diagnostics, not a guarantee of full format/schema conformance or scientific/geospatial correctness.
+
+### Wave 30 candidate CI — 2026-11-23
+
+- PR [#83](https://github.com/Nolane-x/Nolane-search/pull/83) current-head CI [45118748674](https://github.com/Nolane-x/Nolane-search/actions/runs/45118748674) passed type-check, 25 Vitest files / 252 tests, deployment-script checks, 283 Python runner tests and Worker build.
+- Worker export/health smoke and production deployment remain pending until merge.
