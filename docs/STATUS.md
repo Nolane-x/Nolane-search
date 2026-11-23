@@ -2,13 +2,17 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## Candidate implementation — Wave 37 (PR #90; not yet production)
+## Latest production release — Wave 37 (2026-11-23)
 
-- [PR #90](https://github.com/Nolane-x/Nolane-search/pull/90) targets the 462-tool production baseline; it does not add processors or change the catalog count.
-- AI catalog discovery is paginated and bounded, with all active tools reachable by category/query/offset. Everyday categories are ordered before developer/repository categories, which remain explicitly discoverable.
-- Telegram `/ai` and authenticated Web chat expose a guarded `prepare_file_processing` function only when the owner/private-chat context is valid. It writes the existing owner/chat-bound five-minute pending upload key; it does not start processing before a file arrives.
-- The upload planner's function schema is generated from all ready catalog IDs. MIME compatibility and pipeline transition validation remain mandatory, and actual processors still run on isolated GitHub Actions runners.
-- The PR adds tests for complete paginated catalog traversal, category reachability, tool-call exposure, owner/private context gating and upload preparation. PR CI and deployment have not yet been verified; production stays on Wave 36 until merge and deployment succeed.
+- [PR #90](https://github.com/Nolane-x/Nolane-search/pull/90) merged into `main` as `fb74281e75e72f16e33f2bcefe37d1b5938eabed`. This is an AI integration release; the catalog remains at **462 processors**.
+- [Main CI 45183200600](https://github.com/Nolane-x/Nolane-search/actions/runs/45183200600) passed TypeScript type-check, all **25 Vitest files / 257 tests**, deployment-script checks, **354 Python runner tests** and Cloudflare Worker build.
+- Worker export/build and production health smoke [45183200645](https://github.com/Nolane-x/Nolane-search/actions/runs/45183200645) passed; health returned `ok: true`, database reachable and archive enabled.
+- Cloudflare deployment [45183200619](https://github.com/Nolane-x/Nolane-search/actions/runs/45183200619) passed secret validation, source/bundle verification, Worker deployment, Telegram webhook verification (message + callback_query) and command-menu registration.
+- Deployed Worker Version ID: `e2d45f4e-056d-42a8-afe8-b7447b7cd13a`. No D1 migration was required because Wave 37 uses the existing owner-bound `search_cache` pending-upload record.
+- AI discovery now pages across all 462 ready catalog processors, bounded to 20 results per response, with image/document/audio-video/utility/data categories prioritized. Developer and repository categories remain available on explicit technical requests.
+- Direct AI in Telegram and authenticated Web chat can arm a five-minute pending file-upload session only for a verified owner/private-chat context. The upload planner can select any ready catalog tool, but the Worker still enforces MIME compatibility and every allowed pipeline transition; file jobs run on ephemeral GitHub Actions runners.
+- Owner-level acceptance remains separate: test actual PDF/image/audio/video uploads in the private Telegram conversation, verify returned artifacts, job status and retry. CI and health checks do not prove each real upload journey.
+- Implementation handoff: [HANDOFF-WAVE-THIRTY-SEVEN-2026-11-23.md](HANDOFF-WAVE-THIRTY-SEVEN-2026-11-23.md). The future catalog roadmap should favor ordinary-user tools rather than increasing specialist developer tools.
 
 ## Latest production release — Wave 36 (2026-11-23)
 
