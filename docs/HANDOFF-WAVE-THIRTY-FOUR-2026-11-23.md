@@ -3,11 +3,11 @@
 Date: 2026-11-23
 Repository: https://github.com/Nolane-x/Nolane-search
 Branch: feat/wave-thirty-four-robotics-ml-observability
-Status: implementation branch; not merged and not deployed.
+Status: implemented, merged via PR #87 and deployed to production on 2026-11-23.
 
 ## Production boundary
 
-Wave 33 remains the latest production release: **446 tools**. This branch contains four new catalog entries (450 on the branch); they are not production until PR CI, Worker export/health smoke and Cloudflare deployment all pass after merge.
+Wave 33 production baseline was 446 tools. Wave 34 merged as 667ce654c440092e199a33b1a8a4538218b4bb2e and increased the production catalog to **450 tools**. Main CI 45167290956, Worker export/health smoke 45167290969 and Cloudflare deployment 45167291256 all passed. Worker Version ID: d68926f5-045a-46d4-a197-f1e030e1e747.
 
 ## Added processors
 
@@ -36,6 +36,6 @@ Wave 33 remains the latest production release: **446 tools**. This branch contai
 
 ## Verification status
 
-Pending: update the Tool Center documentation with the four `/tool` IDs, confirm catalog/runner/handler/pipeline parity, run TypeScript/Vitest/Python/Worker CI, then verify post-merge export/health smoke and Cloudflare deployment. Production remains **446** until those release gates pass.
+Verified: Tool Center documentation, catalog/runner/handler/pipeline parity, TypeScript/Vitest/Python/Worker CI, Worker export/health smoke and Cloudflare deployment all passed. Production is **450 tools**. Owner-level Telegram fixture uploads and /tool_retry acceptance remain separate.
 
 Detailed upstream sources, versions, licenses, limits and scope: `docs/TOOL-RESEARCH-2026-11-23-WAVE34.md`.
