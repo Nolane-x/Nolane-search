@@ -308,6 +308,14 @@ Prioritize high reuse and meaningful new formats. Each candidate must have a mai
 
 The highest-priority follow-up after Wave 28 is reliability rather than adding another parser. The current architecture intentionally stores snapshot documents in a private Telegram channel and a compact searchable index in D1; however, Telegram Bot API cannot enumerate old channel history to rebuild a lost D1 index automatically. Wave 29 therefore adds an owner-controlled backup/restore path for the index while keeping snapshot content out of D1.
 
-Implementation is on branch feat/wave-twenty-nine-archive-index-backup. The proposed /archive_export produces a versioned JSON index backup in the owner's private chat; /archive_import accepts that backup as a document captioned with the command. The format is bound to the Telegram owner and configured archive channel, caps exports/imports at 2,000 records / 5 MiB, validates every record, and uses idempotent inserts keyed by the existing unique archive channel/message pair. Telegram file downloads are streaming and byte-bounded.
+Implementation shipped in [PR #81](https://github.com/Nolane-x/Nolane-search/pull/81), merged as main commit `a1cbf013170d6bd9e8d1877b85a71ac5acd942e0`. `/archive_export` produces a versioned JSON index backup in the owner's private chat; `/archive_import` accepts that backup as a document captioned with the command. The format is bound to the Telegram owner and configured archive channel, caps exports/imports at 2,000 records / 5 MiB, validates every record, and uses idempotent inserts keyed by the existing unique archive channel/message pair. Telegram file downloads are streaming and byte-bounded.
 
 This backup repairs only the snapshot index. It cannot recreate deleted source messages, watch definitions, provider credentials or other D1 tables. A channel change requires an explicit migration rather than silently rewriting message references. The JSON is private metadata containing source URLs/titles and Telegram file/message references and must be protected accordingly.
+
+
+### Wave 29 release evidence — 2026-11-23
+
+- Main CI [45116557845](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557845) passed type-check, 25 Vitest files / 248 tests, 270 Python runner tests, deployment-script checks and Worker build.
+- Worker export and production health smoke [45116557888](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557888) passed; health `ok: true`, database `reachable`, archive enabled.
+- Cloudflare deployment [45116557917](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557917) passed and registered Telegram commands; Worker Version ID `12307dcf-6344-4130-8d80-5b1ed75a4ec9`.
+- Production Tool Center remains at 434 processors. D1 schema unchanged. Owner-level `/archive_export` and `/archive_import` round-trip is a separate manual acceptance check.
