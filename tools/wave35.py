@@ -264,7 +264,7 @@ def gguf_model_audit(path: Path) -> dict:
             if data_start > size:
                 invalid_offsets += tensor_count or 1
             for tensor_offset in offsets:
-                if tensor_offset % alignment != 0 or tensor_offset >= max(data_bytes, 1):
+                if tensor_offset % alignment != 0 or tensor_offset >= data_bytes:
                     invalid_offsets += 1
     except (OSError, struct.error, OverflowError):
         raise RuntimeError("GGUF metadata or tensor index is truncated or malformed.") from None
@@ -289,7 +289,10 @@ def hf_model_card_audit(path: Path) -> dict:
     _check_file(path, "Hugging Face model card", MAX_TEXT_CONFIG_BYTES)
     if path.suffix.lower() not in (".md", ".markdown"):
         raise RuntimeError("Hugging Face model-card audit accepts Markdown files.")
-    text = path.read_text(encoding="utf-8-sig", errors="strict")
+    try:
+        text = path.read_text(encoding="utf-8-sig", errors="strict")
+    except UnicodeDecodeError:
+        raise RuntimeError("Model card must be valid UTF-8 Markdown.") from None
     lines = text.splitlines()
     frontmatter = None
     body = text
