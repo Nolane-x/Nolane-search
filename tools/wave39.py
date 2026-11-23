@@ -214,7 +214,7 @@ def date_calculator(path: Path) -> dict:
         business_days = 0
         cursor = first
         while cursor <= last:
-            if cursor.weekday() < 5 and (include_end or cursor != last):
+            if cursor.weekday() < 5 and (include_end or cursor != end):
                 business_days += 1
             cursor += dt.timedelta(days=1)
         lines = [
@@ -406,7 +406,7 @@ def paint_calculator(path: Path) -> dict:
         raise RuntimeError("Door and window area must be smaller than the total wall area.")
     paint_area = walls - openings + (length * width if include_ceiling else ZERO)
     required = paint_area * coats / coverage * (ONE + waste / Decimal(100))
-    recommended = required.quantize(Decimal("0.5"), rounding=ROUND_CEILING) / Decimal(1)
+    recommended = (required / Decimal("0.5")).to_integral_value(rounding=ROUND_CEILING) * Decimal("0.5")
     lines = [
         "Paint coverage calculator",
         f"Room: {_fmt(length)} m × {_fmt(width)} m × {_fmt(height)} m",
