@@ -1,5 +1,15 @@
 # Wave 29 handoff — Telegram archive index backup and recovery (2026-11-23)
 
+## Final production release checkpoint — deployed 2026-11-23
+
+- [PR #81](https://github.com/Nolane-x/Nolane-search/pull/81) merged into `main` as `a1cbf013170d6bd9e8d1877b85a71ac5acd942e0`.
+- Production remains **434 Tool Center processors**; Wave 29 adds archive reliability commands, not a processor.
+- Main CI [45116557845](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557845) passed type-check, 25 Vitest files / 248 tests, deployment-script checks, 270 Python runner tests and Worker build.
+- Worker export/health smoke [45116557888](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557888) passed; the health response reported `ok: true`, database `reachable`, archive enabled.
+- Cloudflare deploy [45116557917](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557917) passed; Worker Version ID `12307dcf-6344-4130-8d80-5b1ed75a4ec9`. Telegram webhook (message + callback_query) verified and command menu successfully registered `archive_export` and `archive_import`.
+- D1 migration skipped correctly; no schema change, new secret, provider or paid resource.
+- The commands are deployed, but owner-level live E2E has not yet been performed. Next: run `/archive_export` privately, verify the JSON contains metadata only, import it with caption `/archive_import`, confirm existing references are skipped, then test a restore against a staging/empty D1 index before relying on disaster recovery.
+
 ## Current checkpoint
 
 - Repository: Nolane-x/Nolane-search
