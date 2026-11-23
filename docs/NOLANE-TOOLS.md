@@ -1,4 +1,4 @@
-Nolane Tools hiện có **438 công cụ đang được đăng ký trên production** sau Wave 31, phát hành ngày 2026-11-23 trên Cloudflare Worker `nolane-search`. Wave 32 đang được phát triển trên nhánh riêng với bốn công cụ mới (OCR PDF tìm kiếm, RDF graph, SHACL và cron preview); chúng chưa được tính vào production cho đến khi PR CI, Worker smoke và Cloudflare deployment đều thành công. [PR #84](https://github.com/Nolane-x/Nolane-search/pull/84) đã merge vào `main` bằng commit `bfc107d1f299b9ae4b7c557fbe4fea0e3eee6599`. Main CI [45127497703](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497703), Worker export/health smoke [45127497583](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497583) và Cloudflare deployment [45127497651](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497651) đều thành công. Latest Worker Version ID: `679e4cfc-08a8-4832-92cc-459e79df6763`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema. Tệp đầu vào được xử lý trên GitHub-hosted runner dùng một lần; D1 chỉ giữ dữ liệu chỉ mục/cache nhỏ, Telegram archive giữ snapshot documents. Nguồn upstream và giới hạn triển khai được ghi tại docs/TOOL-RESEARCH-2026-11-22.md.
+Nolane Tools hiện có **442 công cụ đang được đăng ký trên production** sau Wave 32, phát hành ngày 2026-11-23 trên Cloudflare Worker `nolane-search`. [PR #85](https://github.com/Nolane-x/Nolane-search/pull/85) đã merge vào `main` bằng commit `f9359406a25043220e51a90e33cc9a72c6fc7321`. Main CI [45145755895](https://github.com/Nolane-x/Nolane-search/actions/runs/45145755895), Worker export/health smoke [45145756137](https://github.com/Nolane-x/Nolane-search/actions/runs/45145756137) và Cloudflare deployment [45145755910](https://github.com/Nolane-x/Nolane-search/actions/runs/45145755910) đều thành công. Latest Worker Version ID: `ddfedcef-6feb-42da-97a3-e29c4fcfaa3e`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema. Tệp đầu vào được xử lý trên GitHub-hosted runner dùng một lần; D1 chỉ giữ dữ liệu chỉ mục/cache nhỏ, Telegram archive giữ snapshot documents. Nguồn upstream và giới hạn triển khai được ghi tại docs/TOOL-RESEARCH-2026-11-23.md.
 
 ### Wave 30 — File format, microscopy and geospatial metadata auditors — deployed 2026-11-23
 
@@ -14,9 +14,9 @@ Wave 30 safety and bounds: all inputs are capped at 20 MiB. OME-NGFF ZIP inspect
 
 
 
-### Wave 32 — Semantic data, searchable PDF and scheduling tools — active development
+### Wave 32 — Semantic data, searchable PDF and scheduling tools — deployed 2026-11-23
 
-Wave 32 adds four additional processors on PR #85. The branch catalog contains **442 tools**, but production remains **438** until CI, Worker export/health smoke and Cloudflare deployment all succeed after merge.
+Wave 32 adds four additional processors through [PR #85](https://github.com/Nolane-x/Nolane-search/pull/85), increasing production from **438 to 442 tools**. Main CI [45145755895](https://github.com/Nolane-x/Nolane-search/actions/runs/45145755895), Worker export/health smoke [45145756137](https://github.com/Nolane-x/Nolane-search/actions/runs/45145756137) and Cloudflare deployment [45145755910](https://github.com/Nolane-x/Nolane-search/actions/runs/45145755910) passed. Worker Version ID: `ddfedcef-6feb-42da-97a3-e29c4fcfaa3e`.
 
 | ID | Công cụ | Nhóm | Chức năng |
 |---|---|---|---|
