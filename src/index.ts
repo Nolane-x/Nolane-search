@@ -966,12 +966,12 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
         backup.content,
         "Nolane Archive index backup · " + backup.count + " records · metadata only",
       );
-      await reply(env, "Đã gửi bản backup chỉ mục Telegram Archive: <b>" + backup.count +
+      await reply(env, chatId, "Đã gửi bản backup chỉ mục Telegram Archive: <b>" + backup.count +
         " snapshot</b>. Tệp gồm metadata, SHA-256 và tham chiếu tin nhắn; không chứa nội dung trang web. " +
         "Giữ tệp này ở nơi riêng tư. Để nhập lại, gửi file JSON với caption <code>/archive_import</code>.");
     } catch (error) {
       console.error("Telegram archive index export failed:", error instanceof Error ? error.message : "unknown");
-      await reply(env, "Không thể tạo backup chỉ mục. " + htmlEscape(error instanceof Error ? error.message : "Lỗi không xác định."));
+      await reply(env, chatId, "Không thể tạo backup chỉ mục. " + htmlEscape(error instanceof Error ? error.message : "Lỗi không xác định."));
     }
     return;
   }
