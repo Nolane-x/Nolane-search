@@ -27,6 +27,7 @@ import {
   formatToolCenterHome, formatToolCategoryPage, formatToolDetail, formatToolSearchResults,
   formatToolJobsPage, buildToolJobsKeyboard, formatToolJobDetail, buildToolJobDetailKeyboard,
   downloadTelegramFile, sendSearchPage, sendTelegram, sendTelegramDocument, sendToArchive, telegramApi,
+  TELEGRAM_PROCESSING_FILE_MAX_BYTES, uploadTelegramDocument,
 } from "./telegram";
 import { crawlAndIndexSite, validateWatchUrl, checkWatchTargets } from "./watch";
 import {
@@ -286,6 +287,64 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
 
   const session = await getWebSession(request, env);
   if (!session) return jsonResponse({ error: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn." }, 401);
+
+  if (url.pathname === "/api/ai/upload" && request.method === "POST") {
+    if (session.chatId !== session.userId || !allowedUser(env, session.userId)) {
+      return jsonResponse({ error: "Đính kèm tệp chỉ hoạt động trong Web Workspace gắn với chat riêng Telegram được cấp quyền." }, 403);
+    }
+    if (!env.TELEGRAM_BOT_TOKEN || !env.NOLANE_GH_ACTIONS_TOKEN) {
+      return jsonResponse({ error: "Thiếu cấu hình Telegram hoặc GitHub Actions runner để xử lý tệp." }, 503);
+    }
+    const contentLength = Number(request.headers.get("content-length") || 0);
+    if (Number.isFinite(contentLength) && contentLength > TELEGRAM_PROCESSING_FILE_MAX_BYTES + 256 * 1024) {
+      return jsonResponse({ error: "Tệp tải lên vượt giới hạn 20 MB." }, 413);
+    }
+    if (!(request.headers.get("content-type") || "").toLowerCase().startsWith("multipart/form-data;")) {
+      return jsonResponse({ error: "Yêu cầu phải dùng multipart/form-data." }, 415);
+    }
+    let form: FormData;
+    try { form = await request.formData(); }
+    catch { return jsonResponse({ error: "Không đọc được tệp đính kèm. Hãy thử chọn tệp và gửi lại." }, 400); }
+    const upload = form.get("file");
+    if (!(upload instanceof File)) return jsonResponse({ error: "Hãy chọn một tệp cần xử lý." }, 400);
+    if (upload.size < 1) return jsonResponse({ error: "Tệp đang trống." }, 400);
+    if (upload.size > TELEGRAM_PROCESSING_FILE_MAX_BYTES) {
+      return jsonResponse({ error: "Tệp vượt giới hạn 20 MB của luồng xử lý hiện tại." }, 413);
+    }
+    const rawPrompt = form.get("prompt");
+    const prompt = typeof rawPrompt === "string" ? rawPrompt.normalize("NFKC").trim() : "";
+    if (prompt.length < 6 || prompt.length > 6000 || /[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]/.test(prompt)) {
+      return jsonResponse({ error: "Hãy mô tả công việc cần làm với tệp (6–6000 ký tự)." }, 400);
+    }
+    const fileName = normalizeUploadedFileName(upload.name);
+    const mimeType = (upload.type || "application/octet-stream").split(";")[0]!.trim().toLowerCase().slice(0, 120) || "application/octet-stream";
+    try {
+      const stored = await uploadTelegramDocument(
+        env, session.chatId, upload, fileName,
+        "Tệp được gửi từ Nolane Web Workspace · AI đang xử lý theo yêu cầu.",
+      );
+      const outcome = await handleAiFileUpload(env, session.chatId, session.userId, {
+        fileId: stored.fileId,
+        fileName: stored.fileName || fileName,
+        mimeType,
+        fileSize: stored.fileSize ?? upload.size,
+        isPhoto: false,
+      }, prompt);
+      if (!outcome.ok) return jsonResponse({ error: outcome.error || "Không thể khởi chạy xử lý tệp." }, 422);
+      return jsonResponse({
+        ok: true,
+        fileName: stored.fileName || fileName,
+        jobId: outcome.jobId,
+        pipeline: outcome.pipeline,
+        pipelineIds: outcome.pipelineIds,
+        selectedByAi: outcome.selectedByAi,
+        reason: outcome.reason,
+      });
+    } catch (error) {
+      console.error("Web AI file upload failed:", error instanceof Error ? error.message : "unknown");
+      return jsonResponse({ error: error instanceof Error ? error.message.slice(0, 300) : "Không thể tải tệp lên Telegram." }, 502);
+    }
+  }
 
   if (url.pathname === "/api/tools/catalog" && request.method === "GET") {
     return jsonResponse({
@@ -2165,6 +2224,12 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   await reply(env, chatId, "Không nhận diện được lệnh. Gõ /help để xem các chức năng.");
 }
 
+function normalizeUploadedFileName(raw: string): string {
+  const leaf = raw.normalize("NFKC").replace(/\\/g, "/").split("/").pop() || "";
+  const safe = leaf.replace(/[\\u0000-\\u001f\\u007f<>:"|?*]/g, "_").trim().slice(0, 180);
+  return safe && safe !== "." && safe !== ".." ? safe : "upload.bin";
+}
+
 interface IncomingToolFile {
   fileId: string;
   fileName: string;
@@ -2286,14 +2351,23 @@ async function markPendingAiFileUsed(env: Env, batch: PendingAiFileBatch): Promi
   return next;
 }
 
+interface AiFileUploadOutcome {
+  ok: boolean;
+  jobId?: string;
+  pipeline?: string[];
+  pipelineIds?: string[];
+  selectedByAi?: boolean;
+  reason?: string;
+  error?: string;
+}
+
 async function handleAiFileUpload(
   env: Env,
-  message: NonNullable<TelegramUpdate["message"]>,
+  chatId: number,
   userId: number,
   file: IncomingToolFile,
   prompt: string,
-): Promise<boolean> {
-  const chatId=message.chat.id;
+): Promise<AiFileUploadOutcome> {
   const catalog=TOOL_CATALOG.filter(tool => tool.ready).map(tool =>
     `- ${tool.id}: ${tool.name}; category ${tool.category}; accepts ${tool.accepts.join(", ")}; ${tool.description}`
   ).join("\n");
@@ -2345,8 +2419,9 @@ async function handleAiFileUpload(
   } else pipelineSteps=validatedPipeline.steps;
   const tool=getTool(selectedToolId);
   if(!tool?.ready || !isToolCompatible(tool,file.mimeType,file.fileName)){
-    await reply(env,chatId,"Không tìm thấy processor phù hợp với định dạng tệp. Hãy gửi /tools để xem catalog.");
-    return false;
+    const error = "Không tìm thấy processor phù hợp với định dạng tệp. Hãy gửi /tools để xem catalog.";
+    await reply(env,chatId,error);
+    return { ok: false, error };
   }
   try{
     const job=await createToolJob(env,{
@@ -2361,10 +2436,18 @@ async function handleAiFileUpload(
       "Lựa chọn: "+(selectedByAi?"AI lập pipeline":"fallback an toàn")+
       "\nLý do: "+htmlEscape(reason)+
       "\nJob: <code>"+job.id+"</code>\n\nRunner sẽ chạy tuần tự từng bước, gửi file cuối và để AI tổng hợp kết quả.");
-    return true;
+    return {
+      ok: true,
+      jobId: job.id,
+      pipeline: pipelineSteps.map(step => getTool(step.toolId)?.name || step.toolId),
+      pipelineIds: pipelineSteps.map(step => step.toolId),
+      selectedByAi,
+      reason,
+    };
   }catch(error){
-    await reply(env,chatId,"Không thể khởi chạy AI File: "+htmlEscape(error instanceof Error?error.message:"unknown error"));
-    return false;
+    const message = error instanceof Error ? error.message : "unknown error";
+    await reply(env,chatId,"Không thể khởi chạy AI File: "+htmlEscape(message));
+    return { ok: false, error: message };
   }
 }
 
@@ -2428,8 +2511,8 @@ async function handleToolUpload(env: Env, message: NonNullable<TelegramUpdate["m
   const aiPrompt=aiCaption?.[1]?.trim() || pendingBatch?.prompt || "";
   if(aiPrompt){
     if (aiCaption?.[1]) await clearPendingToolWorkflow(env, userId, chatId);
-    const started=await handleAiFileUpload(env,message,userId,file,aiPrompt);
-    if(started && pendingBatch && !aiCaption?.[1]){
+    const started=await handleAiFileUpload(env,chatId,userId,file,aiPrompt);
+    if(started.ok && pendingBatch && !aiCaption?.[1]){
       const used=await markPendingAiFileUsed(env,pendingBatch);
       await reply(env,chatId,"Đã nhận tệp thứ "+used+" trong batch. Mỗi tệp có job/pipeline riêng; tiếp tục gửi tệp hoặc dùng /ai_file_done để kết thúc.");
     }
