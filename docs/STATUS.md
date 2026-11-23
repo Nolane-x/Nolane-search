@@ -2,6 +2,13 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+## Active development — Wave 34 (not production)
+
+- Branch: `feat/wave-thirty-four-robotics-ml-observability`.
+- Four new processors are staged: `mcap-recording-audit`, `iceberg-metadata-audit`, `onnx-model-audit` and `otel-trace-audit`.
+- Branch catalog has 450 IDs; production remains **446** until PR CI, Worker export/health smoke and Cloudflare deployment all pass after merge.
+- Research: [TOOL-RESEARCH-2026-11-23-WAVE34.md](TOOL-RESEARCH-2026-11-23-WAVE34.md); handoff: [HANDOFF-WAVE-THIRTY-FOUR-2026-11-23.md](HANDOFF-WAVE-THIRTY-FOUR-2026-11-23.md).
+
 ## Latest production release — Wave 33 (2026-11-23)
 
 - [PR #86](https://github.com/Nolane-x/Nolane-search/pull/86) merged into main as `18acca8f983ee8e1667939e282f25d59aa41e2f1`; production catalog increased from **442 to 446 tools**.
