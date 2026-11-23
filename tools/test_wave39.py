@@ -92,7 +92,7 @@ class Wave39Tests(unittest.TestCase):
                 {"name": "Homework", "score": 80, "max_score": 100, "weight_percent": 40},
                 {"name": "Midterm", "score": 90, "max_score": 100, "weight_percent": 30},
             ],
-            "target_overall_percent": 85,
+            "target_overall_percent": 87,
         })
         report = Path(wave39.grade_calculator(path)["output_path"]).read_text()
         self.assertIn("Remaining weight: 30%", report)
@@ -144,7 +144,8 @@ class Wave39Tests(unittest.TestCase):
         })
         report = Path(wave39.unit_price_comparator(path)["output_path"]).read_text()
         self.assertIn("Large pack", report.split("Best unit price: ")[1])
-        self.assertIn("VND 46000 per g", report)
+        self.assertIn("VND 46 per g", report)
+        self.assertIn("VND 50 per g", report)
 
     def test_rejects_duplicate_json_keys_and_mixed_comparison_units(self):
         duplicate = self.root / "duplicate.json"
