@@ -25,7 +25,7 @@ class Wave36Tests(unittest.TestCase):
         return Path(result["output_path"]).read_text(encoding="utf-8")
 
     def test_ollama_modelfile_recognizes_documented_directives_and_withholds_prompt_values(self):
-        source = """# Local model definition
+        source = '''# Local model definition
 FROM private-model:latest
 PARAMETER temperature 0.2
 PARAMETER num_ctx 8192
@@ -39,7 +39,7 @@ REQUIRES 0.14.0
 CAPABILITY tools
 CAPABILITY vision
 LICENSE """PRIVATE_LICENSE_TEXT"""
-"""
+'''
         report = self.report(wave36.ollama_modelfile_audit(self.write("Modelfile", source)))
         self.assertIn("FROM directives: 1", report)
         self.assertIn("PARAMETER directives: 2", report)
