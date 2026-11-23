@@ -1,4 +1,4 @@
-Nolane Tools hiện có **446 công cụ đang được đăng ký trên production** sau Wave 33, phát hành ngày 2026-11-23 trên Cloudflare Worker `nolane-search`. [PR #86](https://github.com/Nolane-x/Nolane-search/pull/86) đã merge vào `main` bằng commit `18acca8f983ee8e1667939e282f25d59aa41e2f1`. Main CI [45150195124](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195124), Worker export/health smoke [45150195535](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195535) và Cloudflare deployment [45150195611](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195611) đều thành công. Latest Worker Version ID: `016b7d5b-629d-400a-bf86-0c0f5b70913a`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema. Tệp đầu vào được xử lý trên GitHub-hosted runner dùng một lần; D1 chỉ giữ dữ liệu chỉ mục/cache nhỏ, Telegram archive giữ snapshot documents. Nguồn upstream và giới hạn triển khai được ghi tại docs/TOOL-RESEARCH-2026-11-23-WAVE33.md.
+Nolane Tools hiện có **450 công cụ đang được đăng ký trên production** sau Wave 34, phát hành ngày 2026-11-23 trên Cloudflare Worker `nolane-search`. [PR #87](https://github.com/Nolane-x/Nolane-search/pull/87) đã merge vào `main` bằng commit `667ce654c440092e199a33b1a8a4538218b4bb2e`. Main CI [45167290956](https://github.com/Nolane-x/Nolane-search/actions/runs/45167290956), Worker export/health smoke [45167290969](https://github.com/Nolane-x/Nolane-search/actions/runs/45167290969) và Cloudflare deployment [45167291256](https://github.com/Nolane-x/Nolane-search/actions/runs/45167291256) đều thành công. Latest Worker Version ID: `d68926f5-045a-46d4-a197-f1e030e1e747`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema. Tệp đầu vào được xử lý trên GitHub-hosted runner dùng một lần; D1 chỉ giữ dữ liệu chỉ mục/cache nhỏ, Telegram archive giữ snapshot documents. Nguồn upstream và giới hạn triển khai được ghi tại docs/TOOL-RESEARCH-2026-11-23-WAVE34.md.
 
 ### Wave 30 — File format, microscopy and geospatial metadata auditors — deployed 2026-11-23
 
@@ -26,6 +26,19 @@ Wave 34 is being developed on branch `feat/wave-thirty-four-robotics-ml-observab
 | /tool otel-trace-audit | OpenTelemetry Proto 1.11.1 | Validate OTLP/JSON trace/span identifiers, timestamp ordering, status/kind enums, duplicates and aggregate counts while withholding identifiers and values. |
 
 Runtime dependencies are version-pinned and installed only when a selected job requires them. The OTLP processor uses Python's standard library. See [Wave 34 upstream research](TOOL-RESEARCH-2026-11-23-WAVE34.md) and [implementation handoff](HANDOFF-WAVE-THIRTY-FOUR-2026-11-23.md). These tools are development-branch entries only; production remains **446**.
+
+### Wave 34 — Robotics telemetry, lakehouse metadata, ONNX models and OpenTelemetry traces — deployed 2026-11-23
+
+Wave 34 was merged through [PR #87](https://github.com/Nolane-x/Nolane-search/pull/87), increasing production from **446 to 450 tools**. Main CI [45167290956](https://github.com/Nolane-x/Nolane-search/actions/runs/45167290956), Worker export/health smoke [45167290969](https://github.com/Nolane-x/Nolane-search/actions/runs/45167290969) and Cloudflare deployment [45167291256](https://github.com/Nolane-x/Nolane-search/actions/runs/45167291256) passed. Worker Version ID: d68926f5-045a-46d4-a197-f1e030e1e747.
+
+| ID / command | Processor | Capability |
+|---|---|---|
+| /tool mcap-recording-audit | MCAP Python 1.6.0 | Inspect robotics recording header/footer and indexed summary, count messages/channels/schemas/chunks/attachments; do not decode payloads or decompress chunks. |
+| /tool iceberg-metadata-audit | PyIceberg 0.12.0 | Parse local Iceberg v1/v2/v3 metadata JSON; inspect schemas, partition specs, snapshots, refs and internal ID consistency; no catalog/object-storage calls. |
+| /tool onnx-model-audit | ONNX 1.23.2 | Check model protobuf/graph/opset consistency; no inference, custom operators or external tensor loading. |
+| /tool otel-trace-audit | OpenTelemetry Proto 1.11.1 | Validate OTLP/JSON trace/span identifiers, timestamp ordering, status/kind enums, duplicates and aggregate counts while withholding identifiers and values. |
+
+Runtime dependencies are version-pinned and installed only when a selected job requires them. The OTLP processor uses Python's standard library. See [Wave 34 upstream research](TOOL-RESEARCH-2026-11-23-WAVE34.md) and [implementation handoff](HANDOFF-WAVE-THIRTY-FOUR-2026-11-23.md). CI passed 25 Vitest files / 253 tests and 329 Python runner tests. MCAP/PyIceberg/ONNX dependencies are version-pinned and installed only when selected; OTLP uses the standard library. MCAP summary index records are optional and their absence is not treated as file corruption. Owner-level Telegram fixture uploads and /tool_retry acceptance remain separate from CI and deployment.
 
 ### Wave 33 — Article extraction, policy compilation, Kubernetes schema and artifact provenance — deployed 2026-11-23
 
