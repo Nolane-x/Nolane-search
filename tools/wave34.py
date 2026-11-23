@@ -56,28 +56,19 @@ def mcap_recording_audit(path: Path) -> dict:
         message_count = start_time = end_time = 0
         declared_channels = declared_schemas = declared_chunks = 0
 
-    channel_ids = set(summary.channels)
-    schema_ids = set(summary.schemas)
-    channel_schema_dangling = sum(
-        1 for channel in summary.channels.values()
-        if channel.schema_id != 0 and channel.schema_id not in schema_ids
-    )
-    statistics_mismatch = 0
-    if stats is not None:
-        statistics_mismatch += int(declared_channels != len(channel_ids))
-        statistics_mismatch += int(declared_schemas != len(schema_ids))
-        statistics_mismatch += int(declared_chunks != len(summary.chunk_indexes))
+    channel_count = len(summary.channels)
+    schema_count = len(summary.schemas)
 
     return _mcap_report(path, [
         "Summary section: present",
         f"Messages declared by summary: {message_count:,}",
-        f"Distinct channels: {len(channel_ids):,}",
-        f"Distinct schemas: {len(schema_ids):,}",
-        f"Chunk indexes: {len(summary.chunk_indexes):,}",
-        f"Attachment indexes: {len(summary.attachment_indexes):,}",
-        f"Metadata indexes: {len(summary.metadata_indexes):,}",
-        f"Declared channel/schema/chunk-count mismatches: {statistics_mismatch:,}",
-        f"Channels referencing missing schemas: {channel_schema_dangling:,}",
+        f"Channel records present in summary: {channel_count:,}",
+        f"Schema records present in summary: {schema_count:,}",
+        f"Chunk indexes present in summary: {len(summary.chunk_indexes):,}",
+        f"Attachment indexes present in summary: {len(summary.attachment_indexes):,}",
+        f"Metadata indexes present in summary: {len(summary.metadata_indexes):,}",
+        f"Statistics-declared channels/schemas/chunks: {declared_channels:,}/{declared_schemas:,}/{declared_chunks:,}" if stats is not None else "Statistics record: absent",
+        "Summary channel/schema/chunk index records may be omitted by a valid MCAP writer configuration; counts are reported separately, not treated as corruption",
         f"Message start timestamp (Unix ns): {start_time:,}" if stats is not None and message_count else "Message start timestamp: unavailable",
         f"Message end timestamp (Unix ns): {end_time:,}" if stats is not None and message_count else "Message end timestamp: unavailable",
         f"Header profile present: {'yes' if bool(header.profile) else 'no'}",
