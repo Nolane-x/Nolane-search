@@ -469,6 +469,10 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "parquet-metadata-audit", name: "Kiểm toán metadata Apache Parquet", category: "data", description: "Rà footer, row groups, schema types, compression/encodings và GeoParquet key; không xuất column names, min/max statistics, custom metadata values hay row data.", accepts: ["application/vnd.apache.parquet", ".parquet"], output: "Báo cáo Parquet Metadata TXT", ready: true },
   { id: "cog-geotiff-audit", name: "Kiểm tra Cloud Optimized GeoTIFF", category: "data", description: "Kiểm tra COG tile/overview/IFD/data-offset layout bằng rio-cogeo trên file GeoTIFF cục bộ; không truy cập URL hoặc đọc raster pixel values.", accepts: ["image/tiff", "image/geotiff", ".cog.tif", ".cog.tiff", ".tif", ".tiff"], output: "Báo cáo COG TXT", ready: true },
   { id: "file-format-identify", name: "Nhận diện định dạng file bằng PRONOM", category: "data", description: "Nhận diện định dạng theo chữ ký PRONOM bằng Siegfried đã pin phiên bản/database; trả PUID, format và MIME, không lộ tên file, đường dẫn hoặc nội dung. Không phải malware scan.", accepts: ["*"], output: "Báo cáo File Format TXT", ready: true },
+  { id: "pdf-ocr-searchable", name: "Tạo PDF có thể tìm kiếm", category: "document", description: "Tạo lớp văn bản OCR tiếng Anh và tiếng Việt cho PDF scan; bỏ qua trang đã có text, tự xoay và làm thẳng trang; xuất PDF mới.", accepts: ["application/pdf", ".pdf"], output: "PDF có lớp văn bản tìm kiếm", ready: true },
+  { id: "rdf-graph-audit", name: "Phân tích RDF Graph / Dataset", category: "data", description: "Phân tích Turtle, N-Triples, N-Quads và TriG; thống kê triple, subject, predicate, literal, blank node và named graph nhưng không tiết lộ giá trị.", accepts: ["text/turtle", "application/n-triples", "application/n-quads", ".ttl", ".nt", ".nq", ".trig"], output: "Báo cáo RDF Graph TXT", ready: true },
+  { id: "shacl-validate", name: "Kiểm định RDF bằng SHACL", category: "data", description: "Nhận ZIP chứa data.ttl và shapes.ttl, chạy SHACL Core offline; trả mức độ vi phạm tổng hợp, chặn SPARQL/JavaScript và remote imports.", accepts: ["application/zip", ".shacl.zip", ".zip"], output: "Báo cáo SHACL TXT", ready: true },
+  { id: "cron-schedule-audit", name: "Kiểm tra lịch Cron", category: "utility", description: "Kiểm tra biểu thức cron 5 trường và xem trước ba lần chạy UTC; không chạy command, không tạo lịch và không tiết lộ biểu thức.", accepts: ["text/plain", ".cron"], output: "Báo cáo Cron UTC TXT", ready: true }
 
 ];
 
@@ -892,6 +896,10 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "parquet-metadata-audit": ["text-clean", "text-stats"],
   "cog-geotiff-audit": ["text-clean", "text-stats"],
   "file-format-identify": ["text-clean", "text-stats"],
+  "pdf-ocr-searchable": ["pdf-text", "pdf-info", "pdf-compress", "pdf-to-images", "pdf-split"],
+  "rdf-graph-audit": ["text-clean", "text-stats"],
+  "shacl-validate": ["text-clean", "text-stats"],
+  "cron-schedule-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
@@ -1066,6 +1074,8 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (isPhoto) return "image-ocr";
   const mime = (file.mimeType || "").toLowerCase();
   const name = (file.fileName || "").toLowerCase();
+  if (/\.cron$/i.test(name)) return "cron-schedule-audit";
+  if (/\.(?:ttl|nt|nq|trig)$/i.test(name)) return "rdf-graph-audit";
   if (/\.(?:gcode|gco|tap)$/i.test(name)) return "gcode-audit";
   if (/\.(?:mid|midi)$/i.test(name) || mime.includes("midi")) return "midi-audit";
   if (/\.(?:musicxml|mxl)$/i.test(name) || mime.includes("musicxml")) return "musicxml-audit";
