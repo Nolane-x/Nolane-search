@@ -1,4 +1,4 @@
-const EVERYDAY_TOOL_IDS = new Set([
+export const EVERYDAY_TOOL_IDS = new Set([
   "bill-split-calculator", "loan-payment-calculator", "date-calculator", "timezone-converter",
   "recipe-scaler", "grade-calculator", "paint-calculator", "fuel-trip-calculator",
   "discount-calculator", "unit-price-comparator",
