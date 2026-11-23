@@ -38,7 +38,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 | Deep Search jobs | /jobs, /retry JOB_ID | Inspect recent jobs, view failure reason and retry failed jobs |
 | Personal memory | /remember, /memories, /forget | Explicit owner-controlled memories shared by Telegram and Web AI chat |
 | Status | /status | Provider configuration and compact index counters |
- | Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | **437 production tools** through Wave 30 across developer, data, document, image, audio/video, repository, scientific and geospatial domains. Jobs run on ephemeral GitHub Actions runners. |
+ | Tool center | /tools, /tool_search, /tool ID, /tool_jobs, /tool_job, /tool_retry | **437 production tools** through Wave 30 across developer, data, document, image, audio/video, repository, scientific and geospatial domains. Wave 31 is under review with one PRONOM-powered file-format identifier; candidate registry is 438 while production remains 437 until CI and deployment pass. Jobs run on ephemeral GitHub Actions runners. |
 | Workflow Intelligence | /workflow_plan, /workflow_plan_save, /workflow_plan_discard | AI designs validated pipelines and parallel DAGs with controlled text fan-in; preview, save and execution are separate |
 | GitHub Repository Intelligence | /repo URL, /repo_compare URL base...head | Analyze a public repository directly: static module/import graph, commit/branch history, dependency and lockfile inventory, license evidence, secret-pattern scan with values withheld, TODO markers, plus static CI/CD, Docker, Kubernetes and Terraform security checks. Reports include SARIF findings and supply-chain metadata; source code and workflows are never executed. |
 
@@ -111,4 +111,4 @@ Use `/workflow_plan mục tiêu` to ask the AI planner to design a processor pip
 The command returns a preview with its assumptions, warnings, self-reported confidence and graph workload (processor count, critical-path length and maximum parallelism). The workload is graph-derived, not a runtime guarantee. DAG plans may fan out and then merge 2–3 text branches through the dedicated `text-join` processor; ordinary processors remain single-input. Drafts are private to the owner/chat and expire after 15 minutes. Review the result, then use `/workflow_plan_save PLAN_ID Name` to save it into the existing Workflow Library; use `/workflow_plan_discard PLAN_ID` to discard it. Saving does not start a job. Run it later with `/workflow_run WORKFLOW_ID` and upload a compatible file. The uploaded MIME type and extension are checked again before dispatch.
 
 
-Latest production release handoff: docs/HANDOFF-WAVE-THIRTY-2026-11-23.md. Next research candidates and follow-up work are tracked in docs/TOOL-RESEARCH-2026-11-22.md.
+Latest production release handoff: docs/HANDOFF-WAVE-THIRTY-2026-11-23.md. Current Wave 31 candidate and release gates: docs/HANDOFF-WAVE-THIRTY-ONE-2026-11-23.md.
