@@ -50,6 +50,22 @@ class Wave34Tests(unittest.TestCase):
         self.assertNotIn("PRIVATE_SCHEMA_SENTINEL", report)
         self.assertNotIn("private-library-name", report)
 
+    def test_mcap_does_not_flag_optional_summary_indexes_as_corruption(self):
+        from mcap.writer import IndexType, Writer
+
+        buffer = io.BytesIO()
+        writer = Writer(buffer, index_types=IndexType.NONE)
+        writer.start()
+        channel_id = writer.register_channel("/robot/topic", "cdr", 0)
+        writer.add_message(channel_id, 1_700_000_000_000_000_000, b"payload", 1_700_000_000_000_000_001)
+        writer.finish()
+        path = self.write("no-indexes.mcap", buffer.getvalue())
+        report = self.report(wave34.mcap_recording_audit(path))
+        self.assertIn("Statistics-declared channels/schemas/chunks: 1/0/1", report)
+        self.assertIn("Chunk indexes present in summary: 0", report)
+        self.assertIn("may be omitted by a valid MCAP writer configuration", report)
+        self.assertNotIn("corruption", report.lower().replace("not treated as corruption", ""))
+
     def test_mcap_accepts_no_summary_but_marks_totals_unavailable(self):
         from mcap.writer import Writer
 
