@@ -28,7 +28,7 @@ describe("Nolane AI callable tools", () => {
     const ids = new Set(first.tools.map(tool => tool.id));
     let offset = first.nextOffset;
     while (offset !== null) {
-      const page = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { offset, limit: 30 })) as {
+      const page = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { offset, limit: 20 })) as {
         total: number; nextOffset: number | null; tools: Array<{id:string}>;
       };
       expect(page.total).toBe(first.total);
@@ -42,7 +42,7 @@ describe("Nolane AI callable tools", () => {
     expect(ids).toEqual(new Set(TOOL_CATALOG.map(tool => tool.id)));
     expect(ids.has("video-compress")).toBe(true);
     await expect(executeAgentTool(env, "list_nolane_tools", { offset: -1 })).rejects.toThrow("offset");
-    await expect(executeAgentTool(env, "list_nolane_tools", { limit: 31 })).rejects.toThrow("page size");
+    await expect(executeAgentTool(env, "list_nolane_tools", { limit: 21 })).rejects.toThrow("page size");
   });
 
   it("keeps technical tools available by explicit category without prioritizing them by default", async () => {
@@ -55,7 +55,8 @@ describe("Nolane AI callable tools", () => {
 
     const repository = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "repository", limit: 30 })) as {tools:Array<{id:string}>};
     expect(repository.tools.some(tool => tool.id === "repo-security-audit")).toBe(true);
-    expect(repository.tools.some(tool => tool.id === "repo-supply-chain")).toBe(true);
+    const supplyChain = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "repository", query: "repo-supply-chain" })) as {tools:Array<{id:string}>};
+    expect(supplyChain.tools.some(tool => tool.id === "repo-supply-chain")).toBe(true);
     const developer = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "developer", limit: 30 })) as {tools:Array<{id:string}>};
     expect(developer.tools.some(tool => tool.id === "code-imports")).toBe(true);
     const audioVideo = JSON.parse(await executeAgentTool(env, "list_nolane_tools", { category: "audio-video", limit: 30 })) as {tools:Array<{id:string}>};
