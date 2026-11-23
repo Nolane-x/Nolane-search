@@ -336,7 +336,7 @@ describe("Nolane AI callable tools", () => {
       if (requests.length === 1) {
         return new Response(JSON.stringify({
           choices: [{ message: { content: null, tool_calls: [
-            { id: "call_catalog", type: "function", function: { name: "list_nolane_tools", arguments: JSON.stringify({ category: "document", query: "pdf-split", limit: 30 }) } },
+            { id: "call_catalog", type: "function", function: { name: "list_nolane_tools", arguments: JSON.stringify({ category: "document", query: "pdf-split", limit: 20 }) } },
           ] } }],
         }), { status: 200 });
       }
