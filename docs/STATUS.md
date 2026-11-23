@@ -2,16 +2,17 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## Candidate implementation — Wave 38 (PR #91; not yet production)
+## Latest production release — Wave 38 (2026-11-23)
 
-- [PR #91](https://github.com/Nolane-x/Nolane-search/pull/91) adds direct file attachments to authenticated Nolane Web Chat. The user enters a task and attaches a file together; the Worker hands the file to the owner's private Telegram chat using `sendDocument`, then reuses the existing AI file planner and GitHub Actions job path.
-- The endpoint is same-origin and requires a valid allowlisted Web session bound to a private Telegram chat where `chatId === userId`. Empty files, invalid prompts, unsafe filenames and uploads above 20 MiB are rejected.
-- The 20 MiB cap matches the current Telegram `getFile` download cap used by the runner. No D1 migration, new secret, R2/KV, persistent file store or processor was added.
-- The existing planner still checks ready catalog IDs, MIME compatibility and every explicit pipeline transition; jobs execute on ephemeral GitHub Actions runners. Web Chat shows the job receipt; completion and AI synthesis are delivered to the paired private Telegram chat and Tool Center history.
-- PR CI [45195143144](https://github.com/Nolane-x/Nolane-search/actions/runs/45195143144) passed TypeScript, **25 Vitest files / 260 tests**, deployment-script checks, **354 Python runner tests** and Worker build.
-- Merge, deployment and health verification are pending. Owner-level acceptance must still test actual PDF/image/media uploads through the Web UI, inspect output artifacts and job history, and verify failure/retry behavior. CI does not prove the Telegram Bot API upload or account-bound session works end to end.
-
-gram upload/retry checks.
+- [PR #91](https://github.com/Nolane-x/Nolane-search/pull/91) merged into `main` as `5bfe1160c84c0da2be9df4df37ae7ef52725b14b`. This is a Web AI file-intake integration release; the catalog remains **462 processors**.
+- Main CI [45195995372](https://github.com/Nolane-x/Nolane-search/actions/runs/45195995372) passed TypeScript, all **25 Vitest files / 260 tests**, deployment-script checks, **354 Python runner tests** and Cloudflare Worker build.
+- Worker export/build [45195995222](https://github.com/Nolane-x/Nolane-search/actions/runs/45195995222) passed. Cloudflare deploy [45195995178](https://github.com/Nolane-x/Nolane-search/actions/runs/45195995178) passed on retry after a transient Telegram API `ECONNRESET`; deployment then verified webhook updates (`message` + `callback_query`) and command registration.
+- Deployed Worker Version ID: `a6e8b852-cad9-4f87-961b-35de6ac67cf6`. Cloudflare's active deployment record assigns 100% traffic to this version. No D1 migration, new secret or persistent file-storage service was introduced.
+- Live `/health` was fetched after deployment and returned `ok: true`, `database: reachable`, `archiveEnabled: true`; configured AI/search route counts were also present.
+- Web Chat now includes a file picker and task prompt. `POST /api/ai/upload` requires a same-origin authenticated session bound to the allowlisted owner's private Telegram chat, rejects empty/unsafe prompts and files above **20 MiB**, sends the file to that private chat through Telegram `sendDocument`, and reuses the shared AI file planner/job pipeline.
+- The existing catalog compatibility checks and explicit pipeline-transition validation remain in force; actual jobs run on ephemeral GitHub Actions runners. Web Chat shows the job receipt/pipeline, while completion output and AI synthesis are delivered to the paired private Telegram chat and Tool Center history.
+- Owner-level acceptance remains separate: test actual non-sensitive PDF, image and media uploads from the Web Chat attachment UI; verify artifacts, job history and failure/retry behavior. CI and production health do not prove a private account's full upload interaction.
+- Implementation handoff: [HANDOFF-WAVE-THIRTY-EIGHT-2026-11-23.md](HANDOFF-WAVE-THIRTY-EIGHT-2026-11-23.md). Wave 38 adds no processors; keep future catalog growth focused on everyday-user needs.
 
 ## Latest production release — Wave 37 (2026-11-23)
 
