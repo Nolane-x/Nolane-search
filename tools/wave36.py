@@ -445,16 +445,25 @@ def dvc_pipeline_manifest_audit(path: Path) -> dict:
             value = stage.get(field, [])
             if value is None:
                 continue
+            if field == "params":
+                if isinstance(value, list):
+                    parameter_count += len(value)
+                    if any(not isinstance(item, (str, dict)) for item in value):
+                        malformed_stages += 1
+                elif isinstance(value, dict):
+                    parameter_count += sum(len(item) if isinstance(item, list) else 1 for item in value.values())
+                    if any(not isinstance(key, str) or not key or not isinstance(item, (str, list, dict)) for key, item in value.items()):
+                        malformed_stages += 1
+                else:
+                    malformed_stages += 1
+                continue
             if not isinstance(value, list):
                 malformed_stages += 1
                 continue
-            if field in ("deps", "outs", "metrics", "plots"):
-                if field == "deps":
-                    dependency_count += len(value)
-                elif field in ("outs", "metrics", "plots"):
-                    output_count += len(value)
-            elif field == "params":
-                parameter_count += len(value)
+            if field == "deps":
+                dependency_count += len(value)
+            else:
+                output_count += len(value)
             for item in value:
                 if isinstance(item, str):
                     item_path = item
@@ -528,7 +537,9 @@ def helm_chart_metadata_audit(path: Path) -> dict:
         if not isinstance(dep_name, str) or not dep_name:
             invalid_dependencies += 1
             continue
-        if not isinstance(dep_version, str) or not semver.fullmatch(dep_version):
+        constraint_chars = re.fullmatch(r"[0-9A-Za-z.+*xXv<>=~^|,\\-\\s]+", dep_version) if isinstance(dep_version, str) else None
+        has_version_triplet = bool(re.search(r"v?\\d+\\.\\d+\\.\\d+", dep_version)) if isinstance(dep_version, str) else False
+        if not isinstance(dep_version, str) or not dep_version.strip() or not constraint_chars or (dep_version.strip() not in ("*", "x", "X") and not has_version_triplet):
             invalid_dependencies += 1
         if repository is not None and not isinstance(repository, str):
             invalid_dependencies += 1
