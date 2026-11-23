@@ -1,8 +1,22 @@
 # Verified Project Status
 
-Last verified: 2026-11-22. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
+Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## Latest production release — Wave 28 (2026-11-23)
+## Latest production release — Wave 29 (2026-11-23)
+
+- [PR #81](https://github.com/Nolane-x/Nolane-search/pull/81) merged into `main` as commit `a1cbf013170d6bd9e8d1877b85a71ac5acd942e0`. This is a reliability/recovery improvement; the production Tool Center remains **434 tools**.
+- Main CI [45116557845](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557845) passed type-check, all **25 Vitest files / 248 tests**, deployment-script checks, **270 Python runner tests** and Worker build.
+- Worker export and production health smoke [45116557888](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557888) passed. The live health response returned `ok: true`, database `reachable` and `archiveEnabled: true`.
+- Cloudflare deployment [45116557917](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557917) passed source verification, build, bundle validation, Worker/runtime-secret upload and Telegram webhook plus command-menu registration. The webhook was confirmed for `message` and `callback_query`; the command menu including `archive_export` and `archive_import` was registered successfully.
+- Deployed Worker Version ID: `12307dcf-6344-4130-8d80-5b1ed75a4ec9`. D1 migration was correctly skipped because Wave 29 makes no schema changes.
+- Added owner-only `/archive_export` and `/archive_import`: versioned JSON backup of snapshot-index metadata only, bound to the owner and configured archive channel, capped at 2,000 records / 5 MiB, with strict validation and idempotent imports using the existing channel/message uniqueness constraint.
+- Snapshot page bodies/documents remain in Telegram; no full page content is written to D1 or included in the backup. Re-import skips existing message references. This restores the snapshot index only, not deleted Telegram messages, watches, provider credentials or other D1 tables.
+- No new secret, provider, paid resource, D1 migration or runtime dependency was required.
+- Owner-level E2E remains separate: run `/archive_export` in private Telegram, download/inspect the metadata-only JSON, import it using a document caption `/archive_import`, verify duplicate-skip counts, and test a real restore against a safe staging/empty index before relying on disaster recovery. Automated CI/deployment does not prove that end-to-end user journey.
+
+## Previous production release — Wave 28 (2026-11-23)
+
+
 
 - [PR #80](https://github.com/Nolane-x/Nolane-search/pull/80) merged into `main` as commit `61f389df0f9d797af74b27130cfaeb9e5662c47a`; eight processors raised production from 426 to **434 tools**.
 - Main CI [45040057467](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057467) passed type-check, all **25 Vitest files / 238 tests**, deployment-script checks, **270 Python runner tests** and Worker build.
