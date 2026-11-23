@@ -102,6 +102,21 @@ describe("Telegram archive document delivery", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("enforces the download cap while streaming when Telegram omits file_size", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/getFile")) {
+        return new Response(JSON.stringify({ ok: true, result: { file_path: "documents/stream.json" } }), {
+          status: 200, headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(new Uint8Array(11), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(downloadTelegramFile({ TELEGRAM_BOT_TOKEN: "test-token" } as Env, "file", 10))
+      .rejects.toThrow("exceeds the download size limit");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects a Telegram file whose declared or streamed size exceeds the cap", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       if (String(input).endsWith("/getFile")) {
