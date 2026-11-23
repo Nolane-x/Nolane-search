@@ -633,7 +633,7 @@ describe("Nolane Tools registry", () => {
       "hf-model-card-audit",
       "chat-dataset-audit",
       "promptfoo-config-audit",
-      "3mf-package-audit",
+      "three-mf-package-audit",
     ];
     expect(TOOL_CATALOG).toHaveLength(456);
     for (const id of ids) expect(getTool(id)?.ready).toBe(true);
@@ -641,7 +641,7 @@ describe("Nolane Tools registry", () => {
     expect(inferToolForUpload({ fileName: "local-model.gguf" })).toBe("gguf-model-audit");
     expect(inferToolForUpload({ fileName: "training.jsonl" })).toBe("chat-dataset-audit");
     expect(inferToolForUpload({ fileName: "promptfooconfig.yaml" })).toBe("promptfoo-config-audit");
-    expect(inferToolForUpload({ fileName: "sample.3mf" })).toBe("3mf-package-audit");
+    expect(inferToolForUpload({ fileName: "sample.3mf" })).toBe("three-mf-package-audit");
     expect(inferToolForUpload({ fileName: "model-card.md" })).toBe("hf-model-card-audit");
     expect(validateToolPipeline(
       { mimeType: "application/octet-stream", fileName: "weights.safetensors" },
