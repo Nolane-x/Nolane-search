@@ -77,8 +77,11 @@ jobs:
         if: contains(steps.job.outputs.tool_ids, 'fuzzy-match-report')
         run: python -m pip install --disable-pip-version-check rapidfuzz
       - name: Install Parquet engine
-        if: contains(steps.job.outputs.tool_ids, 'csv-to-parquet') || contains(steps.job.outputs.tool_ids, 'parquet-to-csv')
+        if: contains(steps.job.outputs.tool_ids, 'csv-to-parquet') || contains(steps.job.outputs.tool_ids, 'parquet-to-csv') || contains(steps.job.outputs.tool_ids, 'parquet-metadata-audit')
         run: python -m pip install --disable-pip-version-check duckdb
+      - name: Install COG GeoTIFF validator
+        if: contains(steps.job.outputs.tool_ids, 'cog-geotiff-audit')
+        run: python -m pip install --disable-pip-version-check 'rio-cogeo==7.0.4'
       - name: Install SQLGlot
         if: contains(steps.job.outputs.tool_ids, 'sqlglot-format')
         run: python -m pip install --disable-pip-version-check sqlglot
