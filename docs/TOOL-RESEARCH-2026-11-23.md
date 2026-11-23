@@ -40,7 +40,7 @@ Validates one five-field cron expression per non-comment line and previews the n
 - RDF/SHACL/cron report processors can feed text-clean and text-stats. The OCR PDF output can feed the existing PDF processors.
 - Optional runtime dependencies are installed only for the selected tool. CI installs the Python parser dependencies to exercise all unit tests.
 - No D1 migration, Cloudflare secret, persistent service or paid resource is introduced.
-- Regression coverage is in tools/test_wave32.py (12 focused tests): RDF formats and privacy, SHACL conforming/violating/forbidden packages, cron UTC previews and privacy, and PDF OCR command isolation/error handling.
+- Regression coverage is in tools/test_wave32.py (13 focused tests): RDF formats and privacy, SHACL conforming/violating/forbidden packages, cron UTC previews and privacy, and PDF OCR command isolation/error handling.
 - Do not describe the four tools as production until PR CI, Worker export/health smoke and Cloudflare deployment all pass after merge.
 - Owner-level Telegram acceptance remains separate: exercise one searchable scanned PDF, one small RDF graph, one valid/invalid SHACL package and one cron file through the private bot; inspect returned files/reports and test /tool_retry.
 
