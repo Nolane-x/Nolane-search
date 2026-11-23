@@ -1,4 +1,4 @@
-Nolane Tools hiện có **442 công cụ đang được đăng ký trên production** sau Wave 32, phát hành ngày 2026-11-23 trên Cloudflare Worker `nolane-search`. [PR #85](https://github.com/Nolane-x/Nolane-search/pull/85) đã merge vào `main` bằng commit `f9359406a25043220e51a90e33cc9a72c6fc7321`. Main CI [45145755895](https://github.com/Nolane-x/Nolane-search/actions/runs/45145755895), Worker export/health smoke [45145756137](https://github.com/Nolane-x/Nolane-search/actions/runs/45145756137) và Cloudflare deployment [45145755910](https://github.com/Nolane-x/Nolane-search/actions/runs/45145755910) đều thành công. Latest Worker Version ID: `ddfedcef-6feb-42da-97a3-e29c4fcfaa3e`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema. Tệp đầu vào được xử lý trên GitHub-hosted runner dùng một lần; D1 chỉ giữ dữ liệu chỉ mục/cache nhỏ, Telegram archive giữ snapshot documents. Nguồn upstream và giới hạn triển khai được ghi tại docs/TOOL-RESEARCH-2026-11-23.md.
+Nolane Tools hiện có **446 công cụ đang được đăng ký trên production** sau Wave 33, phát hành ngày 2026-11-23 trên Cloudflare Worker `nolane-search`. [PR #86](https://github.com/Nolane-x/Nolane-search/pull/86) đã merge vào `main` bằng commit `18acca8f983ee8e1667939e282f25d59aa41e2f1`. Main CI [45150195124](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195124), Worker export/health smoke [45150195535](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195535) và Cloudflare deployment [45150195611](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195611) đều thành công. Latest Worker Version ID: `016b7d5b-629d-400a-bf86-0c0f5b70913a`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema. Tệp đầu vào được xử lý trên GitHub-hosted runner dùng một lần; D1 chỉ giữ dữ liệu chỉ mục/cache nhỏ, Telegram archive giữ snapshot documents. Nguồn upstream và giới hạn triển khai được ghi tại docs/TOOL-RESEARCH-2026-11-23-WAVE33.md.
 
 ### Wave 30 — File format, microscopy and geospatial metadata auditors — deployed 2026-11-23
 
@@ -14,9 +14,9 @@ Wave 30 safety and bounds: all inputs are capped at 20 MiB. OME-NGFF ZIP inspect
 
 
 
-### Wave 33 — Article extraction, policy compilation, Kubernetes schema and artifact provenance — active development
+### Wave 33 — Article extraction, policy compilation, Kubernetes schema and artifact provenance — deployed 2026-11-23
 
-Wave 33 is being developed on branch `feat/wave-thirty-three-content-policy-provenance`. The branch contains **446 catalog entries**, but production remains **442 tools** until CI, Worker health smoke and Cloudflare deployment pass after merge.
+Wave 33 was merged through [PR #86](https://github.com/Nolane-x/Nolane-search/pull/86), increasing production from **442 to 446 tools**. Main CI [45150195124](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195124), Worker export/health smoke [45150195535](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195535) and Cloudflare deployment [45150195611](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195611) passed. Worker Version ID: `016b7d5b-629d-400a-bf86-0c0f5b70913a`.
 
 | ID / command | Processor | Capability |
 |---|---|---|
@@ -25,7 +25,7 @@ Wave 33 is being developed on branch `feat/wave-thirty-three-content-policy-prov
 | /tool k8s-schema-validate | Kubeconform 0.8.0 | Strict Kubernetes 1.34.0 OpenAPI/JSON-Schema validation using a pinned schema-repository commit and API-group kind suffix; no cluster connection. |
 | /tool cosign-verify-blob | Cosign 3.1.4 | Verify a blob using a Sigstore bundle, local PEM public key and user-provided TrustedRoot. No KMS or keyless mode. |
 
-The three CLI binaries are downloaded only for selected jobs and checked against pinned SHA-256 digests. Trafilatura is installed only for the HTML article processor. No new D1 schema, secret or persistent service is required. See [Wave 33 upstream research](TOOL-RESEARCH-2026-11-23-WAVE33.md) and [implementation handoff](HANDOFF-WAVE-THIRTY-THREE-2026-11-23.md). Tool behavior and security limitations are documented there; production count remains unchanged until release gates pass.
+The three CLI binaries are downloaded only for selected jobs and checked against pinned SHA-256 digests. Trafilatura is installed only for the HTML article processor. No new D1 schema, secret or persistent service is required. See [Wave 33 upstream research](TOOL-RESEARCH-2026-11-23-WAVE33.md) and [implementation handoff](HANDOFF-WAVE-THIRTY-THREE-2026-11-23.md). Tool behavior, security limitations and acceptance checks are documented there.
 
 ### Wave 32 — Semantic data, searchable PDF and scheduling tools — deployed 2026-11-23
 
