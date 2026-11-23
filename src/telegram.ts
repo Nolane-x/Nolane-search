@@ -65,14 +65,14 @@ export interface TelegramArchiveDocument {
   fileSize?: number;
 }
 
-export async function sendArchiveDocument(
-  env: Env, filename: string, content: string, caption: string,
-): Promise<TelegramArchiveDocument | null> {
-  if (!env.TELEGRAM_ARCHIVE_CHAT_ID || !env.TELEGRAM_BOT_TOKEN) return null;
+export async function sendTelegramDocument(
+  env: Env, chatId: number | string, filename: string, content: string, caption: string,
+): Promise<TelegramArchiveDocument> {
+  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is not configured.");
   const form = new FormData();
-  form.set("chat_id", env.TELEGRAM_ARCHIVE_CHAT_ID);
+  form.set("chat_id", String(chatId));
   form.set("caption", caption.slice(0, 900));
-  form.set("document", new Blob([content], { type: "text/plain;charset=utf-8" }), filename);
+  form.set("document", new Blob([content], { type: "application/json;charset=utf-8" }), filename);
   const response = await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/sendDocument", {
     method: "POST", body: form, signal: AbortSignal.timeout(20_000),
   });
@@ -87,16 +87,83 @@ export async function sendArchiveDocument(
   if (!response.ok || !data.ok) throw new Error(data.description || "Telegram sendDocument failed (" + response.status + ")");
   const messageId = data.result?.message_id;
   const document = data.result?.document;
-  if (typeof messageId !== "number" || !Number.isSafeInteger(messageId) || !document || typeof document.file_id !== "string" || !document.file_id) {
-    throw new Error("Telegram accepted the archive upload but returned no document reference.");
+  if (typeof messageId !== "number" || !Number.isSafeInteger(messageId) ||
+      !document || typeof document.file_id !== "string" || !document.file_id) {
+    throw new Error("Telegram accepted the document upload but returned no document reference.");
   }
   return {
-    messageId: Number(messageId),
+    messageId,
     fileId: document.file_id,
     ...(typeof document.file_unique_id === "string" ? { fileUniqueId: document.file_unique_id } : {}),
     fileName: typeof document.file_name === "string" ? document.file_name : filename,
     ...(typeof document.file_size === "number" && Number.isSafeInteger(document.file_size) ? { fileSize: document.file_size } : {}),
   };
+}
+
+export async function sendArchiveDocument(
+  env: Env, filename: string, content: string, caption: string,
+): Promise<TelegramArchiveDocument | null> {
+  if (!env.TELEGRAM_ARCHIVE_CHAT_ID || !env.TELEGRAM_BOT_TOKEN) return null;
+  return sendTelegramDocument(env, env.TELEGRAM_ARCHIVE_CHAT_ID, filename, content, caption);
+}
+
+/** Download one Telegram-hosted file through the official getFile path with a hard byte cap. */
+export async function downloadTelegramFile(
+  env: Env,
+  fileId: string,
+  maxBytes: number,
+): Promise<Uint8Array> {
+  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is not configured.");
+  if (typeof fileId !== "string" || !fileId.trim() || fileId.length > 2048 ||
+      !Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 20 * 1024 * 1024) {
+    throw new Error("Telegram file download arguments are invalid.");
+  }
+  const metadata = await telegramApi<{ file_path?: string; file_size?: number }>(env, "getFile", { file_id: fileId });
+  const filePath = metadata.file_path;
+  if (typeof filePath !== "string" || filePath.length < 1 || filePath.length > 512 ||
+      !/^[A-Za-z0-9_./-]+$/.test(filePath) ||
+      filePath.split("/").some(part => !part || part === "." || part === "..")) {
+    throw new Error("Telegram returned an invalid file path.");
+  }
+  if (typeof metadata.file_size === "number" &&
+      (!Number.isSafeInteger(metadata.file_size) || metadata.file_size < 0 || metadata.file_size > maxBytes)) {
+    throw new Error("Telegram file exceeds the download size limit.");
+  }
+  const safePath = filePath.split("/").map(part => encodeURIComponent(part)).join("/");
+  const response = await fetch("https://api.telegram.org/file/bot" + env.TELEGRAM_BOT_TOKEN + "/" + safePath, {
+    method: "GET",
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok || !response.body) throw new Error("Telegram file download failed (" + response.status + ").");
+  const contentLength = Number(response.headers.get("content-length") || 0);
+  if (contentLength > maxBytes) {
+    await response.body.cancel().catch(() => undefined);
+    throw new Error("Telegram file exceeds the download size limit.");
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error("Telegram file exceeds the download size limit.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output;
 }
 
 export type TelegramInputMode = SearchMode | "ai" | "ask" | "deep";
