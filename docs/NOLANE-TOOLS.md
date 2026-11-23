@@ -20,7 +20,7 @@ Wave 33 is being developed on branch `feat/wave-thirty-three-content-policy-prov
 
 | ID / command | Processor | Capability |
 |---|---|---|
-| /tool web-article-extract | Trafilatura 2.3.1 | Extract main article body and selected metadata from an already-downloaded HTML/XHTML file; write Markdown. No URL fetching. |
+| /tool web-article-extract | Trafilatura 2.3.1 | Extract main article body and selected metadata from an already-downloaded HTML/XHTML file; require 40+ characters of main text and write Markdown. No URL fetching. |
 | /tool rego-policy-check | OPA 1.22.4 | Strict Rego v1-compatible parse/compile only. Never evaluates policy rules or built-ins. |
 | /tool k8s-schema-validate | Kubeconform 0.8.0 | Strict Kubernetes 1.34.0 OpenAPI/JSON-Schema validation using a pinned schema-repository commit and API-group kind suffix; no cluster connection. |
 | /tool cosign-verify-blob | Cosign 3.1.4 | Verify a blob using a Sigstore bundle, local PEM public key and user-provided TrustedRoot. No KMS or keyless mode. |
