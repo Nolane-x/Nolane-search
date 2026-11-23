@@ -979,7 +979,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   if (command === "archive_import") {
     if (chatId !== userId) { await reply(env, chatId, "Khôi phục chỉ mục archive chỉ khả dụng trong chat riêng được cấp quyền."); return; }
     if (!env.TELEGRAM_ARCHIVE_CHAT_ID) { await reply(env, chatId, "Chưa cấu hình TELEGRAM_ARCHIVE_CHAT_ID; không thể nhập backup."); return; }
-    await reply(env,
+    await reply(env, chatId,
       "<b>Khôi phục chỉ mục Telegram Archive</b>\n" +
       "Hãy gửi file JSON backup được tạo bằng <code>/archive_export</code>, đặt caption chính xác là <code>/archive_import</code>.\n\n" +
       "Chỉ nhận backup của đúng Telegram owner và đúng archive channel hiện tại. Các message đã có sẽ được bỏ qua; tệp snapshot gốc không bị upload lại.");
@@ -2380,14 +2380,14 @@ async function handleToolUpload(env: Env, message: NonNullable<TelegramUpdate["m
       const bytes = await downloadTelegramFile(env, file.fileId, MAX_ARCHIVE_BACKUP_BYTES);
       const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
       const result = await importArchiveBackup(env, content, String(userId), env.TELEGRAM_ARCHIVE_CHAT_ID);
-      await reply(env,
+      await reply(env, chatId,
         "<b>Đã khôi phục chỉ mục archive</b>\n" +
         "Nhập mới: <b>" + result.imported + "</b> · Bỏ qua trùng lặp: <b>" + result.skipped +
         "</b> · Tổng bản ghi: <b>" + result.total + "</b>.\n" +
         "Tệp snapshot gốc vẫn nằm trong Telegram archive channel; hãy dùng /archive để kiểm tra.");
     } catch (error) {
       console.error("Telegram archive index import failed:", error instanceof Error ? error.message : "unknown");
-      await reply(env, "Không thể nhập backup. " + htmlEscape(error instanceof Error ? error.message : "Backup không hợp lệ."));
+      await reply(env, chatId, "Không thể nhập backup. " + htmlEscape(error instanceof Error ? error.message : "Backup không hợp lệ."));
     }
     return;
   }
