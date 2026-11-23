@@ -14,6 +14,23 @@ Wave 30 safety and bounds: all inputs are capped at 20 MiB. OME-NGFF ZIP inspect
 
 
 
+### Wave 32 — Semantic data, searchable PDF and scheduling tools — active development
+
+Wave 32 adds four additional processors on PR #85. The branch catalog contains **442 tools**, but production remains **438** until CI, Worker export/health smoke and Cloudflare deployment all succeed after merge.
+
+| ID | Công cụ | Nhóm | Chức năng |
+|---|---|---|---|
+| /tool pdf-ocr-searchable | Searchable PDF OCR | Document accessibility | Tạo lớp văn bản tìm kiếm cho PDF scan bằng OCR tiếng Anh/Việt; bỏ qua trang đã có text, tự xoay và deskew. Xuất PDF mới, không ghi đè file gốc. |
+| /tool rdf-graph-audit | RDF graph/dataset profile | Semantic Web / linked data | Phân tích Turtle, N-Triples, N-Quads và TriG; thống kê cấu trúc aggregate, không đưa graph URI, subject, predicate hay literal value vào báo cáo. |
+| /tool shacl-validate | SHACL Core validation | Semantic Web / data quality | Nhận ZIP gồm chính xác data.ttl và shapes.ttl, kiểm tra RDF data theo SHACL Core offline, tổng hợp mức độ lỗi; chặn imports, SPARQL, JS và rules. |
+| /tool cron-schedule-audit | Cron schedule preview | Automation / operations | Kiểm tra cron 5 trường và xem trước ba lần chạy UTC, không thực thi command hay cài lịch. |
+
+Runtime packages are pinned to OCRmyPDF 17.14.2 (MPL-2.0), RDFLib 7.6.0 (BSD-3-Clause), pySHACL 0.40.2 (Apache-2.0) and croniter 7.0.0 (MIT). OCRmyPDF needs Tesseract language + orientation data and a PDF rasterizer; the selected runner job installs Tesseract, Ghostscript and pypdfium2. Optional dependencies are installed only for selected processors.
+
+Bounds: RDF input 5 MiB / 50,000 triples; SHACL ZIP 5 MiB, each Turtle member 2 MiB, data graph 50,000 triples and shapes graph 10,000 triples; cron input 2 MiB and 1,000 schedules (first 100 get previews); OCR input 20 MiB, 20-minute timeout and 45 MiB output. RDF parsers use offline local syntaxes only. SHACL package members are parsed in memory and not extracted. Reports withhold identifiers, values, focus nodes and raw parser/validator diagnostics. OCRmyPDF is not a malware scanner and should not be described as a security sandbox.
+
+See [Wave 32 upstream research](TOOL-RESEARCH-2026-11-23.md) and [implementation handoff](HANDOFF-WAVE-THIRTY-TWO-2026-11-23.md). Owner-level Telegram upload/retry acceptance remains separate from CI.
+
 ### Wave 31 — PRONOM file format identification — deployed 2026-11-23
 
 Wave 31 adds one universal format-identification processor to the existing 437-tool production catalog, bringing production to **438 tools**. [PR #84](https://github.com/Nolane-x/Nolane-search/pull/84) merged as `bfc107d1f299b9ae4b7c557fbe4fea0e3eee6599`; main CI [45127497703](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497703), Worker export/health smoke [45127497583](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497583) and Cloudflare deployment [45127497651](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497651) passed. Worker Version ID: `679e4cfc-08a8-4832-92cc-459e79df6763`.
