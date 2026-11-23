@@ -121,6 +121,7 @@ class Wave33Tests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertIn("-strict", command)
         self.assertIn("1.34.0", command)
+        self.assertTrue(any(".KindSuffix" in item for item in command))
         self.assertTrue(any(wave33.KUBERNETES_SCHEMA_COMMIT in item for item in command))
         self.assertIn("Valid: 1", output)
         self.assertNotIn("private-app", output)
