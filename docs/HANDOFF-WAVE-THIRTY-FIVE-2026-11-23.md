@@ -48,7 +48,7 @@ Expand Nolane Tools into model packaging, model documentation, training-data val
 ## Production rollout — 2026-11-23
 
 - [PR #88](https://github.com/Nolane-x/Nolane-search/pull/88) merged to main as `3e20f1fe423b68fc453af14ef9fc3026c274a9d0`.
-- PR CI [45175181809](https://github.com/Nolane-x/Nolane-search/actions/runs/45175181809) passed 25 Vitest files / 253 tests, TypeScript type-check, deployment-script checks, 341 Python runner tests and Worker build.
+- PR CI [45175181809](https://github.com/Nolane-x/Nolane-search/actions/runs/45175181809) passed 25 Vitest files / 254 tests, TypeScript type-check, deployment-script checks, 341 Python runner tests and Worker build.
 - Main CI [45175463155](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463155), Worker export/health smoke [45175463060](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463060) and Cloudflare deployment [45175463070](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463070) all succeeded.
 - The health smoke returned `ok: true` and `database: reachable`. D1 migration was skipped because this release changes no database schema.
 - Cloudflare Worker Version ID: `4e6aebb9-655d-4b33-9233-dd29540d1788`. Telegram webhook (message + callback_query) was verified and bot commands registered.
