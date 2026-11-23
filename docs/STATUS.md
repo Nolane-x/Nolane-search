@@ -2,6 +2,13 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+## Active development — Wave 33 (not production)
+
+- Branch: `feat/wave-thirty-three-content-policy-provenance`.
+- Four new processors are being developed: `web-article-extract`, `rego-policy-check`, `k8s-schema-validate` and `cosign-verify-blob`.
+- Branch catalog has 446 IDs; production remains **442** until PR CI, Worker export/health smoke and Cloudflare deployment all pass after merge.
+- Research: [TOOL-RESEARCH-2026-11-23-WAVE33.md](TOOL-RESEARCH-2026-11-23-WAVE33.md); handoff: [HANDOFF-WAVE-THIRTY-THREE-2026-11-23.md](HANDOFF-WAVE-THIRTY-THREE-2026-11-23.md).
+
 ## Latest production release — Wave 32 (2026-11-23)
 
 - [PR #85](https://github.com/Nolane-x/Nolane-search/pull/85) merged into main as `f9359406a25043220e51a90e33cc9a72c6fc7321`; production catalog increased from **438 to 442 tools**.

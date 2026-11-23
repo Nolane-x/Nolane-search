@@ -472,7 +472,11 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "pdf-ocr-searchable", name: "Tạo PDF có thể tìm kiếm", category: "document", description: "Tạo lớp văn bản OCR tiếng Anh và tiếng Việt cho PDF scan; bỏ qua trang đã có text, tự xoay và làm thẳng trang; xuất PDF mới.", accepts: ["application/pdf", ".pdf"], output: "PDF có lớp văn bản tìm kiếm", ready: true },
   { id: "rdf-graph-audit", name: "Phân tích RDF Graph / Dataset", category: "data", description: "Phân tích Turtle, N-Triples, N-Quads và TriG; thống kê triple, subject, predicate, literal, blank node và named graph nhưng không tiết lộ giá trị.", accepts: ["text/turtle", "application/n-triples", "application/n-quads", ".ttl", ".nt", ".nq", ".trig"], output: "Báo cáo RDF Graph TXT", ready: true },
   { id: "shacl-validate", name: "Kiểm định RDF bằng SHACL", category: "data", description: "Nhận ZIP chứa data.ttl và shapes.ttl, chạy SHACL Core offline; trả mức độ vi phạm tổng hợp, chặn SPARQL/JavaScript và remote imports.", accepts: ["application/zip", ".shacl.zip", ".zip"], output: "Báo cáo SHACL TXT", ready: true },
-  { id: "cron-schedule-audit", name: "Kiểm tra lịch Cron", category: "utility", description: "Kiểm tra biểu thức cron 5 trường và xem trước ba lần chạy UTC; không chạy command, không tạo lịch và không tiết lộ biểu thức.", accepts: ["text/plain", ".cron"], output: "Báo cáo Cron UTC TXT", ready: true }
+  { id: "cron-schedule-audit", name: "Kiểm tra lịch Cron", category: "utility", description: "Kiểm tra biểu thức cron 5 trường và xem trước ba lần chạy UTC; không chạy command, không tạo lịch và không tiết lộ biểu thức.", accepts: ["text/plain", ".cron"], output: "Báo cáo Cron UTC TXT", ready: true },
+  { id: "web-article-extract", name: "Trích xuất nội dung bài viết từ HTML", category: "document", description: "Dùng Trafilatura để tách nội dung chính, tiêu đề, tác giả và ngày từ HTML đã tải sẵn; không tự truy cập URL, xuất Markdown.", accepts: ["text/html", ".html", ".htm", ".xhtml"], output: "Bài viết Markdown", ready: true },
+  { id: "rego-policy-check", name: "Kiểm tra policy Rego bằng OPA", category: "developer", description: "Phân tích cú pháp và biên dịch strict theo tập cú pháp tương thích Rego v1; không evaluate policy, query hay built-in, không truy cập nguồn ngoài.", accepts: ["text/plain", ".rego", ".zip"], output: "Báo cáo Rego TXT", ready: true },
+  { id: "k8s-schema-validate", name: "Xác thực Kubernetes theo JSON Schema", category: "developer", description: "Kiểm định YAML nhiều resource bằng Kubeconform với Kubernetes OpenAPI schema v1.34.0 được pin commit; không kết nối cluster, không bao gồm CRD/admission.", accepts: ["application/yaml", "text/yaml", ".yaml", ".yml"], output: "Báo cáo Kubernetes Schema TXT", ready: true },
+  { id: "cosign-verify-blob", name: "Xác minh chữ ký artifact Sigstore", category: "developer", description: "Xác minh blob bằng Sigstore bundle, PEM public key và trusted root cục bộ; không dùng KMS/keyless, không tự tải trust material.", accepts: ["application/zip", ".zip"], output: "Báo cáo Sigstore Verify TXT", ready: true }
 
 ];
 
@@ -900,6 +904,10 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "rdf-graph-audit": ["text-clean", "text-stats"],
   "shacl-validate": ["text-clean", "text-stats"],
   "cron-schedule-audit": ["text-clean", "text-stats"],
+  "web-article-extract": ["text-clean", "text-stats"],
+  "rego-policy-check": ["text-clean", "text-stats"],
+  "k8s-schema-validate": ["text-clean", "text-stats"],
+  "cosign-verify-blob": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
