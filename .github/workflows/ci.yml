@@ -53,7 +53,7 @@ jobs:
       - name: Install pinned PRONOM engine for format identification tests
         run: bash scripts/install-siegfried.sh
       - name: Install Python tool test dependencies
-        run: python -m pip install --disable-pip-version-check pillow pymupdf pyyaml openpyxl python-docx python-pptx 'qrcode[pil]' vobject fonttools dpkt jsonschema dnspython cryptography pdfplumber jmespath python-barcode rapidfuzz duckdb 'rdflib==7.6.0' 'pyshacl==0.40.2' 'croniter==7.0.0' 'trafilatura==2.3.1' sqlglot sqlfluff bandit Pint trimesh ezdxf pyshp polib nbformat pillow-heif pyproj tinycss2 graphql-core h5py pydicom rio-cogeo==7.0.4
+        run: python -m pip install --disable-pip-version-check pillow pymupdf pyyaml openpyxl python-docx python-pptx 'qrcode[pil]' vobject fonttools dpkt jsonschema dnspython cryptography pdfplumber jmespath python-barcode rapidfuzz duckdb 'rdflib==7.6.0' 'pyshacl==0.40.2' 'croniter==7.0.0' 'trafilatura==2.3.1' 'mcap==1.6.0' 'pyiceberg==0.12.0' 'onnx==1.23.2' sqlglot sqlfluff bandit Pint trimesh ezdxf pyshp polib nbformat pillow-heif pyproj tinycss2 graphql-core h5py pydicom rio-cogeo==7.0.4
       - name: Test GitHub Actions tool runner
         run: |
           python -m py_compile tools/runner.py
