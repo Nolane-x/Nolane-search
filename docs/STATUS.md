@@ -2,6 +2,13 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+## Active development — Wave 32 (not production)
+
+- Branch: feat/wave-thirty-two-semantic-and-pdf-tools.
+- Four new processors are staged on the branch: pdf-ocr-searchable, rdf-graph-audit, shacl-validate and cron-schedule-audit.
+- The production count remains **438** until the branch passes PR CI, Worker export/health smoke and Cloudflare deployment after merge.
+- Implementation handoff: [HANDOFF-WAVE-THIRTY-TWO-2026-11-23.md](HANDOFF-WAVE-THIRTY-TWO-2026-11-23.md); upstream review: [TOOL-RESEARCH-2026-11-23.md](TOOL-RESEARCH-2026-11-23.md).
+
 ## Latest production release — Wave 31 (2026-11-23)
 
 - [PR #84](https://github.com/Nolane-x/Nolane-search/pull/84) merged into `main` as `bfc107d1f299b9ae4b7c557fbe4fea0e3eee6599`; production catalog increased from 437 to **438 tools**.
