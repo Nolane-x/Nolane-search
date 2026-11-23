@@ -1,4 +1,4 @@
-Nolane Tools hiện có **456 công cụ đang được đăng ký trên production** sau Wave 35, phát hành ngày 2026-11-23 trên Cloudflare Worker `nolane-search`. [PR #88](https://github.com/Nolane-x/Nolane-search/pull/88) đã merge vào `main` bằng commit `3e20f1fe423b68fc453af14ef9fc3026c274a9d0`. Main CI [45175463155](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463155), Worker export/health smoke [45175463060](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463060) và Cloudflare deployment [45175463070](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463070) đều thành công. Latest Worker Version ID: `4e6aebb9-655d-4b33-9233-dd29540d1788`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema. Tệp đầu vào được xử lý trên GitHub-hosted runner dùng một lần; D1 chỉ giữ dữ liệu chỉ mục/cache nhỏ, Telegram archive giữ snapshot documents. Nguồn upstream và giới hạn triển khai được ghi tại docs/TOOL-RESEARCH-2026-11-23-WAVE35.md.
+Nolane Tools hiện có **462 công cụ đang được đăng ký trên production** sau Wave 36, phát hành ngày 2026-11-23 trên Cloudflare Worker `nolane-search`. [PR #89](https://github.com/Nolane-x/Nolane-search/pull/89) đã merge vào `main` bằng commit `f1ca98ba55a664ceff52a920f84ea65090e1e214`. Main CI [45178181372](https://github.com/Nolane-x/Nolane-search/actions/runs/45178181372), Worker export/health smoke [45178181358](https://github.com/Nolane-x/Nolane-search/actions/runs/45178181358) và Cloudflare deployment [45178181369](https://github.com/Nolane-x/Nolane-search/actions/runs/45178181369) đều thành công. Latest Worker Version ID: `010394f8-b046-4e0b-8703-f42b32387741`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema. Tệp đầu vào được xử lý trên GitHub-hosted runner dùng một lần; D1 chỉ giữ dữ liệu chỉ mục/cache nhỏ, Telegram archive giữ snapshot documents. Nguồn upstream và giới hạn triển khai được ghi tại docs/TOOL-RESEARCH-2026-11-23-WAVE36.md.
 
 ### Wave 35 — AI model artifacts, training data, evaluation configs and 3D manufacturing — deployed to production
 
@@ -32,9 +32,9 @@ Wave 30 safety and bounds: all inputs are capped at 20 MiB. OME-NGFF ZIP inspect
 
 
 
-### Wave 36 — Local AI, tokenizer engineering, MLOps and Kubernetes packaging — candidate, not production
+### Wave 36 — Local AI, tokenizer engineering, MLOps and Kubernetes packaging — deployed to production
 
-Wave 36 adds six candidate processors, taking the branch catalog from 456 to **462 IDs**. Production remains **456 tools** until the branch passes full CI, merges into main and the Worker deployment/health smoke succeeds.
+Wave 36 adds six processors, increasing the production catalog from **456 to 462 tools**. PR #89 is merged and main CI, Worker export/health smoke and Cloudflare deployment all succeeded.
 
 | ID / command | Processor | Capability |
 |---|---|---|
@@ -45,7 +45,7 @@ Wave 36 adds six candidate processors, taking the branch catalog from 456 to **4
 | /tool dvc-pipeline-audit | DVC pipeline/lock auditor | Checks schema, stages, commands, dependencies, params, outputs, metrics, plots and lock manifest structure. Does not read remotes or run pipeline stages. |
 | /tool helm-chart-audit | Helm Chart.yaml auditor | Checks apiVersion, chart name, SemVer, chart type, dependencies, aliases, maintainers and annotations. Does not render or install charts. |
 
-PyYAML 6.0.2 is installed only in the one-off runner for YAML-based Wave 36 jobs. Inputs are bounded (4 MiB, dataset cards 2 MiB); no database schema or Cloudflare secrets are changed. See [Wave 36 upstream research](TOOL-RESEARCH-2026-11-23-WAVE36.md) and [implementation handoff](HANDOFF-WAVE-THIRTY-SIX-2026-11-23.md).
+PyYAML 6.0.2 is installed only in the one-off runner for selected YAML-based Wave 36 jobs. Inputs are bounded (4 MiB, dataset cards 2 MiB); no database schema or Cloudflare secrets are changed. See [Wave 36 upstream research](TOOL-RESEARCH-2026-11-23-WAVE36.md) and [implementation handoff](HANDOFF-WAVE-THIRTY-SIX-2026-11-23.md).
 
 ### Wave 34 — Robotics telemetry, lakehouse metadata, ONNX models and OpenTelemetry traces — deployed 2026-11-23
 
