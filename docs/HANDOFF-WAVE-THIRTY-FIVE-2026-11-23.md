@@ -17,7 +17,7 @@ Expand Nolane Tools into model packaging, model documentation, training-data val
 | hf-model-card-audit | developer | Hugging Face README YAML front matter and model-card section coverage; no Hub API. |
 | chat-dataset-audit | data | Chat-completions JSONL roles/content/tool calls, malformed lines, duplicate rows and minimum example count; no prompt/completion output. |
 | promptfoo-config-audit | developer | Local Promptfoo YAML/JSON providers/prompts/tests/assertions/scenarios structure; no reference resolution or model execution. |
-| 3mf-package-audit | utility | 3MF OPC root relationships, primary model part, objects, mesh vertices and triangle indices; no extraction/rendering. |
+| three-mf-package-audit | utility | 3MF OPC root relationships, primary model part, objects, mesh vertices and triangle indices; no extraction/rendering. |
 
 ## Files changed
 
