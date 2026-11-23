@@ -62,7 +62,7 @@ class Wave31Tests(unittest.TestCase):
         self.assertEqual(parsed["verdict"], "UNKNOWN — no matching content signature")
         self.assertEqual(parsed["puids"], [])
         report = wave31._report_from_result(Path("opaque.bin"), parsed)["summary"]
-        self.assertIn("no matching signature", report)
+        self.assertIn("no matching content signature", report)
         self.assertNotIn("Portable Document Format", report)
 
     def test_ambiguous_identification_keeps_distinct_matches_separate(self):
