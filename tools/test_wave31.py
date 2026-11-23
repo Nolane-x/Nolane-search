@@ -6,6 +6,8 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import wave31
 
@@ -109,6 +111,57 @@ class Wave31Tests(unittest.TestCase):
                     os.environ["NOLANE_SIEGFRIED_BINARY"] = old_binary
                 if old_sig is not None:
                     os.environ["NOLANE_SIEGFRIED_SIG"] = old_sig
+
+    def test_runner_uses_neutral_stdin_name_and_never_passes_the_real_path_to_sf(self):
+        payload = json.dumps(self.sample_payload())
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "private-name-and-path.pdf"
+            binary = root / "sf"
+            signature = root / "default.sig"
+            source.write_bytes(b"synthetic-private-payload")
+            binary.write_bytes(b"test-binary-placeholder")
+            signature.write_bytes(b"test-signature-placeholder")
+            env = {
+                "NOLANE_SIEGFRIED_BINARY": str(binary),
+                "NOLANE_SIEGFRIED_SIG": str(signature),
+            }
+            with patch.dict(os.environ, env):
+                with patch.object(
+                    wave31.subprocess,
+                    "run",
+                    return_value=SimpleNamespace(returncode=0, stdout=payload, stderr="PRIVATE_STDERR_SENTINEL"),
+                ) as run:
+                    result = wave31.file_format_identify(source)
+            command = run.call_args.args[0]
+            self.assertEqual(command[-3:], ["-name", "nolane-upload", "-"])
+            self.assertNotIn(str(source), command)
+            self.assertNotIn(source.name, command)
+            self.assertEqual(run.call_args.kwargs["stdin"].name, str(source))
+            self.assertEqual(run.call_args.kwargs["timeout"], wave31.SIEGFRIED_TIMEOUT_SECONDS)
+            self.assertNotIn(source.name, result["summary"])
+            self.assertNotIn(temp, result["summary"])
+            self.assertNotIn("PRIVATE_STDERR_SENTINEL", result["summary"])
+
+    def test_timeout_is_reported_without_leaking_the_filename(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "sensitive-file-name.dat"
+            binary = Path(temp) / "sf"
+            signature = Path(temp) / "default.sig"
+            source.write_bytes(b"synthetic")
+            binary.write_bytes(b"binary")
+            signature.write_bytes(b"signature")
+            with patch.dict(os.environ, {
+                "NOLANE_SIEGFRIED_BINARY": str(binary),
+                "NOLANE_SIEGFRIED_SIG": str(signature),
+            }):
+                with patch.object(
+                    wave31.subprocess,
+                    "run",
+                    side_effect=wave31.subprocess.TimeoutExpired("sf", 30),
+                ):
+                    with self.assertRaisesRegex(RuntimeError, "30-second time limit"):
+                        wave31.file_format_identify(source)
 
     def test_real_pinned_engine_identifies_a_zip_container_without_returning_path(self):
         binary = os.environ.get("NOLANE_SIEGFRIED_BINARY")
