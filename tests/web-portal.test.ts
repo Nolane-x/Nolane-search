@@ -22,6 +22,10 @@ describe("private browser search portal", () => {
     expect(html).toContain("Gỡ domain");
     expect(html).toContain("feedback-btn");
     expect(html).toContain("data-mode=\"research\"");
+    expect(html).toContain('id="chatFile"');
+    expect(html).toContain('id="clearChatFile"');
+    expect(html).toContain("/api/ai/upload");
+    expect(html).toContain("Tối đa 20 MB");
   });
 
   it("does not expose search results to anonymous browser requests", async () => {
@@ -51,12 +55,28 @@ describe("private browser search portal", () => {
     }), env, context);
     expect(deleteIndex.status).toBe(401);
 
+    const aiUpload = await worker.fetch(new Request("https://nolane-search.example/api/ai/upload", {
+      method: "POST",
+      headers: { origin: "https://nolane-search.example", "content-type": "multipart/form-data; boundary=test" },
+      body: "--test--\\r\\n",
+    }), env, context);
+    expect(aiUpload.status).toBe(401);
+
     const feedback = await worker.fetch(new Request("https://nolane-search.example/api/feedback", {
       method: "POST",
       headers: { "content-type": "application/json", origin: "https://nolane-search.example" },
       body: JSON.stringify({ eventId: "12345678-1234-1234-1234-123456789abc", url: "https://example.com", rating: 1 }),
     }), env, context);
     expect(feedback.status).toBe(401);
+  });
+
+  it("rejects cross-origin AI file uploads before authentication or file parsing", async () => {
+    const response = await worker.fetch(new Request("https://nolane-search.example/api/ai/upload", {
+      method: "POST",
+      headers: { origin: "https://attacker.example", "content-type": "multipart/form-data; boundary=test" },
+      body: "--test--\\r\\n",
+    }), env, context);
+    expect(response.status).toBe(403);
   });
 
   it("rejects cross-origin ticket exchanges before accessing D1", async () => {
