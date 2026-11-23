@@ -61,8 +61,8 @@ def web_article_extract(path: Path) -> dict:
     except Exception as exc:
         raise RuntimeError("HTML article extraction failed safely.") from exc
 
-    if not isinstance(article, str) or not article.strip():
-        raise RuntimeError("No reliable main article content was found in this HTML document.")
+    if not isinstance(article, str) or len(article.strip()) < 40:
+        raise RuntimeError("No reliable main article content was found; extracted text is empty or too short.")
 
     title = str(getattr(metadata, "title", "") or "").strip()[:500]
     author = str(getattr(metadata, "author", "") or "").strip()[:300]
