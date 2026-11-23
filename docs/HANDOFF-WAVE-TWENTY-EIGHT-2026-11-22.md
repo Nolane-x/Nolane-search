@@ -1,6 +1,6 @@
 # Wave 28 handoff — 2026-11-22
 
-## Current checkpoint
+## Final release checkpoint — deployed 2026-11-23\n\n- PR #80 merged as `61f389df0f9d797af74b27130cfaeb9e5662c47a`.\n- Production catalog is **434 tools**, deployed Worker Version ID `34fad733-fef3-4b93-bc58-e480bb3c082f`.\n- Main CI [45040057467](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057467) passed 25 Vitest files / 238 tests and 270 Python runner tests.\n- Worker export/health smoke [45040057426](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057426) passed; health confirmed `ok: true`, database `reachable`, archive enabled.\n- Cloudflare deploy [45040057437](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057437) passed; Telegram webhook (message + callback_query) and command menu verified. D1 migration skipped correctly.\n- Wave 28 is closed. Remaining owner-level acceptance: send representative synthetic/non-sensitive files through the private Telegram bot, check reports/downloads and test `/tool_retry`.\n\n## Current checkpoint
 
 - Repository: `Nolane-x/Nolane-search`
 - Production baseline: **426 tools**, after Wave 27.
