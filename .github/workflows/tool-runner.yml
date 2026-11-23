@@ -88,6 +88,21 @@ jobs:
       - name: Install pinned PRONOM format identification engine
         if: contains(steps.job.outputs.tool_ids, 'file-format-identify')
         run: bash scripts/install-siegfried.sh
+      - name: Install OCRmyPDF runtime for searchable PDFs
+        if: contains(steps.job.outputs.tool_ids, 'pdf-ocr-searchable')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-vie tesseract-ocr-osd ghostscript fonts-noto-core
+          python -m pip install --disable-pip-version-check 'ocrmypdf==17.14.2' pypdfium2
+      - name: Install RDFLib for semantic graph tools
+        if: contains(steps.job.outputs.tool_ids, 'rdf-graph-audit') || contains(steps.job.outputs.tool_ids, 'shacl-validate')
+        run: python -m pip install --disable-pip-version-check 'rdflib==7.6.0'
+      - name: Install pySHACL validator
+        if: contains(steps.job.outputs.tool_ids, 'shacl-validate')
+        run: python -m pip install --disable-pip-version-check 'pyshacl==0.40.2'
+      - name: Install croniter
+        if: contains(steps.job.outputs.tool_ids, 'cron-schedule-audit')
+        run: python -m pip install --disable-pip-version-check 'croniter==7.0.0'
       - name: Install SQLGlot
         if: contains(steps.job.outputs.tool_ids, 'sqlglot-format')
         run: python -m pip install --disable-pip-version-check sqlglot
