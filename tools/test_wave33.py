@@ -81,7 +81,7 @@ class Wave33Tests(unittest.TestCase):
         self.assertEqual(command[1], "check")
         self.assertIn("--strict", command)
         self.assertIn("--rego-v1", command)
-        self.assertIn("Rego v1 strict compilation: passed", output)
+        self.assertIn("Rego v1-compatible strict compilation: passed", output)
         self.assertNotIn("secret-user", output)
         self.assertNotIn("private-policy.rego", command)
 
@@ -93,7 +93,7 @@ class Wave33Tests(unittest.TestCase):
             return_value=SimpleNamespace(returncode=1, stdout="PRIVATE_REGO_SOURCE", stderr="PRIVATE_REGO_DIAGNOSTIC"),
         ):
             output = self.report(wave33.rego_policy_check(path))
-        self.assertIn("Rego v1 strict compilation: failed", output)
+        self.assertIn("Rego v1-compatible strict compilation: failed", output)
         self.assertNotIn("PRIVATE_REGO_SOURCE", output)
         self.assertNotIn("PRIVATE_REGO_DIAGNOSTIC", output)
 
