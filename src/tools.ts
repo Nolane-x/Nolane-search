@@ -486,7 +486,7 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "hf-model-card-audit", name: "Đánh giá Hugging Face Model Card", category: "developer", description: "Kiểm tra YAML front matter, license/tags metadata và độ bao phủ các mục mô tả, intended use, limitations, training data và evaluation; không gọi Hub API.", accepts: ["text/markdown", ".md", ".markdown"], output: "Báo cáo Model Card TXT", ready: true },
   { id: "chat-dataset-audit", name: "Kiểm định JSONL Chat Fine-tuning", category: "data", description: "Kiểm tra từng example messages, role, content, tool calls, dòng lỗi và bản ghi trùng; chỉ trả số liệu tổng hợp, không lộ prompt/completion.", accepts: ["application/x-ndjson", ".jsonl", ".ndjson"], output: "Báo cáo Chat Dataset TXT", ready: true },
   { id: "promptfoo-config-audit", name: "Kiểm tra cấu hình Promptfoo", category: "developer", description: "Kiểm tra cấu trúc YAML/JSON providers, prompts, tests, vars, assertions và scenarios; không resolve file/HTTP refs, không chạy model evaluation.", accepts: ["application/yaml", "text/yaml", "application/json", ".yaml", ".yml", ".json"], output: "Báo cáo Promptfoo Config TXT", ready: true },
-  { id: "3mf-package-audit", name: "Kiểm định gói 3MF cho in 3D", category: "utility", description: "Kiểm tra ZIP/OPC relationships, primary model XML, object/mesh counts, vertex coordinates và triangle indices; không giải nén hay render.", accepts: ["application/octet-stream", ".3mf"], output: "Báo cáo 3MF TXT", ready: true }
+  { id: "three-mf-package-audit", name: "Kiểm định gói 3MF cho in 3D", category: "utility", description: "Kiểm tra ZIP/OPC relationships, primary model XML, object/mesh counts, vertex coordinates và triangle indices; không giải nén hay render.", accepts: ["application/octet-stream", ".3mf"], output: "Báo cáo 3MF TXT", ready: true }
 
 ];
 
@@ -927,7 +927,7 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "hf-model-card-audit": ["text-clean", "text-stats"],
   "chat-dataset-audit": ["text-clean", "text-stats"],
   "promptfoo-config-audit": ["text-clean", "text-stats"],
-  "3mf-package-audit": ["text-clean", "text-stats"],
+  "three-mf-package-audit": ["text-clean", "text-stats"],
 
 };
 
@@ -1105,7 +1105,7 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   const name = (file.fileName || "").toLowerCase();
   if (/\.safetensors$/i.test(name)) return "safetensors-audit";
   if (/\.gguf$/i.test(name)) return "gguf-model-audit";
-  if (/\.3mf$/i.test(name)) return "3mf-package-audit";
+  if (/\.3mf$/i.test(name)) return "three-mf-package-audit";
   if (/^(?:promptfooconfig|promptfoo\.config)\.(?:yaml|yml|json)$/i.test(name)) return "promptfoo-config-audit";
   if (/^(?:training|train|finetune|fine-tuning|chat-dataset|sft)(?:[-_.].*)?\.(?:jsonl|ndjson)$/i.test(name)) return "chat-dataset-audit";
   if (/^(?:model-card|modelcard|README\.model)\.(?:md|markdown)$/i.test(name)) return "hf-model-card-audit";
