@@ -2,7 +2,7 @@
 
 Date: 2026-11-23  
 Branch: feat/wave-thirty-five-ai-model-and-3mf-tools  
-Status: implementation committed to branch; PR/CI/deployment acceptance pending.
+Status: merged and deployed to production on 2026-11-23.
 
 ## Purpose
 
@@ -44,3 +44,17 @@ Expand Nolane Tools into model packaging, model documentation, training-data val
 - No D1 schema change, secret, paid service, new persistent runtime, remote data fetch or inference.
 - PyYAML is installed conditionally in the private GitHub Actions runner, not in the Worker.
 - The branch's first CI run must be treated as authoritative. Do not mark Wave 35 as production before main merge, Worker smoke and Cloudflare deployment succeed.
+
+## Production rollout — 2026-11-23
+
+- [PR #88](https://github.com/Nolane-x/Nolane-search/pull/88) merged to main as `3e20f1fe423b68fc453af14ef9fc3026c274a9d0`.
+- PR CI [45175181809](https://github.com/Nolane-x/Nolane-search/actions/runs/45175181809) passed 25 Vitest files / 253 tests, TypeScript type-check, deployment-script checks, 341 Python runner tests and Worker build.
+- Main CI [45175463155](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463155), Worker export/health smoke [45175463060](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463060) and Cloudflare deployment [45175463070](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463070) all succeeded.
+- The health smoke returned `ok: true` and `database: reachable`. D1 migration was skipped because this release changes no database schema.
+- Cloudflare Worker Version ID: `4e6aebb9-655d-4b33-9233-dd29540d1788`. Telegram webhook (message + callback_query) was verified and bot commands registered.
+- Production tool catalog: **456 tools**, up from 450. All six Wave 35 IDs are in the TypeScript catalog, Python runner allowlist, handler map, upload inference, pipeline transitions and operator documentation.
+- No new Cloudflare secret, paid resource, D1 migration or persistent service was introduced.
+
+## Owner-side acceptance still required
+
+The code, CI, Worker build/health smoke, Cloudflare deployment and Telegram command registration are verified. The real private Telegram upload journey for each new file type has not been exercised in this session. Upload representative non-sensitive fixtures for SafeTensors, GGUF, model cards, chat JSONL, Promptfoo YAML and 3MF, inspect reports and verify retry behavior with `/tool_retry`. This manual acceptance must not be treated as complete until confirmed.
