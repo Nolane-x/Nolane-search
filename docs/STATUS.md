@@ -2,6 +2,14 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+## Candidate development — Wave 36 (not production)
+
+- Branch: feat/wave-thirty-six-ai-mlops-and-helm-tools. Six new processors increase the candidate catalog from 456 to **462 IDs**.
+- Added static audits for Ollama Modelfiles, Hugging Face tokenizer JSON, Hugging Face dataset cards, MLflow MLmodel manifests, DVC pipeline/lock files and Helm Chart.yaml.
+- Not deployed; production remains Wave 35 at **456 tools** until CI, merge, Worker health smoke and Cloudflare deployment succeed.
+- No D1 schema, Cloudflare secret, paid service, persistent process, model inference, remote cache access or Kubernetes cluster change.
+- Handoff: [HANDOFF-WAVE-THIRTY-SIX-2026-11-23.md](HANDOFF-WAVE-THIRTY-SIX-2026-11-23.md); source review: [TOOL-RESEARCH-2026-11-23-WAVE36.md](TOOL-RESEARCH-2026-11-23-WAVE36.md).
+
 ## Latest production release — Wave 35 (2026-11-23)
 
 - [PR #88](https://github.com/Nolane-x/Nolane-search/pull/88) merged into main as `3e20f1fe423b68fc453af14ef9fc3026c274a9d0`; production catalog increased from **450 to 456 tools**.

@@ -486,7 +486,13 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "hf-model-card-audit", name: "Đánh giá Hugging Face Model Card", category: "developer", description: "Kiểm tra YAML front matter, license/tags metadata và độ bao phủ các mục mô tả, intended use, limitations, training data và evaluation; không gọi Hub API.", accepts: ["text/markdown", ".md", ".markdown"], output: "Báo cáo Model Card TXT", ready: true },
   { id: "chat-dataset-audit", name: "Kiểm định JSONL Chat Fine-tuning", category: "data", description: "Kiểm tra từng example messages, role, content, tool calls, dòng lỗi và bản ghi trùng; chỉ trả số liệu tổng hợp, không lộ prompt/completion.", accepts: ["application/x-ndjson", ".jsonl", ".ndjson"], output: "Báo cáo Chat Dataset TXT", ready: true },
   { id: "promptfoo-config-audit", name: "Kiểm tra cấu hình Promptfoo", category: "developer", description: "Kiểm tra cấu trúc YAML/JSON providers, prompts, tests, vars, assertions và scenarios; không resolve file/HTTP refs, không chạy model evaluation.", accepts: ["application/yaml", "text/yaml", "application/json", ".yaml", ".yml", ".json"], output: "Báo cáo Promptfoo Config TXT", ready: true },
-  { id: "three-mf-package-audit", name: "Kiểm định gói 3MF cho in 3D", category: "utility", description: "Kiểm tra ZIP/OPC relationships, primary model XML, object/mesh counts, vertex coordinates và triangle indices; không giải nén hay render.", accepts: ["application/octet-stream", ".3mf"], output: "Báo cáo 3MF TXT", ready: true }
+  { id: "three-mf-package-audit", name: "Kiểm định gói 3MF cho in 3D", category: "utility", description: "Kiểm tra ZIP/OPC relationships, primary model XML, object/mesh counts, vertex coordinates và triangle indices; không giải nén hay render.", accepts: ["application/octet-stream", ".3mf"], output: "Báo cáo 3MF TXT", ready: true },
+  { id: "ollama-modelfile-audit", name: "Kiểm định Ollama Modelfile", category: "developer", description: "Kiểm tra FROM, PARAMETER, TEMPLATE, SYSTEM, MESSAGE, REQUIRES và CAPABILITY; không truy cập model path, tạo model hoặc chạy inference.", accepts: ["text/plain", "Modelfile", ".modelfile"], output: "Báo cáo Ollama Modelfile TXT", ready: true },
+  { id: "hf-tokenizer-audit", name: "Kiểm định Hugging Face tokenizer.json", category: "developer", description: "Kiểm tra tokenizer model, vocabulary IDs, added tokens, merge rules, normalizer, pre-tokenizer và decoder; không lộ token strings hoặc chạy tokenizer.", accepts: ["application/json", "tokenizer.json", ".tokenizer.json"], output: "Báo cáo Hugging Face Tokenizer TXT", ready: true },
+  { id: "hf-dataset-card-audit", name: "Đánh giá Hugging Face Dataset Card", category: "data", description: "Kiểm tra YAML metadata và độ bao phủ mô tả dataset, fields, splits, nguồn tạo dữ liệu, dữ liệu nhạy cảm, bias và licensing; không gọi Hub.", accepts: ["text/markdown", ".md", ".markdown"], output: "Báo cáo Dataset Card TXT", ready: true },
+  { id: "mlflow-model-audit", name: "Kiểm định MLflow MLmodel manifest", category: "developer", description: "Kiểm tra YAML flavors, python_function, model signature và environment references; không import loader, load pickle/cloudpickle hay deserialize model artifact.", accepts: ["application/yaml", "text/yaml", "MLmodel"], output: "Báo cáo MLflow Manifest TXT", ready: true },
+  { id: "dvc-pipeline-audit", name: "Kiểm định DVC pipeline và lockfile", category: "developer", description: "Kiểm tra schema, stages, deps, params, outs, metrics và cấu trúc dvc.lock; không resolve remote/cache hoặc thực thi pipeline commands.", accepts: ["application/yaml", "text/yaml", "dvc.yaml", "dvc.yml", "dvc.lock"], output: "Báo cáo DVC Pipeline TXT", ready: true },
+  { id: "helm-chart-audit", name: "Kiểm định Helm Chart metadata", category: "developer", description: "Kiểm tra Chart.yaml apiVersion, tên, SemVer, loại chart, dependencies, aliases và maintainers; không chạy Helm template, cài chart hoặc kết nối Kubernetes.", accepts: ["application/yaml", "text/yaml", "Chart.yaml"], output: "Báo cáo Helm Chart TXT", ready: true },
 
 ];
 
@@ -928,6 +934,12 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "chat-dataset-audit": ["text-clean", "text-stats"],
   "promptfoo-config-audit": ["text-clean", "text-stats"],
   "three-mf-package-audit": ["text-clean", "text-stats"],
+  "ollama-modelfile-audit": ["text-clean", "text-stats"],
+  "hf-tokenizer-audit": ["text-clean", "text-stats"],
+  "hf-dataset-card-audit": ["text-clean", "text-stats"],
+  "mlflow-model-audit": ["text-clean", "text-stats"],
+  "dvc-pipeline-audit": ["text-clean", "text-stats"],
+  "helm-chart-audit": ["text-clean", "text-stats"],
 
 };
 
@@ -1103,6 +1115,13 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (isPhoto) return "image-ocr";
   const mime = (file.mimeType || "").toLowerCase();
   const name = (file.fileName || "").toLowerCase();
+
+  if (/^(?:modelfile|ollama\.modelfile)$/i.test(name) || /\.modelfile$/i.test(name)) return "ollama-modelfile-audit";
+  if (/^(?:tokenizer|.*\.tokenizer)\.json$/i.test(name)) return "hf-tokenizer-audit";
+  if (/^(?:dataset-card|README\.dataset)\.(?:md|markdown)$/i.test(name)) return "hf-dataset-card-audit";
+  if (name === "mlmodel") return "mlflow-model-audit";
+  if (/^dvc\.(?:yaml|yml|lock)$/i.test(name)) return "dvc-pipeline-audit";
+  if (name === "chart.yaml") return "helm-chart-audit";
   if (/\.safetensors$/i.test(name)) return "safetensors-audit";
   if (/\.gguf$/i.test(name)) return "gguf-model-audit";
   if (/\.3mf$/i.test(name)) return "three-mf-package-audit";
