@@ -7,6 +7,7 @@ Nolane Search is a personal search interface inside Telegram. It combines extern
 ## Current status
 
 - Source tree is committed and CI has passed type-checking, unit tests and Cloudflare build validation.
+- Wave 32 development is isolated on branch feat/wave-thirty-two-semantic-and-pdf-tools: four additional processors for searchable OCR PDFs, RDF graph profiling, SHACL validation and cron previews. These are **not production tools yet**; see docs/HANDOFF-WAVE-THIRTY-TWO-2026-11-23.md.
 - Cloudflare Worker `nolane-search` is deployed from `main`; its live `/health` endpoint returns `ok: true` and `database: reachable`.
 - D1 migrations `0001_core.sql` through `0005_archive_snapshots.sql` are applied. The main Queue, dead-letter Queue, consumers and 30-minute Cron trigger are configured.
 - Latest production deployment: Wave 31 main commit `bfc107d1f299b9ae4b7c557fbe4fea0e3eee6599`, released by [Cloudflare deployment run 45127497651](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497651). Latest Worker Version ID `679e4cfc-08a8-4832-92cc-459e79df6763`; Telegram webhook (message + callback_query) and command menu were verified. Main CI [45127497703](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497703), with 25 Vitest files/253 tests and 293 Python runner tests, plus Worker export/health smoke [45127497583](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497583) all passed.
