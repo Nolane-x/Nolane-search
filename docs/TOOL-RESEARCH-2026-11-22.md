@@ -358,19 +358,29 @@ Wave 30 adds `ome-ngff-audit`, `parquet-metadata-audit` and `cog-geotiff-audit`.
 
 | Source | Reviewed capability | Provenance | Wave 31 decision |
 |---|---|---|---|
-| [Siegfried](https://github.com/richardlehane/siegfried) | Signature-based identification using PRONOM plus optional MIME-info, LOC and Wikidata profiles; JSON output includes file records and matches | Apache-2.0; release `v1.11.9`, published 2026-09-27 | Integrate the static Linux binary and the pinned default PRONOM signature database. Do not run `sf -update`; pin both GitHub release assets and verify SHA-256 before use. |
+| [Siegfried](https://github.com/richardlehane/siegfried) | Signature-based identification using PRONOM plus optional MIME-info, LOC and Wikidata profiles; JSON output includes file records and matches | Apache-2.0; release `v1.11.9`, published 2026-09-27 | Integrated in Wave 31 as `file-format-identify`: static Linux binary and signature data pinned by release SHA-256; no automatic signature updates. |
 | [PRONOM](https://www.nationalarchives.gov.uk/PRONOM/Default.aspx) | Persistent identifiers (PUIDs) and format signatures maintained by The National Archives UK | Distributed in Siegfried's versioned signature-data archive | Use the PRONOM default signature file from the exact release. Display PUID, format/version and MIME; don't imply match confidence or malware safety. |
 
 ### Wave 31 implementation and limits
 
-The candidate branch `feat/wave-thirty-one-pronom-file-identification` adds `file-format-identify` as the unknown-format fallback, after existing specialist extension/MIME rules have been checked. Explicit `/tool file-format-identify` accepts any supported upload because it relies on signatures rather than extensions.
+[PR #84](https://github.com/Nolane-x/Nolane-search/pull/84) merged as `bfc107d1f299b9ae4b7c557fbe4fea0e3eee6599`; production is now **438 tools**, including `file-format-identify` as the unknown-format fallback after existing specialist extension/MIME rules have been checked. Explicit `/tool file-format-identify` accepts any supported upload because it relies on signatures rather than extensions.
 
 - Siegfried version: `1.11.9`; upstream release: [v1.11.9](https://github.com/richardlehane/siegfried/releases/tag/v1.11.9).
 - Linux static binary asset SHA-256: `c8cb3ec3c536863bd477cea7cd1b1213843b4bcad7e9d64bcea4d131e2bb9a01`.
 - Signature-data archive SHA-256: `1a284a57d102996ab99e393dc40e7e213039ab44e1573c55fa9d9935840515cf`.
 - The runner installs both assets only when `file-format-identify` is selected; CI installs the same pinned assets to run a real synthetic ZIP identification.
-- Calls `sf -json -multi 1 -sig <pinned-default.sig> <local-file>`; archive recursion is not enabled.
+- Calls `sf -json -multi 1 -sig <pinned-default.sig> -name nolane-upload -` with the file stream on stdin. The original filename/path is not passed to Siegfried, preventing extension-only hints and path disclosure; archive recursion is not enabled.
 - Existing input bound: 20 MiB; subprocess timeout: 30 seconds; JSON output cap: 1 MiB; maximum 128 distinct result records. Report suppresses filename/path, modification time, raw stderr, file content, signature basis details and raw warnings/errors.
 - Unknown and ambiguous results are reported as such. This is file-format identification, not malware detection, authenticity validation, document parsing or proof that the file is safe.
-- Candidate count: 438 (437 production + 1 Wave31 candidate); production stays 437 until current-head CI, Worker export/health smoke and deployment pass.
+- Production count: **438 tools** after Wave 31 deployment. The owner-level Telegram upload/retry journey remains a separate manual acceptance check.
+
+### Wave 31 production release evidence — 2026-11-23
+
+- [PR #84](https://github.com/Nolane-x/Nolane-search/pull/84) merged as `bfc107d1f299b9ae4b7c557fbe4fea0e3eee6599`; production catalog is **438 tools**.
+- Main CI [45127497703](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497703) passed 25 Vitest files / 253 tests, 293 Python runner tests, type-check, deployment-script checks and Worker build.
+- CI downloaded the pinned Siegfried v1.11.9 binary and PRONOM signature archive, verified both SHA-256 digests and successfully identified a synthetic ZIP by content using neutral stdin naming.
+- Worker export/health [45127497583](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497583) passed; health returned `ok: true`, D1 reachable and archive enabled.
+- Cloudflare deploy [45127497651](https://github.com/Nolane-x/Nolane-search/actions/runs/45127497651) passed; Worker Version ID `679e4cfc-08a8-4832-92cc-459e79df6763`. Telegram webhook and command registration passed.
+- D1 migration skipped; no schema change, new secret or paid resource was introduced.
+- Owner-level Telegram uploads and retry flows remain a separate manual acceptance check.
 
