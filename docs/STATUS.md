@@ -2,15 +2,20 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## Candidate development — Wave 36 (not production)
+## Latest production release — Wave 36 (2026-11-23)
 
-- Branch: feat/wave-thirty-six-ai-mlops-and-helm-tools. Six new processors increase the candidate catalog from 456 to **462 IDs**.
-- Added static audits for Ollama Modelfiles, Hugging Face tokenizer JSON, Hugging Face dataset cards, MLflow MLmodel manifests, DVC pipeline/lock files and Helm Chart.yaml.
-- Not deployed; production remains Wave 35 at **456 tools** until CI, merge, Worker health smoke and Cloudflare deployment succeed.
-- No D1 schema, Cloudflare secret, paid service, persistent process, model inference, remote cache access or Kubernetes cluster change.
-- Handoff: [HANDOFF-WAVE-THIRTY-SIX-2026-11-23.md](HANDOFF-WAVE-THIRTY-SIX-2026-11-23.md); source review: [TOOL-RESEARCH-2026-11-23-WAVE36.md](TOOL-RESEARCH-2026-11-23-WAVE36.md).
+- [PR #89](https://github.com/Nolane-x/Nolane-search/pull/89) merged into main as `f1ca98ba55a664ceff52a920f84ea65090e1e214`; production catalog increased from **456 to 462 tools**.
+- PR CI [45177911438](https://github.com/Nolane-x/Nolane-search/actions/runs/45177911438) passed TypeScript type-check, all **25 Vitest files / 255 tests**, deployment-script checks, **354 Python runner tests** and Cloudflare Worker build.
+- Main CI [45178181372](https://github.com/Nolane-x/Nolane-search/actions/runs/45178181372) passed the same checks on the merge commit.
+- Worker export/build and production health smoke [45178181358](https://github.com/Nolane-x/Nolane-search/actions/runs/45178181358) passed; health returned `ok: true`, database reachable and archive enabled.
+- Cloudflare deployment [45178181369](https://github.com/Nolane-x/Nolane-search/actions/runs/45178181369) passed source verification, build, bundle validation, Worker/runtime-secret upload, Telegram webhook verification and command-menu registration.
+- Deployed Worker Version ID: `010394f8-b046-4e0b-8703-f42b32387741`. D1 migration was correctly skipped because Wave 36 made no schema changes.
+- Added ollama-modelfile-audit, hf-tokenizer-audit, hf-dataset-card-audit, mlflow-model-audit, dvc-pipeline-audit and helm-chart-audit. All **462 IDs** are registered in the TypeScript catalog, Python runner allowlist and handler map; catalog/runner/docs parity tests passed.
+- No new Cloudflare secret, paid resource, D1 migration, persistent service, external inference, DVC remote access or Kubernetes operation was introduced. PyYAML is installed only for selected YAML jobs.
+- Owner-level acceptance remains separate: upload representative non-sensitive Modelfile, tokenizer.json, dataset card, MLmodel, dvc.yaml/dvc.lock and Chart.yaml fixtures through private Telegram; inspect reports and test `/tool_retry`. CI and webhook verification do not prove each individual upload journey.
+- Implementation handoff: [HANDOFF-WAVE-THIRTY-SIX-2026-11-23.md](HANDOFF-WAVE-THIRTY-SIX-2026-11-23.md); upstream review: [TOOL-RESEARCH-2026-11-23-WAVE36.md](TOOL-RESEARCH-2026-11-23-WAVE36.md).
 
-## Latest production release — Wave 35 (2026-11-23)
+## Previous production release — Wave 35 (2026-11-23)
 
 - [PR #88](https://github.com/Nolane-x/Nolane-search/pull/88) merged into main as `3e20f1fe423b68fc453af14ef9fc3026c274a9d0`; production catalog increased from **450 to 456 tools**.
 - PR CI [45175181809](https://github.com/Nolane-x/Nolane-search/actions/runs/45175181809) passed TypeScript type-check, all **25 Vitest files / 254 tests**, deployment-script checks, **341 Python runner tests** and Cloudflare Worker build.
