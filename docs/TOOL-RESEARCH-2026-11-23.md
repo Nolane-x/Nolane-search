@@ -2,7 +2,7 @@
 
 Repository: https://github.com/Nolane-x/Nolane-search
 Branch: feat/wave-thirty-two-semantic-and-pdf-tools
-Status: development proposal; not merged or deployed.
+Status: implemented, merged in PR #85 and deployed to production on 2026-11-23. Production catalog: 442 tools; Worker Version ID: ddfedcef-6feb-42da-97a3-e29c4fcfaa3e.
 
 Wave 32 deliberately adds capabilities that are not equivalent to the existing CSV/JSON/Office validators or the existing PDF text extractor.
 
@@ -41,7 +41,7 @@ Validates one five-field cron expression per non-comment line and previews the n
 - Optional runtime dependencies are installed only for the selected tool. CI installs the Python parser dependencies to exercise all unit tests.
 - No D1 migration, Cloudflare secret, persistent service or paid resource is introduced.
 - Regression coverage is in tools/test_wave32.py (13 focused tests): RDF formats and privacy, SHACL conforming/violating/forbidden packages, cron UTC previews and privacy, and PDF OCR command isolation/error handling.
-- Do not describe the four tools as production until PR CI, Worker export/health smoke and Cloudflare deployment all pass after merge.
+- Release verification: PR #85 merged as f9359406a25043220e51a90e33cc9a72c6fc7321. Main CI 45145755895, Worker export/health smoke 45145756137 and Cloudflare deployment 45145755910 all passed. Production catalog is now 442 tools.
 - Owner-level Telegram acceptance remains separate: exercise one searchable scanned PDF, one small RDF graph, one valid/invalid SHACL package and one cron file through the private bot; inspect returned files/reports and test /tool_retry.
 
 Research links:
