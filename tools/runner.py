@@ -49,6 +49,11 @@ from wave36 import (
     dvc_pipeline_manifest_audit, hf_dataset_card_audit, hf_tokenizer_audit,
     helm_chart_metadata_audit, mlflow_model_manifest_audit, ollama_modelfile_audit,
 )
+from wave39 import (
+    bill_split_calculator, loan_payment_calculator, date_calculator,
+    timezone_converter, recipe_scaler, grade_calculator, paint_calculator,
+    fuel_trip_calculator, discount_calculator, unit_price_comparator,
+)
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
@@ -196,6 +201,9 @@ RUNNERS = {
     "mlflow-model-audit",
     "dvc-pipeline-audit",
     "helm-chart-audit",
+    "bill-split-calculator", "loan-payment-calculator", "date-calculator", "timezone-converter",
+    "recipe-scaler", "grade-calculator", "paint-calculator", "fuel-trip-calculator",
+    "discount-calculator", "unit-price-comparator",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -12455,6 +12463,16 @@ TOOLS={
  "mlflow-model-audit":mlflow_model_manifest_audit,
  "dvc-pipeline-audit":dvc_pipeline_manifest_audit,
  "helm-chart-audit":helm_chart_metadata_audit,
+ "bill-split-calculator":bill_split_calculator,
+ "loan-payment-calculator":loan_payment_calculator,
+ "date-calculator":date_calculator,
+ "timezone-converter":timezone_converter,
+ "recipe-scaler":recipe_scaler,
+ "grade-calculator":grade_calculator,
+ "paint-calculator":paint_calculator,
+ "fuel-trip-calculator":fuel_trip_calculator,
+ "discount-calculator":discount_calculator,
+ "unit-price-comparator":unit_price_comparator,
 
 }
 
