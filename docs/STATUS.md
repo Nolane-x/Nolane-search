@@ -2,14 +2,20 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## Active development — Wave 33 (not production)
+## Latest production release — Wave 33 (2026-11-23)
 
-- Branch: `feat/wave-thirty-three-content-policy-provenance`.
-- Four new processors are being developed: `web-article-extract`, `rego-policy-check`, `k8s-schema-validate` and `cosign-verify-blob`.
-- Branch catalog has 446 IDs; production remains **442** until PR CI, Worker export/health smoke and Cloudflare deployment all pass after merge.
-- Research: [TOOL-RESEARCH-2026-11-23-WAVE33.md](TOOL-RESEARCH-2026-11-23-WAVE33.md); handoff: [HANDOFF-WAVE-THIRTY-THREE-2026-11-23.md](HANDOFF-WAVE-THIRTY-THREE-2026-11-23.md).
+- [PR #86](https://github.com/Nolane-x/Nolane-search/pull/86) merged into main as `18acca8f983ee8e1667939e282f25d59aa41e2f1`; production catalog increased from **442 to 446 tools**.
+- Main CI [45150195124](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195124) passed TypeScript type-check, all **25 Vitest files / 253 tests**, deployment checks, **317 Python runner tests** and Cloudflare Worker build.
+- Worker export/build and production health smoke [45150195535](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195535) passed. Health returned `ok: true`, database `reachable`, and archive enabled.
+- Cloudflare deployment [45150195611](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195611) passed source verification, build, bundle validation, Worker/runtime-secret upload, Telegram webhook verification and command-menu registration.
+- Deployed Worker Version ID: `016b7d5b-629d-400a-bf86-0c0f5b70913a`. D1 migration was correctly skipped because Wave 33 made no schema changes.
+- Added `web-article-extract`, `rego-policy-check`, `k8s-schema-validate` and `cosign-verify-blob`. All 446 IDs are present in the TypeScript catalog, Python runner allowlist and handler map; no duplicates or omissions were found.
+- Trafilatura, OPA, Kubeconform and Cosign are version-pinned; the three CLI binaries are SHA-256 checked and installed only for jobs that select those tools. No new Cloudflare secret, paid resource, D1 migration or persistent service was introduced.
+- Scope limitations remain explicit: HTML extraction processes already-downloaded files only; OPA compiles but does not evaluate policy; Kubeconform validates pinned OpenAPI schemas, not CRDs/admission/server-side behavior; Cosign uses user-supplied local trust material.
+- Owner-level acceptance remains separate: upload representative non-sensitive HTML, Rego, Kubernetes YAML and Cosign bundle fixtures through private Telegram, inspect outputs and test `/tool_retry`. CI, health smoke and webhook verification do not prove each individual upload journey.
+- Implementation handoff: [HANDOFF-WAVE-THIRTY-THREE-2026-11-23.md](HANDOFF-WAVE-THIRTY-THREE-2026-11-23.md); upstream review: [TOOL-RESEARCH-2026-11-23-WAVE33.md](TOOL-RESEARCH-2026-11-23-WAVE33.md).
 
-## Latest production release — Wave 32 (2026-11-23)
+## Previous production release — Wave 32 (2026-11-23)
 
 - [PR #85](https://github.com/Nolane-x/Nolane-search/pull/85) merged into main as `f9359406a25043220e51a90e33cc9a72c6fc7321`; production catalog increased from **438 to 442 tools**.
 - Main CI [45145755895](https://github.com/Nolane-x/Nolane-search/actions/runs/45145755895) passed TypeScript type-check, all **25 Vitest files / 253 tests**, deployment checks, **306 Python runner tests** and Cloudflare Worker build.
