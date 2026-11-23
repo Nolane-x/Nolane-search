@@ -152,7 +152,7 @@ class _GGUFReader:
 
     def read(self, amount: int) -> bytes:
         if amount < 0 or amount > self.file_size - self.offset:
-            raise RuntimeError("GGUF structure extends beyond the uploaded file.")
+            raise RuntimeError("GGUF structure extends beyond the uploaded file; metadata is truncated or malformed.")
         data = self.stream.read(amount)
         if len(data) != amount:
             raise RuntimeError("GGUF structure is truncated.")
