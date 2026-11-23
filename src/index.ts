@@ -313,7 +313,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     }
     const rawPrompt = form.get("prompt");
     const prompt = typeof rawPrompt === "string" ? rawPrompt.normalize("NFKC").trim() : "";
-    if (prompt.length < 6 || prompt.length > 6000 || /[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]/.test(prompt)) {
+    if (prompt.length < 6 || prompt.length > 6000 || hasControlCharacters(prompt)) {
       return jsonResponse({ error: "Hãy mô tả công việc cần làm với tệp (6–6000 ký tự)." }, 400);
     }
     const fileName = normalizeUploadedFileName(upload.name);
@@ -2224,9 +2224,20 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   await reply(env, chatId, "Không nhận diện được lệnh. Gõ /help để xem các chức năng.");
 }
 
+function hasControlCharacters(value: string): boolean {
+  for (const character of value) {
+    const code = character.codePointAt(0) || 0;
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
 function normalizeUploadedFileName(raw: string): string {
   const leaf = raw.normalize("NFKC").replace(/\\/g, "/").split("/").pop() || "";
-  const safe = leaf.replace(/[\\u0000-\\u001f\\u007f<>:"|?*]/g, "_").trim().slice(0, 180);
+  const safe = [...leaf].map(character => {
+    const code = character.codePointAt(0) || 0;
+    return code < 0x20 || code === 0x7f || '<>:"|?*'.includes(character) ? "_" : character;
+  }).join("").trim().slice(0, 180);
   return safe && safe !== "." && safe !== ".." ? safe : "upload.bin";
 }
 
