@@ -59,7 +59,7 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
           query: { type: "string", description: "Optional search phrase to filter tool names and descriptions." },
           category: { type: "string", enum: ["image", "document", "audio-video", "data", "utility", "developer", "repository"], description: "Optional category filter; image, document, audio-video, data and utility are the everyday-user categories." },
           offset: { type: "integer", minimum: 0, maximum: 10000, description: "Zero-based result offset for pagination; defaults to 0." },
-          limit: { type: "integer", minimum: 1, maximum: 30, description: "Page size; defaults to 20. Call again with nextOffset to continue." },
+          limit: { type: "integer", minimum: 1, maximum: 20, description: "Page size; defaults to 20. Call again with nextOffset to continue." },
         },
         additionalProperties: false,
       },
@@ -1568,7 +1568,7 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
     const offset = args.offset === undefined ? 0 : args.offset;
     const limit = args.limit === undefined ? 20 : args.limit;
     if (!Number.isSafeInteger(offset) || Number(offset) < 0 || Number(offset) > 10_000) throw new Error("Tool offset must be an integer from 0 to 10000.");
-    if (!Number.isSafeInteger(limit) || Number(limit) < 1 || Number(limit) > 30) throw new Error("Tool page size must be an integer from 1 to 30.");
+    if (!Number.isSafeInteger(limit) || Number(limit) < 1 || Number(limit) > 20) throw new Error("Tool page size must be an integer from 1 to 20.");
     const categoryOrder: Record<ToolCategory, number> = {
       image: 0, document: 1, "audio-video": 2, utility: 3, data: 4, developer: 5, repository: 6,
     };
@@ -1584,8 +1584,8 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
       limit: Number(limit),
       nextOffset,
       tools: page.map(tool => ({
-        id: tool.id, name: tool.name, category: tool.category, description: tool.description.slice(0, 320),
-        accepts: tool.accepts.slice(0, 12), output: tool.output,
+        id: tool.id, name: tool.name, category: tool.category, description: tool.description.slice(0, 180),
+        accepts: tool.accepts.slice(0, 6), output: tool.output.slice(0, 100),
       })),
     });
   }
