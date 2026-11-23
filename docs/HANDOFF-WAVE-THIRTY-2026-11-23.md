@@ -6,7 +6,7 @@
 - Production baseline: **434 tools**, latest deployed Worker Version ID `68ebc068-23aa-4f08-8ff4-d0985926383a`.
 - Candidate branch: `feat/wave-thirty-format-and-science-auditors`
 - Candidate processors: 3; candidate catalog **437** (434 production + 3 unmerged).
-- PR: [#83 — Wave 30: add OME-NGFF, Parquet metadata and COG auditors](https://github.com/Nolane-x/Nolane-search/pull/83). Current head: `6a080b2c979320ed283c578b7188142c0bac0fb1`.
+- PR: [#83 — Wave 30: add OME-NGFF, Parquet metadata and COG auditors](https://github.com/Nolane-x/Nolane-search/pull/83). Current head: `f0475a2d3436351f5dee11da836c033a649415fc`.
 - No D1 schema change, provider credential, new secret or paid Cloudflare resource is expected.
 
 ## Wave 30 processors
@@ -31,7 +31,7 @@
 
 ## Test and release gates
 
-1. PR #83 is open. Its current-head CI [45118748674](https://github.com/Nolane-x/Nolane-search/actions/runs/45118748674) passed type-check, 25 Vitest files / 252 tests, deployment-script checks, 283 Python runner tests and Worker build.
+1. PR #83 is open. Latest current-head CI [45119158868](https://github.com/Nolane-x/Nolane-search/actions/runs/45119158868) passed type-check, 25 Vitest files / 252 tests, deployment-script checks, 283 Python runner tests and Worker build.
 2. Re-check the latest PR head and all checks immediately before merge; fix any new failures before merge.
 3. Verify runner/catalog parity and all three inference rules.
 4. Merge only when latest-head CI passes.
