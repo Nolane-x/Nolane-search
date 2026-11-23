@@ -1,9 +1,12 @@
 # Wave 37 — unified AI access to Nolane tools
 
 Date: 2026-11-23  
-Status: implementation candidate in [PR #90](https://github.com/Nolane-x/Nolane-search/pull/90); not yet a production release.  
-Base: `main` at `9b79de7f79bbb1c36f43fa380db03f3c51f0d6cc`.  
-Branch: `feat/ai-unified-tool-access-wave37-20261123`.
+Status: merged and deployed production release via [PR #90](https://github.com/Nolane-x/Nolane-search/pull/90).  
+Main merge commit: `fb74281e75e72f16e33f2bcefe37d1b5938eabed`.  
+Worker Version ID: `e2d45f4e-056d-42a8-afe8-b7447b7cd13a`.  
+CI: [45183200600](https://github.com/Nolane-x/Nolane-search/actions/runs/45183200600).  
+Export/health smoke: [45183200645](https://github.com/Nolane-x/Nolane-search/actions/runs/45183200645).  
+Cloudflare deploy: [45183200619](https://github.com/Nolane-x/Nolane-search/actions/runs/45183200619).
 
 ## Goal
 
@@ -22,16 +25,16 @@ The production catalog already contains 462 registered processors, but direct AI
 
 “Full access” means the AI can discover and select registered Nolane processors and call the explicitly exposed agent functions. It does not mean arbitrary shell or SQL execution, root privileges, direct access to the user's computer, private-network URL fetching, or execution of uploaded code. File processing begins only after an authorized user sends a file. The file and its embedded text remain untrusted data.
 
-## Validation plan
+## Verification evidence
 
-PR CI must pass:
-- TypeScript type-check
-- Vitest, including complete 462-ID pagination coverage, default consumer-first ordering, developer/repository reachability, context gating and a mocked real agent function-call round trip
-- Python runner tests and catalog/runner/docs parity
-- Cloudflare Worker build
+Production main CI and deploy completed successfully:
+- TypeScript type-check passed.
+- Vitest: 25 files / 257 tests passed, including complete 462-ID pagination coverage, default consumer-first ordering, developer/repository reachability, context gating and a mocked real agent function-call round trip.
+- Python runner: 354 tests passed, including catalog/runner/docs parity.
+- Cloudflare Worker build passed.
 
-After merge, deployment workflow and production health must be checked separately. Owner-level acceptance remains necessary: test `/ai` asking for a PDF/image/audio/video operation, verify the agent arms the upload flow, send representative non-sensitive files in the same private Telegram chat, inspect returned artifacts and test job status/retry. CI does not prove real Bot API uploads or provider/model function-calling support.
+Deployment succeeded, live health returned `ok: true`, database reachable and archive enabled; Telegram webhook and command menu registration passed. Owner-level acceptance remains necessary: test `/ai` asking for a PDF/image/audio/video operation, verify the agent arms the upload flow, send representative non-sensitive files in the same private Telegram chat, inspect returned artifacts and test job status/retry. CI does not prove real Bot API uploads or provider/model function-calling support.
 
 ## Current release baseline
 
-The latest verified production catalog remains **462 tools (Wave 36)**. Wave 37 changes AI access/integration only; it does not increase the processor count. Do not describe Wave 37 as deployed until PR merge, Worker deployment and health smoke all pass.
+Wave 37 is deployed to production. The catalog remains **462 tools** (no tools added in this integration wave). The latest deployed Worker Version ID is recorded above. Do not claim that actual private Telegram file upload/retry journeys have been owner-verified until representative real files are tested.
