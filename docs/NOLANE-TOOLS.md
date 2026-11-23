@@ -30,6 +30,23 @@ Wave 30 safety and bounds: all inputs are capped at 20 MiB. OME-NGFF ZIP inspect
 
 
 
+
+
+### Wave 36 — Local AI, tokenizer engineering, MLOps and Kubernetes packaging — candidate, not production
+
+Wave 36 adds six candidate processors, taking the branch catalog from 456 to **462 IDs**. Production remains **456 tools** until the branch passes full CI, merges into main and the Worker deployment/health smoke succeeds.
+
+| ID / command | Processor | Capability |
+|---|---|---|
+| /tool ollama-modelfile-audit | Ollama Modelfile auditor | Checks FROM, PARAMETER, TEMPLATE, SYSTEM, MESSAGE, REQUIRES and CAPABILITY directives. Does not resolve model paths, build or run inference. |
+| /tool hf-tokenizer-audit | Hugging Face tokenizer JSON auditor | Checks model vocabulary structures including Unigram arrays, vocabulary/added-token IDs, BPE merges and pipeline component objects. Does not print token strings or execute tokenization. |
+| /tool hf-dataset-card-audit | Hugging Face Dataset Card reviewer | Checks YAML metadata and documentation coverage for dataset structure, fields, splits, creation, sensitive information, bias and licensing. |
+| /tool mlflow-model-audit | MLflow MLmodel manifest auditor | Checks flavor declarations, python_function, signature and environment references. Never imports a flavor or deserializes a model artifact. |
+| /tool dvc-pipeline-audit | DVC pipeline/lock auditor | Checks schema, stages, commands, dependencies, params, outputs, metrics, plots and lock manifest structure. Does not read remotes or run pipeline stages. |
+| /tool helm-chart-audit | Helm Chart.yaml auditor | Checks apiVersion, chart name, SemVer, chart type, dependencies, aliases, maintainers and annotations. Does not render or install charts. |
+
+PyYAML 6.0.2 is installed only in the one-off runner for YAML-based Wave 36 jobs. Inputs are bounded (4 MiB, dataset cards 2 MiB); no database schema or Cloudflare secrets are changed. See [Wave 36 upstream research](TOOL-RESEARCH-2026-11-23-WAVE36.md) and [implementation handoff](HANDOFF-WAVE-THIRTY-SIX-2026-11-23.md).
+
 ### Wave 34 — Robotics telemetry, lakehouse metadata, ONNX models and OpenTelemetry traces — deployed 2026-11-23
 
 Wave 34 was merged through [PR #87](https://github.com/Nolane-x/Nolane-search/pull/87), increasing production from **446 to 450 tools**. Main CI [45167290956](https://github.com/Nolane-x/Nolane-search/actions/runs/45167290956), Worker export/health smoke [45167290969](https://github.com/Nolane-x/Nolane-search/actions/runs/45167290969) and Cloudflare deployment [45167291256](https://github.com/Nolane-x/Nolane-search/actions/runs/45167291256) passed. Worker Version ID: d68926f5-045a-46d4-a197-f1e030e1e747.
