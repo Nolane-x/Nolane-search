@@ -232,14 +232,19 @@ def cron_schedule_audit(path: Path, base: datetime | None = None) -> dict:
             invalid_count += 1
             samples.append(f"Line {line_number}: invalid five-field expression.")
             continue
+        try:
+            iterator = croniter(expression, reference)
+            occurrences = []
+            for _ in range(3):
+                next_run = iterator.get_next(datetime)
+                if next_run.tzinfo is None:
+                    next_run = next_run.replace(tzinfo=timezone.utc)
+                occurrences.append(next_run.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
+        except Exception:
+            invalid_count += 1
+            samples.append(f"Line {line_number}: valid syntax, but no safe next-run preview could be calculated.")
+            continue
         valid_count += 1
-        iterator = croniter(expression, reference)
-        occurrences = []
-        for _ in range(3):
-            next_run = iterator.get_next(datetime)
-            if next_run.tzinfo is None:
-                next_run = next_run.replace(tzinfo=timezone.utc)
-            occurrences.append(next_run.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
         samples.append(f"Line {line_number}: valid; next runs: " + " · ".join(occurrences))
 
     remaining = max(0, len(rows) - 100)
