@@ -2,14 +2,14 @@
 
 Repository: https://github.com/Nolane-x/Nolane-search
 Branch: feat/wave-thirty-three-content-policy-provenance
-Status: implementation branch; not merged and not deployed. Production remains 442 tools until the release workflows pass.
+Status: implemented, merged in PR #86 and deployed to production on 2026-11-23. Production catalog: 446 tools; Worker Version ID: 016b7d5b-629d-400a-bf86-0c0f5b70913a.
 
 Wave 33 targets capabilities that are materially different from current HTML text extraction, heuristic Kubernetes security audits and static repository pattern checks.
 
 | Upstream | Pinned release/source | License | Capability selected |
 |---|---|---|---|
 | [Trafilatura](https://github.com/adbar/trafilatura) | 2.3.1, released 2026-10-06 | Apache-2.0 | Main-content/article extraction from HTML that has already been downloaded |
-| [Open Policy Agent](https://github.com/open-policy-agent/opa) | 1.22.4, released 2026-11-12 | Apache-2.0 | Parse and strictly compile Rego v1 policy modules |
+| [Open Policy Agent](https://github.com/open-policy-agent/opa) | 1.22.4, released 2026-11-12 | Apache-2.0 | Parse and strictly compile Rego v1-compatible policy modules |
 | [Kubeconform](https://github.com/yannh/kubeconform) | 0.8.0, released 2026-06-04 | Apache-2.0 | Validate Kubernetes YAML against pinned OpenAPI-derived JSON schemas |
 | [Sigstore Cosign](https://github.com/sigstore/cosign) | 3.1.4, released 2026-10-20 | Apache-2.0 | Verify a signed artifact against a supplied Sigstore bundle, PEM public key and local trusted root |
 
@@ -56,7 +56,8 @@ Cosign 3.1.4 Linux AMD64 binary SHA-256: `424e2c97d0b45fd7a6b608a87f090f35633f4c
 2. CI must pass type-check, all Vitest tests, Python unittest discovery and Worker build.
 3. The runner execution workflow must download only requested pinned CLI binaries, verify SHA-256 and pass tool-specific fixtures.
 4. After merge, Worker export/health smoke and Cloudflare deployment must pass before changing the production count from 442 to 446.
-5. Owner-level Telegram E2E remains separate: upload a saved HTML page, valid/invalid Rego, Kubernetes YAML with one valid and one invalid resource, and a signed artifact ZIP. Confirm returned outputs and `/tool_retry`.
+5. Release verification: PR #86 merged as `18acca8f983ee8e1667939e282f25d59aa41e2f1`; Main CI `45150195124`, Worker export/health smoke `45150195535` and Cloudflare deployment `45150195611` all passed. Production catalog is now 446 tools.
+6. Owner-level Telegram E2E remains separate: upload a saved HTML page, valid/invalid Rego, Kubernetes YAML with one valid and one invalid resource, and a signed artifact ZIP. Confirm returned outputs and `/tool_retry`.
 
 ## Primary sources
 
