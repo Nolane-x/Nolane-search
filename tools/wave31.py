@@ -57,6 +57,7 @@ def parse_siegfried_json(content: str) -> dict:
     formats = set()
     versions = set()
     mimes = set()
+    basis_categories = set()
     for item in matches:
         if not isinstance(item, dict):
             continue
@@ -65,11 +66,21 @@ def parse_siegfried_json(content: str) -> dict:
         format_name = item.get("format", item.get("name", ""))
         version = item.get("version", "")
         mime = item.get("mime", item.get("mime_type", ""))
+        basis = item.get("basis", "")
         namespace = namespace.strip().lower() if isinstance(namespace, str) else ""
         identifier = identifier.strip() if isinstance(identifier, str) else ""
         format_name = _label(format_name, 140)
         version = _label(version, 80)
         mime = _label(mime, 120)
+        basis_text = basis.lower() if isinstance(basis, str) else ""
+        if "extension" in basis_text or "filename" in basis_text:
+            basis_categories.add("filename-extension hint")
+        elif "container" in basis_text:
+            basis_categories.add("container signature")
+        elif any(token in basis_text for token in ("byte", "text", "xml", "riff", "signature")):
+            basis_categories.add("content signature")
+        elif basis_text:
+            basis_categories.add("other signature basis")
         if identifier and re.fullmatch(r"(?:fmt|x-fmt|xpr)/[A-Za-z0-9._-]+", identifier, re.I):
             puids.add(identifier.lower())
         if format_name:
@@ -98,11 +109,13 @@ def parse_siegfried_json(content: str) -> dict:
             fields.append(mime)
         display.append(" · ".join(fields))
     if not selected:
-        verdict = "UNKNOWN — no matching signature"
+        verdict = "UNKNOWN — no matching content signature"
     elif len(selected) > 1:
         verdict = "AMBIGUOUS — multiple signature matches"
+    elif basis_categories == {"filename-extension hint"}:
+        verdict = "PROVISIONAL — identification relies on an extension hint only"
     else:
-        verdict = "IDENTIFIED — one signature match"
+        verdict = "IDENTIFIED — one content/signature match"
     return {
         "engine": engine,
         "signature_date": signature_date,
@@ -112,6 +125,7 @@ def parse_siegfried_json(content: str) -> dict:
         "formats": sorted(formats),
         "versions": sorted(versions),
         "mimes": sorted(mimes),
+        "basis_categories": sorted(basis_categories),
         "display": display,
         "truncated_matches": max(0, len(selected) - len(display)),
         "error_present": error_present,
@@ -129,9 +143,11 @@ def file_format_identify(path: Path) -> dict:
     if not signature or not Path(signature).is_file():
         raise RuntimeError("Pinned PRONOM signature database is unavailable; the runner install step did not complete.")
     try:
-        process = subprocess.run(
-            [binary, "-json", "-multi", "1", "-sig", signature, str(path)],
-            capture_output=True,
+        with path.open("rb") as source:
+            process = subprocess.run(
+                [binary, "-json", "-multi", "1", "-sig", signature, "-name", "nolane-upload", "-"],
+                stdin=source,
+                capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -162,6 +178,8 @@ def _report_from_result(path: Path, result: dict) -> dict:
     lines.extend(f"- {item}" for item in result["display"])
     if result["truncated_matches"]:
         lines.append(f"Additional distinct matches not shown: {result['truncated_matches']:,}")
+    if result["basis_categories"]:
+        lines.append("Match basis: " + ", ".join(result["basis_categories"]))
     if result["error_present"]:
         lines.append("Siegfried reported a scan warning/error; raw diagnostic text is withheld.")
     lines.extend([
