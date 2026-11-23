@@ -59,7 +59,7 @@ class Wave31Tests(unittest.TestCase):
     def test_unknown_file_is_reported_without_inventing_a_format(self):
         parsed = wave31.parse_siegfried_json(json.dumps(self.sample_payload(matches=[])))
         self.assertEqual(parsed["match_count"], 0)
-        self.assertEqual(parsed["verdict"], "UNKNOWN — no matching signature")
+        self.assertEqual(parsed["verdict"], "UNKNOWN — no matching content signature")
         self.assertEqual(parsed["puids"], [])
         report = wave31._report_from_result(Path("opaque.bin"), parsed)["summary"]
         self.assertIn("no matching signature", report)
