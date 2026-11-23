@@ -2,15 +2,20 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## Candidate development — Wave 35 (not production)
+## Latest production release — Wave 35 (2026-11-23)
 
-- Branch: feat/wave-thirty-five-ai-model-and-3mf-tools. Six new processors raise the candidate branch catalog from 450 to 456 IDs.
-- Added SafeTensors and GGUF header/index audits, Hugging Face model-card review, chat fine-tuning JSONL validation, Promptfoo config review and 3MF package/mesh validation.
-- The candidate is not deployed. Latest verified production remains Wave 34 at **450 tools** until PR checks, main merge, Worker health smoke and Cloudflare deployment all pass.
-- No D1 schema, Cloudflare secret, paid service or persistent runtime change. PyYAML is installed only in selected on-demand jobs that need it.
-- Handoff: [HANDOFF-WAVE-THIRTY-FIVE-2026-11-23.md](HANDOFF-WAVE-THIRTY-FIVE-2026-11-23.md); source review: [TOOL-RESEARCH-2026-11-23-WAVE35.md](TOOL-RESEARCH-2026-11-23-WAVE35.md).
+- [PR #88](https://github.com/Nolane-x/Nolane-search/pull/88) merged into main as `3e20f1fe423b68fc453af14ef9fc3026c274a9d0`; production catalog increased from **450 to 456 tools**.
+- PR CI [45175181809](https://github.com/Nolane-x/Nolane-search/actions/runs/45175181809) passed TypeScript type-check, all **25 Vitest files / 253 tests**, deployment-script checks, **341 Python runner tests** and Cloudflare Worker build.
+- Main CI [45175463155](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463155) passed the same gates on the merge commit.
+- Worker export/build and production health smoke [45175463060](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463060) passed; the health response confirmed `ok: true` and `database: reachable`.
+- Cloudflare deployment [45175463070](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463070) passed source verification, build, bundle validation, Worker/runtime-secret upload, Telegram webhook verification and command-menu registration.
+- Deployed Worker Version ID: `4e6aebb9-655d-4b33-9233-dd29540d1788`. D1 migration was correctly skipped because Wave 35 made no schema changes.
+- Added safetensors-audit, gguf-model-audit, hf-model-card-audit, chat-dataset-audit, promptfoo-config-audit and three-mf-package-audit. All **456 IDs** are registered in the TypeScript catalog, Python runner allowlist and handler map; catalog/runner/docs parity tests passed.
+- No new Cloudflare secret, paid resource, D1 migration or persistent service was introduced. PyYAML is pinned and installed only for the selected model-card and Promptfoo YAML jobs. All six processors run as bounded local-file jobs; their explicit limits and non-goals are documented in the handoff.
+- Owner-level acceptance remains separate: upload representative non-sensitive SafeTensors, GGUF, model-card, JSONL, Promptfoo and 3MF fixtures through private Telegram, inspect outputs and test `/tool_retry`. CI and webhook verification do not prove each individual upload journey.
+- Implementation handoff: [HANDOFF-WAVE-THIRTY-FIVE-2026-11-23.md](HANDOFF-WAVE-THIRTY-FIVE-2026-11-23.md); upstream review: [TOOL-RESEARCH-2026-11-23-WAVE35.md](TOOL-RESEARCH-2026-11-23-WAVE35.md).
 
-## Latest production release — Wave 34 (2026-11-23)
+## Previous production release — Wave 34 (2026-11-23)
 
 - [PR #87](https://github.com/Nolane-x/Nolane-search/pull/87) merged into main as 667ce654c440092e199a33b1a8a4538218b4bb2e; production catalog increased from **446 to 450 tools**.
 - Main CI [45167290956](https://github.com/Nolane-x/Nolane-search/actions/runs/45167290956) passed TypeScript type-check, all **25 Vitest files / 253 tests**, deployment-script checks, **329 Python runner tests** and Cloudflare Worker build.
