@@ -314,6 +314,8 @@ This backup repairs only the snapshot index. It cannot recreate deleted source m
 
 
 ### Wave 29 release evidence — 2026-11-23
+- PR #82 adds processUpdate-level tests for a valid private owner import and rejection of group/non-allowlisted senders; latest main CI has 251 Vitest tests and 270 runner tests.
+- Latest test-only main merge commit: `c621264baa2d832c621d5732bb991921353987c7`; deployment [45117251720](https://github.com/Nolane-x/Nolane-search/actions/runs/45117251720) passed and created Worker version `68ebc068-23aa-4f08-8ff4-d0985926383a`.
 
 - Main CI [45116557845](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557845) passed type-check, 25 Vitest files / 248 tests, 270 Python runner tests, deployment-script checks and Worker build.
 - Worker export and production health smoke [45116557888](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557888) passed; health `ok: true`, database `reachable`, archive enabled.
