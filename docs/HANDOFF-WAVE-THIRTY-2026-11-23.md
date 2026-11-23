@@ -1,13 +1,15 @@
 # Wave 30 handoff — file format, microscopy and geospatial metadata auditors (2026-11-23)
 
-## Current checkpoint
+## Final production checkpoint — deployed 2026-11-23
 
-- Repository: `Nolane-x/Nolane-search`
-- Production baseline: **434 tools**, latest deployed Worker Version ID `68ebc068-23aa-4f08-8ff4-d0985926383a`.
-- Candidate branch: `feat/wave-thirty-format-and-science-auditors`
-- Candidate processors: 3; candidate catalog **437** (434 production + 3 unmerged).
-- PR: [#83 — Wave 30: add OME-NGFF, Parquet metadata and COG auditors](https://github.com/Nolane-x/Nolane-search/pull/83). Current head: `f0475a2d3436351f5dee11da836c033a649415fc`.
-- No D1 schema change, provider credential, new secret or paid Cloudflare resource is expected.
+- PR [#83](https://github.com/Nolane-x/Nolane-search/pull/83) merged into `main` as commit `44dc33b71f7317d54e9fa9ae1ac6a48b84a06797`.
+- Production catalog: **437 tools** (434 before Wave 30 + 3 new processors).
+- Latest Worker Version ID: `8f9ca4bf-21ac-4fb7-9e11-fcaaaa3f3d2b`.
+- Main CI [45124586861](https://github.com/Nolane-x/Nolane-search/actions/runs/45124586861) passed type-check, 25 Vitest files / 252 tests, deployment-script checks, 283 Python runner tests and Worker build.
+- Worker export/health [45124586793](https://github.com/Nolane-x/Nolane-search/actions/runs/45124586793) passed; production health returned `ok: true`, D1 `reachable`, archive enabled.
+- Cloudflare deployment [45124586883](https://github.com/Nolane-x/Nolane-search/actions/runs/45124586883) passed; Telegram webhook (message + callback_query) and command menu registered successfully.
+- No D1 migration, new secret, provider or paid resource. `rio-cogeo==7.0.4` is installed only for COG jobs.
+- Candidate branch and PR are closed/merged. All 437 catalog IDs are unique; all Wave 30 tools have runner allowlist, handlers, pipeline transitions and upload inference.
 
 ## Wave 30 processors
 
@@ -29,16 +31,16 @@
 - Current branch registry parity was checked: 437 unique catalog IDs and 437 runner IDs; all three Wave 30 processors have pipeline transitions, handlers and upload inference.
 - Wave 30 source has not been deployed. Production stays at 434 until merge, Worker export/health smoke and Cloudflare deployment all pass.
 
-## Test and release gates
+## Remaining owner-level acceptance
 
-1. PR #83 is open. Latest current-head CI [45119158868](https://github.com/Nolane-x/Nolane-search/actions/runs/45119158868) passed type-check, 25 Vitest files / 252 tests, deployment-script checks, 283 Python runner tests and Worker build.
-2. Re-check the latest PR head and all checks immediately before merge; fix any new failures before merge.
-3. Verify runner/catalog parity and all three inference rules.
-4. Merge only when latest-head CI passes.
-5. Confirm main CI, Worker export/health smoke and Cloudflare deployment.
-6. Check Telegram command menu remains unchanged; no new Telegram command is required.
-7. Owner-level acceptance after deployment: upload a synthetic OME-Zarr fixture, a Parquet fixture containing private row values, and a non-sensitive GeoTIFF; confirm metadata reports contain no chunk/pixel/column/statistical values.
-8. Keep the production tool count at 434 until deployment is confirmed.
+Automated CI, Worker health and deployment passed. The remaining checks require using the private Telegram bot with synthetic/non-sensitive files:
+
+1. Upload an OME-Zarr ZIP with multiscale metadata; verify the summary reports axis/array/transform issues without channel labels, coordinates or chunk bytes.
+2. Upload a Parquet file containing synthetic private column names/row values; verify only aggregate footer/schema categories appear and no column names, stats or values leak.
+3. Upload a COG GeoTIFF and a regular generic TIFF; verify the explicit COG command validates local layout while generic TIFF continues through the existing image flow.
+4. Exercise `/tool_job` and `/tool_retry` for the new processors.
+
+These checks were not performed in the user's live Telegram session. Do not describe them as owner-verified until tested.
 
 ## Production checkpoint
 
