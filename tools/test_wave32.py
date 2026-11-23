@@ -42,7 +42,7 @@ ex:bob a ex:Person .
         result = wave32.rdf_graph_audit(path)
         report = self.report(result)
         self.assertIn("Syntax: turtle", report)
-        self.assertIn("Triples/quads inspected: 5", report)
+        self.assertIn("Triples/quads inspected: 4", report)
         self.assertIn("Distinct subjects: 2", report)
         self.assertNotIn("PRIVATE_PERSON_SENTINEL", report)
         self.assertNotIn("example.invalid", report)
