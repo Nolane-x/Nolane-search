@@ -17,7 +17,7 @@ Wave 33 targets capabilities that are materially different from current HTML tex
 
 ### web-article-extract
 
-Uses Trafilatura to extract the article body, title, author/date/site metadata and tables from an HTML/XHTML file. Input must already be downloaded: no URL fetch, crawler, sitemap traversal or external-resource loading is performed. Output is UTF-8 Markdown. HTML input is capped at 10 MiB and generated Markdown at 8 MiB. The tool complements, rather than replaces, the generic html-text converter: its job is to identify the main article and discard page boilerplate. Metadata is bounded; no source URL is included.
+Uses Trafilatura to extract the article body, title, author/date/site metadata and tables from an HTML/XHTML file. Input must already be downloaded: no URL fetch, crawler, sitemap traversal or external-resource loading is performed. Output is UTF-8 Markdown. HTML input is capped at 10 MiB and generated Markdown at 8 MiB; extracted main text must be at least 40 characters to reject navigation-only snippets. The tool complements, rather than replaces, the generic html-text converter: its job is to identify the main article and discard page boilerplate. Metadata is bounded; no source URL is included.
 
 ### rego-policy-check
 
