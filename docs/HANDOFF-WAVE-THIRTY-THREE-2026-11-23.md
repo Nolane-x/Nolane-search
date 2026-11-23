@@ -13,7 +13,7 @@ Wave 32 remains the latest production release: **442 tools**. Wave 33 adds four 
 
 | ID | Description |
 |---|---|
-| `web-article-extract` | Extract main article body/metadata from a saved HTML file to Markdown; never fetch URLs. |
+| `web-article-extract` | Extract main article body/metadata from a saved HTML file to Markdown; require at least 40 characters of main text and never fetch URLs. |
 | `rego-policy-check` | OPA strict parsing/compilation using the Rego v0/v1-compatible language set; never evaluates policies. |
 | `k8s-schema-validate` | Kubeconform strict schema checks against Kubernetes 1.34.0 schemas pinned to a repository commit; no cluster access. |
 | `cosign-verify-blob` | Verify artifact signature using Sigstore bundle, local PEM public key and user-supplied TrustedRoot. |
