@@ -88,6 +88,14 @@ jobs:
       - name: Install pinned PRONOM format identification engine
         if: contains(steps.job.outputs.tool_ids, 'file-format-identify')
         run: bash scripts/install-siegfried.sh
+      - name: Install Trafilatura for offline article extraction
+        if: contains(steps.job.outputs.tool_ids, 'web-article-extract')
+        run: python -m pip install --disable-pip-version-check 'trafilatura==2.3.1'
+      - name: Install pinned Wave 33 policy, schema and signature CLIs
+        if: contains(steps.job.outputs.tool_ids, 'rego-policy-check') || contains(steps.job.outputs.tool_ids, 'k8s-schema-validate') || contains(steps.job.outputs.tool_ids, 'cosign-verify-blob')
+        env:
+          NOLANE_WAVE33_TOOL_IDS: ${{ steps.job.outputs.tool_ids }}
+        run: bash scripts/install-wave33-binaries.sh
       - name: Install OCRmyPDF runtime for searchable PDFs
         if: contains(steps.job.outputs.tool_ids, 'pdf-ocr-searchable')
         run: |
