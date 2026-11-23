@@ -537,8 +537,8 @@ def helm_chart_metadata_audit(path: Path) -> dict:
         if not isinstance(dep_name, str) or not dep_name:
             invalid_dependencies += 1
             continue
-        constraint_chars = re.fullmatch(r"[0-9A-Za-z.+*xXv<>=~^|,\\-\\s]+", dep_version) if isinstance(dep_version, str) else None
-        has_version_triplet = bool(re.search(r"v?\\d+\\.\\d+\\.\\d+", dep_version)) if isinstance(dep_version, str) else False
+        constraint_chars = isinstance(dep_version, str) and bool(dep_version.strip()) and all(ch.isalnum() or ch in ".+*xXv<>=~^|,- \t" for ch in dep_version)
+        has_version_triplet = bool(re.search(r"\d+\.\d+\.\d+", dep_version)) if isinstance(dep_version, str) else False
         if not isinstance(dep_version, str) or not dep_version.strip() or not constraint_chars or (dep_version.strip() not in ("*", "x", "X") and not has_version_triplet):
             invalid_dependencies += 1
         if repository is not None and not isinstance(repository, str):
