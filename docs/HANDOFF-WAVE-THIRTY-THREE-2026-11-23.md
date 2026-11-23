@@ -3,11 +3,11 @@
 Date: 2026-11-23
 Repository: https://github.com/Nolane-x/Nolane-search
 Branch: feat/wave-thirty-three-content-policy-provenance
-Status: implementation branch; not merged or deployed.
+Status: implemented, merged via PR #86 and deployed to production on 2026-11-23.
 
 ## Production boundary
 
-Wave 32 remains the latest production release: **442 tools**. Wave 33 adds four entries on this branch (446 catalog entries) but must not be described as production until PR CI, Worker export/health smoke and Cloudflare deployment pass.
+Wave 32 production baseline was 442 tools. Wave 33 merged as `18acca8f983ee8e1667939e282f25d59aa41e2f1` and increased the production catalog to **446 tools**. Main CI `45150195124`, Worker export/health smoke `45150195535` and Cloudflare deployment `45150195611` all passed. Worker Version ID: `016b7d5b-629d-400a-bf86-0c0f5b70913a`.
 
 ## Added processors
 
@@ -41,4 +41,4 @@ Detailed sources and limitations: `docs/TOOL-RESEARCH-2026-11-23-WAVE33.md`.
 
 ## Verification status
 
-Pending: TypeScript/Vitest/Python/Worker CI, post-merge Worker export and health smoke, Cloudflare deployment, then owner Telegram E2E. Until those gates pass, production count stays **442**.
+Verified: TypeScript/Vitest/Python/Worker CI, post-merge Worker export and health smoke, and Cloudflare deployment all passed. Production is **446 tools**. Owner Telegram E2E remains a separate manual acceptance check.
