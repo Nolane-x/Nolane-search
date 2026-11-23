@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { processUpdate } from "../src/index";
 import { downloadTelegramFile, sendArchiveDocument, sendTelegramDocument } from "../src/telegram";
 import type { Env } from "../src/types";
 
@@ -129,6 +130,187 @@ describe("Telegram archive document delivery", () => {
     vi.stubGlobal("fetch", fetchMock);
     await expect(downloadTelegramFile({ TELEGRAM_BOT_TOKEN: "test-token" } as Env, "file", 10))
       .rejects.toThrow("exceeds the download size limit");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe("Telegram archive import update integration", () => {
+  const payload = {
+    format: "nolane-telegram-archive-index",
+    version: 1,
+    exportedAt: "2026-11-23T05:00:00.000Z",
+    ownerUserId: "42",
+    archiveChatId: "-1001234567890",
+    count: 1,
+    snapshots: [{
+      watchId: 12,
+      archiveMessageId: 991,
+      telegramFileId: "archive-document-file-ref",
+      telegramFileUniqueId: "archive-document-unique-ref",
+      fileName: "snapshot.txt",
+      fileSize: 120,
+      url: "https://example.com/article",
+      normalizedUrl: "https://example.com/article",
+      title: "Example archive snapshot",
+      contentHash: "a".repeat(64),
+      captureKind: "initial",
+      capturedAt: "2026-11-22T10:00:00.000Z",
+      createdAt: 1795341600000,
+    }],
+  };
+
+  function uploadUpdate(chatId = 42, chatType = "private", userId = 42) {
+    return {
+      update_id: 9001,
+      message: {
+        message_id: 9002,
+        chat: { id: chatId, type: chatType },
+        from: { id: userId, is_bot: false, first_name: "Owner" },
+        caption: "/archive_import",
+        document: {
+          file_id: "private-backup-file-ref",
+          file_unique_id: "private-backup-unique-ref",
+          file_name: "nolane-archive-index.json",
+          mime_type: "application/json",
+          file_size: new TextEncoder().encode(JSON.stringify(payload)).byteLength,
+        },
+      },
+    };
+  }
+
+  it("imports a private owner backup through processUpdate without creating a Tool Center job", async () => {
+    const backupBytes = new TextEncoder().encode(JSON.stringify(payload));
+    const prepared: Array<{ sql: string; values: unknown[] }> = [];
+    const batches: Array<Array<{ sql: string; values: unknown[] }>> = [];
+    const prepare = vi.fn((sql: string) => ({
+      sql,
+      values: [] as unknown[],
+      bind(...values: unknown[]) {
+        this.values = values;
+        return this;
+      },
+      async run() {
+        prepared.push({ sql, values: this.values });
+        return { meta: { changes: 1 } };
+      },
+    }));
+    const batch = vi.fn(async (statements: Array<{ sql: string; values: unknown[] }>) => {
+      batches.push(statements);
+      return statements.map(() => ({ meta: { changes: 1 } }));
+    });
+    const telegramMessages: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/getFile")) {
+        expect(JSON.parse(String(init?.body || "{}"))).toMatchObject({ file_id: "private-backup-file-ref" });
+        return new Response(JSON.stringify({
+          ok: true,
+          result: { file_path: "documents/nolane-archive-index.json", file_size: backupBytes.byteLength },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url === "https://api.telegram.org/file/bottest-token/documents/nolane-archive-index.json") {
+        return new Response(backupBytes, { status: 200 });
+      }
+      if (url.endsWith("/sendMessage")) {
+        const body = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+        telegramMessages.push(body);
+        return new Response(JSON.stringify({ ok: true, result: { message_id: 9003 } }), {
+          status: 200, headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error("Unexpected request " + url);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = {
+      TELEGRAM_BOT_TOKEN: "test-token",
+      TELEGRAM_ARCHIVE_CHAT_ID: "-1001234567890",
+      ALLOWED_TELEGRAM_USER_IDS: "42",
+      DB: { prepare, batch },
+    } as unknown as Env;
+
+    await processUpdate(env, uploadUpdate() as never);
+
+    expect(prepare.mock.calls.map(call => call[0])).toContain(
+      "INSERT OR IGNORE INTO telegram_updates (update_id) VALUES (?)",
+    );
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(1);
+    expect(batches[0]?.[0]?.sql).toContain("INSERT OR IGNORE INTO archive_snapshots");
+    expect(batches[0]?.[0]?.values).toEqual([
+      12, "42", "42", "-1001234567890", 991, "archive-document-file-ref",
+      "archive-document-unique-ref", "snapshot.txt", 120,
+      "https://example.com/article", "https://example.com/article",
+      "Example archive snapshot", "a".repeat(64), "initial",
+      "2026-11-22T10:00:00.000Z", 1795341600000,
+    ]);
+    expect(telegramMessages).toHaveLength(1);
+    expect(String(telegramMessages[0]?.text)).toContain("Nhập mới: <b>1</b>");
+    expect(String(telegramMessages[0]?.text)).toContain("Bỏ qua trùng lặp: <b>0</b>");
+    expect(fetchMock.mock.calls.some(call => String(call[0]).includes("/createToolJob"))).toBe(false);
+    expect(batches.flat().some(statement => statement.sql.includes("tool_jobs"))).toBe(false);
+  });
+
+  it("does not download or import an archive backup sent outside the owner's private chat", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/sendMessage")) {
+        return new Response(JSON.stringify({ ok: true, result: { message_id: 9004 } }), {
+          status: 200, headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error("Unexpected request " + url);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const batch = vi.fn();
+    const env = {
+      TELEGRAM_BOT_TOKEN: "test-token",
+      TELEGRAM_ARCHIVE_CHAT_ID: "-1001234567890",
+      ALLOWED_TELEGRAM_USER_IDS: "42",
+      DB: {
+        prepare: () => ({
+          bind: () => ({ run: async () => ({ meta: { changes: 1 } }) }),
+        }),
+        batch,
+      },
+    } as unknown as Env;
+
+    await processUpdate(env, uploadUpdate(-100123, "supergroup") as never);
+
+    expect(fetchMock.mock.calls.some(call => String(call[0]).endsWith("/getFile"))).toBe(false);
+    expect(batch).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not download or import an archive backup from a non-allowlisted Telegram user", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/sendMessage")) {
+        return new Response(JSON.stringify({ ok: true, result: { message_id: 9005 } }), {
+          status: 200, headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error("Unexpected request " + url);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const batch = vi.fn();
+    const env = {
+      TELEGRAM_BOT_TOKEN: "test-token",
+      TELEGRAM_ARCHIVE_CHAT_ID: "-1001234567890",
+      ALLOWED_TELEGRAM_USER_IDS: "99",
+      DB: {
+        prepare: () => ({
+          bind: () => ({ run: async () => ({ meta: { changes: 1 } }) }),
+        }),
+        batch,
+      },
+    } as unknown as Env;
+
+    await processUpdate(env, uploadUpdate() as never);
+
+    expect(fetchMock.mock.calls.some(call => String(call[0]).endsWith("/getFile"))).toBe(false);
+    expect(batch).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
