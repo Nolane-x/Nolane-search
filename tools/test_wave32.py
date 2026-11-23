@@ -147,6 +147,15 @@ ex:Shape a sh:NodeShape ; sh:sparql [ sh:select "SELECT * WHERE { ?this ?p ?o }"
         report = self.report(wave32.cron_schedule_audit(path, datetime(2026, 1, 1, tzinfo=timezone.utc)))
         self.assertIn("Invalid schedules: 1", report)
 
+    def test_cron_handles_preview_failures_without_leaking_parser_diagnostics(self):
+        from croniter import croniter
+        path = self.write("schedules.cron", "0 9 * * 1\n")
+        with patch.object(croniter, "get_next", side_effect=ValueError("PRIVATE_CRON_DIAGNOSTIC")):
+            report = self.report(wave32.cron_schedule_audit(path, datetime(2026, 1, 1, tzinfo=timezone.utc)))
+        self.assertIn("Invalid schedules: 1", report)
+        self.assertIn("no safe next-run preview", report)
+        self.assertNotIn("PRIVATE_CRON_DIAGNOSTIC", report)
+
     def test_pdf_searchable_uses_neutral_paths_and_creates_pdf_output(self):
         source = self.write("private-customer-name.pdf", b"%PDF-1.7\nsynthetic")
         captured = {}
