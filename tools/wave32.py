@@ -51,7 +51,7 @@ def rdf_graph_audit(path: Path) -> dict:
         from rdflib import BNode, Dataset, Literal
 
         dataset = Dataset()
-        dataset.parse(path=str(path), format=rdf_format)
+        dataset.parse(location=str(path), format=rdf_format)
         default_graph_id = dataset.default_graph.identifier
         subjects = set()
         predicates = set()
