@@ -26,10 +26,13 @@ import {
   formatDeepReport, formatHomeMenu, formatModePrompt, formatSearchResults, SEARCH_PAGE_SIZE,
   formatToolCenterHome, formatToolCategoryPage, formatToolDetail, formatToolSearchResults,
   formatToolJobsPage, buildToolJobsKeyboard, formatToolJobDetail, buildToolJobDetailKeyboard,
-  sendSearchPage, sendTelegram, sendToArchive, telegramApi,
+  downloadTelegramFile, sendSearchPage, sendTelegram, sendTelegramDocument, sendToArchive, telegramApi,
 } from "./telegram";
 import { crawlAndIndexSite, validateWatchUrl, checkWatchTargets } from "./watch";
-import { ARCHIVE_PAGE_SIZE, formatArchiveSnapshotList, getArchiveSnapshot, listArchiveSnapshots, parseArchivePageArguments } from "./archive";
+import {
+  ARCHIVE_PAGE_SIZE, MAX_ARCHIVE_BACKUP_BYTES, createArchiveBackup, formatArchiveSnapshotList,
+  getArchiveSnapshot, importArchiveBackup, listArchiveSnapshots, parseArchivePageArguments,
+} from "./archive";
 import type {
   DeepSearchJob, Env, ExecutionContext, MessageBatch, SearchMode, SearchResult, SearchQueueJob, SiteCrawlJob,
   TelegramCallbackQuery, TelegramUpdate,
@@ -951,6 +954,38 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     return;
   }
 
+  if (command === "archive_export") {
+    if (chatId !== userId) { await reply(env, chatId, "Backup archive chỉ khả dụng trong chat riêng được cấp quyền."); return; }
+    if (!env.TELEGRAM_ARCHIVE_CHAT_ID) { await reply(env, chatId, "Chưa cấu hình TELEGRAM_ARCHIVE_CHAT_ID; không thể tạo bản backup."); return; }
+    try {
+      const backup = await createArchiveBackup(env, String(userId), env.TELEGRAM_ARCHIVE_CHAT_ID);
+      await sendTelegramDocument(
+        env,
+        chatId,
+        backup.fileName,
+        backup.content,
+        "Nolane Archive index backup · " + backup.count + " records · metadata only",
+      );
+      await reply(env, chatId, "Đã gửi bản backup chỉ mục Telegram Archive: <b>" + backup.count +
+        " snapshot</b>. Tệp gồm metadata, SHA-256 và tham chiếu tin nhắn; không chứa nội dung trang web. " +
+        "Giữ tệp này ở nơi riêng tư. Để nhập lại, gửi file JSON với caption <code>/archive_import</code>.");
+    } catch (error) {
+      console.error("Telegram archive index export failed:", error instanceof Error ? error.message : "unknown");
+      await reply(env, chatId, "Không thể tạo backup chỉ mục. " + htmlEscape(error instanceof Error ? error.message : "Lỗi không xác định."));
+    }
+    return;
+  }
+
+  if (command === "archive_import") {
+    if (chatId !== userId) { await reply(env, chatId, "Khôi phục chỉ mục archive chỉ khả dụng trong chat riêng được cấp quyền."); return; }
+    if (!env.TELEGRAM_ARCHIVE_CHAT_ID) { await reply(env, chatId, "Chưa cấu hình TELEGRAM_ARCHIVE_CHAT_ID; không thể nhập backup."); return; }
+    await reply(env, chatId,
+      "<b>Khôi phục chỉ mục Telegram Archive</b>\n" +
+      "Hãy gửi file JSON backup được tạo bằng <code>/archive_export</code>, đặt caption chính xác là <code>/archive_import</code>.\n\n" +
+      "Chỉ nhận backup của đúng Telegram owner và đúng archive channel hiện tại. Các message đã có sẽ được bỏ qua; tệp snapshot gốc không bị upload lại.");
+    return;
+  }
+
   if (command === "archive_restore") {
     if (chatId !== userId) { await reply(env, chatId, "Khôi phục snapshot chỉ khả dụng trong chat riêng được cấp quyền."); return; }
     const id = args.trim();
@@ -1637,6 +1672,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "<code>/unwatch ID</code> — bỏ theo dõi\n" +
       "<code>/archive [từ khóa]</code> — tìm snapshot trong Telegram archive\n" +
       "<code>/archive_restore ID</code> — gửi lại tệp snapshot đã lưu\n" +
+      "<code>/archive_export</code> — tải backup metadata của Telegram Archive\n" +
+      "<code>/archive_import</code> — hướng dẫn nhập lại backup chỉ mục\n" +
       "<code>/status</code> — trạng thái cấu hình bot\n" +
       "<code>/jobs</code> — lịch sử Deep Search gần đây\n" +
       "<code>/retry ID</code> — chạy lại job thất bại\n" +
@@ -2324,6 +2361,36 @@ async function handleToolUpload(env: Env, message: NonNullable<TelegramUpdate["m
   }
   const file = incomingToolFile(message);
   if (!file) return;
+  const archiveImportCaption = message.caption?.trim().match(/^\/archive_import(?:@\w+)?$/i);
+  if (archiveImportCaption) {
+    if (!message.document || !file.fileName.toLowerCase().endsWith(".json") ||
+        (file.mimeType !== "application/json" && file.mimeType !== "text/json" && file.mimeType !== "application/octet-stream")) {
+      await reply(env, chatId, "Archive import chỉ nhận file JSON backup đính kèm với caption /archive_import.");
+      return;
+    }
+    if (!env.TELEGRAM_ARCHIVE_CHAT_ID) {
+      await reply(env, chatId, "Chưa cấu hình TELEGRAM_ARCHIVE_CHAT_ID; không thể nhập backup.");
+      return;
+    }
+    if (file.fileSize > MAX_ARCHIVE_BACKUP_BYTES) {
+      await reply(env, chatId, "Backup lớn hơn giới hạn 5 MiB. Không có dữ liệu nào được nhập.");
+      return;
+    }
+    try {
+      const bytes = await downloadTelegramFile(env, file.fileId, MAX_ARCHIVE_BACKUP_BYTES);
+      const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      const result = await importArchiveBackup(env, content, String(userId), env.TELEGRAM_ARCHIVE_CHAT_ID);
+      await reply(env, chatId,
+        "<b>Đã khôi phục chỉ mục archive</b>\n" +
+        "Nhập mới: <b>" + result.imported + "</b> · Bỏ qua trùng lặp: <b>" + result.skipped +
+        "</b> · Tổng bản ghi: <b>" + result.total + "</b>.\n" +
+        "Tệp snapshot gốc vẫn nằm trong Telegram archive channel; hãy dùng /archive để kiểm tra.");
+    } catch (error) {
+      console.error("Telegram archive index import failed:", error instanceof Error ? error.message : "unknown");
+      await reply(env, chatId, "Không thể nhập backup. " + htmlEscape(error instanceof Error ? error.message : "Backup không hợp lệ."));
+    }
+    return;
+  }
   if (file.fileSize > 20 * 1024 * 1024) {
     await reply(env, chatId, "Tệp lớn hơn 20 MB. Telegram Bot API không cho bot tải tệp lớn hơn mức này bằng getFile.");
     return;

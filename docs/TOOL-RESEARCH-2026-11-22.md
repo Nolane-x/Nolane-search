@@ -303,3 +303,11 @@ Prioritize high reuse and meaningful new formats. Each candidate must have a mai
 - Worker Version ID: `34fad733-fef3-4b93-bc58-e480bb3c082f`; no D1 schema migration was required.
 - Production catalog: 434 unique TypeScript tool IDs, matched against the Python runner allowlist and documentation. Wave 28 contributes eight IDs.
 
+
+## Wave 29 — Telegram archive index recovery
+
+The highest-priority follow-up after Wave 28 is reliability rather than adding another parser. The current architecture intentionally stores snapshot documents in a private Telegram channel and a compact searchable index in D1; however, Telegram Bot API cannot enumerate old channel history to rebuild a lost D1 index automatically. Wave 29 therefore adds an owner-controlled backup/restore path for the index while keeping snapshot content out of D1.
+
+Implementation is on branch feat/wave-twenty-nine-archive-index-backup. The proposed /archive_export produces a versioned JSON index backup in the owner's private chat; /archive_import accepts that backup as a document captioned with the command. The format is bound to the Telegram owner and configured archive channel, caps exports/imports at 2,000 records / 5 MiB, validates every record, and uses idempotent inserts keyed by the existing unique archive channel/message pair. Telegram file downloads are streaming and byte-bounded.
+
+This backup repairs only the snapshot index. It cannot recreate deleted source messages, watch definitions, provider credentials or other D1 tables. A channel change requires an explicit migration rather than silently rewriting message references. The JSON is private metadata containing source URLs/titles and Telegram file/message references and must be protected accordingly.

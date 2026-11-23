@@ -52,6 +52,8 @@ const commands = [
   { command: "archive", description: "Tìm snapshot đã lưu trong Telegram archive" },
   { command: "archive_page", description: "Xem trang tiếp theo trong Telegram archive" },
   { command: "archive_restore", description: "Gửi lại tệp snapshot từ archive" },
+  { command: "archive_export", description: "Tải backup metadata của Telegram Archive" },
+  { command: "archive_import", description: "Khôi phục chỉ mục từ file backup JSON" },
   { command: "jobs", description: "Xem lịch sử Deep Search" },
   { command: "status", description: "Trạng thái cấu hình bot" },
   { command: "retry", description: "Chạy lại Deep Search thất bại" },

@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createArchiveBackup,
   formatArchiveSnapshotList,
   getArchiveSnapshot,
+  importArchiveBackup,
+  parseArchiveBackup,
   listArchiveSnapshots,
   parseArchivePageArguments,
   saveArchiveSnapshot,
@@ -181,5 +184,118 @@ describe("Telegram archive index", () => {
     expect(output).toContain("2.0 KB");
     expect(output).toContain("SHA-256");
     expect(output).toContain("aaaaaaaaaaaaaaaa…");
+  });
+});
+
+
+const backupEntry = {
+  watchId: 4,
+  archiveMessageId: 91,
+  telegramFileId: "telegram-file-reference",
+  telegramFileUniqueId: "unique-file-reference",
+  fileName: "nolane-4-snapshot.txt",
+  fileSize: 2048,
+  url: "https://example.com/docs",
+  normalizedUrl: "https://example.com/docs",
+  title: "Nolane <Research> & Search",
+  contentHash: "a".repeat(64),
+  captureKind: "change" as const,
+  capturedAt: "2026-11-21T08:00:00.000Z",
+  createdAt: 1795267200000,
+};
+
+function backupPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    format: "nolane-telegram-archive-index",
+    version: 1,
+    exportedAt: "2026-11-23T05:00:00.000Z",
+    ownerUserId: "42",
+    archiveChatId: "-1001234567890",
+    count: 1,
+    snapshots: [backupEntry],
+    ...overrides,
+  };
+}
+
+describe("Telegram archive index backup and recovery", () => {
+  it("exports only the owner's archive-channel metadata in a versioned JSON backup", async () => {
+    const prepare = vi.fn((sql: string) => ({
+      bind: vi.fn().mockReturnThis(),
+      first: vi.fn().mockResolvedValue(sql.includes("COUNT(*)") ? { total: 1 } : null),
+      all: vi.fn().mockResolvedValue({ results: [{
+        watch_id: row.watch_id,
+        archive_message_id: row.archive_message_id,
+        telegram_file_id: row.telegram_file_id,
+        telegram_file_unique_id: row.telegram_file_unique_id,
+        file_name: row.file_name,
+        file_size: row.file_size,
+        url: row.url,
+        normalized_url: row.normalized_url,
+        title: row.title,
+        content_hash: row.content_hash,
+        capture_kind: row.capture_kind,
+        captured_at: row.captured_at,
+        created_at: row.created_at,
+      }] }),
+    }));
+    const backup = await createArchiveBackup({ DB: { prepare } } as unknown as Env, "42", "-1001234567890");
+    const parsed = JSON.parse(backup.content) as ReturnType<typeof backupPayload>;
+    expect(backup.count).toBe(1);
+    expect(backup.fileName).toMatch(/^nolane-archive-index-/);
+    expect(parsed.format).toBe("nolane-telegram-archive-index");
+    expect(parsed.version).toBe(1);
+    expect(parsed.ownerUserId).toBe("42");
+    expect(parsed.archiveChatId).toBe("-1001234567890");
+    expect(parsed.snapshots[0]).toMatchObject(backupEntry);
+    expect(backup.content).not.toContain("snapshot page body");
+  });
+
+  it("refuses oversized exports rather than silently creating a partial backup", async () => {
+    const prepare = vi.fn(() => ({
+      bind: vi.fn().mockReturnThis(),
+      first: vi.fn().mockResolvedValue({ total: 2001 }),
+    }));
+    await expect(createArchiveBackup({ DB: { prepare } } as unknown as Env, "42", "-1001234567890"))
+      .rejects.toThrow("more than 2,000 records");
+  });
+
+  it("validates version, owner, archive channel, record count and HTTPS metadata before import", () => {
+    const valid = JSON.stringify(backupPayload());
+    expect(parseArchiveBackup(valid, "42", "-1001234567890").snapshots).toHaveLength(1);
+    expect(() => parseArchiveBackup(valid, "99", "-1001234567890")).toThrow("different Telegram owner");
+    expect(() => parseArchiveBackup(valid, "42", "-1009999999999")).toThrow("different Telegram archive channel");
+    expect(() => parseArchiveBackup(JSON.stringify(backupPayload({ version: 2 })), "42", "-1001234567890"))
+      .toThrow("Unsupported archive backup format");
+    expect(() => parseArchiveBackup(JSON.stringify(backupPayload({ count: 2 })), "42", "-1001234567890"))
+      .toThrow("does not match");
+    const unsafe = backupPayload({ snapshots: [{ ...backupEntry, url: "http://example.com/" }] });
+    expect(() => parseArchiveBackup(JSON.stringify(unsafe), "42", "-1001234567890")).toThrow("HTTPS URL");
+  });
+
+  it("rejects duplicate Telegram message references within one backup", () => {
+    const duplicate = backupPayload({ count: 2, snapshots: [backupEntry, { ...backupEntry, watchId: 5 }] });
+    expect(() => parseArchiveBackup(JSON.stringify(duplicate), "42", "-1001234567890")).toThrow("duplicate Telegram message IDs");
+  });
+
+  it("imports idempotently and binds ownership to the authenticated private-chat user", async () => {
+    const batches: Array<unknown[]> = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        sql,
+        values: [] as unknown[],
+        bind(...values: unknown[]) { this.values = values; return this; },
+      })),
+      batch: vi.fn(async (statements: Array<{ sql: string; values: unknown[] }>) => {
+        batches.push(statements);
+        return statements.map((_, index) => ({ meta: { changes: index === 0 ? 1 : 0 } }));
+      }),
+    };
+    const backup = backupPayload({ count: 2, snapshots: [backupEntry, { ...backupEntry, archiveMessageId: 92, title: "Second" }] });
+    const result = await importArchiveBackup({ DB: db } as unknown as Env, JSON.stringify(backup), "42", "-1001234567890");
+    expect(result).toEqual({ imported: 1, skipped: 1, total: 2 });
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(batches[0]).toHaveLength(2);
+    expect(batches[0]?.[0]).toMatchObject({ values: expect.arrayContaining(["42", "-1001234567890", 91]) });
+    expect(batches[0]?.[0]).not.toMatchObject({ values: expect.arrayContaining(["snapshot page body"]) });
   });
 });
