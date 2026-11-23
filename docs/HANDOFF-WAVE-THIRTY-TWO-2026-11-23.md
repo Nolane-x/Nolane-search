@@ -3,11 +3,11 @@
 Date: 2026-11-23
 Repository: https://github.com/Nolane-x/Nolane-search
 Branch: feat/wave-thirty-two-semantic-and-pdf-tools
-Status: implementation branch; not merged or deployed.
+Status: implemented, merged via PR #85 and deployed to production on 2026-11-23.
 
 ## Production baseline
 
-Production remains **438 tools** on Wave 31 (bfc107d1f299b9ae4b7c557fbe4fea0e3eee6599). This branch has four additional catalog entries (442 registered on the branch) and must not be described as production until main CI, Worker export/health smoke and Cloudflare deployment pass after merge.
+Wave 31 production baseline was 438 tools. Wave 32 merged as `f9359406a25043220e51a90e33cc9a72c6fc7321` and increased the production catalog to **442 tools**. Main CI `45145755895`, Worker export/health smoke `45145756137` and Cloudflare deployment `45145755910` all passed. Worker Version ID: `ddfedcef-6feb-42da-97a3-e29c4fcfaa3e`.
 
 ## Scope
 
@@ -38,7 +38,7 @@ All runtime packages are pinned. The CI dependency set includes RDFLib, pySHACL 
 ## Verification gates
 
 1. GitHub PR CI must pass type-checking, Vitest, Python unittest discovery, runner/catalog/handler parity and Worker build.
-2. Worker export/health smoke and Cloudflare deploy must pass after merge before updating the production count from 438.
+2. Verified after merge: Worker export/health smoke and Cloudflare deployment both passed; production count is 442.
 3. Owner-level Telegram E2E remains necessary: upload test fixtures for all four processors, inspect output files/reports and exercise /tool_retry.
 4. Telegram Archive backup/restore remains a separate owner-level recovery test. Wave 32 does not change its metadata-only backup semantics.
 
