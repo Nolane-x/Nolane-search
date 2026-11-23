@@ -29,7 +29,7 @@
 - OME ZIP bounds reuse Wave 28 safety: 20 MiB compressed input, 10,000 members, 180 MiB expanded; Zarr metadata 2 MiB/file, 10 MiB aggregate.
 - Parquet and COG input capped at 20 MiB. Parquet metadata record counts bounded. DuckDB memory is limited to 256 MiB, one thread, and only footer/schema fields are selected. COG dependency is optional and installed only when that tool is selected.
 - Current branch registry parity was checked: 437 unique catalog IDs and 437 runner IDs; all three Wave 30 processors have pipeline transitions, handlers and upload inference.
-- Wave 30 source has not been deployed. Production stays at 434 until merge, Worker export/health smoke and Cloudflare deployment all pass.
+- Wave 30 source is deployed. Production is at 437 tools; latest main commit includes post-release documentation updates while Worker Version `8f9ca4bf-21ac-4fb7-9e11-fcaaaa3f3d2b` runs the merged Wave 30 code.
 
 ## Remaining owner-level acceptance
 
