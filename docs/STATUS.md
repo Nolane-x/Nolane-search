@@ -2,14 +2,21 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## Active development — Wave 34 (not production)
+## Latest production release — Wave 34 (2026-11-23)
 
-- Branch: `feat/wave-thirty-four-robotics-ml-observability`.
-- Four new processors are staged: `mcap-recording-audit`, `iceberg-metadata-audit`, `onnx-model-audit` and `otel-trace-audit`.
-- Branch catalog has 450 IDs; production remains **446** until PR CI, Worker export/health smoke and Cloudflare deployment all pass after merge.
-- Research: [TOOL-RESEARCH-2026-11-23-WAVE34.md](TOOL-RESEARCH-2026-11-23-WAVE34.md); handoff: [HANDOFF-WAVE-THIRTY-FOUR-2026-11-23.md](HANDOFF-WAVE-THIRTY-FOUR-2026-11-23.md).
+- [PR #87](https://github.com/Nolane-x/Nolane-search/pull/87) merged into main as 667ce654c440092e199a33b1a8a4538218b4bb2e; production catalog increased from **446 to 450 tools**.
+- Main CI [45167290956](https://github.com/Nolane-x/Nolane-search/actions/runs/45167290956) passed TypeScript type-check, all **25 Vitest files / 253 tests**, deployment-script checks, **329 Python runner tests** and Cloudflare Worker build.
+- Worker export/build and production health smoke [45167290969](https://github.com/Nolane-x/Nolane-search/actions/runs/45167290969) passed. Health returned ok: true, database reachable, and archive enabled.
+- Cloudflare deployment [45167291256](https://github.com/Nolane-x/Nolane-search/actions/runs/45167291256) passed source verification, build, bundle validation, Worker/runtime-secret upload, Telegram webhook verification and command-menu registration.
+- Deployed Worker Version ID: d68926f5-045a-46d4-a197-f1e030e1e747. D1 migration was correctly skipped because Wave 34 made no schema changes.
+- Added mcap-recording-audit, iceberg-metadata-audit, onnx-model-audit and otel-trace-audit. All 450 IDs are present in the TypeScript catalog, Python runner allowlist and handler map; no duplicates or omissions were found.
+- MCAP, PyIceberg and ONNX dependencies are pinned and installed only for selected jobs; OTLP uses the standard library. No new Cloudflare secret, paid resource, D1 migration or persistent service was introduced.
+- Scope limits remain explicit: MCAP reads summary indexes only, not payloads or CRCs; Iceberg parses local metadata without opening manifests/data files; ONNX checker does not execute inference or load external weights; OTLP emits aggregate counts without IDs or attribute values.
+- Owner-level acceptance remains separate: upload representative non-sensitive MCAP, Iceberg metadata JSON, ONNX model and OTLP trace fixtures through private Telegram, inspect outputs and test /tool_retry. CI and webhook verification do not prove each individual upload journey.
+- Implementation handoff: [HANDOFF-WAVE-THIRTY-FOUR-2026-11-23.md](HANDOFF-WAVE-THIRTY-FOUR-2026-11-23.md); upstream review: [TOOL-RESEARCH-2026-11-23-WAVE34.md](TOOL-RESEARCH-2026-11-23-WAVE34.md).
 
-## Latest production release — Wave 33 (2026-11-23)
+## Previous production release — Wave 33 (2026-11-23)
+
 
 - [PR #86](https://github.com/Nolane-x/Nolane-search/pull/86) merged into main as `18acca8f983ee8e1667939e282f25d59aa41e2f1`; production catalog increased from **442 to 446 tools**.
 - Main CI [45150195124](https://github.com/Nolane-x/Nolane-search/actions/runs/45150195124) passed TypeScript type-check, all **25 Vitest files / 253 tests**, deployment checks, **317 Python runner tests** and Cloudflare Worker build.
