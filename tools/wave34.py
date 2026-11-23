@@ -331,8 +331,16 @@ def otel_trace_audit(path: Path) -> dict:
                     invalid_timestamps += 1
 
                 kind = span.get("kind", 0)
-                if isinstance(kind, str) and kind.isdigit():
-                    kind = int(kind)
+                kind_map = {
+                    "SPAN_KIND_UNSPECIFIED": 0,
+                    "SPAN_KIND_INTERNAL": 1,
+                    "SPAN_KIND_SERVER": 2,
+                    "SPAN_KIND_CLIENT": 3,
+                    "SPAN_KIND_PRODUCER": 4,
+                    "SPAN_KIND_CONSUMER": 5,
+                }
+                if isinstance(kind, str):
+                    kind = kind_map.get(kind, int(kind) if kind.isdigit() else -1)
                 if kind not in (0, 1, 2, 3, 4, 5):
                     invalid_spans += 1
                 else:
