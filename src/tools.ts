@@ -465,6 +465,9 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "jp2-box-audit", name: "Kiểm tra JPEG 2000 JP2 Box Structure", category: "image", description: "Rà JP2 signature, ftyp/jp2h/ihdr/jp2c box framing và lengths; không decode codestream hoặc xuất pixel data.", accepts: ["image/jp2", ".jp2"], output: "Báo cáo JP2 TXT", ready: true },
   { id: "netcdf-classic-audit", name: "Kiểm tra NetCDF Classic Header", category: "data", description: "Đọc metadata header CDF-1/CDF-2: dimensions, global attributes, variable descriptors và record count; không đọc array payload; NetCDF-4/CDF-5 chưa hỗ trợ.", accepts: ["application/x-netcdf", ".nc"], output: "Báo cáo NetCDF TXT", ready: true },
   { id: "nwb-structure-audit", name: "Kiểm tra NWB Neurodata HDF5 Structure", category: "data", description: "Kiểm tra root NWB attributes, standard groups, hierarchy/object counts và HDF5 links; chỉ metadata, không đọc timeseries, images hay scientific dataset values.", accepts: ["application/x-nwb", "application/x-hdf5", ".nwb"], output: "Báo cáo NWB TXT", ready: true },
+  { id: "ome-ngff-audit", name: "Kiểm tra OME-NGFF Bioimaging Zarr", category: "data", description: "Rà OME-Zarr 0.6 multiscales, axes, coordinate systems, resolution datasets và scale/translation references trong ZIP; không đọc ảnh/voxel chunks, không xuất tên kênh hay tọa độ.", accepts: ["application/zip", ".ome.zarr.zip"], output: "Báo cáo OME-NGFF TXT", ready: true },
+  { id: "parquet-metadata-audit", name: "Kiểm toán metadata Apache Parquet", category: "data", description: "Rà footer, row groups, schema types, compression/encodings và GeoParquet key; không xuất column names, min/max statistics, custom metadata values hay row data.", accepts: ["application/vnd.apache.parquet", ".parquet"], output: "Báo cáo Parquet Metadata TXT", ready: true },
+  { id: "cog-geotiff-audit", name: "Kiểm tra Cloud Optimized GeoTIFF", category: "data", description: "Kiểm tra COG tile/overview/IFD/data-offset layout bằng rio-cogeo trên file GeoTIFF cục bộ; không truy cập URL hoặc đọc raster pixel values.", accepts: ["image/tiff", "image/geotiff", ".cog.tif", ".cog.tiff", ".tif", ".tiff"], output: "Báo cáo COG TXT", ready: true },
 
 ];
 
@@ -884,6 +887,9 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "jp2-box-audit": ["text-clean", "text-stats"],
   "netcdf-classic-audit": ["text-clean", "text-stats"],
   "nwb-structure-audit": ["text-clean", "text-stats"],
+  "ome-ngff-audit": ["text-clean", "text-stats"],
+  "parquet-metadata-audit": ["text-clean", "text-stats"],
+  "cog-geotiff-audit": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
@@ -1114,6 +1120,10 @@ export function inferToolForUpload(file: { mimeType?: string; fileName?: string 
   if (name === "premis.xml" || name.endsWith(".premis.xml")) return "premis-event-audit";
   if (name === "stac-item.json" || name === "stac-collection.json" || name === "stac-catalog.json" || name.endsWith(".stac.json")) return "stac-catalog-audit";
   if (name === "tei.xml" || name.endsWith(".tei.xml") || name.endsWith(".tei.gz")) return "tei-document-audit";
+
+  if (name.endsWith(".ome.zarr.zip")) return "ome-ngff-audit";
+  if (name.endsWith(".parquet") || mime === "application/vnd.apache.parquet") return "parquet-metadata-audit";
+  if (/\.cog\.(?:tif|tiff)$/.test(name)) return "cog-geotiff-audit";
   if (name.endsWith(".ocfl.zip")) return "ocfl-object-audit";
   if (name.endsWith(".zarr.zip")) return "zarr-store-audit";
   if (name.endsWith(".nii") || name.endsWith(".nii.gz")) return "nifti-header-audit";

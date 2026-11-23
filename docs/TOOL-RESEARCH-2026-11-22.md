@@ -321,3 +321,28 @@ This backup repairs only the snapshot index. It cannot recreate deleted source m
 - Worker export and production health smoke [45116557888](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557888) passed; health `ok: true`, database `reachable`, archive enabled.
 - Cloudflare deployment [45116557917](https://github.com/Nolane-x/Nolane-search/actions/runs/45116557917) passed and registered Telegram commands; Worker Version ID `12307dcf-6344-4130-8d80-5b1ed75a4ec9`.
 - Production Tool Center remains at 434 processors. D1 schema unchanged. Owner-level `/archive_export` and `/archive_import` round-trip is a separate manual acceptance check.
+
+## Wave 30 — File signatures, bioimaging and data-layout metadata
+
+### Upstream research and implementation choices
+
+| Upstream / specification | Reviewed capability | License / provenance | Wave 30 decision |
+|---|---|---|---|
+| [OME-NGFF 0.6](https://ngff.openmicroscopy.org/specifications/0.6/) and [ome/ngff-spec](https://github.com/ome/ngff-spec) | Zarr v3 bioimaging groups; OME metadata version; multiscales, coordinate systems/axes, resolution dataset references and coordinate transformations | Community specification and maintained examples/schemas in ome/ngff-spec | Implement a bounded local ZIP metadata audit. Validate array ranks, paths, scale/identity/sequence transforms and descending resolution levels. Do not inspect microscopy chunk payloads or fetch cloud/object-store URLs. |
+| [DuckDB Parquet metadata](https://duckdb.org/docs/current/data/parquet/metadata) and [Apache Parquet format](https://github.com/apache/parquet-format) | Footer/file metadata, row-group and column-chunk layout, physical/logical schema, compression/encoding, GeoParquet key/value metadata | DuckDB is already used by the CSV↔Parquet processors; Apache Parquet format is the upstream file-format specification | Reuse the already-installed DuckDB dependency. Query only footer/schema fields; never select min/max statistics, column names, custom metadata values or row data. GeoParquet detection compares the metadata key name `geo` only. |
+| [rio-cogeo](https://github.com/cogeotiff/rio-cogeo) and [COG validator](https://github.com/rouault/cog_validator) | Cloud Optimized GeoTIFF structural layout: IFD order, internal overview placement, tile/block and data offsets | rio-cogeo 7.0.4; BSD-3-Clause. Rasterio/GDAL-based implementation | Use `cog_validate` only with the local runner path, never a URL. Install the optional dependency only for COG jobs. Do not expose raw validation messages, TIFF tags, CRS, bounds or pixel values. The separate Flask cog_validator service is not integrated. |
+| [Siegfried](https://github.com/richardlehane/siegfried) / PRONOM | Signature-based universal file format identification using PRONOM, MIME-info and Library of Congress format descriptions | Siegfried v1.11.9; Apache-2.0; release published 2026-09-27 | Researched as a strong Wave 31 candidate. Not added in this wave because binary/signature database pinning, install/update flow and JSON output normalization need a separate reproducibility review. |
+
+### Wave 30 scope and limits
+
+The branch `feat/wave-thirty-format-and-science-auditors` adds `ome-ngff-audit`, `parquet-metadata-audit` and `cog-geotiff-audit`. [PR #83](https://github.com/Nolane-x/Nolane-search/pull/83) is open. Candidate count is 437 (434 production + 3 candidates); production remains 434 until merge, Worker export/health smoke and Cloudflare deployment pass.
+
+- OME-NGFF reads only `zarr.json` metadata under bounded ZIP limits. It does not support arbitrary remote Zarr stores, fetch cloud assets, parse embedded OME-XML content or validate pixel chunks.
+- Parquet uses DuckDB metadata table functions and does not read table rows. Reports suppress column names, min/max/null statistics, key/value metadata values and file paths. The file-size cap is 20 MiB and metadata record counts are bounded.
+- COG uses rio-cogeo/Rasterio against a local upload path only. URL-based validation is not exposed. The optional runtime dependency is installed only when `cog-geotiff-audit` is selected.
+- All three tools are structural/metadata diagnostics, not a guarantee of full format/schema conformance or scientific/geospatial correctness.
+
+### Wave 30 candidate CI — 2026-11-23
+
+- PR [#83](https://github.com/Nolane-x/Nolane-search/pull/83) current-head CI [45118748674](https://github.com/Nolane-x/Nolane-search/actions/runs/45118748674) passed type-check, 25 Vitest files / 252 tests, deployment-script checks, 283 Python runner tests and Worker build.
+- Worker export/health smoke and production deployment remain pending until merge.
