@@ -96,6 +96,24 @@ REQUIRES newest
         self.assertIn("Malformed merge entries: 1", report)
         self.assertNotIn("secret", report)
 
+
+    def test_hf_tokenizer_audit_accepts_unigram_array_vocabulary(self):
+        tokenizer = {
+            "version": "1.0",
+            "added_tokens": [],
+            "model": {
+                "type": "Unigram",
+                "vocab": [["<unk>", 0.0], ["hello", -1.2], ["world", -2.0]],
+                "unk_id": 0,
+            },
+            "normalizer": None,
+            "pre_tokenizer": {"type": "Metaspace"},
+        }
+        report = self.report(wave36.hf_tokenizer_audit(self.write("tokenizer.json", json.dumps(tokenizer))))
+        self.assertIn("Vocabulary entries: 3 (Unigram array)", report)
+        self.assertIn("Invalid vocabulary IDs: 0", report)
+        self.assertIn("Duplicate vocabulary IDs: 0", report)
+
     def test_hf_dataset_card_audit_checks_metadata_and_safety_sections(self):
         card = """---
 license: mit
