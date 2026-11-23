@@ -201,18 +201,31 @@ def hf_tokenizer_audit(path: Path) -> dict:
         findings += 1
 
     vocab = model.get("vocab", {})
-    if not isinstance(vocab, dict):
-        findings += 1
-        vocab = {}
-    if len(vocab) > MAX_TOKENIZER_ENTRIES:
-        raise RuntimeError("Tokenizer vocabulary exceeds the 2,000,000-entry processing limit.")
     vocab_ids = []
     invalid_vocab_ids = 0
-    for token_id in vocab.values():
-        if isinstance(token_id, bool) or not isinstance(token_id, int) or token_id < 0:
-            invalid_vocab_ids += 1
-        else:
-            vocab_ids.append(token_id)
+    if isinstance(vocab, dict):
+        if len(vocab) > MAX_TOKENIZER_ENTRIES:
+            raise RuntimeError("Tokenizer vocabulary exceeds the 2,000,000-entry processing limit.")
+        for token_id in vocab.values():
+            if isinstance(token_id, bool) or not isinstance(token_id, int) or token_id < 0:
+                invalid_vocab_ids += 1
+            else:
+                vocab_ids.append(token_id)
+        vocab_count = len(vocab)
+        vocab_format = "mapping"
+    elif isinstance(vocab, list) and model_type == "Unigram":
+        if len(vocab) > MAX_TOKENIZER_ENTRIES:
+            raise RuntimeError("Tokenizer vocabulary exceeds the 2,000,000-entry processing limit.")
+        for entry in vocab:
+            if not isinstance(entry, list) or len(entry) != 2 or not isinstance(entry[0], str) or isinstance(entry[1], bool) or not isinstance(entry[1], (int, float)):
+                invalid_vocab_ids += 1
+        vocab_ids = list(range(len(vocab)))
+        vocab_count = len(vocab)
+        vocab_format = "Unigram array"
+    else:
+        findings += 1
+        vocab_count = 0
+        vocab_format = "invalid"
     duplicate_vocab_ids = len(vocab_ids) - len(set(vocab_ids))
 
     added = root.get("added_tokens", [])
@@ -263,7 +276,7 @@ def hf_tokenizer_audit(path: Path) -> dict:
     return _report(path, "hf-tokenizer", "Hugging Face tokenizer JSON structure audit", [
         f"Tokenizer format version field: {'present' if 'version' in root else 'missing'}",
         f"Model type: {'present' if isinstance(model_type, str) and model_type else 'missing'}",
-        f"Vocabulary entries: {len(vocab):,}",
+        f"Vocabulary entries: {vocab_count:,} ({vocab_format})",
         f"Added-token entries: {len(added):,}",
         f"Merge rules: {len(merges) if isinstance(merges, list) else 0:,}",
         f"Invalid vocabulary IDs: {invalid_vocab_ids:,}",
