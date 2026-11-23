@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "\${RUNNER_TEMP:?RUNNER_TEMP must be set by GitHub Actions}"
+: "${RUNNER_TEMP:?RUNNER_TEMP must be set by GitHub Actions}"
 
 VERSION="1.11.9"
-BASE="https://github.com/richardlehane/siegfried/releases/download/v\${VERSION}"
-WORK="$RUNNER_TEMP/nolane-siegfried-\${VERSION}"
+BASE="https://github.com/richardlehane/siegfried/releases/download/v${VERSION}"
+WORK="$RUNNER_TEMP/nolane-siegfried-${VERSION}"
 BIN_ZIP="$WORK/siegfried-linux64-static.zip"
 DATA_ZIP="$WORK/siegfried-data.zip"
 BIN_DIR="$WORK/bin"
@@ -34,11 +34,11 @@ test -n "$SF_BIN"
 test -n "$SF_SIG"
 chmod 0755 "$SF_BIN"
 
-"$SF_BIN" -sig "$SF_SIG" -version | grep -F "siegfried \${VERSION}" >/dev/null
+"$SF_BIN" -sig "$SF_SIG" -version | grep -F "siegfried ${VERSION}" >/dev/null
 
 {
   printf 'NOLANE_SIEGFRIED_BINARY=%s\n' "$SF_BIN"
   printf 'NOLANE_SIEGFRIED_SIG=%s\n' "$SF_SIG"
 } >> "$GITHUB_ENV"
 
-echo "Installed pinned Siegfried \${VERSION} and PRONOM signature database after SHA-256 verification."
+echo "Installed pinned Siegfried ${VERSION} and PRONOM signature database after SHA-256 verification."
