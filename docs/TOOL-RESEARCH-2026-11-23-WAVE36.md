@@ -1,7 +1,7 @@
 # Wave 36 upstream research — local AI, MLOps and Kubernetes manifests
 
 Date: 2026-11-23  
-Branch status: candidate implementation; production remains Wave 35 at 456 tools until CI, merge and Cloudflare deployment complete.
+Status: merged and deployed to production on 2026-11-23 as Wave 36; production catalog is now 462 tools.
 
 ## Why these ecosystems were selected
 
