@@ -67,12 +67,13 @@ export interface TelegramArchiveDocument {
 
 export async function sendTelegramDocument(
   env: Env, chatId: number | string, filename: string, content: string, caption: string,
+  contentType = "application/json;charset=utf-8",
 ): Promise<TelegramArchiveDocument> {
   if (!env.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is not configured.");
   const form = new FormData();
   form.set("chat_id", String(chatId));
   form.set("caption", caption.slice(0, 900));
-  form.set("document", new Blob([content], { type: "application/json;charset=utf-8" }), filename);
+  form.set("document", new Blob([content], { type: contentType }), filename);
   const response = await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/sendDocument", {
     method: "POST", body: form, signal: AbortSignal.timeout(20_000),
   });
@@ -104,7 +105,7 @@ export async function sendArchiveDocument(
   env: Env, filename: string, content: string, caption: string,
 ): Promise<TelegramArchiveDocument | null> {
   if (!env.TELEGRAM_ARCHIVE_CHAT_ID || !env.TELEGRAM_BOT_TOKEN) return null;
-  return sendTelegramDocument(env, env.TELEGRAM_ARCHIVE_CHAT_ID, filename, content, caption);
+  return sendTelegramDocument(env, env.TELEGRAM_ARCHIVE_CHAT_ID, filename, content, caption, "text/plain;charset=utf-8");
 }
 
 /** Download one Telegram-hosted file through the official getFile path with a hard byte cap. */
