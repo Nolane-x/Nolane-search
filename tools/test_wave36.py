@@ -174,7 +174,7 @@ signature:
 """
         report = self.report(wave36.mlflow_model_manifest_audit(self.write("MLmodel", manifest)))
         self.assertIn("Malformed flavor descriptors: 1", report)
-        self.assertIn("Structural findings: 2", report)
+        self.assertIn("Structural findings: 3", report)
 
     def test_dvc_pipeline_audit_checks_stage_graph_inputs_outputs_and_privacy(self):
         manifest = """schema: '2.0'
