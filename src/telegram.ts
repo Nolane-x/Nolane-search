@@ -65,6 +65,52 @@ export interface TelegramArchiveDocument {
   fileSize?: number;
 }
 
+export const TELEGRAM_PROCESSING_FILE_MAX_BYTES = 20 * 1024 * 1024;
+
+/** Upload a browser-supplied file to the owner's private Telegram chat and return its reusable file_id. */
+export async function uploadTelegramDocument(
+  env: Env,
+  chatId: number | string,
+  file: Blob,
+  filename: string,
+  caption: string,
+): Promise<TelegramArchiveDocument> {
+  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is not configured.");
+  if (!(file instanceof Blob) || file.size < 1 || file.size > TELEGRAM_PROCESSING_FILE_MAX_BYTES) {
+    throw new Error("The uploaded file must be between 1 byte and 20 MB.");
+  }
+  const safeFilename = filename.trim().slice(0, 180) || "upload.bin";
+  const form = new FormData();
+  form.set("chat_id", String(chatId));
+  form.set("caption", caption.slice(0, 900));
+  form.set("document", file, safeFilename);
+  const response = await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/sendDocument", {
+    method: "POST", body: form, signal: AbortSignal.timeout(45_000),
+  });
+  const data = await readJsonResponse<{
+    ok?: boolean;
+    description?: string;
+    result?: {
+      message_id?: number;
+      document?: { file_id?: string; file_unique_id?: string; file_name?: string; file_size?: number };
+    };
+  }>(response, 1_000_000);
+  if (!response.ok || !data.ok) throw new Error(data.description || "Telegram sendDocument failed (" + response.status + ").");
+  const messageId = data.result?.message_id;
+  const document = data.result?.document;
+  if (typeof messageId !== "number" || !Number.isSafeInteger(messageId) ||
+      !document || typeof document.file_id !== "string" || !document.file_id) {
+    throw new Error("Telegram accepted the document but returned no usable file reference.");
+  }
+  return {
+    messageId,
+    fileId: document.file_id,
+    ...(typeof document.file_unique_id === "string" ? { fileUniqueId: document.file_unique_id } : {}),
+    fileName: typeof document.file_name === "string" ? document.file_name : safeFilename,
+    ...(typeof document.file_size === "number" && Number.isSafeInteger(document.file_size) ? { fileSize: document.file_size } : {}),
+  };
+}
+
 export async function sendTelegramDocument(
   env: Env, chatId: number | string, filename: string, content: string, caption: string,
   contentType = "application/json;charset=utf-8",
