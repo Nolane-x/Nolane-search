@@ -276,7 +276,7 @@ Eight implementations live in `tools/wave28.py`; the registry, upload inference,
 
 Medical/scientific files may contain patient or otherwise sensitive data. Reports suppress selected values, but the original upload remains present during processing on an ephemeral GitHub-hosted runner; report redaction is not source-file de-identification. Do not use the DICOM screen as anonymization, clinical decision support or a guarantee of confidentiality. Test with synthetic/non-sensitive examples.
 
-Wave 28 currently has eight candidate IDs and 20 synthetic-fixture Python tests. [PR #80](https://github.com/Nolane-x/Nolane-search/pull/80) is under review. Candidate count: 434; production remains 426 until the latest PR CI, Worker export/health smoke and Cloudflare deployment all pass.
+Wave 28 shipped eight production IDs and 20 focused synthetic-fixture Python tests. [PR #80](https://github.com/Nolane-x/Nolane-search/pull/80) merged as `61f389df0f9d797af74b27130cfaeb9e5662c47a`; main CI [45040057467](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057467), Worker export/health smoke [45040057426](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057426), and Cloudflare deployment [45040057437](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057437) all passed. Production is **434 tools**. Deployed Worker Version ID: `34fad733-fef3-4b93-bc58-e480bb3c082f`.
 
 ## Next-wave research shortlist — not implemented yet
 
@@ -293,3 +293,13 @@ The next expansion should target new ecosystems rather than add near-duplicate v
 ### Selection rule for Wave 29
 
 Prioritize high reuse and meaningful new formats. Each candidate must have a maintained upstream, a clear licence/provenance, bounded parsing or optional dependencies, privacy-safe output, upload inference, runner dispatch, pipeline parity and synthetic regression fixtures. Avoid bundling heavy GDAL/Java runtimes into every runner job. A repository being popular or feature-rich is not by itself sufficient evidence for adoption.
+
+
+## Wave 28 production verification — 2026-11-23
+
+- Main CI: [45040057467](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057467) — 25 Vitest files / 238 TypeScript tests and 270 Python runner tests passed, along with type-check, deployment-script checks and Worker build.
+- Worker export and production health smoke: [45040057426](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057426) — passed. Health output: `ok: true`, database `reachable`, `archiveEnabled: true`; provider health/configuration booleans in the response are configuration indicators, not guarantees of future upstream availability.
+- Cloudflare deployment: [45040057437](https://github.com/Nolane-x/Nolane-search/actions/runs/45040057437) — passed Worker upload, runtime-secret upload, webhook verification and Telegram command-menu registration.
+- Worker Version ID: `34fad733-fef3-4b93-bc58-e480bb3c082f`; no D1 schema migration was required.
+- Production catalog: 434 unique TypeScript tool IDs, matched against the Python runner allowlist and documentation. Wave 28 contributes eight IDs.
+
