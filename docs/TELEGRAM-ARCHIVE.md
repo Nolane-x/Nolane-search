@@ -13,6 +13,14 @@ The page text and document bytes are not copied into D1. D1 is a searchable cata
 - /archive_page PAGE [query] opens another page and can carry the same optional search query. The command supports pages 1–1001 (the query layer caps offset at 5,000 rows).
 - Each non-final page shows previous/next commands. Query text is HTML-escaped before it is shown in Telegram.
 - /archive_restore ID copies the original channel document back into the private bot chat using Telegram copyMessage.
+- /archive_export creates a versioned JSON backup of the owner's snapshot index and sends it to the owner's private chat. It includes metadata, SHA-256 hashes and Telegram channel/message/file references only; snapshot page bodies are not copied into the backup.
+- /archive_import explains the recovery process. To import, send the JSON backup file as a Telegram document with caption `/archive_import`. Import is restricted to the same owner ID and configured archive channel. Existing channel/message references are skipped, so importing the same backup twice is idempotent.
+
+## Index backup and recovery
+
+The backup envelope records a format identifier, version, export timestamp, owner Telegram ID, archive channel ID, record count and snapshot metadata. It is capped at 2,000 records and 5 MiB. Imports validate owner/channel binding, HTTPS source URLs, record fields, SHA-256 shape and duplicate message IDs before writing. Telegram file downloads are bounded to 5 MiB and the Bot API file path is validated before fetching. D1 rows are restored in small batches with `INSERT OR IGNORE`; old internal D1 IDs are regenerated, while Telegram message references remain unchanged.
+
+Keep the JSON backup private: it contains source URLs, titles, file references and capture timestamps. The file does not contain snapshot text/documents and cannot recreate deleted Telegram channel messages. The archive channel still needs to exist and the bot must retain access. An export is a backup of the index, not a copy of the underlying snapshot files.
 
 The archive index is owner-scoped and commands require the private chat. A snapshot cannot be restored after its source message is deleted from Telegram or the bot loses access to the source channel. The D1 index does not independently reconstruct or download the file.
 
