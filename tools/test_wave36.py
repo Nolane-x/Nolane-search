@@ -202,7 +202,8 @@ stages:
     deps:
       - raw/private.csv
     params:
-      - train.seed
+      params.yaml:
+        - train.seed
     outs:
       - prepared/private.parquet
   train:
@@ -252,7 +253,7 @@ version: 1.2.3
 appVersion: '2026.11'
 dependencies:
   - name: redis
-    version: 19.0.1
+    version: ^19.0.0
     repository: https://charts.example.invalid
     alias: private-cache
 maintainers:
