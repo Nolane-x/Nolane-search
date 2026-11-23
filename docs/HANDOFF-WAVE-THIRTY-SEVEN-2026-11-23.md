@@ -11,7 +11,7 @@ The production catalog already contains 462 registered processors, but direct AI
 
 ## Changes
 
-- `list_nolane_tools` now returns `total`, `offset`, `limit`, `nextOffset` and a bounded `tools` page. The default is 20 entries; callers can request up to 30 and continue using `nextOffset`. Every ready catalog entry is reachable via pagination, query or category.
+- `list_nolane_tools` now returns `total`, `offset`, `limit`, `nextOffset` and a bounded `tools` page. The default is 20 entries; callers can request up to 20 and continue using `nextOffset`. Every ready catalog entry is reachable via pagination, query or category.
 - Discovery order prioritizes image, document, audio/video, utility and data tools. Developer and repository categories remain available, but the AI system instruction directs it to use them only for explicit technical work.
 - `prepare_file_processing` is exposed only when the calling agent has an authorized private-chat callback. It validates the goal and arms the existing five-minute pending-upload record. It does not download a file or execute a processor.
 - Both Telegram `/ai` and authenticated Web Workspace chat can arm the same private Telegram upload session. A browser-chat request still requires the user to upload the actual file through the paired private Telegram conversation.
