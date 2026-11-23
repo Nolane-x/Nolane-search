@@ -335,7 +335,7 @@ This backup repairs only the snapshot index. It cannot recreate deleted source m
 
 ### Wave 30 scope and limits
 
-The branch `feat/wave-thirty-format-and-science-auditors` adds `ome-ngff-audit`, `parquet-metadata-audit` and `cog-geotiff-audit`. [PR #83](https://github.com/Nolane-x/Nolane-search/pull/83) is open. Candidate count is 437 (434 production + 3 candidates); production remains 434 until merge, Worker export/health smoke and Cloudflare deployment pass.
+Wave 30 adds `ome-ngff-audit`, `parquet-metadata-audit` and `cog-geotiff-audit`. [PR #83](https://github.com/Nolane-x/Nolane-search/pull/83) merged as `44dc33b71f7317d54e9fa9ae1ac6a48b84a06797`; production is **437 tools** and Cloudflare Worker Version `8f9ca4bf-21ac-4fb7-9e11-fcaaaa3f3d2b` is deployed.
 
 - OME-NGFF reads only `zarr.json` metadata under bounded ZIP limits. It does not support arbitrary remote Zarr stores, fetch cloud assets, parse embedded OME-XML content or validate pixel chunks.
 - Parquet uses DuckDB metadata table functions and does not read table rows. Reports suppress column names, min/max/null statistics, key/value metadata values and file paths. The file-size cap is 20 MiB and metadata record counts are bounded.
