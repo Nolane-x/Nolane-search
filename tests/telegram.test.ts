@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { buildBackHomeKeyboard, buildHomeKeyboard, buildModePromptKeyboard, buildSearchKeyboard, buildToolCenterKeyboard, buildToolCategoryKeyboard, buildToolDetailKeyboard, buildToolSearchKeyboard, buildToolJobDetailKeyboard, buildToolJobsKeyboard, formatDeepReport, formatHomeMenu, formatModePrompt, formatSearchResults, formatToolCenterHome, formatToolCategoryPage, formatToolDetail, formatToolJobDetail, formatToolJobsPage, formatToolSearchResults, SEARCH_PAGE_SIZE } from "../src/telegram";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildBackHomeKeyboard, buildHomeKeyboard, buildModePromptKeyboard, buildSearchKeyboard, buildToolCenterKeyboard, buildToolCategoryKeyboard, buildToolDetailKeyboard, buildToolSearchKeyboard, buildToolJobDetailKeyboard, buildToolJobsKeyboard, formatDeepReport, formatHomeMenu, formatModePrompt, formatSearchResults, formatToolCenterHome, formatToolCategoryPage, formatToolDetail, formatToolJobDetail, formatToolJobsPage, formatToolSearchResults, SEARCH_PAGE_SIZE, TELEGRAM_PROCESSING_FILE_MAX_BYTES, uploadTelegramDocument } from "../src/telegram";
 import { TOOL_CATALOG, getTool } from "../src/tools";
-import type { SearchResult } from "../src/types";
+import type { Env, SearchResult } from "../src/types";
 
 const result: SearchResult = {
   title: "A <title> & quoted",
@@ -18,6 +18,46 @@ function countTag(text: string, tag: string, closing = false): number {
     : new RegExp("<" + tag + "(?:\\s[^>]*)?>", "g");
   return [...text.matchAll(pattern)].length;
 }
+
+describe("Telegram browser file handoff", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("uploads a browser file to the private chat and returns its Telegram file reference", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const form = init?.body as FormData;
+      expect(form.get("chat_id")).toBe("42");
+      expect(form.get("caption")).toBe("From Web Workspace");
+      const document = form.get("document");
+      expect(document).toBeInstanceOf(Blob);
+      expect((document as File).name).toBe("report.pdf");
+      return new Response(JSON.stringify({
+        ok: true,
+        result: {
+          message_id: 77,
+          document: { file_id: "telegram-file-123", file_unique_id: "telegram-unique-123", file_name: "report.pdf", file_size: 4 },
+        },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = { TELEGRAM_BOT_TOKEN: "test-token" } as Env;
+    const file = new Blob(["PDF!"], { type: "application/pdf" });
+    const stored = await uploadTelegramDocument(env, 42, file, "report.pdf", "From Web Workspace");
+    expect(stored).toEqual({
+      messageId: 77, fileId: "telegram-file-123", fileUniqueId: "telegram-unique-123",
+      fileName: "report.pdf", fileSize: 4,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects files beyond the runner's Telegram download limit before network access", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const env = { TELEGRAM_BOT_TOKEN: "test-token" } as Env;
+    const oversized = new Blob([new Uint8Array(TELEGRAM_PROCESSING_FILE_MAX_BYTES + 1)]);
+    await expect(uploadTelegramDocument(env, 42, oversized, "large.bin", "test")).rejects.toThrow("20 MB");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
 
 describe("Telegram interactive workspace UI", () => {
   it("builds a menu with all search/AI modes and a web workspace URL", () => {
