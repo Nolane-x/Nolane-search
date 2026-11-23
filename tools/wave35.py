@@ -513,6 +513,9 @@ def _read_3mf_xml(archive: zipfile.ZipFile, members: dict[str, zipfile.ZipInfo],
         raise RuntimeError("3MF XML part exceeds the 20 MiB per-part limit.")
     try:
         data = archive.read(info)
+        upper_data = data.upper()
+        if b"<!DOCTYPE" in upper_data or b"<!ENTITY" in upper_data:
+            raise RuntimeError("3MF XML DTD/entity declarations are not allowed.")
         return ET.fromstring(data)
     except (KeyError, OSError, ET.ParseError, RuntimeError):
         raise RuntimeError("3MF package contains an unreadable or malformed XML part.") from None
@@ -579,7 +582,7 @@ def three_mf_package_audit(path: Path) -> dict:
                 for node in content_types.iter()
                 if _local_name(node.tag) == "Override" and node.attrib.get("PartName", "").lstrip("/") == model_name
             ]
-            content_type_valid = not overrides or any(value == "application/vnd.ms-package.3dmanufacturing-3dmodel+xml" for value in overrides)
+            content_type_valid = len(overrides) == 1 and overrides[0] == "application/vnd.ms-package.3dmanufacturing-3dmodel+xml"
 
             objects = [node for node in model_root.iter() if _local_name(node.tag) == "object"]
             build_items = [node for node in model_root.iter() if _local_name(node.tag) == "item"]
