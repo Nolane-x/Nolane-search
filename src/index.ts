@@ -2263,7 +2263,7 @@ async function setPendingAiFileBatch(env: Env, userId: number, chatId: number, r
     throw new Error("AI chỉ có thể nhận tệp trong chat riêng Telegram của tài khoản được cấp quyền.");
   }
   const prompt = rawPrompt.normalize("NFKC").trim();
-  if (prompt.length < 6 || prompt.length > 6000 || /[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]/.test(prompt)) {
+  if (prompt.length < 6 || prompt.length > 6000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(prompt)) {
     throw new Error("Yêu cầu xử lý tệp phải dài từ 6 đến 6000 ký tự và không chứa ký tự điều khiển.");
   }
   const now = Date.now();
