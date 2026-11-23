@@ -5,7 +5,7 @@ Last verified: 2026-11-23. Production deployment evidence is separated from owne
 ## Latest production release — Wave 35 (2026-11-23)
 
 - [PR #88](https://github.com/Nolane-x/Nolane-search/pull/88) merged into main as `3e20f1fe423b68fc453af14ef9fc3026c274a9d0`; production catalog increased from **450 to 456 tools**.
-- PR CI [45175181809](https://github.com/Nolane-x/Nolane-search/actions/runs/45175181809) passed TypeScript type-check, all **25 Vitest files / 253 tests**, deployment-script checks, **341 Python runner tests** and Cloudflare Worker build.
+- PR CI [45175181809](https://github.com/Nolane-x/Nolane-search/actions/runs/45175181809) passed TypeScript type-check, all **25 Vitest files / 254 tests**, deployment-script checks, **341 Python runner tests** and Cloudflare Worker build.
 - Main CI [45175463155](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463155) passed the same gates on the merge commit.
 - Worker export/build and production health smoke [45175463060](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463060) passed; the health response confirmed `ok: true` and `database: reachable`.
 - Cloudflare deployment [45175463070](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463070) passed source verification, build, bundle validation, Worker/runtime-secret upload, Telegram webhook verification and command-menu registration.
@@ -18,7 +18,7 @@ Last verified: 2026-11-23. Production deployment evidence is separated from owne
 ## Previous production release — Wave 34 (2026-11-23)
 
 - [PR #87](https://github.com/Nolane-x/Nolane-search/pull/87) merged into main as 667ce654c440092e199a33b1a8a4538218b4bb2e; production catalog increased from **446 to 450 tools**.
-- Main CI [45167290956](https://github.com/Nolane-x/Nolane-search/actions/runs/45167290956) passed TypeScript type-check, all **25 Vitest files / 253 tests**, deployment-script checks, **329 Python runner tests** and Cloudflare Worker build.
+- Main CI [45175463155](https://github.com/Nolane-x/Nolane-search/actions/runs/45175463155) passed TypeScript type-check, all **25 Vitest files / 254 tests**, deployment-script checks, **341 Python runner tests** and Cloudflare Worker build.
 - Worker export/build and production health smoke [45167290969](https://github.com/Nolane-x/Nolane-search/actions/runs/45167290969) passed. Health returned ok: true, database reachable, and archive enabled.
 - Cloudflare deployment [45167291256](https://github.com/Nolane-x/Nolane-search/actions/runs/45167291256) passed source verification, build, bundle validation, Worker/runtime-secret upload, Telegram webhook verification and command-menu registration.
 - Deployed Worker Version ID: d68926f5-045a-46d4-a197-f1e030e1e747. D1 migration was correctly skipped because Wave 34 made no schema changes.
