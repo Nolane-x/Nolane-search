@@ -188,6 +188,54 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
   {
     type: "function",
     function: {
+      name: "get_marine_forecast",
+      description: "Get marine model conditions and a short forecast for a named coastal or sea location: wave height, direction, period, swell and sea temperature. Use for general beach and trip planning only, never for navigation or rescue decisions. Add country_code when the place is ambiguous.",
+      parameters: { type: "object", properties: {
+        location: { type: "string", minLength: 2, maxLength: 100, description: "Coastal town, beach or sea-area place name." },
+        country_code: { type: "string", pattern: "^[A-Za-z]{2}$", description: "Optional two-letter ISO country code." },
+        forecast_days: { type: "integer", minimum: 1, maximum: 7, description: "Forecast length, default 3 days." }
+      }, required: ["location"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_earthquake_activity",
+      description: "Look up recorded USGS earthquake events near a city for the last 1–30 days. Use for catalog information only; this is not an earthquake early-warning or safety-clearance service. Add country_code when needed.",
+      parameters: { type: "object", properties: {
+        location: { type: "string", minLength: 2, maxLength: 100, description: "City or town used as search center." },
+        country_code: { type: "string", pattern: "^[A-Za-z]{2}$", description: "Optional two-letter ISO country code." },
+        days_back: { type: "integer", minimum: 1, maximum: 30, description: "Lookback period, default 7 days." },
+        radius_km: { type: "number", minimum: 10, maximum: 1000, description: "Search radius, default 250 km." },
+        minimum_magnitude: { type: "number", minimum: 0, maximum: 9.9, description: "Minimum magnitude, default 2.5." }
+      }, required: ["location"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_books",
+      description: "Search Open Library's catalog for books by title, author or subject. Use for reading suggestions or bibliographic details. Results are catalog records and do not confirm local availability.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 140, description: "Title, author, ISBN or subject keywords." },
+        limit: { type: "integer", minimum: 1, maximum: 10, description: "Number of results, default 5." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "lookup_postal_code",
+      description: "Look up a postcode or ZIP code and its mapped places for a country. Coverage varies; results are GeoNames-derived reference data, not official delivery confirmation.",
+      parameters: { type: "object", properties: {
+        country_code: { type: "string", pattern: "^[A-Za-z]{2}$", description: "Required two-letter ISO country code, e.g. US, GB or DE." },
+        postal_code: { type: "string", minLength: 2, maxLength: 20, description: "Postal or ZIP code." }
+      }, required: ["country_code","postal_code"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "process_text_content",
       description: "Run bounded text/data processors on supplied content: environment-file auditing/redaction/template generation, INI inspection/conversion, Dockerfile/requirements/package manifest/gitignore static audits, environment-reference extraction, Terraform/Nginx/Apache/Caddy/systemd/shell static audits, everyday calculators and planners for bills, loans, dates, time zones, recipes, grades, paint, fuel, discounts, unit prices, home energy/materials, household budgets, travel packing, meal shopping lists, study schedules, chores, subscriptions, commuting, reading goals, grocery budgets, habit history, plant care, garden beds, home inventory, home maintenance, pet routines, event seating and spaced review, work hours, battery life, storage tanks, bank CSV spending summaries, recurring bill cash-flow forecasts, group expense settlement, moving-day tasks and box labels, product return deadlines, gift budgets, user-defined household emergency supply quantities, vehicle fuel logs and ownership costs, appliance repair/replacement and service history, repair-quote comparison, rental move-in/move-out inspections and rental-offer costs, translation, developer text and network extraction, Markdown/HTML extraction, JSON/CSV/SQL/YAML conversions and statistics. Never executes shell commands, SQL, package scripts, uploaded code or arbitrary commands.",
       parameters: {
@@ -1705,7 +1753,7 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
     const page = await fetchTinyFishPage(env, safe.toString());
     return JSON.stringify({ title: page.title, url: page.finalUrl, text: page.text.slice(0, 12_000) });
   }
-  if (["get_weather_forecast","check_air_quality","convert_currency","get_public_holidays","find_long_weekends"].includes(name)) {
+  if (["get_weather_forecast","check_air_quality","convert_currency","get_public_holidays","find_long_weekends","get_marine_forecast","get_earthquake_activity","search_books","lookup_postal_code"].includes(name)) {
     return (await runLiveEverydayTool(name, args)).slice(0, 12_000);
   }
   if (name === "process_text_content") {
@@ -1749,6 +1797,7 @@ export async function runAgentLoop(
   const instruction = [
     "You are Nolane Agent with access to Nolane's real, allowlisted tools. Use the available tools when they materially improve the result; never invent a tool or claim execution without a returned result.",
     "Use list_nolane_tools to discover the all ready file processors. Results are paginated: inspect total/tools/nextOffset, use targeted query/category filters, and pass nextOffset to continue. The default ordering prioritizes everyday tasks: images, documents, audio/video, utilities and data. Developer and repository tools remain available, but use them only when the user asks for technical or software-repository work.",
+    "Use get_marine_forecast for general wave/swell outlooks only, never for navigation or rescue advice. Use get_earthquake_activity for USGS recorded events, never as an early-warning or safety-clearance service. Use search_books for human reading/catalog requests and lookup_postal_code for postcode reference data, preserving each provider’s coverage and accuracy limits.",
     "Use get_weather_forecast and check_air_quality for location-specific model data; use convert_currency for dated daily reference rates; use get_public_holidays and find_long_weekends for country or subdivision holiday planning. Do not guess current readings. Ask for a country when a city is ambiguous. Distinguish forecast data from ground-station readings and daily currency reference rates from trading or retail exchange quotes. Open-Meteo free API use is non-commercial and must follow its fair-use terms.",
     "process_text_content is for bounded text input up to 40,000 characters. For an uploaded image, PDF, Office file, audio/video, archive or other catalog-supported file, use prepare_file_processing only when that function is available and the user explicitly wants the file processed or says they will upload it. It only prepares a private Telegram upload session; the user must still send the file, and no processor has run until the job returns.",
     "The uploaded-file planner can select any ready catalog processor that matches the file and validated data-flow transitions. Do not claim that a file was processed before a completed job result is received. Prefer ordinary-user processors unless a technical file task is explicit.",
