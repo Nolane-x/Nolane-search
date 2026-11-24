@@ -48,7 +48,7 @@ No new package, secret, D1 migration, Cloudflare binding or file processor was i
 
 - PR CI #497 [45408553468](https://github.com/Nolane-x/Nolane-search/actions/runs/45408553468) passed.
 - Main CI #498 [45408855220](https://github.com/Nolane-x/Nolane-search/actions/runs/45408855220) passed TypeScript, 32 Vitest files / 329 tests, deployment-script checks, 449 Python runner tests and Worker build.
-- Cloudflare deploy #157 [45408855289](https://github.com/Nolane-x/Nolane-search/actions/runs/45408855289) succeeded. Worker Version ID: \`e5dcdc69-0a58-4b37-9933-0ab73c0fb6ef\`.
-- Worker export/build #150 and public health smoke [45408855306](https://github.com/Nolane-x/Nolane-search/actions/runs/45408855306) succeeded. The health response reports \`ok: true\`, database \`reachable\` and archive enabled.
+- Cloudflare deploy #157 [45408855289](https://github.com/Nolane-x/Nolane-search/actions/runs/45408855289) succeeded. Worker Version ID: `e5dcdc69-0a58-4b37-9933-0ab73c0fb6ef`.
+- Worker export/build #150 and public health smoke [45408855306](https://github.com/Nolane-x/Nolane-search/actions/runs/45408855306) succeeded. The health response reports `ok: true`, database `reachable` and archive enabled.
 - Deployment verified secret validation, Worker upload, triggers, Telegram webhook and slash-command registration. No D1 migration was needed.
 - These CI and health results verify the deployed Worker and tool registration path; live upstream provider availability and owner-side Telegram conversation acceptance remain separate checks.
