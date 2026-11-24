@@ -161,8 +161,8 @@ function applianceRepairReplace(input: Input): string {
   const replacementCost = money(input.replacement_cost, "replacement_cost") / 100;
   const newLife = numberValue(input.replacement_expected_life_years, "replacement_expected_life_years", 0.1, 100);
   const newEnergy = money(input.replacement_annual_energy_cost, "replacement_annual_energy_cost") / 100;
-  const repairWarranty = integerValue(input.repair_warranty_months, "repair_warranty_months", 0, 120);
-  const newWarranty = integerValue(input.replacement_warranty_months, "replacement_warranty_months", 0, 240);
+  const repairWarranty = integerValue(input.repair_warranty_months ?? 0, "repair_warranty_months", 0, 120);
+  const newWarranty = integerValue(input.replacement_warranty_months ?? 0, "replacement_warranty_months", 0, 240);
   const repairAnnual = repairCost / yearsAfter + oldEnergy, replaceAnnual = replacementCost / newLife + newEnergy;
   const delta = replaceAnnual - repairAnnual, energySaving = oldEnergy - newEnergy;
   const payback = energySaving > 0 && replacementCost > repairCost ? (replacementCost - repairCost) / energySaving : null;
