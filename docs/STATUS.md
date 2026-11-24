@@ -3,7 +3,19 @@
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
-## Latest production release — Wave 48 (2026-11-24)
+## Latest production release — Wave 49 (2026-11-24)
+
+- [PR #104](https://github.com/Nolane-x/Nolane-search/pull/104) merged into main as `56793e4b01ce985b90c4f78f3ec1e4c7269cdc9`. Production adds five direct AI-callable discovery functions: English word lookup, U.S.-public-domain-filtered book search, Art Institute public-domain artwork search, NASA EONET natural-event browsing and current local time by city. The **534 file processors** remain unchanged.
+- PR CI [45343427454](https://github.com/Nolane-x/Nolane-search/actions/runs/45343427454) and main CI [45343582511](https://github.com/Nolane-x/Nolane-search/actions/runs/45343582511) passed TypeScript, Vitest, deployment-script checks, Python runner tests and Worker build.
+- Cloudflare deployment [45343582467](https://github.com/Nolane-x/Nolane-search/actions/runs/45343582467) passed source/bundle validation, Worker and runtime-secret upload, and Telegram webhook/menu registration.
+- Worker export/build and public `/health` smoke [45343582462](https://github.com/Nolane-x/Nolane-search/actions/runs/45343582462) passed.
+- D1 migration was correctly skipped because no schema changes or persistent records were added.
+- No Worker version identifier was present in the visible deploy summary; none is inferred.
+- Research: [TOOL-RESEARCH-2026-11-24-WAVE49.md](TOOL-RESEARCH-2026-11-24-WAVE49.md). Handoff: [HANDOFF-WAVE-FORTY-NINE-2026-11-24.md](HANDOFF-WAVE-FORTY-NINE-2026-11-24.md).
+- Owner-level acceptance remains separate: real Telegram/Web Chat checks are useful for a dictionary definition, classic book search, artwork search, NASA event query and city-time lookup. Mocked tests and Worker health do not prove every feature-level API request.
+
+
+## Previous production release — Wave 48 (2026-11-24)
 
 - [PR #102](https://github.com/Nolane-x/Nolane-search/pull/102) merged into main as `903fd0e63b8ed4aa2633f5cdb432b41946fa56ae`. Production adds four direct AI-callable everyday services: marine forecasts, USGS earthquake-event lookup, Open Library book search and postal-code lookup. The **534 file processors** are unchanged.
 - PR CI [45336663336](https://github.com/Nolane-x/Nolane-search/actions/runs/45336663336) and main CI [45336845318](https://github.com/Nolane-x/Nolane-search/actions/runs/45336845318) passed TypeScript type-check, Vitest, deployment-script checks, Python runner tests and Worker build.

@@ -1,9 +1,9 @@
 # Wave 49 — implementation handoff
 
 Date: 2026-11-24
-Branch: feat/wave-49-learning-art-world
-Base main commit: 06135aee23663d3b5eeec7e0e41ac4cb4bc6fc8a
-Status: implementation committed; PR/CI/deployment pending.
+PR: https://github.com/Nolane-x/Nolane-search/pull/104
+Merge commit: 56793e4b01ce985b90c4f78f3ec1e4c7269cdc9
+Status: merged and deployed to production on 2026-11-24.
 
 ## Scope
 
@@ -34,8 +34,14 @@ The file-processor catalog remains 534.
 - NASA EONET records are curated metadata, not warnings or emergency instructions.
 - Local time is calculated with the geocoded IANA zone and server clock.
 
-## Acceptance
+## Production verification
 
-1. Full CI must pass.
-2. Merge, Worker export/health and Cloudflare deployment must pass.
-3. Real Telegram/Web Chat checks remain useful for one definition, public-domain book query, artwork search, NASA event query and city-time query.
+- PR CI #45343427454 passed.
+- Main CI #45343582511 passed TypeScript, complete Vitest, deployment-script checks, Python runner tests and Worker build.
+- Cloudflare deploy #45343582467 passed required-secret checks, source/bundle checks, Worker/runtime-secret upload and Telegram webhook + command registration.
+- Worker export #45343582462 passed build/export and public `/health` smoke.
+- No D1 migration was required; no Worker version ID was reported in the visible deployment summary.
+
+## Remaining owner acceptance
+
+Use real Telegram/Web Chat requests for a dictionary definition, a Gutenberg catalog query, an artwork search, a NASA event query and a city-local-time query. Mocked tests and a public health check do not replace these live feature-level checks.
