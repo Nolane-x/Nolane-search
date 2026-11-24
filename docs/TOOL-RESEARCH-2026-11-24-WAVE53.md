@@ -14,12 +14,12 @@ Source: https://www.themealdb.com/api.php
 Documentation: https://www.themealdb.com/docs_api_guide.php
 
 Endpoints used:
-- \`search.php?s=\` for meal-name search.
-- \`filter.php?i=\`, \`filter.php?c=\` or \`filter.php?a=\` for one ingredient, category or cuisine/area.
-- \`lookup.php?i=\` for full recipe details.
+- `search.php?s=` for meal-name search.
+- `filter.php?i=`, `filter.php?c=` or `filter.php?a=` for one ingredient, category or cuisine/area.
+- `lookup.php?i=` for full recipe details.
 
 Integration notes:
-- Uses the documented public test key \`1\`, intended for development or educational use. TheMealDB says public app-store releases require a supporter key. This implementation is for the authenticated, personal Nolane workspace and must not be promoted as a public app-store integration; obtain a supporter key or disable this provider before any such distribution.
+- Uses the documented public test key `1`, intended for development or educational use. TheMealDB says public app-store releases require a supporter key. This implementation is for the authenticated, personal Nolane workspace and must not be promoted as a public app-store integration; obtain a supporter key or disable this provider before any such distribution.
 - Only one ingredient can be filtered in the free V1 endpoint. The tool does not claim to solve multi-ingredient pantry matching.
 - Ingredients, quantities and cooking instructions are catalog/community content. They can be incomplete or inaccurate and must not be treated as allergen guarantees or food-safety advice.
 - Upstream image, video and recipe-source URLs are checked for HTTPS and expected hosts where applicable. Results retain source links.
@@ -32,11 +32,11 @@ API: https://www.wikidata.org/w/api.php
 Guidance: https://www.wikidata.org/wiki/Help:Data_access and https://www.mediawiki.org/wiki/API:Etiquette/en
 
 Tools:
-- \`search_wikidata_entities\`: disambiguation search in English or Vietnamese.
-- \`get_wikidata_entity\`: retrieve item labels, descriptions, aliases and English/Vietnamese Wikipedia sitelinks.
+- `search_wikidata_entities`: disambiguation search in English or Vietnamese.
+- `get_wikidata_entity`: retrieve item labels, descriptions, aliases and English/Vietnamese Wikipedia sitelinks.
 
 Integration notes:
-- Uses MediaWiki Action API \`wbsearchentities\` and \`wbgetentities\`, with \`maxlag=5\`, a descriptive User-Agent and a bounded result size.
+- Uses MediaWiki Action API `wbsearchentities` and `wbgetentities`, with `maxlag=5`, a descriptive User-Agent and a bounded result size.
 - No SPARQL query service, bulk download, editing operation, or high-volume crawl is used.
 - HTTP 429 and overload responses are surfaced without retry loops; callers should reduce request frequency and retry later.
 - Wikidata is community-maintained and may have gaps, stale claims or competing labels. The tool is a discovery/disambiguation aid, not an authoritative fact-verification service.
