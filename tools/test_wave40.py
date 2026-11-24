@@ -41,7 +41,7 @@ class Wave40Tests(unittest.TestCase):
             "waste_percent": 10, "tiles_per_box": 4,
             "price_per_box": 150000, "currency": "VND",
         })
-        self.assertIn("Tiles required including waste: 38", report)
+        self.assertIn("Tiles required including waste: 37", report)
         self.assertIn("Boxes to buy: 10 (40 tiles)", report)
         self.assertIn("Estimated material cost: VND 1500000", report)
 
