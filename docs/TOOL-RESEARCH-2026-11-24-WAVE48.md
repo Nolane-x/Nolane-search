@@ -1,7 +1,7 @@
 # Wave 48 — marine, earthquake, books and postal tools
 
 Date: 2026-11-24
-Status: implementation branch; CI, merge and deployment pending.
+Status: merged and deployed to production on 2026-11-24.
 Branch: feat/wave-48-marine-earthquake-books-postal
 Base main commit: bdab89165ccdd068efe14aefe386b5082011c220
 Scope: four directly model-callable everyday information functions. The 534 file-processor catalog remains unchanged.
@@ -39,3 +39,15 @@ Open Food Facts was deliberately excluded: its API docs require prospective inte
 ## Validation plan
 
 Mocked-fetch tests cover all providers, bounds, response shaping, postcode 404 handling, URL allowlisting and API dispatch. CI must pass TypeScript, full Vitest, deployment scripts, Python runner tests and Worker build before merge.
+
+
+## Production verification
+
+- PR #102 merged on 2026-11-24 using squash merge.
+- PR CI: https://github.com/Nolane-x/Nolane-search/actions/runs/45336663336 — passed TypeScript, Vitest, Python runner tests and Worker build.
+- Main CI: https://github.com/Nolane-x/Nolane-search/actions/runs/45336845318 — passed the same full checks.
+- Cloudflare deployment: https://github.com/Nolane-x/Nolane-search/actions/runs/45336845278 — passed source verification, production bundle dry-run, Worker/runtime-secret upload and Telegram webhook/command registration.
+- Worker export and smoke test: https://github.com/Nolane-x/Nolane-search/actions/runs/45336845328 — passed build/export and the public Worker /health smoke check.
+- No D1 migration was required.
+- The visible deployment run summary did not report a Worker version identifier; none is inferred here.
+- Open-Meteo's free endpoint remains non-commercial. Do not use it for commercial deployment without changing to an appropriately licensed service.

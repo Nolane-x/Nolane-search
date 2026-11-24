@@ -3,7 +3,7 @@
 Date: 2026-11-24
 Branch: feat/wave-48-marine-earthquake-books-postal
 Base main commit: bdab89165ccdd068efe14aefe386b5082011c220
-Status: implementation committed; PR/CI/deployment pending.
+Status: merged and deployed to production on 2026-11-24.
 
 ## Scope
 
@@ -33,8 +33,15 @@ Four AI-callable services, separate from the 534 file processors:
 - Open Food Facts was intentionally excluded because its usage form and provider restrictions require separate review.
 - No D1 migration, API secrets, dependencies, paid services or copied source assets.
 
-## Acceptance
+## Production verification
 
-1. Full CI must pass.
-2. Merge and Cloudflare deployment/health must pass.
-3. Owner-side Telegram/Web Chat acceptance should include a coastal forecast, nearby earthquake lookup, book search and postcode query. Mocked CI tests do not replace these real-user checks.
+- PR CI #45336663336 passed.
+- Main CI #45336845318 passed TypeScript, complete Vitest, deployment-script checks, Python runner tests and Worker build.
+- Cloudflare deploy #45336845278 passed source verification, production bundle dry-run, Worker/runtime-secret upload and Telegram webhook + bot menu registration.
+- Worker export #45336845328 passed build/export and the public Worker /health smoke check.
+- No D1 migration was required.
+- The visible deployment summary did not include a Worker version ID.
+
+## Remaining owner acceptance
+
+The CI and public health check confirm the deployed build, but a real Telegram/Web Chat acceptance remains useful for one coastal marine forecast, one earthquake lookup, one book search and one postal-code lookup. Open-Meteo free marine API remains non-commercial only.
