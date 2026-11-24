@@ -1,5 +1,22 @@
 Nolane Tools hiện có **494 công cụ đã được đăng ký và triển khai trên production** sau Wave 41, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. [PR #94](https://github.com/Nolane-x/Nolane-search/pull/94) đã merge vào `main` bằng commit `38e6c4a81b147f5445c23682c8e75b138ccf1c60`. Main CI [45300211124](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211124), Worker export và live health smoke [45300211171](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211171), Cloudflare deployment [45300211092](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211092) đều thành công. Latest Worker Version ID: `4d48b314-4548-4a78-8059-2215027cc989`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema; tệp tiếp tục được xử lý trên GitHub-hosted runner dùng một lần.
 
+## Wave 42 — personal planning and household tools — review pending
+
+The current production catalog remains **494 tools** (Wave 41). The following eight tools are implemented on the Wave 42 review branch and are not yet included in the production count.
+
+| ID / command | Công cụ | Chức năng |
+|---|---|---|
+| /tool meal-shopping-list-planner | Gộp danh sách nguyên liệu | Scale khẩu phần từng món và gộp nguyên liệu trùng tên/đơn vị |
+| /tool travel-packing-checklist | Checklist hành lý | Gợi ý đồ cần mang theo số ngày, số người, khí hậu và hoạt động do người dùng nhập |
+| /tool study-plan-scheduler | Lịch học theo hạn | Chia thời lượng học theo ngày rảnh và deadline; báo phần quá tải |
+| /tool weekly-chore-planner | Phân công việc nhà | Chia việc theo ngày và cân bằng phút làm giữa thành viên |
+| /tool subscription-cost-calculator | Chi phí đăng ký định kỳ | Quy đổi phí theo chu kỳ thành chi phí năm/tháng, tách theo tiền tệ |
+| /tool commute-cost-calculator | Chi phí đi lại | Ước tính xăng/đỗ xe/phí đường hoặc so vé lượt với vé tháng |
+| /tool reading-plan-calculator | Kế hoạch đọc sách | Tính số trang mỗi buổi và thời gian đọc ước lượng |
+| /tool grocery-budget-planner | Ngân sách mua sắm | Cộng giỏ hàng theo nhóm và báo số tiền còn/vượt ngân sách |
+
+All amounts and assumptions are user supplied. The tools do not provide live exchange rates, prices, public-transport fares, weather, visa or airline-rule checks. Review [product research](TOOL-RESEARCH-2026-11-24-WAVE42.md) and [implementation handoff](HANDOFF-WAVE-FORTY-TWO-2026-11-24.md).
+
 ## Wave 39 — everyday-user calculators — deployed to production
 
 Wave 39 increased the production catalog from **462 to 472 registered tools**. These ten calculators are callable directly by Nolane AI using compact JSON input and are also connected to the file runner for JSON uploads. PR #92, CI, Worker export/health smoke and Cloudflare deployment are complete.

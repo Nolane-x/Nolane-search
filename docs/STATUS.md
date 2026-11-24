@@ -2,6 +2,12 @@
 
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+## In development — Wave 42 personal planning tools
+
+- Review branch: [feat/wave-forty-two-personal-planning-tools](https://github.com/Nolane-x/Nolane-search/tree/feat/wave-forty-two-personal-planning-tools). Proposed additions: 8 consumer-facing utilities for meal shopping lists, travel packing, study scheduling, weekly chores, subscriptions, commuting, reading goals and grocery budgets.
+- Implementation includes TypeScript catalog + direct AI routing, Python GitHub Actions runner, Python and AI tests. Product research: [TOOL-RESEARCH-2026-11-24-WAVE42.md](TOOL-RESEARCH-2026-11-24-WAVE42.md). Handoff: [HANDOFF-WAVE-FORTY-TWO-2026-11-24.md](HANDOFF-WAVE-FORTY-TWO-2026-11-24.md).
+- This is not a production release yet. The verified production baseline remains Wave 41 / 494 tools until review, CI and deployment are complete.
+
 ## Latest production release — Wave 41 (2026-11-24)
 
 - [PR #94](https://github.com/Nolane-x/Nolane-search/pull/94) merged into `main` as `38e6c4a81b147f5445c23682c8e75b138ccf1c60`. Production Tool Center catalog: **494 processors** (+11 over Wave 40).

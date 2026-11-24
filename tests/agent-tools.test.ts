@@ -20,7 +20,7 @@ describe("Nolane AI callable tools", () => {
       tools: Array<{id:string;category:string}>;
     };
     expect(first.total).toBe(TOOL_CATALOG.length);
-    expect(first.total).toBe(494);
+    expect(first.total).toBe(502);
     expect(first.tools).toHaveLength(20);
     expect(first.nextOffset).toBe(20);
     expect(first.tools.every(tool => tool.category === "image")).toBe(true);
@@ -128,6 +128,103 @@ describe("Nolane AI callable tools", () => {
       .toContain("Estimated billable weight: 12 kg");
     expect(await run("storage-capacity-calculator", {capacity_gb:128,reserve_percent:10,photo_size_mb:4,video_size_mb_per_minute:150,document_size_mb:1}))
       .toContain("about 28,800 photos");
+  });
+
+  it("exposes and runs all Wave 42 personal planning tools through the normal AI tool", async () => {
+    const schema = AGENT_TOOL_DEFINITIONS.find(tool => tool.function.name === "process_text_content")?.function.parameters as {
+      properties?: { tool_id?: { enum?: string[] } };
+    };
+    const ids = [
+      "meal-shopping-list-planner", "travel-packing-checklist", "study-plan-scheduler",
+      "weekly-chore-planner", "subscription-cost-calculator", "commute-cost-calculator",
+      "reading-plan-calculator", "grocery-budget-planner",
+    ];
+    expect(schema.properties?.tool_id?.enum).toEqual(expect.arrayContaining(ids));
+    expect(TOOL_CATALOG.filter(tool => ids.includes(tool.id) && tool.ready)).toHaveLength(8);
+    const run = (tool_id: string, value: unknown) => executeAgentTool(env, "process_text_content", {
+      tool_id, content: JSON.stringify(value),
+    });
+
+    expect(await run("meal-shopping-list-planner", {meals:[
+      {name:"Dinner",servings:2,target_servings:4,ingredients:[
+        {name:"Rice",quantity:200,unit:"g",category:"Pantry"},
+        {name:"Chicken",quantity:300,unit:"g",category:"Meat"},
+      ]},
+      {name:"Breakfast",servings:1,target_servings:1,ingredients:[
+        {name:"rice",quantity:100,unit:"g",category:"Pantry"},
+        {name:"Eggs",quantity:2,unit:"pcs",category:"Dairy"},
+      ]},
+    ]})).toContain("500 g Rice");
+
+    const packing = await run("travel-packing-checklist", {
+      days:5,nights:4,travelers:2,climate:"cold",activities:["hiking","business"],international:true,
+    });
+    expect(packing).toContain("2 × Warm layer / jacket");
+    expect(packing).toContain("2 × Hiking shoes");
+    expect(packing).toContain("2 × Passport / international travel document");
+
+    const study = await run("study-plan-scheduler", {
+      start_date:"2026-11-24",available_minutes_per_day:60,session_minutes:50,
+      study_days:["Tue","Wed","Thu"],
+      tasks:[
+        {name:"Physics revision",due_date:"2026-11-26",estimated_hours:2,priority:4},
+        {name:"English vocabulary",due_date:"2026-11-25",estimated_hours:0.5,priority:5},
+      ],
+    });
+    expect(study).toContain("Scheduled study time: 150 minutes");
+    expect(study).toContain("Unscheduled tasks: 0");
+
+    const chores = await run("weekly-chore-planner", {
+      people:["Alex","Sam"],
+      chores:[
+        {name:"Wash dishes",times_per_week:7,duration_minutes:20},
+        {name:"Vacuum",times_per_week:2,duration_minutes:30,preferred_days:["Sat","Sun"]},
+      ],
+    });
+    expect(chores).toContain("Wash dishes");
+    expect(chores).toContain("Vacuum");
+    expect(chores).toContain("Weekly workload by person");
+
+    const subscriptions = await run("subscription-cost-calculator", {
+      currency:"USD",
+      subscriptions:[
+        {name:"Music",amount:12,billing_cycle:"monthly"},
+        {name:"Storage",amount:20,billing_cycle:"quarterly"},
+      ],
+    });
+    expect(subscriptions).toContain("USD 224.00 per year");
+    expect(subscriptions).toContain("USD 18.67 average per month");
+
+    const car = await run("commute-cost-calculator", {
+      mode:"car",commute_days_per_month:20,currency:"VND",
+      distance_one_way_km:10,consumption_l_per_100km:6.5,fuel_price_per_litre:25000,
+      parking_per_day:30000,people_sharing:2,
+    });
+    expect(car).toContain("Total monthly commute cost: VND 1250000");
+    expect(car).toContain("Estimated monthly cost per person: VND 625000");
+
+    const transit = await run("commute-cost-calculator", {
+      mode:"public_transport",commute_days_per_month:20,currency:"EUR",
+      round_trip_fare:5,monthly_pass_price:75,
+    });
+    expect(transit).toContain("Estimated monthly transit cost: EUR 75.00");
+
+    const reading = await run("reading-plan-calculator", {
+      pages_remaining:420,days_until_deadline:14,reading_days_per_week:5,pages_per_hour:30,
+    });
+    expect(reading).toContain("Reading sessions assumed: 10");
+    expect(reading).toContain("Suggested pace: about 42 pages per reading day");
+    expect(reading).toContain("about 84 minutes");
+
+    const groceries = await run("grocery-budget-planner", {
+      currency:"VND",budget:100000,
+      items:[
+        {name:"Rice",quantity:2,unit_price:30000,category:"Pantry"},
+        {name:"Milk",quantity:1,unit_price:25000,category:"Dairy"},
+      ],
+    });
+    expect(groceries).toContain("Estimated total: VND 85000");
+    expect(groceries).toContain("Budget remaining: VND 15000");
   });
 
   it("exposes and runs all Wave 40 household and travel calculators through the normal AI tool", async () => {
