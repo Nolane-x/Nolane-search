@@ -92,6 +92,7 @@ class Wave44Tests(unittest.TestCase):
         self.assertIn("white | normal", output)
         self.assertIn("dark | wool | dry: flat | wash at up to 20°C", output)
         self.assertIn("bright | normal | dry: air | wash at up to 30°C", output)
+        self.assertIn("white | towel", output)
         self.assertNotIn("White towel", output.split("white | normal")[0])
 
     def test_trip_itinerary_marks_stops_that_do_not_fit(self):
@@ -104,8 +105,9 @@ class Wave44Tests(unittest.TestCase):
             ],
         })
         self.assertIn("09:00–09:20 | Travel to Museum", output)
-        self.assertIn("10:50–11:05 | Travel to Park", output)
+        self.assertNotIn("Travel to Park", output)
         self.assertIn("Stops that do not fit", output)
+        self.assertIn("- Park", output)
         self.assertIn("- Market", output)
 
     def test_vehicle_maintenance_uses_user_entered_date_and_odometer_intervals(self):
