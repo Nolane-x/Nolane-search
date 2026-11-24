@@ -950,7 +950,7 @@ describe("Nolane AI callable tools", () => {
 
     const returns = await run("return-deadline-tracker", {
       as_of_date: "2026-11-24",
-      purchases: [{ product: "Headphones", seller: "Store", purchase_date: "2026-11-20", return_window_days: 14 }],
+      purchases: [{ product: "Headphones", seller: "Store", purchase_date: "2026-11-20", return_window_days: 14, remind_days_before: 20 }],
     });
     expect(returns).toContain("Check return now");
 
