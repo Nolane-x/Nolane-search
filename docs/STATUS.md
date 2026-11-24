@@ -2,13 +2,19 @@
 
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## In development — Wave 43 home, hobby and learning tools
+## Latest production release — Wave 43 (2026-11-24)
 
-- Review branch: [feat/wave-forty-three-home-hobby-and-study-tools](https://github.com/Nolane-x/Nolane-search/tree/feat/wave-forty-three-home-hobby-and-study-tools). Eight proposed ordinary-user tools cover habit history, plant care reminders, garden-bed capacity, household inventory, home maintenance, pet routines, event seating and spaced review.
-- The branch includes TypeScript catalog/direct AI implementations, Python GitHub Actions processors, tests and research/handoff documentation.
-- This is not a production release yet. The verified production baseline remains Wave 42 / 502 tools until PR, CI and deployment are complete.
+- [PR #96](https://github.com/Nolane-x/Nolane-search/pull/96) merged into main as `c633897b6448cf15ea1e25fb1664dfc11a0cc986`. Production Tool Center catalog: **510 processors** (+8 over Wave 42).
+- PR CI [45318520850](https://github.com/Nolane-x/Nolane-search/actions/runs/45318520850) passed TypeScript, **25 Vitest files / 267 tests**, deployment-script checks, **414 Python runner tests** and Worker build. Main CI [45318665956](https://github.com/Nolane-x/Nolane-search/actions/runs/45318665956) passed the same checks on the merge commit.
+- Worker export/build and live health smoke [45318665973](https://github.com/Nolane-x/Nolane-search/actions/runs/45318665973) passed; health returned `ok: true` and database `reachable`.
+- Cloudflare deployment [45318665976](https://github.com/Nolane-x/Nolane-search/actions/runs/45318665976) passed required-secret validation, source and bundle checks, Worker upload, Telegram webhook verification (message + callback_query) and bot command registration. Worker Version ID: `79123ac0-c9fc-4616-bee2-4d93d2448ccf`.
+- D1 migration was correctly skipped because Wave 43 adds no schema changes or persistent storage.
+- Eight everyday tools are registered in the catalog, direct Nolane AI interface and GitHub Actions runner: habit history, plant-care reminders, garden-bed capacity, household inventory, home maintenance, non-medical pet routines, event seating and spaced review.
+- Product research: [TOOL-RESEARCH-2026-11-24-WAVE43.md](TOOL-RESEARCH-2026-11-24-WAVE43.md). Implementation handoff: [HANDOFF-WAVE-FORTY-THREE-2026-11-24.md](HANDOFF-WAVE-FORTY-THREE-2026-11-24.md).
+- Owner-level acceptance remains separate: test selected tools in the real private Telegram bot and upload a non-sensitive JSON file. CI and webhook registration do not prove every client-side interaction.
 
-## Latest production release — Wave 42 (2026-11-24)
+## Previous production release — Wave 42 (2026-11-24)
+## Previous production release — Wave 42 (2026-11-24)
 
 - [PR #95](https://github.com/Nolane-x/Nolane-search/pull/95) merged into main as `caa5bc0ee08a1b584c2099decdad3b8e8b78a890`. Production Tool Center catalog: **502 processors** (+8 over Wave 41).
 - PR CI [45312352260](https://github.com/Nolane-x/Nolane-search/actions/runs/45312352260) passed TypeScript type-check, **25 Vitest files / 266 tests**, deployment-script checks, **404 Python runner tests** and Worker build. Main CI [45317297572](https://github.com/Nolane-x/Nolane-search/actions/runs/45317297572) passed TypeScript, **25 Vitest files / 266 tests**, deployment-script checks, **404 Python runner tests** and Worker build.
