@@ -3,7 +3,17 @@
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
-## Latest production release — Wave 55 (2026-11-24)
+## Latest production release — Wave 56 (2026-11-24)
+
+- [PR #118](https://github.com/Nolane-x/Nolane-search/pull/118) merged into `main` as `581666372bca99157850552e866d0401a4159a94`. Production adds AI-callable Internet Archive public audio search and a browser-native audio player in the authenticated Media Portal. The tool queries `mediatype:audio`, checks a bounded set of item metadata records and returns only supported, non-private files explicitly marked `source: original`. It rejects restricted/noindex items, derivatives, unsafe filenames, unsupported formats and files with missing source markers. Existing **534 file processors** remain unchanged.
+- PR CI #506 [45417728775](https://github.com/Nolane-x/Nolane-search/actions/runs/45417728775) passed on rerun attempt 2. Main CI #508 [45418371630](https://github.com/Nolane-x/Nolane-search/actions/runs/45418371630) passed TypeScript, **34 Vitest files / 348 tests**, deployment-script checks, **449 Python runner tests** and Cloudflare Worker build.
+- Cloudflare deployment #160 [45418371696](https://github.com/Nolane-x/Nolane-search/actions/runs/45418371696) succeeded. Worker Version ID: `f28746a7-4210-40d3-b330-952dc47de536`. Telegram webhook configuration and bot command registration succeeded.
+- Worker export #153 [45418371450](https://github.com/Nolane-x/Nolane-search/actions/runs/45418371450) and public `/health` smoke passed. Health returned `ok: true`, database `reachable`, and `archiveEnabled: true`. No D1 migration was required.
+- Research: [TOOL-RESEARCH-2026-11-24-WAVE56.md](TOOL-RESEARCH-2026-11-24-WAVE56.md). Handoff: [HANDOFF-WAVE-FIFTY-SIX-2026-11-24.md](HANDOFF-WAVE-FIFTY-SIX-2026-11-24.md).
+- Rights boundary: Internet Archive item metadata and rights vary. The existence of an audio player or downloadable original does not guarantee public-domain status or permission to redistribute. Users should review the source item's rights statement.
+- **Downloader status:** arbitrary yt-dlp/gallery-dl downloads and private R2 signed share links are still not production-enabled. A direct Cloudflare account API check returned R2 activation error `10042`; no private media bucket, multipart upload, signed links or private Range playback is available.
+
+## Previous production release — Wave 55 (2026-11-24)
 
 - [PR #116](https://github.com/Nolane-x/Nolane-search/pull/116) merged into `main` as `d44aaed6c938eda2212387e60b5bc0a7df4ae693`. Production adds five AI-callable open-knowledge tools: Wikipedia search/read across EN/VI/JA/FR/ES/DE, Wikivoyage destination search/read in EN/VI, and Wiktionary dictionary lookup in EN/VI. The adapters use the Wikimedia Action API, fixed project hosts, identifying User-Agent headers, `maxlag=5`, bounded responses/results and a maximum 1,200-character / 10-sentence article extract. Existing **534 file processors** remain unchanged.
 - PR CI [45414597298](https://github.com/Nolane-x/Nolane-search/actions/runs/45414597298) passed. Main CI #505 [45415054045](https://github.com/Nolane-x/Nolane-search/actions/runs/45415054045) passed TypeScript, **33 Vitest files / 343 tests**, deployment-script checks, **449 Python runner tests** and Cloudflare Worker build.
