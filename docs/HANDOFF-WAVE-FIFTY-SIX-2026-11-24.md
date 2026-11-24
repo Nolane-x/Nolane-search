@@ -3,7 +3,7 @@
 Date: 2026-11-24
 Branch: feat/wave-56-internet-archive-audio
 Base: 4387df73e109b892f16b7cc95cebf56e427eea92
-Release status: implementation branch; not yet merged or deployed.
+Release status: merged and deployed via [PR #118](https://github.com/Nolane-x/Nolane-search/pull/118) as `581666372bca99157850552e866d0401a4159a94`.
 
 ## What changes
 
@@ -40,8 +40,13 @@ No dependency, secret, D1 migration, Cloudflare binding or 534-file processor ch
 - Media stays on archive.org; Nolane does not proxy/rehost bytes.
 - No user file upload, arbitrary cross-site downloader, DRM bypass or private R2 share link is included.
 
-## Acceptance gates
+## Production verification — 2026-11-24
 
-1. PR CI passes TypeScript, Vitest, deployment scripts, Python runner tests and Worker build.
-2. Main CI, Cloudflare deployment and Worker export/health smoke pass after merge.
-3. A live audio query and player acceptance check should be done after deployment; mocked CI alone cannot establish the availability or rights status of every Archive item.
+- PR CI #506 [45417728775](https://github.com/Nolane-x/Nolane-search/actions/runs/45417728775) passed on rerun attempt 2.
+- Main CI #508 [45418371630](https://github.com/Nolane-x/Nolane-search/actions/runs/45418371630) passed TypeScript, 34 Vitest files / 348 tests, deployment-script checks, 449 Python runner tests and Worker build.
+- Cloudflare deploy #160 [45418371696](https://github.com/Nolane-x/Nolane-search/actions/runs/45418371696) succeeded. Worker Version ID: `f28746a7-4210-40d3-b330-952dc47de536`.
+- Worker export #153 [45418371450](https://github.com/Nolane-x/Nolane-search/actions/runs/45418371450) and public health smoke succeeded: `ok: true`, database `reachable`, archive enabled.
+- Telegram webhook validation and bot command registration completed. No D1 migration was required.
+- The build, health endpoint and mocked provider tests verify deployment and integration behavior; they do not guarantee every live Archive item has a supported audio file or a reusable rights statement. No live per-item rights review was performed.
+
+
