@@ -14,16 +14,16 @@ const HTML = String.raw`<!doctype html>
 <header class="top"><div class="shell" style="width:100%;display:flex;align-items:center;justify-content:space-between"><a class="brand" href="/"><span class="mark">N</span><span>Nolane <span style="color:#91afff">Search</span></span></a><nav class="toplinks"><a href="/">Tìm kiếm</a><button id="logout" type="button">Đăng xuất</button></nav></div></header>
 <main class="shell">
 <section class="hero">
-<span class="eyebrow">MEDIA DISCOVERY · IMAGE & VIDEO</span>
-<h1>Khám phá hình ảnh và video.</h1>
-<p>Tìm ảnh có thông tin tác giả và giấy phép trên Wikimedia Commons; khám phá tư liệu NASA và phát trực tiếp các video có MP4 công khai ngay trong trình duyệt.</p>
+<span class="eyebrow">MEDIA DISCOVERY · IMAGE · VIDEO · AUDIO</span>
+<h1>Khám phá ảnh, video và âm thanh.</h1>
+<p>Tìm ảnh kèm tác giả và giấy phép, xem tư liệu công khai từ NASA và Internet Archive, hoặc nghe các bản ghi âm có tệp gốc công khai ngay trong trình duyệt.</p>
 <form id="search" class="search"><input id="q" autocomplete="off" minlength="2" maxlength="160" placeholder="Ví dụ: aurora, Hubble telescope, coral reef…" required><select id="kind" aria-label="Loại media"><option value="all">Ảnh, video và audio</option><option value="image">Chỉ hình ảnh</option><option value="video">Chỉ video</option><option value="audio">Chỉ audio</option></select><select id="provider" aria-label="Nguồn media"><option value="all">Tất cả nguồn</option><option value="commons">Wikimedia Commons</option><option value="nasa">NASA</option><option value="openverse">Openverse · ảnh có giấy phép mở</option><option value="archive">Internet Archive · video/audio công cộng</option></select><button id="go" class="btn" type="submit">Tìm media</button></form>
-<div class="tabs"><button class="tab active" data-kind="all">Tất cả</button><button class="tab" data-kind="image">Hình ảnh</button><button class="tab" data-kind="video">Video</button></div>
+<div class="tabs"><button class="tab active" data-kind="all">Tất cả</button><button class="tab" data-kind="image">Hình ảnh</button><button class="tab" data-kind="video">Video</button><button class="tab" data-kind="audio">Audio</button></div>
 </section>
 <div class="meta"><span id="status">Đang kiểm tra phiên đăng nhập…</span><span id="count"></span></div>
 <div id="notice" class="notice hidden"></div>
 <section id="results" class="grid"></section>
-<div class="footer">Wikimedia Commons và Openverse cung cấp ảnh kèm nguồn/tác giả/giấy phép khi có. Video Internet Archive chỉ hiện khi hồ sơ công khai có file video gốc; quyền sử dụng khác nhau theo từng mục. NASA có thể chứa tư liệu bên thứ ba. Hãy xem trang nguồn và điều khoản trước khi tái sử dụng. Tải video đa website vẫn là tính năng riêng đang phát triển.</div>
+<div class="footer">Wikimedia Commons và Openverse cung cấp ảnh kèm nguồn/tác giả/giấy phép khi có. Video và audio Internet Archive chỉ hiện khi hồ sơ công khai liệt kê tệp gốc phù hợp; quyền sử dụng khác nhau theo từng mục. NASA có thể chứa tư liệu bên thứ ba. Hãy xem trang nguồn và điều khoản trước khi tái sử dụng. Tải video đa website vẫn là tính năng riêng đang phát triển.</div>
 </main>
 <script>
 (function(){
