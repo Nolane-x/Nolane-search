@@ -2,12 +2,18 @@
 
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## In development — Wave 42 personal planning tools
+## Latest production release — Wave 42 (2026-11-24)
 
-- Review branch: [feat/wave-forty-two-personal-planning-tools](https://github.com/Nolane-x/Nolane-search/tree/feat/wave-forty-two-personal-planning-tools). Proposed additions: 8 consumer-facing utilities for meal shopping lists, travel packing, study scheduling, weekly chores, subscriptions, commuting, reading goals and grocery budgets.
-- Implementation includes TypeScript catalog + direct AI routing, Python GitHub Actions runner, Python and AI tests. Product research: [TOOL-RESEARCH-2026-11-24-WAVE42.md](TOOL-RESEARCH-2026-11-24-WAVE42.md). Handoff: [HANDOFF-WAVE-FORTY-TWO-2026-11-24.md](HANDOFF-WAVE-FORTY-TWO-2026-11-24.md).
-- This is not a production release yet. The verified production baseline remains Wave 41 / 494 tools until review, CI and deployment are complete.
+- [PR #95](https://github.com/Nolane-x/Nolane-search/pull/95) merged into main as `caa5bc0ee08a1b584c2099decdad3b8e8b78a890`. Production Tool Center catalog: **502 processors** (+8 over Wave 41).
+- PR CI [45312352260](https://github.com/Nolane-x/Nolane-search/actions/runs/45312352260) passed TypeScript type-check, **25 Vitest files / 266 tests**, deployment-script checks, **404 Python runner tests** and Worker build. Main CI [45317297572](https://github.com/Nolane-x/Nolane-search/actions/runs/45317297572) is running the same checks on the merge commit.
+- Worker export/build and health smoke [45317299584](https://github.com/Nolane-x/Nolane-search/actions/runs/45317299584) passed.
+- Cloudflare deployment [45317297601](https://github.com/Nolane-x/Nolane-search/actions/runs/45317297601) passed required-secret validation, source and bundle checks, Worker upload and Telegram webhook verification (message + callback_query) and bot command registration. Worker Version ID: `70089084-aae3-4692-bd88-2368aec4e8a2`.
+- D1 migration was correctly skipped because Wave 42 adds no schema changes or persistent storage.
+- Eight everyday planning tools are registered in the catalog, direct Nolane AI interface and GitHub Actions runner: meal shopping lists, travel packing checklists, study schedules, weekly chores, subscription costs, commute costs, reading plans and grocery budgets.
+- Product research: [TOOL-RESEARCH-2026-11-24-WAVE42.md](TOOL-RESEARCH-2026-11-24-WAVE42.md). Implementation handoff: [HANDOFF-WAVE-FORTY-TWO-2026-11-24.md](HANDOFF-WAVE-FORTY-TWO-2026-11-24.md).
+- Owner-level acceptance remains separate: try the new commands in the real private Telegram bot and upload a non-sensitive JSON file. Successful deployment and webhook registration do not prove each client-side interaction.
 
+## Previous production release — Wave 41 (2026-11-24)
 ## Latest production release — Wave 41 (2026-11-24)
 
 - [PR #94](https://github.com/Nolane-x/Nolane-search/pull/94) merged into `main` as `38e6c4a81b147f5445c23682c8e75b138ccf1c60`. Production Tool Center catalog: **494 processors** (+11 over Wave 40).
