@@ -10,7 +10,7 @@ const env = { DB: {} as never, SEARCH_JOBS: {} as never } as Env;
 describe("Nolane AI callable tools", () => {
   it("exposes the catalog as a real model-callable function", () => {
     expect(AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name)).toEqual([
-      "list_nolane_tools", "search_web", "read_web_page", "get_weather_forecast", "check_air_quality", "convert_currency", "get_public_holidays", "find_long_weekends", "process_text_content", "hash_text",
+      "list_nolane_tools", "search_web", "read_web_page", "get_weather_forecast", "check_air_quality", "convert_currency", "get_public_holidays", "find_long_weekends", "get_marine_forecast", "get_earthquake_activity", "search_books", "lookup_postal_code", "process_text_content", "hash_text",
     ]);
   });
 
@@ -1048,6 +1048,19 @@ describe("Nolane AI callable tools", () => {
     }));
     expect(result.converted_amount).toBe(52700);
     expect(result.reference_date).toBe("2026-11-23");
+  });
+
+  it("exposes all Wave 48 discovery tools to the model and dispatches postcode lookup", async () => {
+    const names = AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name);
+    expect(names).toEqual(expect.arrayContaining([
+      "get_marine_forecast", "get_earthquake_activity", "search_books", "lookup_postal_code",
+    ]));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      "post code": "90210", country: "United States", "country abbreviation": "US",
+      places: [{ "place name": "Beverly Hills", state: "California", "state abbreviation": "CA", latitude: "34.0901", longitude: "-118.4065" }],
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+    const result = JSON.parse(await executeAgentTool(env, "lookup_postal_code", { country_code: "US", postal_code: "90210" }));
+    expect(result.places[0].place_name).toBe("Beverly Hills");
   });
 
 });

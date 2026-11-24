@@ -33,11 +33,11 @@ function numeric(value: unknown, key: string, fallback: number, min: number, max
 function maybeNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
-async function getJson<T>(url: URL, provider: string): Promise<T> {
+async function getJson<T>(url: URL, provider: string, extraHeaders: Record<string, string> = {}): Promise<T> {
   let response: Response;
   try {
     response = await fetch(url, {
-      method: "GET", headers: { accept: "application/json" },
+      method: "GET", headers: { accept: "application/json", ...extraHeaders },
       redirect: "error", signal: AbortSignal.timeout(12_000),
     });
   } catch {
@@ -297,6 +297,228 @@ async function longWeekends(args: Obj): Promise<string> {
   });
 }
 
+
+function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const rad = (value: number) => value * Math.PI / 180;
+  const dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+async function marineForecast(args: Obj): Promise<string> {
+  const resolved = await locate(args);
+  if (resolved.choices) return ambiguity(resolved.choices);
+  const place = resolved.place!;
+  const days = integer(args.forecast_days, "forecast_days", 3, 1, 7);
+  const url = new URL("https://marine-api.open-meteo.com/v1/marine");
+  url.searchParams.set("latitude", String(place.latitude));
+  url.searchParams.set("longitude", String(place.longitude));
+  url.searchParams.set("current", "wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period,sea_surface_temperature,ocean_current_velocity,ocean_current_direction");
+  url.searchParams.set("daily", "wave_height_max,wave_direction_dominant,wave_period_max,swell_wave_height_max,swell_wave_direction_dominant,swell_wave_period_max");
+  url.searchParams.set("forecast_days", String(days));
+  url.searchParams.set("timezone", "auto");
+  url.searchParams.set("cell_selection", "sea");
+  const data = obj(await getJson<unknown>(url, "Open-Meteo marine forecast"), "Marine forecast");
+  const current = obj(data.current, "Marine current conditions");
+  const daily = obj(data.daily, "Daily marine conditions");
+  const dates = Array.isArray(daily.time) ? daily.time.slice(0, days) : [];
+  const at = (key: string, i: number): unknown => Array.isArray(daily[key]) ? (daily[key] as unknown[])[i] : null;
+  const forecast = dates.map((date, i) => ({
+    date,
+    maximum_wave_height_m: maybeNumber(at("wave_height_max", i)),
+    dominant_wave_direction_deg_from_north: maybeNumber(at("wave_direction_dominant", i)),
+    maximum_wave_period_seconds: maybeNumber(at("wave_period_max", i)),
+    maximum_swell_height_m: maybeNumber(at("swell_wave_height_max", i)),
+    dominant_swell_direction_deg_from_north: maybeNumber(at("swell_wave_direction_dominant", i)),
+    maximum_swell_period_seconds: maybeNumber(at("swell_wave_period_max", i)),
+  }));
+  const modelLatitude = maybeNumber(data.latitude);
+  const modelLongitude = maybeNumber(data.longitude);
+  const modelDistance = modelLatitude !== null && modelLongitude !== null
+    ? distanceKm(place.latitude, place.longitude, modelLatitude, modelLongitude) : null;
+  return JSON.stringify({
+    status: "ok",
+    source: "Open-Meteo Marine API",
+    source_url: "https://open-meteo.com/en/docs/marine-weather-api",
+    attribution: OPEN_METEO_NOTE,
+    requested_location: place,
+    marine_model_grid: {
+      latitude: modelLatitude,
+      longitude: modelLongitude,
+      distance_from_requested_location_km: modelDistance === null ? null : Math.round(modelDistance * 10) / 10,
+      cell_selection: "nearest sea cell",
+    },
+    timezone: typeof data.timezone === "string" ? data.timezone : place.timezone,
+    current: {
+      time: current.time ?? null,
+      wave_height_m: maybeNumber(current.wave_height),
+      wave_direction_deg_from_north: maybeNumber(current.wave_direction),
+      wave_period_seconds: maybeNumber(current.wave_period),
+      swell_height_m: maybeNumber(current.swell_wave_height),
+      swell_direction_deg_from_north: maybeNumber(current.swell_wave_direction),
+      swell_period_seconds: maybeNumber(current.swell_wave_period),
+      sea_surface_temperature_c: maybeNumber(current.sea_surface_temperature),
+      ocean_current_speed_km_per_hour: maybeNumber(current.ocean_current_velocity),
+      ocean_current_direction_deg: maybeNumber(current.ocean_current_direction),
+      units: data.current_units ?? {},
+    },
+    daily_forecast: forecast,
+    note: "Marine model estimates, not a navigation, swimming, rescue or severe-weather warning service. Check local maritime authorities and beach flags. The nearest sea grid may be far from the requested city; treat the forecast cautiously when the reported grid distance is large.",
+    location_warning: modelDistance !== null && modelDistance > 80
+      ? "The nearest sea grid is more than 80 km from the requested location; it may not represent nearby coastal conditions."
+      : null,
+  });
+}
+
+async function earthquakeActivity(args: Obj): Promise<string> {
+  const resolved = await locate(args);
+  if (resolved.choices) return ambiguity(resolved.choices);
+  const place = resolved.place!;
+  const days = integer(args.days_back, "days_back", 7, 1, 30);
+  const radius = numeric(args.radius_km, "radius_km", 250, 10, 1000);
+  const magnitude = numeric(args.minimum_magnitude, "minimum_magnitude", 2.5, 0, 9.9);
+  const end = new Date();
+  const start = new Date(end.getTime() - days * 86_400_000);
+  const url = new URL("https://earthquake.usgs.gov/fdsnws/event/1/query");
+  url.searchParams.set("format", "geojson");
+  url.searchParams.set("starttime", start.toISOString());
+  url.searchParams.set("endtime", end.toISOString());
+  url.searchParams.set("latitude", String(place.latitude));
+  url.searchParams.set("longitude", String(place.longitude));
+  url.searchParams.set("maxradiuskm", String(radius));
+  url.searchParams.set("minmagnitude", String(magnitude));
+  url.searchParams.set("orderby", "time");
+  url.searchParams.set("limit", "30");
+  const data = obj(await getJson<unknown>(url, "USGS earthquake catalog"), "Earthquake catalog");
+  const features = Array.isArray(data.features) ? data.features : [];
+  const events = features.slice(0, 30).flatMap((raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const feature = raw as Obj;
+    if (!feature.properties || typeof feature.properties !== "object" || Array.isArray(feature.properties)) return [];
+    const properties = feature.properties as Obj;
+    const coordinates = feature.geometry && typeof feature.geometry === "object" && !Array.isArray(feature.geometry)
+      ? (feature.geometry as Obj).coordinates : null;
+    const coordinateList = Array.isArray(coordinates) ? coordinates : [];
+    const longitude = typeof coordinateList[0] === "number" ? coordinateList[0] : null;
+    const latitude = typeof coordinateList[1] === "number" ? coordinateList[1] : null;
+    const depthKm = typeof coordinateList[2] === "number" ? coordinateList[2] : null;
+    const eventDate = typeof properties.time === "number" ? new Date(properties.time) : null;
+    const timestamp = eventDate && Number.isFinite(eventDate.getTime()) ? eventDate.toISOString() : null;
+    const eventUrl = typeof properties.url === "string" ? (() => {
+      try {
+        const candidate = new URL(properties.url as string);
+        return candidate.protocol === "https:" && candidate.hostname === "earthquake.usgs.gov" ? candidate.toString() : null;
+      } catch { return null; }
+    })() : null;
+    return [{
+      id: typeof feature.id === "string" ? feature.id.slice(0, 80) : null,
+      magnitude: maybeNumber(properties.mag),
+      magnitude_type: typeof properties.magType === "string" ? properties.magType.slice(0, 12) : null,
+      place: typeof properties.place === "string" ? properties.place.slice(0, 220) : "Location not reported",
+      time_utc: timestamp,
+      depth_km: depthKm,
+      coordinates: longitude !== null && latitude !== null ? { latitude, longitude } : null,
+      detail_url: eventUrl,
+      tsunami_flag_reported_by_usgs: properties.tsunami === 1,
+    }];
+  });
+  const metadata = data.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata) ? data.metadata as Obj : {};
+  return JSON.stringify({
+    status: "ok",
+    source: "USGS Earthquake Catalog",
+    source_url: "https://earthquake.usgs.gov/fdsnws/event/1/",
+    query: {
+      location: place, days_back: days, radius_km: radius, minimum_magnitude: magnitude,
+      start_time_utc: start.toISOString(), end_time_utc: end.toISOString(),
+    },
+    event_count: events.length,
+    catalog_count: maybeNumber(metadata.count),
+    events,
+    note: "This is a catalog of reported earthquake events, not an earthquake early-warning system. Event completeness and reporting delays vary by location and magnitude. Follow official local emergency information; absence of listed events does not prove an area is safe.",
+  });
+}
+
+let lastOpenLibraryRequestAt = 0;
+async function searchBooks(args: Obj): Promise<string> {
+  const query = text(args, "query", 140);
+  const limit = integer(args.limit, "limit", 5, 1, 10);
+  const now = Date.now();
+  if (now - lastOpenLibraryRequestAt < 1000) {
+    throw new Error("Open Library search is limited to one request per second. Please retry shortly.");
+  }
+  lastOpenLibraryRequestAt = now;
+  const url = new URL("https://openlibrary.org/search.json");
+  url.searchParams.set("q", query);
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("fields", "key,title,author_name,first_publish_year,edition_count,isbn,subject");
+  const data = obj(await getJson<unknown>(url, "Open Library", {
+    "user-agent": "NolaneSearch/1.0 (https://github.com/Nolane-x/Nolane-search)",
+  }), "Open Library search");
+  const docs = Array.isArray(data.docs) ? data.docs : [];
+  const books = docs.slice(0, limit).flatMap((raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const row = raw as Obj;
+    if (typeof row.title !== "string" || !row.title.trim()) return [];
+    const key = typeof row.key === "string" && /^\/works\/[A-Za-z0-9]+$/.test(row.key) ? row.key : null;
+    return [{
+      title: row.title.slice(0, 240),
+      authors: Array.isArray(row.author_name) ? row.author_name.filter((x): x is string => typeof x === "string").slice(0, 4).map(x => x.slice(0, 100)) : [],
+      first_publication_year: maybeNumber(row.first_publish_year),
+      edition_count: maybeNumber(row.edition_count),
+      isbn_examples: Array.isArray(row.isbn) ? row.isbn.filter((x): x is string => typeof x === "string").slice(0, 3) : [],
+      subjects: Array.isArray(row.subject) ? row.subject.filter((x): x is string => typeof x === "string").slice(0, 4).map(x => x.slice(0, 80)) : [],
+      open_library_url: key ? "https://openlibrary.org" + key : null,
+    }];
+  });
+  return JSON.stringify({
+    status: "ok", source: "Open Library", source_url: "https://openlibrary.org/developers/api",
+    query, total_matching_records: maybeNumber(data.numFound), result_count: books.length, books,
+    note: "Catalog metadata can be incomplete or duplicated. A catalog record does not confirm that an edition is currently available to borrow or buy. This tool makes human-initiated, low-volume searches only and does not harvest the catalog.",
+  });
+}
+
+async function postalCodeLookup(args: Obj): Promise<string> {
+  const country = countryCode(args.country_code);
+  if (!country) throw new Error("country_code is required; use a two-letter ISO country code.");
+  const code = text(args, "postal_code", 20);
+  if (!/^[A-Za-z0-9][A-Za-z0-9 .-]{0,18}$/.test(code)) {
+    throw new Error("postal_code may contain letters, numbers, spaces, periods or hyphens only.");
+  }
+  const url = new URL("https://api.zippopotam.us/" + country.toLowerCase() + "/" + encodeURIComponent(code));
+  let payload: unknown;
+  try {
+    payload = await getJson<unknown>(url, "Zippopotam.us postal-code service");
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("HTTP 404")) {
+      return JSON.stringify({
+        status: "not_found", country_code: country, postal_code: code,
+        message: "No matching postal-code record was returned. The service does not cover every country or all postal-code details.",
+      });
+    }
+    throw error;
+  }
+  const data = obj(payload, "Postal-code");
+  const places = Array.isArray(data.places) ? data.places.slice(0, 10).flatMap((raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const place = raw as Obj;
+    return [{
+      place_name: typeof place["place name"] === "string" ? place["place name"].slice(0, 120) : null,
+      state_or_region: typeof place.state === "string" ? place.state.slice(0, 120) : null,
+      state_abbreviation: typeof place["state abbreviation"] === "string" ? place["state abbreviation"].slice(0, 20) : null,
+      latitude: typeof place.latitude === "string" && Number.isFinite(Number(place.latitude)) ? Number(place.latitude) : null,
+      longitude: typeof place.longitude === "string" && Number.isFinite(Number(place.longitude)) ? Number(place.longitude) : null,
+    }];
+  }) : [];
+  return JSON.stringify({
+    status: "ok", source: "Zippopotam.us / GeoNames", source_url: "https://docs.zippopotam.us/",
+    country: typeof data.country === "string" ? data.country.slice(0, 100) : null,
+    country_code: typeof data["country abbreviation"] === "string" ? data["country abbreviation"].slice(0, 2) : country,
+    postal_code: typeof data["post code"] === "string" ? data["post code"].slice(0, 30) : code,
+    places,
+    note: "Postal-code data is provided as-is from GeoNames and may be incomplete or approximate in some countries. It is not an official proof of deliverability or a replacement for a local postal authority.",
+  });
+}
+
 export async function runLiveEverydayTool(name: string, rawArgs: unknown): Promise<string> {
   const args = obj(rawArgs, "Tool arguments");
   if (name === "get_weather_forecast") return weather(args);
@@ -304,5 +526,9 @@ export async function runLiveEverydayTool(name: string, rawArgs: unknown): Promi
   if (name === "convert_currency") return currency(args);
   if (name === "get_public_holidays") return holidayCalendar(args);
   if (name === "find_long_weekends") return longWeekends(args);
+  if (name === "get_marine_forecast") return marineForecast(args);
+  if (name === "get_earthquake_activity") return earthquakeActivity(args);
+  if (name === "search_books") return searchBooks(args);
+  if (name === "lookup_postal_code") return postalCodeLookup(args);
   throw new Error("Unknown live everyday information tool.");
 }
