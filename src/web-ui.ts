@@ -49,7 +49,7 @@ button,input,textarea{font:inherit}button{cursor:pointer}a{color:inherit}.shell{
 <body>
 <header class="topbar"><div class="shell" style="width:100%;display:flex;align-items:center;justify-content:space-between">
 <a class="brand" href="/"><span class="mark">N</span><span>Nolane<span style="color:#315efb"> Search</span></span></a>
-<div class="top-actions"><span class="pill">Private search workspace</span><button id="toolsBtn" class="quiet hidden" type="button">🧰 Tools</button><button id="themeBtn" class="quiet" title="Đổi giao diện">◐</button><button id="logoutBtn" class="quiet hidden">Đăng xuất</button></div>
+<div class="top-actions"><span class="pill">Private search workspace</span><button id="mediaBtn" class="quiet hidden" type="button">▣ Media</button><button id="toolsBtn" class="quiet hidden" type="button">🧰 Tools</button><button id="themeBtn" class="quiet" title="Đổi giao diện">◐</button><button id="logoutBtn" class="quiet hidden">Đăng xuất</button></div>
 </div></header>
 <main class="shell">
 <section id="auth" class="auth hidden"><div class="mark" style="margin:auto;width:46px;height:46px;font-size:20px">N</div><h2>Không gian tìm kiếm riêng tư</h2><p id="authText">Để đăng nhập, hãy mở bot Nolane Search trên Telegram, gửi lệnh <b>/web</b>, sau đó mở đường dẫn bot gửi cho bạn.</p><div id="authError" class="notice hidden"></div></section>
@@ -97,8 +97,8 @@ function text(el,value){el.textContent=value==null?'':String(value)}
 function safeUrl(raw){try{var u=new URL(raw);return (u.protocol==='https:'||u.protocol==='http:')?u.href:null}catch(e){return null}}
 function authHeaders(){return {'content-type':'application/json','x-nolane-request':'1'}}
 function setBusy(on,label){state.busy=on;$('searchBtn').disabled=on;$('searchBtn').textContent=on?'Đang tìm…':'Tìm kiếm';if(on){results.innerHTML='<div class="loading"><span class="spinner"></span><span></span></div>';results.querySelector('.loading span:last-child').textContent=label||'Đang tìm kiếm qua nhiều nguồn…'}}
-function showAuth(message){workspace.classList.add('hidden');auth.classList.remove('hidden');$('toolsBtn').classList.add('hidden');if(message){$('authError').classList.remove('hidden');text($('authError'),message)}}
-function showWorkspace(){auth.classList.add('hidden');workspace.classList.remove('hidden');$('logoutBtn').classList.remove('hidden');$('toolsBtn').classList.remove('hidden')}
+function showAuth(message){workspace.classList.add('hidden');auth.classList.remove('hidden');$('mediaBtn').classList.add('hidden');$('toolsBtn').classList.add('hidden');if(message){$('authError').classList.remove('hidden');text($('authError'),message)}}
+function showWorkspace(){auth.classList.add('hidden');workspace.classList.remove('hidden');$('logoutBtn').classList.remove('hidden');$('mediaBtn').classList.remove('hidden');$('toolsBtn').classList.remove('hidden')}
 function saveRecent(q){try{var arr=JSON.parse(localStorage.getItem('nolane.recent')||'[]');arr=[q].concat(arr.filter(function(x){return x!==q})).slice(0,6);localStorage.setItem('nolane.recent',JSON.stringify(arr));renderRecent()}catch(e){}}
 function renderRecent(){var box=$('recent');box.replaceChildren();var arr=[];try{arr=JSON.parse(localStorage.getItem('nolane.recent')||'[]')}catch(e){}arr.forEach(function(item){var b=document.createElement('button');text(b,item);b.addEventListener('click',function(){query.value=item;runSearch()});box.appendChild(b)})}
 function addResult(item,index,eventId){
@@ -271,6 +271,7 @@ function showTools(show){
  text($('toolsBtn'),show?'← Tìm kiếm':'🧰 Tools');
  if(show){loadTools();refreshToolJobs();$('toolsHub').scrollIntoView({behavior:'smooth',block:'start'})}
 }
+$('mediaBtn').addEventListener('click',function(){location.href='/media'});
 $('toolsBtn').addEventListener('click',function(){showTools($('toolsHub').classList.contains('hidden'))});
 $('refreshToolJobs').addEventListener('click',refreshToolJobs);
 
