@@ -20,7 +20,7 @@ describe("Nolane AI callable tools", () => {
       tools: Array<{id:string;category:string}>;
     };
     expect(first.total).toBe(TOOL_CATALOG.length);
-    expect(first.total).toBe(518);
+    expect(first.total).toBe(526);
     expect(first.tools).toHaveLength(20);
     expect(first.nextOffset).toBe(20);
     expect(first.tools.every(tool => tool.category === "image")).toBe(true);
@@ -909,6 +909,64 @@ describe("Nolane AI callable tools", () => {
     });
     expect(warranty).toContain("Bản nháp yêu cầu kiểm tra bảo hành");
     expect(warranty).toContain("2027-01-31");
+  });
+
+  it("runs Wave 45 finance and moving-life tools through AI-callable tools", async () => {
+    const run = (tool_id: string, value: Record<string, unknown>) =>
+      executeAgentTool(env, "process_text_content", { tool_id, content: JSON.stringify(value) });
+
+    const bank = await run("bank-csv-expense-analyzer", {
+      transactions: [
+        { date: "2026-11-01", description: "Salary", amount: 1000, currency: "USD", category: "Income" },
+        { date: "2026-11-02", description: "Food", amount: -100, currency: "USD", category: "Food" },
+      ],
+    });
+    expect(bank).toContain("USD: income 1000; expenses 100; net 900");
+    expect(bank).toContain("Food | expenses 100");
+
+    const cashflow = await run("bill-cashflow-calendar-planner", {
+      as_of_date: "2026-11-24", horizon_days: 10, opening_balances: [{ currency: "VND", amount: 1000 }],
+      events: [{ name: "Rent", amount: 100, currency: "VND", direction: "expense", first_date: "2026-11-25", recurrence: "once" }],
+    });
+    expect(cashflow).toContain("projected balance 900 VND");
+
+    const settlement = await run("shared-expense-settler", {
+      currency: "VND", participants: ["A", "B"],
+      expenses: [{ name: "Dinner", amount: 100, paid_by: "A" }],
+    });
+    expect(settlement).toContain("B pays A: 50 VND");
+
+    const move = await run("moving-day-checklist-planner", {
+      as_of_date: "2026-11-24", move_date: "2026-11-30",
+      tasks: [{ name: "Book van", days_before_move: 2, assignee: "A" }],
+    });
+    expect(move).toContain("2026-11-28 | Book van | Upcoming");
+
+    const boxes = await run("moving-box-label-maker", {
+      boxes: [{ box_id: "K1", room: "Kitchen", contents: ["Plates"], fragile: true }],
+    });
+    expect(boxes).toContain("BOX K1");
+    expect(boxes).toContain("FLAGS: FRAGILE");
+
+    const returns = await run("return-deadline-tracker", {
+      as_of_date: "2026-11-24",
+      purchases: [{ product: "Headphones", seller: "Store", purchase_date: "2026-11-20", return_window_days: 14, remind_days_before: 20 }],
+    });
+    expect(returns).toContain("Check return now");
+
+    const gifts = await run("gift-budget-planner", {
+      currency: "VND", total_budget: 100,
+      recipients: [{ name: "A", budget: 50, gifts: [{ item: "Book", price: 30, purchased: true }] }],
+    });
+    expect(gifts).toContain("Overall budget remaining: 70 VND");
+    expect(gifts).toContain("Already purchased: 30 VND");
+
+    const kit = await run("household-emergency-kit-planner", {
+      household_size: 3, days: 2,
+      items: [{ name: "Water", unit: "L", per_person_per_day: 2, per_household: 1, on_hand: 5 }],
+    });
+    expect(kit).toContain("Water: target 13 L | on hand 5 L | still needed 8 L");
+    expect(kit).toContain("not an official safety standard");
   });
 
 });

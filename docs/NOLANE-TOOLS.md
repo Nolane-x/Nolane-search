@@ -1,5 +1,21 @@
 Nolane Tools hiện có **518 công cụ đã được đăng ký và triển khai trên production** sau Wave 44, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. [PR #97](https://github.com/Nolane-x/Nolane-search/pull/97) đã merge vào `main` bằng commit `4e7489aeca23de36c1cbf20db5ddf692f276d723`. Main CI [45327334511](https://github.com/Nolane-x/Nolane-search/actions/runs/45327334511), Worker export và live health smoke [45327334519](https://github.com/Nolane-x/Nolane-search/actions/runs/45327334519), Cloudflare deployment [45327334621](https://github.com/Nolane-x/Nolane-search/actions/runs/45327334621) đều thành công. Latest Worker Version ID: `adc960a0-89a4-4287-9431-9204636de49e`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema; tệp tiếp tục được xử lý trên GitHub-hosted runner dùng một lần.
 
+## Wave 45 — personal finance and moving-life tools — proposed in PR #98
+
+These eight processors are under review and are not counted as production until PR #98, CI and deployment are verified.
+
+| ID / command | Công cụ | Chức năng |
+|---|---|---|
+| /tool bank-csv-expense-analyzer | Phân tích chi tiêu từ CSV ngân hàng | Tổng hợp thu/chi theo tháng, danh mục và tiền tệ; phát hiện dòng có thể trùng, không sửa giao dịch |
+| /tool bill-cashflow-calendar-planner | Lịch hóa đơn và dòng tiền | Lập lịch thu nhập/hóa đơn lặp và dự báo số dư theo từng loại tiền |
+| /tool shared-expense-settler | Quyết toán chi phí nhóm | Cân bằng nhiều khoản chi, chia đều/chia riêng và các khoản đã thanh toán |
+| /tool moving-day-checklist-planner | Lịch công việc chuyển nhà | Xếp hạn việc theo ngày chuyển, người phụ trách và thời lượng |
+| /tool moving-box-label-maker | Tạo nhãn thùng chuyển nhà | Nhãn phòng, nội dung, đồ dễ vỡ/nặng và thùng cần mở trước |
+| /tool return-deadline-tracker | Theo dõi hạn đổi trả sản phẩm | Tính hạn ước tính từ chính sách do người dùng nhập |
+| /tool gift-budget-planner | Lập ngân sách quà tặng | Theo dõi ngân sách chung, hạn mức từng người và món đã mua |
+| /tool household-emergency-kit-planner | Tính danh sách đồ dùng khẩn cấp gia đình | Tính số lượng từ định mức người dùng tự đặt và lượng đang có |
+
+See [Wave 45 upstream research](TOOL-RESEARCH-2026-11-24-WAVE45.md) and [implementation handoff](HANDOFF-WAVE-FORTY-FIVE-2026-11-24.md).
 ## Wave 44 — everyday life-administration tools — deployed to production
 
 Wave 44 tăng catalog production từ **510 lên 518 công cụ** (+8). Tất cả 8 công cụ được nối vào direct AI JSON interface và GitHub Actions runner. PR CI [45327140857](https://github.com/Nolane-x/Nolane-search/actions/runs/45327140857), main CI, Worker export/health smoke và Cloudflare deployment đều hoàn thành thành công.
