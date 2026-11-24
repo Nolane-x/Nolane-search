@@ -21,7 +21,7 @@ Status: Review branch; CI and deployment pending.
 ## Files
 
 - tools/wave46.py — eight Python processors; standard library only.
-- tools/test_wave46.py — focused tests for fuel intervals, costs, quotes, condition reports, rental totals and service history.
+- tools/test_wave46.py — 11 focused tests for fuel intervals, costs, quotes, condition reports, rental totals and service history.
 - src/home-vehicle-rental-tools.ts — direct AI-callable implementations.
 - src/tools.ts — eight utility catalog entries.
 - src/agent-tools.ts — AI enum, input schema and dispatch.
