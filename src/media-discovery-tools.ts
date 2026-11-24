@@ -427,7 +427,7 @@ const OFF_FIELDS = [
   "code", "product_type", "product_name", "product_name_en", "generic_name", "brands", "quantity",
   "categories", "categories_tags", "ingredients_text", "ingredients_text_en", "allergens", "allergens_tags",
   "traces", "traces_tags", "labels", "nutriscore_grade", "nutriscore_score", "nova_group",
-  "environmental_score_grade", "environmental_score_score", "nutriments", "image_front_url", "image_url", "lang",
+  "environmental_score_grade", "environmental_score_score", "nutrition", "nutriments", "image_front_url", "image_url", "lang",
 ].join(",");
 
 function validBarcode(value: unknown): string {
@@ -542,18 +542,42 @@ function offList(value: unknown, maxItems = 20): string[] {
   return value.filter((item): item is string => typeof item === "string")
     .map(item => item.slice(0, 100)).slice(0, maxItems);
 }
+function nutritionValue(container: Obj, name: string): number | null {
+  const field = container[name];
+  if (!field || typeof field !== "object" || Array.isArray(field)) return null;
+  const value = (field as Obj).value ?? (field as Obj).value_computed;
+  return offNumber(value);
+}
 function normalizeOffProduct(row: Obj, barcode: string, host: string): Obj {
-  const nutrition = row.nutriments && typeof row.nutriments === "object" && !Array.isArray(row.nutriments)
+  const v3Nutrition = row.nutrition && typeof row.nutrition === "object" && !Array.isArray(row.nutrition)
+    ? row.nutrition as Obj : {};
+  const aggregatedSet = v3Nutrition.aggregated_set && typeof v3Nutrition.aggregated_set === "object" &&
+      !Array.isArray(v3Nutrition.aggregated_set) ? v3Nutrition.aggregated_set as Obj : {};
+  const aggregatedNutrients = aggregatedSet.nutrients && typeof aggregatedSet.nutrients === "object" &&
+      !Array.isArray(aggregatedSet.nutrients) ? aggregatedSet.nutrients as Obj : {};
+  const legacyNutrition = row.nutriments && typeof row.nutriments === "object" && !Array.isArray(row.nutriments)
     ? row.nutriments as Obj : {};
+  const v3Per = aggregatedSet.per;
+  const nutritionReference = v3Per === "100g" || v3Per === "100ml" || v3Per === "serving"
+    ? v3Per : (Object.keys(aggregatedNutrients).length ? "unknown" : "100g");
+  const isPer100g = Object.keys(aggregatedNutrients).length
+    ? v3Per === "100g"
+    : true;
+  const choose = (modern: string, legacy: string) => {
+    if (Object.keys(aggregatedNutrients).length) {
+      return isPer100g ? nutritionValue(aggregatedNutrients, modern) : null;
+    }
+    return offNumber(legacyNutrition[legacy]);
+  };
   const nutritionPer100g = {
-    energy_kcal: offNumber(nutrition["energy-kcal_100g"]),
-    fat_g: offNumber(nutrition.fat_100g),
-    saturated_fat_g: offNumber(nutrition["saturated-fat_100g"]),
-    carbohydrates_g: offNumber(nutrition.carbohydrates_100g),
-    sugars_g: offNumber(nutrition.sugars_100g),
-    fiber_g: offNumber(nutrition.fiber_100g),
-    proteins_g: offNumber(nutrition.proteins_100g),
-    salt_g: offNumber(nutrition.salt_100g),
+    energy_kcal: choose("energy-kcal", "energy-kcal_100g"),
+    fat_g: choose("fat", "fat_100g"),
+    saturated_fat_g: choose("saturated-fat", "saturated-fat_100g"),
+    carbohydrates_g: choose("carbohydrates", "carbohydrates_100g"),
+    sugars_g: choose("sugars", "sugars_100g"),
+    fiber_g: choose("fiber", "fiber_100g"),
+    proteins_g: choose("proteins", "proteins_100g"),
+    salt_g: choose("salt", "salt_100g"),
   };
   const productType = typeof row.product_type === "string" && ["food","beauty","petfood","product"].includes(row.product_type)
     ? row.product_type as Exclude<OffProductType,"all">
@@ -578,6 +602,7 @@ function normalizeOffProduct(row: Obj, barcode: string, host: string): Obj {
     nova_group: offNumber(row.nova_group),
     environmental_score_grade: offString(row.environmental_score_grade, 12),
     environmental_score_score: offNumber(row.environmental_score_score),
+    nutrition_reference: nutritionReference,
     nutrition_per_100g: nutritionPer100g,
     image_front_url: offImage(row.image_front_url),
     image_url: offImage(row.image_url),
