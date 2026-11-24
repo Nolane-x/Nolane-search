@@ -10,7 +10,7 @@ const env = { DB: {} as never, SEARCH_JOBS: {} as never } as Env;
 describe("Nolane AI callable tools", () => {
   it("exposes the catalog as a real model-callable function", () => {
     expect(AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name)).toEqual([
-      "list_nolane_tools", "search_web", "read_web_page", "process_text_content", "hash_text",
+      "list_nolane_tools", "search_web", "read_web_page", "get_weather_forecast", "check_air_quality", "convert_currency", "get_public_holidays", "find_long_weekends", "process_text_content", "hash_text",
     ]);
   });
 
@@ -1032,6 +1032,22 @@ describe("Nolane AI callable tools", () => {
     });
     expect(service).toContain("Pump repair (1)");
     expect(service).toContain("recorded service spend: 500000 VND");
+  });
+
+  it("routes live currency conversion through the model-callable tool interface", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("api.frankfurter.dev");
+      return new Response(JSON.stringify({ date: "2026-11-23", base: "USD", quote: "VND", rate: 26350 }), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const result = JSON.parse(await executeAgentTool(env, "convert_currency", {
+      base_currency: "USD", quote_currency: "VND", amount: 2,
+    }));
+    expect(result.converted_amount).toBe(52700);
+    expect(result.reference_date).toBe("2026-11-23");
   });
 
 });
