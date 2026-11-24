@@ -3,7 +3,18 @@
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
-## Latest production release — Wave 57 (2026-11-24)
+## Latest production release — Wave 58 (2026-11-24)
+
+- [PR #126](https://github.com/Nolane-x/Nolane-search/pull/126) merged into `main` as `a7551a00ee290e7506d6a38d9ec00d088f01f559`. Production expands barcode lookup to four official catalogs (Open Food Facts, Open Beauty Facts, Open Pet Food Facts, Open Products Facts) and adds `compare_food_products` for two to four food records. The existing `lookup_food_product` is corrected for the documented API v3 string statuses and legacy numeric compatibility.
+- The adapter reads current nested `nutrition.aggregated_set.nutrients` values and only labels them per 100 g when `per: 100g` is explicit. 100 ml/serving data is not mislabeled; absent or negative nutrient values remain null; non-food records are not included in nutrition comparisons. Redirects are limited to one hop and the exact barcode path on four allowlisted HTTPS Open Facts hosts. Existing **534 file processors** remain unchanged.
+- PR CI #523 [45427879864](https://github.com/Nolane-x/Nolane-search/actions/runs/45427879864) passed. Main CI #524 [45428128612](https://github.com/Nolane-x/Nolane-search/actions/runs/45428128612) passed TypeScript, **35 Vitest files / 356 tests**, deployment-script checks, **449 Python runner tests** and Worker build.
+- Cloudflare deployment #162 [45428128141](https://github.com/Nolane-x/Nolane-search/actions/runs/45428128141) succeeded. Worker Version ID: `959b78b3-38a6-45d5-b5a4-c2231de31bf7`. Telegram webhook validation and bot command registration succeeded.
+- Worker export #155 [45428128360](https://github.com/Nolane-x/Nolane-search/actions/runs/45428128360) and public `/health` smoke passed. Health returned `ok: true`, database `reachable`, and `archiveEnabled: true`. No D1 migration was needed.
+- Research: [TOOL-RESEARCH-2026-11-24-WAVE58.md](TOOL-RESEARCH-2026-11-24-WAVE58.md). Handoff: [HANDOFF-WAVE-FIFTY-EIGHT-2026-11-24.md](HANDOFF-WAVE-FIFTY-EIGHT-2026-11-24.md).
+- Product-name full-text search remains deferred: Open Food Facts issue #469 reports the production Search-a-licious index stopped updating after 2024-12-18. A fresh production reindex has not been verified; the staging index and legacy CGI search are not substituted.
+- **Downloader status:** arbitrary yt-dlp/gallery-dl downloads and private R2 signed share links remain unavailable until Cloudflare R2 is enabled on the account (API error `10042`). No private media bucket, multipart upload, signed playback links or private Range playback exists.
+
+## Previous production release — Wave 57 (2026-11-24)
 
 - [PR #122](https://github.com/Nolane-x/Nolane-search/pull/122) merged into `main` as `17777c5454dce56886ef1dee6e1da347ded1d0bb`. Production adds four SFW AI-callable entertainment catalog functions: anime search/full details and manga search/full details using Jikan API v4's public MyAnimeList-backed records. Searches always send `sfw=true`; result fields include titles, cover, score/rank, synopsis, episode/chapter/volume counts, studios/authors, publication/air dates and canonical catalog links when present. Existing **534 file processors** remain unchanged.
 - PR CI #512 [45420249913](https://github.com/Nolane-x/Nolane-search/actions/runs/45420249913) passed. Main CI #514 [45420656749](https://github.com/Nolane-x/Nolane-search/actions/runs/45420656749) passed TypeScript, **35 Vitest files / 356 tests**, deployment-script checks, **449 Python runner tests** and Cloudflare Worker build.
