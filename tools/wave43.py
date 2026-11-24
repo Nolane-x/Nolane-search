@@ -242,7 +242,7 @@ def garden_bed_capacity_calculator(path: Path) -> dict:
         total_area += area
         lines.extend([
             f"{name}",
-            f"- Bed size: {_money(length * width, 'XXX')} m²",
+            f"- Bed size: {(length * width).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)} m²",
             f"- Rows: {rows}",
             f"- Plants per row: {plants_per_row}",
             f"- Estimated capacity: {count} plant(s)",
@@ -294,6 +294,7 @@ def home_inventory_report(path: Path) -> dict:
     for currency in sorted(totals):
         lines.append(f"- {currency}: {currency} {_money_text(totals[currency], currency)}")
     lines.append("")
+    lines.append("Value by category")
     for (currency, category), amount in sorted(category_totals.items()):
         lines.append(f"- {category} ({currency}): {currency} {_money_text(amount, currency)}")
     lines.append("Purchase values are historical user-entered amounts, not current resale values or insurance valuations.")
