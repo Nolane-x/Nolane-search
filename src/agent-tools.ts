@@ -5,6 +5,7 @@ import { isSafePublicUrl } from "./security";
 import { performSearch } from "./search";
 import { TOOL_CATALOG, type ToolCategory } from "./tools";
 import { EVERYDAY_TOOL_IDS, runEverydayTextTool } from "./everyday-tools";
+import { HOUSEHOLD_TOOL_IDS, runHouseholdTextTool } from "./household-tools";
 import { translateText } from "./translation";
 import type { Env, SearchMode } from "./types";
 
@@ -49,6 +50,10 @@ const TEXT_TOOL_IDS = new Set([
   "bill-split-calculator", "loan-payment-calculator", "date-calculator", "timezone-converter",
   "recipe-scaler", "grade-calculator", "paint-calculator", "fuel-trip-calculator",
   "discount-calculator", "unit-price-comparator",
+  "appliance-energy-calculator", "floor-tile-calculator", "concrete-volume-calculator",
+  "soil-mulch-calculator", "household-budget-calculator", "savings-goal-calculator",
+  "travel-budget-calculator", "download-time-calculator", "work-hours-calculator",
+  "battery-runtime-calculator", "water-tank-volume-calculator",
 ]);
 
 export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
@@ -102,12 +107,12 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
     type: "function",
     function: {
       name: "process_text_content",
-      description: "Run bounded text/data processors on supplied content: environment-file auditing/redaction/template generation, INI inspection/conversion, Dockerfile/requirements/package manifest/gitignore static audits, environment-reference extraction, Terraform/Nginx/Apache/Caddy/systemd/shell static audits, everyday calculators for bills, loans, dates, time zones, recipes, grades, paint, fuel, discounts and unit prices, translation, developer text and network extraction, Markdown/HTML extraction, JSON/CSV/SQL/YAML conversions and statistics. Never executes shell commands, SQL, package scripts, uploaded code or arbitrary commands.",
+      description: "Run bounded text/data processors on supplied content: environment-file auditing/redaction/template generation, INI inspection/conversion, Dockerfile/requirements/package manifest/gitignore static audits, environment-reference extraction, Terraform/Nginx/Apache/Caddy/systemd/shell static audits, everyday calculators for bills, loans, dates, time zones, recipes, grades, paint, fuel, discounts, unit prices, home energy/materials, household budgets, travel, work hours, battery life and storage tanks, translation, developer text and network extraction, Markdown/HTML extraction, JSON/CSV/SQL/YAML conversions and statistics. Never executes shell commands, SQL, package scripts, uploaded code or arbitrary commands.",
       parameters: {
         type: "object",
         properties: {
           tool_id: { type: "string", enum: [...TEXT_TOOL_IDS], description: "Processor ID to run." },
-          content: { type: "string", description: "Text/file contents or compact JSON input. For everyday calculators, use these shapes: bill-split-calculator {bill_amount,people,currency?,tax_percent?,tip_percent?}; loan-payment-calculator {principal,annual_rate_percent,term_months,currency?,extra_monthly_payment?}; date-calculator {start_date,offset_days} or {start_date,end_date,include_end_date?}; timezone-converter {local_datetime,from_timezone,to_timezone,fold?}; recipe-scaler {original_servings,target_servings,ingredients:[{name,amount,unit}]}; grade-calculator {components:[{name,score,max_score?,weight_percent}],target_overall_percent?}; paint-calculator {length_m,width_m,height_m,coats?,coverage_m2_per_liter?,doors_count?,door_area_m2?,windows_count?,window_area_m2?,waste_percent?,include_ceiling?}; fuel-trip-calculator {distance_km,consumption_l_per_100km,fuel_price_per_liter,round_trip?,trips?,passengers?,currency?}; discount-calculator {original_price,discount_percent,extra_discount_percent?,tax_percent?,quantity?,currency?}; unit-price-comparator {items:[{name,price,quantity,unit}],currency?}, with compatible units g/kg/mg, mL/L, cm/m or each. Currency defaults to USD for most money tools; specify VND for Vietnamese đồng. Calculator values are offline estimates using supplied assumptions." },
+          content: { type: "string", description: "Text/file contents or compact JSON input. For everyday calculators, use these shapes: bill-split-calculator {bill_amount,people,currency?,tax_percent?,tip_percent?}; loan-payment-calculator {principal,annual_rate_percent,term_months,currency?,extra_monthly_payment?}; date-calculator {start_date,offset_days} or {start_date,end_date,include_end_date?}; timezone-converter {local_datetime,from_timezone,to_timezone,fold?}; recipe-scaler {original_servings,target_servings,ingredients:[{name,amount,unit}]}; grade-calculator {components:[{name,score,max_score?,weight_percent}],target_overall_percent?}; paint-calculator {length_m,width_m,height_m,coats?,coverage_m2_per_liter?,doors_count?,door_area_m2?,windows_count?,window_area_m2?,waste_percent?,include_ceiling?}; fuel-trip-calculator {distance_km,consumption_l_per_100km,fuel_price_per_liter,round_trip?,trips?,passengers?,currency?}; discount-calculator {original_price,discount_percent,extra_discount_percent?,tax_percent?,quantity?,currency?}; unit-price-comparator {items:[{name,price,quantity,unit}],currency?}; appliance-energy-calculator {price_per_kwh,currency?,appliances:[{name,watts,hours_per_day,days_per_month?,quantity?}]}; floor-tile-calculator {room_length_m,room_width_m,tile_length_cm,tile_width_cm,waste_percent?,tiles_per_box,price_per_box?,currency?}; concrete-volume-calculator {length_m,width_m,depth_m,waste_percent?,bag_yield_l?,price_per_bag?,currency?}; soil-mulch-calculator {area_m2,depth_cm,waste_percent?,bag_volume_l?,price_per_bag?,currency?}; household-budget-calculator {monthly_income,currency?,expenses:[{name,category,monthly_amount}]}; savings-goal-calculator {target_amount,current_savings?,monthly_contribution,annual_interest_rate_percent?,currency?}; travel-budget-calculator {travelers,days,buffer_percent?,currency?,expenses:[{category,total_cost}]}; download-time-calculator {file_size,file_size_unit,speed,speed_unit,overhead_percent?}; work-hours-calculator {hourly_rate?,currency?,shifts:[{label,start,end,break_minutes?}]}; battery-runtime-calculator {device_power_w, battery_wh} or {device_power_w,capacity_mah,voltage_v}, efficiency_percent?,reserve_percent?; water-tank-volume-calculator {shape:rectangular,length_m,width_m,height_m,fill_percent?} or {shape:cylinder,radius_m,height_m,fill_percent?}. Currency defaults to VND in the household tools; specify USD/EUR as needed. Units are user-supplied; no live tariffs, prices or network speed are fetched. All values are offline estimates based on supplied assumptions." },
           target_language: { type: "string", description: "Required only for text-translate, e.g. English, Vietnamese, French or Japanese." },
         },
         required: ["tool_id", "content"],
@@ -206,6 +211,7 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
   if (!TEXT_TOOL_IDS.has(toolId)) throw new Error("This processor is not enabled for direct AI text execution.");
   if (content.length > 40_000) throw new Error("Text input exceeds the 40,000-character agent limit; upload the file with /ai_file for runner processing.");
   if (EVERYDAY_TOOL_IDS.has(toolId)) return runEverydayTextTool(toolId, content);
+  if (HOUSEHOLD_TOOL_IDS.has(toolId)) return runHouseholdTextTool(toolId, content);
   if (toolId === "text-translate") {
     if (!targetLanguage) throw new Error("text-translate requires target_language.");
     const translated = await translateText(env, targetLanguage, content);

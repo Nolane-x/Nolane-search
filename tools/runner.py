@@ -54,6 +54,12 @@ from wave39 import (
     timezone_converter, recipe_scaler, grade_calculator, paint_calculator,
     fuel_trip_calculator, discount_calculator, unit_price_comparator,
 )
+from wave40 import (
+    appliance_energy_calculator, floor_tile_calculator, concrete_volume_calculator,
+    soil_mulch_calculator, household_budget_calculator, savings_goal_calculator,
+    travel_budget_calculator, download_time_calculator, work_hours_calculator,
+    battery_runtime_calculator, water_tank_volume_calculator,
+)
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
@@ -204,6 +210,10 @@ RUNNERS = {
     "bill-split-calculator", "loan-payment-calculator", "date-calculator", "timezone-converter",
     "recipe-scaler", "grade-calculator", "paint-calculator", "fuel-trip-calculator",
     "discount-calculator", "unit-price-comparator",
+    "appliance-energy-calculator", "floor-tile-calculator", "concrete-volume-calculator",
+    "soil-mulch-calculator", "household-budget-calculator", "savings-goal-calculator",
+    "travel-budget-calculator", "download-time-calculator", "work-hours-calculator",
+    "battery-runtime-calculator", "water-tank-volume-calculator",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -12473,6 +12483,17 @@ TOOLS={
  "fuel-trip-calculator":fuel_trip_calculator,
  "discount-calculator":discount_calculator,
  "unit-price-comparator":unit_price_comparator,
+ "appliance-energy-calculator":appliance_energy_calculator,
+ "floor-tile-calculator":floor_tile_calculator,
+ "concrete-volume-calculator":concrete_volume_calculator,
+ "soil-mulch-calculator":soil_mulch_calculator,
+ "household-budget-calculator":household_budget_calculator,
+ "savings-goal-calculator":savings_goal_calculator,
+ "travel-budget-calculator":travel_budget_calculator,
+ "download-time-calculator":download_time_calculator,
+ "work-hours-calculator":work_hours_calculator,
+ "battery-runtime-calculator":battery_runtime_calculator,
+ "water-tank-volume-calculator":water_tank_volume_calculator,
 
 }
 

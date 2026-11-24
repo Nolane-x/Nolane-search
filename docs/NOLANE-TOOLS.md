@@ -19,6 +19,26 @@ Wave 39 increased the production catalog from **462 to 472 registered tools**. T
 
 Research: [TOOL-RESEARCH-2026-11-23-WAVE39.md](TOOL-RESEARCH-2026-11-23-WAVE39.md). Implementation record: [HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md](HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md).
 
+## Wave 40 — everyday household, travel and device utilities — implementation branch, not production
+
+Wave 40 raises the branch catalog from **472 to 483 registered tools** (+11). The following user-facing processors are wired to the Python runner and direct AI text/JSON interface. Production remains at 472 until PR CI, merge and Cloudflare deployment succeed.
+
+| ID | Công cụ | Chức năng |
+|---|---|---|
+| \`/tool appliance-energy-calculator\` | Tính điện tiêu thụ thiết bị | kWh và chi phí điện theo công suất, thời gian dùng và giá/kWh tự nhập |
+| \`/tool floor-tile-calculator\` | Tính gạch lát sàn | Số viên, số hộp và chi phí vật liệu |
+| \`/tool concrete-volume-calculator\` | Tính khối lượng bê tông | Thể tích, lít và số bao theo năng suất nhập |
+| \`/tool soil-mulch-calculator\` | Tính đất và mùn phủ vườn | Thể tích đất/mùn, số bao và chi phí |
+| \`/tool household-budget-calculator\` | Lập ngân sách gia đình | Thu nhập, nhóm chi tiêu và tiền còn lại |
+| \`/tool savings-goal-calculator\` | Tính mục tiêu tiết kiệm | Số tháng để đạt mục tiêu theo tiền góp và lãi suất giả định |
+| \`/tool travel-budget-calculator\` | Lập ngân sách chuyến đi | Tổng chuyến đi, dự phòng và chi phí/người/ngày |
+| \`/tool download-time-calculator\` | Tính thời gian tải xuống | Thời gian truyền tệp với chuyển đổi bit/byte |
+| \`/tool work-hours-calculator\` | Tính giờ làm và tiền công | Ca làm, nghỉ giữa ca, ca qua đêm và tiền công ước tính |
+| \`/tool battery-runtime-calculator\` | Ước tính thời lượng pin | Wh hoặc mAh/điện áp, công suất và hiệu suất |
+| \`/tool water-tank-volume-calculator\` | Tính dung tích bồn nước | Dung tích bồn hộp/trụ và lượng nước hiện tại |
+
+See [upstream research](TOOL-RESEARCH-2026-11-24-WAVE40.md) and [implementation handoff](HANDOFF-WAVE-FORTY-2026-11-24.md). All rates, tariffs and prices are entered by the user; no live market or ISP data is implied.
+
 ### Wave 35 — AI model artifacts, training data, evaluation configs and 3D manufacturing — deployed to production
 
 Wave 35 adds six processors, increasing the production catalog from **450 to 456 tools**. PR #88 is merged and the main CI, Worker export/health smoke and Cloudflare deployment are all successful.
