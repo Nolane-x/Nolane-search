@@ -294,6 +294,68 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
   {
     type: "function",
     function: {
+      name: "search_tv_shows",
+      description: "Search TVmaze for television shows and return cast-independent metadata, genres, original network/channel, dates, schedule, rating and a TVmaze source link. This is a TV catalog, not a streaming availability checker; data is CC BY-SA and requires attribution.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 140, description: "Show title or title keywords." },
+        limit: { type: "integer", minimum: 1, maximum: 8, description: "Number of results, defaults to 5." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_tv_show_episodes",
+      description: "Retrieve a TVmaze episode guide by the numeric show ID returned by search_tv_shows. Can filter to one season and optionally include specials. This is catalog metadata, not a live streaming schedule.",
+      parameters: { type: "object", properties: {
+        tvmaze_show_id: { type: "integer", minimum: 1, maximum: 2147483647, description: "Numeric id from a TVmaze show search result." },
+        season: { type: "integer", minimum: 1, maximum: 100, description: "Optional season number." },
+        include_specials: { type: "boolean", description: "Whether to include TVmaze-listed specials; defaults to false." },
+        limit: { type: "integer", minimum: 1, maximum: 40, description: "Maximum number of episodes returned, defaults to 20." }
+      }, required: ["tvmaze_show_id"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_apple_media",
+      description: "Search Apple's country-specific iTunes Store catalog for movies, podcasts, music, music videos, audiobooks, short films or ebooks. Returns text metadata and official store links only; it does not return artwork or audio previews and does not confirm subscription availability.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 140, description: "Title, creator or keywords." },
+        media_type: { type: "string", enum: ["movie","podcast","music","musicVideo","audiobook","shortFilm","ebook"], description: "Catalog type; defaults to podcast." },
+        country_code: { type: "string", pattern: "^[A-Za-z]{2}$", description: "Two-letter Apple storefront country code; defaults to VN." },
+        limit: { type: "integer", minimum: 1, maximum: 10, description: "Number of results, defaults to 8." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_music_metadata",
+      description: "Search MusicBrainz for artist, recording or release-group metadata. Returns identifiers and credits, never audio recordings. Free API use is non-commercial unless separately licensed; a meaningful User-Agent and a one-request-per-second per-IP limit are required.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 140, description: "Artist, track or release title." },
+        entity_type: { type: "string", enum: ["artist","recording","release-group"], description: "Record type; defaults to artist." },
+        limit: { type: "integer", minimum: 1, maximum: 10, description: "Number of results, defaults to 5." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_scholarly_works",
+      description: "Search Crossref bibliographic records for papers, books and other scholarly works, with optional publication-year limits. Returns DOI, authors and publisher metadata only; it does not retrieve article text or guarantee open access.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 160, description: "Research question keywords, paper title, author or subject." },
+        year_from: { type: "integer", minimum: 1600, maximum: 2100, description: "Optional earliest publication year." },
+        year_to: { type: "integer", minimum: 1600, maximum: 2100, description: "Optional latest publication year." },
+        limit: { type: "integer", minimum: 1, maximum: 10, description: "Number of results, defaults to 5." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "process_text_content",
       description: "Run bounded text/data processors on supplied content: environment-file auditing/redaction/template generation, INI inspection/conversion, Dockerfile/requirements/package manifest/gitignore static audits, environment-reference extraction, Terraform/Nginx/Apache/Caddy/systemd/shell static audits, everyday calculators and planners for bills, loans, dates, time zones, recipes, grades, paint, fuel, discounts, unit prices, home energy/materials, household budgets, travel packing, meal shopping lists, study schedules, chores, subscriptions, commuting, reading goals, grocery budgets, habit history, plant care, garden beds, home inventory, home maintenance, pet routines, event seating and spaced review, work hours, battery life, storage tanks, bank CSV spending summaries, recurring bill cash-flow forecasts, group expense settlement, moving-day tasks and box labels, product return deadlines, gift budgets, user-defined household emergency supply quantities, vehicle fuel logs and ownership costs, appliance repair/replacement and service history, repair-quote comparison, rental move-in/move-out inspections and rental-offer costs, translation, developer text and network extraction, Markdown/HTML extraction, JSON/CSV/SQL/YAML conversions and statistics. Never executes shell commands, SQL, package scripts, uploaded code or arbitrary commands.",
       parameters: {
@@ -1811,7 +1873,7 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
     const page = await fetchTinyFishPage(env, safe.toString());
     return JSON.stringify({ title: page.title, url: page.finalUrl, text: page.text.slice(0, 12_000) });
   }
-  if (["get_weather_forecast","check_air_quality","convert_currency","get_public_holidays","find_long_weekends","get_marine_forecast","get_earthquake_activity","search_books","lookup_postal_code","define_english_word","search_public_domain_books","search_museum_artworks","get_natural_events","get_local_time"].includes(name)) {
+  if (["get_weather_forecast","check_air_quality","convert_currency","get_public_holidays","find_long_weekends","get_marine_forecast","get_earthquake_activity","search_books","lookup_postal_code","define_english_word","search_public_domain_books","search_museum_artworks","get_natural_events","get_local_time","search_tv_shows","get_tv_show_episodes","search_apple_media","search_music_metadata","search_scholarly_works"].includes(name)) {
     return (await runLiveEverydayTool(name, args)).slice(0, 12_000);
   }
   if (name === "process_text_content") {
