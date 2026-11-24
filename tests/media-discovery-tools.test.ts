@@ -5,6 +5,7 @@ import type { Env } from "../src/types";
 
 afterEach(() => vi.unstubAllGlobals());
 const env = { DB: {} as never, SEARCH_JOBS: {} as never } as Env;
+type Obj = Record<string, unknown>;
 function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
