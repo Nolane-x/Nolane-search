@@ -197,14 +197,12 @@ async function getCountryIndicators(args: Obj): Promise<string> {
       source_url: "https://data.worldbank.org/indicator/" + encodeURIComponent(code) + "?locations=" + encodeURIComponent(iso3),
     };
   }
-  const results = countryCodes.map(code => {
-    const iso3 = code.length === 3 ? code : [...countries.keys()].find(key => key === code) ?? code;
-    return countries.get(iso3) ?? countries.get(code) ?? null;
-  }).filter((item): item is { name: string; iso3_code: string; indicators: Record<string, Obj> } => item !== null);
+  const results = [...countries.values()];
   return JSON.stringify({
     status: rows.length ? "ok" : "not_found",
     source: "World Bank World Development Indicators (source 2)",
     source_url: WORLD_BANK_BASE,
+    requested_country_codes: countryCodes,
     countries: results,
     country_count: results.length,
     indicator_keys: keys,
