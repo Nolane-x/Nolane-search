@@ -2,6 +2,12 @@
 
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+## In development — Wave 43 home, hobby and learning tools
+
+- Review branch: [feat/wave-forty-three-home-hobby-and-study-tools](https://github.com/Nolane-x/Nolane-search/tree/feat/wave-forty-three-home-hobby-and-study-tools). Eight proposed ordinary-user tools cover habit history, plant care reminders, garden-bed capacity, household inventory, home maintenance, pet routines, event seating and spaced review.
+- The branch includes TypeScript catalog/direct AI implementations, Python GitHub Actions processors, tests and research/handoff documentation.
+- This is not a production release yet. The verified production baseline remains Wave 42 / 502 tools until PR, CI and deployment are complete.
+
 ## Latest production release — Wave 42 (2026-11-24)
 
 - [PR #95](https://github.com/Nolane-x/Nolane-search/pull/95) merged into main as `caa5bc0ee08a1b584c2099decdad3b8e8b78a890`. Production Tool Center catalog: **502 processors** (+8 over Wave 41).
