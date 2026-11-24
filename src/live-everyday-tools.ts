@@ -98,9 +98,12 @@ function wmo(value: unknown): string {
   if (value === 2) return "Partly cloudy";
   if (value === 3) return "Overcast";
   if (value === 45 || value === 48) return "Fog";
-  if ([51,53,55,56,57].includes(value)) return "Drizzle or freezing drizzle";
-  if ([61,63,65,66,67].includes(value)) return "Rain or freezing rain";
-  if ([71,73,75,77,85,86].includes(value)) return "Snow";
+  if ([51,53,55].includes(value)) return "Drizzle";
+  if ([56,57].includes(value)) return "Freezing drizzle";
+  if ([61,63,65].includes(value)) return "Rain";
+  if ([66,67].includes(value)) return "Freezing rain";
+  if ([71,73,75,77].includes(value)) return "Snow";
+  if ([85,86].includes(value)) return "Snow showers";
   if ([80,81,82].includes(value)) return "Rain showers";
   if ([95,96,99].includes(value)) return "Thunderstorm";
   return "Unknown weather code " + value;
