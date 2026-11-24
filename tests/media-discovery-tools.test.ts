@@ -273,7 +273,8 @@ describe("Wave 52 media and product discovery", () => {
       return json({ metadata: { mediatype: "audio", title: "Derivative Only" }, files: [
         { name: "only.mp3", format: "VBR MP3", size: "1200", source: "derivative" },
         { name: "unsafe.mp3", format: "MP3", size: "1200", source: "original", private: "true" },
-        { name: "wrong.wav", format: "JPEG", size: "1200", source: "original" }
+        { name: "wrong.wav", format: "JPEG", size: "1200", source: "original" },
+        { name: "missing-source.mp3", format: "MP3", size: "1200" }
       ] });
     }));
     const result = await searchInternetArchiveAudio("derivative only");
