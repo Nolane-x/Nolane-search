@@ -6,6 +6,7 @@ import { performSearch } from "./search";
 import { TOOL_CATALOG, type ToolCategory } from "./tools";
 import { EVERYDAY_TOOL_IDS, runEverydayTextTool } from "./everyday-tools";
 import { HOUSEHOLD_TOOL_IDS, runHouseholdTextTool } from "./household-tools";
+import { DAILY_LIFE_TOOL_IDS, runDailyLifeTextTool } from "./daily-life-tools";
 import { translateText } from "./translation";
 import type { Env, SearchMode } from "./types";
 
@@ -54,6 +55,10 @@ const TEXT_TOOL_IDS = new Set([
   "soil-mulch-calculator", "household-budget-calculator", "savings-goal-calculator",
   "travel-budget-calculator", "download-time-calculator", "work-hours-calculator",
   "battery-runtime-calculator", "water-tank-volume-calculator",
+  "water-bill-calculator", "mobile-data-duration-calculator", "solar-panel-output-calculator",
+  "wallpaper-roll-calculator", "curtain-fabric-calculator", "moving-box-calculator",
+  "event-food-calculator", "fuel-economy-calculator", "gas-cylinder-runtime-calculator",
+  "shipping-volumetric-weight-calculator", "storage-capacity-calculator",
 ]);
 
 export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
@@ -112,7 +117,7 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
         type: "object",
         properties: {
           tool_id: { type: "string", enum: [...TEXT_TOOL_IDS], description: "Processor ID to run." },
-          content: { type: "string", description: "Text/file contents or compact JSON input. For everyday calculators, use these shapes: bill-split-calculator {bill_amount,people,currency?,tax_percent?,tip_percent?}; loan-payment-calculator {principal,annual_rate_percent,term_months,currency?,extra_monthly_payment?}; date-calculator {start_date,offset_days} or {start_date,end_date,include_end_date?}; timezone-converter {local_datetime,from_timezone,to_timezone,fold?}; recipe-scaler {original_servings,target_servings,ingredients:[{name,amount,unit}]}; grade-calculator {components:[{name,score,max_score?,weight_percent}],target_overall_percent?}; paint-calculator {length_m,width_m,height_m,coats?,coverage_m2_per_liter?,doors_count?,door_area_m2?,windows_count?,window_area_m2?,waste_percent?,include_ceiling?}; fuel-trip-calculator {distance_km,consumption_l_per_100km,fuel_price_per_liter,round_trip?,trips?,passengers?,currency?}; discount-calculator {original_price,discount_percent,extra_discount_percent?,tax_percent?,quantity?,currency?}; unit-price-comparator {items:[{name,price,quantity,unit}],currency?}; appliance-energy-calculator {price_per_kwh,currency?,appliances:[{name,watts,hours_per_day,days_per_month?,quantity?}]}; floor-tile-calculator {room_length_m,room_width_m,tile_length_cm,tile_width_cm,waste_percent?,tiles_per_box,price_per_box?,currency?}; concrete-volume-calculator {length_m,width_m,depth_m,waste_percent?,bag_yield_l?,price_per_bag?,currency?}; soil-mulch-calculator {area_m2,depth_cm,waste_percent?,bag_volume_l?,price_per_bag?,currency?}; household-budget-calculator {monthly_income,currency?,expenses:[{name,category,monthly_amount}]}; savings-goal-calculator {target_amount,current_savings?,monthly_contribution,annual_interest_rate_percent?,currency?}; travel-budget-calculator {travelers,days,buffer_percent?,currency?,expenses:[{category,total_cost}]}; download-time-calculator {file_size,file_size_unit,speed,speed_unit,overhead_percent?}; work-hours-calculator {hourly_rate?,currency?,shifts:[{label,start,end,break_minutes?}]}; battery-runtime-calculator {device_power_w, battery_wh} or {device_power_w,capacity_mah,voltage_v}, efficiency_percent?,reserve_percent?; water-tank-volume-calculator {shape:rectangular,length_m,width_m,height_m,fill_percent?} or {shape:cylinder,radius_m,height_m,fill_percent?}. Currency defaults to VND in the household tools; specify USD/EUR as needed. Units are user-supplied; no live tariffs, prices or network speed are fetched. All values are offline estimates based on supplied assumptions." },
+          content: { type: "string", description: "Text/file contents or compact JSON. Daily-life input shapes: water-bill-calculator {previous_reading_m3,current_reading_m3,price_per_m3,fixed_charge?,sewage_percent?,currency?}; mobile-data-duration-calculator {allowance_gb,used_gb?,daily_usage_gb,reserve_percent?,days_until_reset?}; solar-panel-output-calculator {panel_watts,panel_count,peak_sun_hours_per_day,system_loss_percent?,days?,price_per_kwh?,currency?}; wallpaper-roll-calculator {room_perimeter_m,wall_height_m,roll_width_m,roll_length_m,pattern_repeat_cm?,extra_rolls?}; curtain-fabric-calculator {window_width_cm,window_height_cm,fabric_width_cm,fullness_ratio?,side_allowance_cm?,top_hem_cm?,bottom_hem_cm?,pattern_repeat_cm?}; moving-box-calculator {items_volume_m3,box_volume_l,usable_fill_percent?,extra_boxes_percent?}; event-food-calculator {guests,food_grams_per_person,drink_ml_per_person,snack_grams_per_person?,extra_percent?}; fuel-economy-calculator {distance_km,fuel_litres,price_per_litre?,currency?}; gas-cylinder-runtime-calculator {gas_weight_kg,consumption_grams_per_hour,reserve_percent?,hours_per_day?}; shipping-volumetric-weight-calculator {length_cm,width_cm,height_cm,actual_weight_kg,volumetric_divisor,price_per_kg?,currency?}; storage-capacity-calculator {capacity_gb,reserve_percent?,photo_size_mb?,video_size_mb_per_minute?,document_size_mb?}. All tariffs, rates, dimensions and prices are user-supplied; these are offline estimates, not live carrier or service quotes." },,
           target_language: { type: "string", description: "Required only for text-translate, e.g. English, Vietnamese, French or Japanese." },
         },
         required: ["tool_id", "content"],
@@ -212,6 +217,7 @@ async function runTextProcessor(env: Env, toolId: string, content: string, targe
   if (content.length > 40_000) throw new Error("Text input exceeds the 40,000-character agent limit; upload the file with /ai_file for runner processing.");
   if (EVERYDAY_TOOL_IDS.has(toolId)) return runEverydayTextTool(toolId, content);
   if (HOUSEHOLD_TOOL_IDS.has(toolId)) return runHouseholdTextTool(toolId, content);
+  if (DAILY_LIFE_TOOL_IDS.has(toolId)) return runDailyLifeTextTool(toolId, content);
   if (toolId === "text-translate") {
     if (!targetLanguage) throw new Error("text-translate requires target_language.");
     const translated = await translateText(env, targetLanguage, content);
