@@ -1,8 +1,8 @@
-Nolane Tools hiện có **494 công cụ đã được đăng ký và triển khai trên production** sau Wave 41, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. [PR #94](https://github.com/Nolane-x/Nolane-search/pull/94) đã merge vào `main` bằng commit `38e6c4a81b147f5445c23682c8e75b138ccf1c60`. Main CI [45300211124](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211124), Worker export và live health smoke [45300211171](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211171), Cloudflare deployment [45300211092](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211092) đều thành công. Latest Worker Version ID: `4d48b314-4548-4a78-8059-2215027cc989`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema; tệp tiếp tục được xử lý trên GitHub-hosted runner dùng một lần.
+Nolane Tools hiện có **502 công cụ đã được đăng ký và triển khai trên production** sau Wave 42, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. [PR #94](https://github.com/Nolane-x/Nolane-search/pull/94) đã merge vào `main` bằng commit `38e6c4a81b147f5445c23682c8e75b138ccf1c60`. Main CI [45300211124](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211124), Worker export và live health smoke [45300211171](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211171), Cloudflare deployment [45300211092](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211092) đều thành công. Latest Worker Version ID: `4d48b314-4548-4a78-8059-2215027cc989`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema; tệp tiếp tục được xử lý trên GitHub-hosted runner dùng một lần.
 
-## Wave 42 — personal planning and household tools — review pending
+## Wave 42 — personal planning and household tools — deployed to production
 
-The current production catalog remains **494 tools** (Wave 41). The following eight tools are implemented on the Wave 42 review branch and are not yet included in the production count.
+Wave 42 increases the production catalog from **494 to 502 registered tools** (+8). All eight tools are connected to the direct AI JSON interface and the Python GitHub Actions runner. PR #95, PR CI, main deployment and Worker export/health smoke completed successfully.
 
 | ID / command | Công cụ | Chức năng |
 |---|---|---|
@@ -15,7 +15,7 @@ The current production catalog remains **494 tools** (Wave 41). The following ei
 | /tool reading-plan-calculator | Kế hoạch đọc sách | Tính số trang mỗi buổi và thời gian đọc ước lượng |
 | /tool grocery-budget-planner | Ngân sách mua sắm | Cộng giỏ hàng theo nhóm và báo số tiền còn/vượt ngân sách |
 
-All amounts and assumptions are user supplied. The tools do not provide live exchange rates, prices, public-transport fares, weather, visa or airline-rule checks. Review [product research](TOOL-RESEARCH-2026-11-24-WAVE42.md) and [implementation handoff](HANDOFF-WAVE-FORTY-TWO-2026-11-24.md).
+All amounts and assumptions are user supplied. The tools do not provide live exchange rates, prices, public-transport fares, weather, visa or airline-rule checks. See [product research](TOOL-RESEARCH-2026-11-24-WAVE42.md) and [implementation handoff](HANDOFF-WAVE-FORTY-TWO-2026-11-24.md). Deployment evidence: [PR #95](https://github.com/Nolane-x/Nolane-search/pull/95), [CI](https://github.com/Nolane-x/Nolane-search/actions/runs/45312352260), [Worker export/health smoke](https://github.com/Nolane-x/Nolane-search/actions/runs/45317299584), [Cloudflare deployment](https://github.com/Nolane-x/Nolane-search/actions/runs/45317297601). Worker Version ID: `70089084-aae3-4692-bd88-2368aec4e8a2`.
 
 ## Wave 39 — everyday-user calculators — deployed to production
 
