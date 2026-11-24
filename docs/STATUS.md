@@ -2,12 +2,16 @@
 
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## In development — Wave 41 (2026-11-24)
+## Latest production release — Wave 41 (2026-11-24)
 
-- Branch [`feat/wave-forty-one-daily-life-planning-tools`](https://github.com/Nolane-x/Nolane-search/tree/feat/wave-forty-one-daily-life-planning-tools) adds 11 daily-life planning tools. Branch target: **494**; production remains at **483** until PR CI, merge and deployment are verified.
-- New tool areas include water bills, mobile-data plans, solar generation, wallpaper rolls, curtain fabric, moving boxes, event food, fuel economy, gas cylinder runtime, shipping volumetric weight and storage-capacity estimates.
-- All tariffs, rates, carrier divisors, power ratings and prices are user-supplied. No live price or carrier service integration is implied. Python uses the standard library; AI chat can invoke the new processors directly.
-- Research: [TOOL-RESEARCH-2026-11-24-WAVE41.md](TOOL-RESEARCH-2026-11-24-WAVE41.md). Handoff: [HANDOFF-WAVE-FORTY-ONE-2026-11-24.md](HANDOFF-WAVE-FORTY-ONE-2026-11-24.md).
+- [PR #94](https://github.com/Nolane-x/Nolane-search/pull/94) merged into `main` as `38e6c4a81b147f5445c23682c8e75b138ccf1c60`. Production Tool Center catalog: **494 processors** (+11 over Wave 40).
+- Main CI [45300211124](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211124) passed TypeScript type-check, **25 Vitest files / 265 tests**, deployment-script checks, **394 Python runner tests** and Worker build.
+- Worker export/build and live `/health` smoke [45300211171](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211171) passed.
+- Cloudflare deployment [45300211092](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211092) passed required-secret validation, source and bundle checks, Worker upload, Telegram webhook verification (message + callback_query) and bot command registration. Worker Version ID: `4d48b314-4548-4a78-8059-2215027cc989`.
+- D1 migration was correctly skipped because Wave 41 adds no schema changes, data tables or persistent file storage.
+- Eleven daily-life planning tools are registered in the catalog, runner allowlist and handler map and callable directly from Nolane AI chat: water bills, mobile data, solar output, wallpaper rolls, curtain fabric, moving boxes, event food, fuel economy, gas runtime, volumetric shipping weight and storage capacity. Python processors use only the standard library; rates and values are user-supplied.
+- Product research: [TOOL-RESEARCH-2026-11-24-WAVE41.md](TOOL-RESEARCH-2026-11-24-WAVE41.md). Release handoff: [HANDOFF-WAVE-FORTY-ONE-2026-11-24.md](HANDOFF-WAVE-FORTY-ONE-2026-11-24.md).
+- Owner-level acceptance remains separate: try selected calculator commands in the real private Telegram bot and a non-sensitive JSON file upload. CI and webhook registration do not prove client-side interaction.
 
 ## Latest production release — Wave 40 (2026-11-24)
 
