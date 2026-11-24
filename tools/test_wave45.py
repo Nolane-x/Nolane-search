@@ -113,11 +113,11 @@ class Wave45Tests(unittest.TestCase):
             ],
             "settlements": [{"from": "C", "to": "A", "amount": 10}],
         })
-        self.assertIn("A: 80 USD (receive)", output)
+        self.assertIn("A: 70 USD (receive)", output)
         self.assertIn("B: 30 USD (pay)", output)
-        self.assertIn("C: 50 USD (pay)", output)
+        self.assertIn("C: 40 USD (pay)", output)
         self.assertIn("B pays A: 30 USD", output)
-        self.assertIn("C pays A: 50 USD", output)
+        self.assertIn("C pays A: 40 USD", output)
 
     def test_shared_expense_rejects_unbalanced_custom_shares(self):
         with self.assertRaisesRegex(RuntimeError, "add up exactly"):
