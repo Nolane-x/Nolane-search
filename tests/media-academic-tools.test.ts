@@ -178,7 +178,7 @@ describe("Wave 50 media and academic discovery tools", () => {
             issued: { "date-parts": [[2026, 3, 1]] },
             publisher: "Example Press",
             "container-title": ["Journal of Example Studies"],
-            "reference-count": 10,
+            "references-count": 10,
             "is-referenced-by-count": 3,
             type: "journal-article",
             score: 50,
