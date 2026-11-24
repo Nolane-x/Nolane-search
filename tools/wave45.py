@@ -318,7 +318,7 @@ def bill_cashflow_calendar_planner(path: Path) -> dict:
         lines.append("- No due events fall inside the selected window.")
     for day, name, currency, signed, direction in expanded:
         balances[currency] += signed
-        totals[currency][direction] += abs(signed)
+        totals[currency]["income" if direction == "income" else "expenses"] += abs(signed)
         totals[currency]["count"] += 1
         lines.append(f"- {day.isoformat()} | {name} | {direction} {_fmt(abs(signed))} {currency} | projected balance {_fmt(balances[currency])} {currency}")
     lines.extend(["", "FORECAST TOTALS"])
