@@ -163,8 +163,7 @@ def floor_tile_calculator(path: Path) -> dict:
     price = _money(_decimal(data.get("price_per_box", 0), "price_per_box", 0, "1000000000000"), currency)
     room_area = length * width
     tile_area = tile_length * tile_width / Decimal(10000)
-    base_count = (room_area / tile_area).to_integral_value(rounding=ROUND_CEILING)
-    tile_count = int((base_count * (ONE + waste / 100)).to_integral_value(rounding=ROUND_CEILING))
+    tile_count = int((room_area / tile_area * (ONE + waste / 100)).to_integral_value(rounding=ROUND_CEILING))
     boxes = (tile_count + per_box - 1) // per_box
     purchased = boxes * per_box
     cost = _money(Decimal(boxes) * price, currency)
