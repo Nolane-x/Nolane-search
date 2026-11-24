@@ -658,8 +658,11 @@ export async function compareFoodProducts(barcodesInput: unknown): Promise<strin
   const products: Array<{ barcode:string; product:Obj }> = [];
   for (const barcode of barcodes) {
     const found = await getOffProduct(barcode, "food");
-    if (found.status === "ok") products.push({ barcode, product: found.product });
-    else products.push({ barcode, product: { barcode, not_found: true } });
+    if (found.status === "ok" && found.product.product_type === "food") {
+      products.push({ barcode, product: found.product });
+    } else {
+      products.push({ barcode, product: { barcode, not_found: true, reason: found.status === "ok" ? "not_a_food_product" : "not_found" } });
+    }
   }
   const metricSpecs: Array<{key:string;label:string;unit:string}> = [
     { key: "energy_kcal", label: "Energy", unit: "kcal/100 g" },
