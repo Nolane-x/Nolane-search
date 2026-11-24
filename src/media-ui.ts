@@ -87,8 +87,17 @@ async function search(){
  }catch(error){$('results').replaceChildren();$('notice').classList.remove('hidden');$('notice').textContent=error.message;$('status').textContent='Không thể tìm media'}
  finally{$('go').disabled=false}
 }
+function syncProviderOptions(){
+ var kind=$('kind').value;
+ var unsupported=kind==='audio'?['commons','nasa','openverse']:kind==='video'?['commons','openverse']:kind==='image'?['archive']:[];
+ var provider=$('provider');
+ for(var i=0;i<provider.options.length;i++){provider.options[i].disabled=unsupported.indexOf(provider.options[i].value)>=0}
+ if(provider.options[provider.selectedIndex]&&provider.options[provider.selectedIndex].disabled)provider.value='all';
+}
+$('kind').addEventListener('change',syncProviderOptions);
+syncProviderOptions();
 $('search').addEventListener('submit',function(e){e.preventDefault();search()});
-document.querySelectorAll('[data-kind]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('[data-kind]').forEach(x=>x.classList.toggle('active',x===b));$('kind').value=b.dataset.kind})});
+document.querySelectorAll('[data-kind]').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('[data-kind]').forEach(x=>x.classList.toggle('active',x===b));$('kind').value=b.dataset.kind;syncProviderOptions()})});
 $('logout').addEventListener('click',async function(){try{await api('/api/auth/logout',{method:'POST',headers:{'content-type':'application/json','origin':location.origin},body:'{}'})}catch(e){}location.href='/'});
 (async function boot(){try{await api('/api/auth/me');$('status').textContent='Đã đăng nhập · sẵn sàng tìm media'}catch(e){$('status').textContent='Hãy đăng nhập từ bot Telegram bằng /web';$('notice').classList.remove('hidden');$('notice').textContent='Bạn cần mở Nolane Search từ liên kết đăng nhập trong cuộc trò chuyện riêng với bot.'}})();
 })();
