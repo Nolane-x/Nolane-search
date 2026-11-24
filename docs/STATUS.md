@@ -3,6 +3,16 @@
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
+## Latest production release — Wave 54 (2026-11-24)
+
+- [PR #114](https://github.com/Nolane-x/Nolane-search/pull/114) merged into `main` as `8c3d05d40c93be76a28244e792aeb6e3b5990c9a`. Production adds two AI-callable media discovery operations: Openverse image search with creator/source/Creative Commons metadata and Internet Archive public video search that returns links only for listed non-private original video files. The authenticated Media Portal now combines Wikimedia Commons + Openverse + NASA for images and NASA + Internet Archive for videos. Per-provider failures are surfaced as warnings rather than discarding successful sources. Existing **534 file processors** remain unchanged.
+- PR CI [45412093218](https://github.com/Nolane-x/Nolane-search/actions/runs/45412093218) passed. Main CI [45412464406](https://github.com/Nolane-x/Nolane-search/actions/runs/45412464406) passed TypeScript, **32 Vitest files / 333 tests**, deployment-script checks, **449 Python runner tests** and Cloudflare Worker build.
+- Cloudflare deployment [45412464223](https://github.com/Nolane-x/Nolane-search/actions/runs/45412464223) succeeded: secrets were validated, Worker uploaded, triggers deployed, Telegram webhook checked and commands registered. Worker Version ID: `a53eafb0-631a-48dd-a65d-ea44af3fbcd7`.
+- Worker export/build and public `/health` smoke [45412464207](https://github.com/Nolane-x/Nolane-search/actions/runs/45412464207) succeeded. Health returned `ok: true`, database `reachable`, and `archiveEnabled: true`. D1 migration was not needed.
+- Research: [TOOL-RESEARCH-2026-11-24-WAVE54.md](TOOL-RESEARCH-2026-11-24-WAVE54.md). Handoff: [HANDOFF-WAVE-FIFTY-FOUR-2026-11-24.md](HANDOFF-WAVE-FIFTY-FOUR-2026-11-24.md).
+- Rights boundaries: Openverse metadata preserves creator, original source, license code/version and license URL; each license has its own terms, and attribution is still required where applicable. Internet Archive items may have missing or incomplete rights. Playback/download availability is not a copyright determination.
+- **Downloader status:** arbitrary yt-dlp/gallery-dl downloads and private R2 share links are still not production-enabled. Internet Archive results link public archive originals and are not copied into Nolane storage. R2 private storage, multipart upload, signed links, Range playback and expiry cleanup remain blocked pending owner-side R2 activation.
+
 ## Latest production release — Wave 53 (2026-11-24)
 
 - [PR #112](https://github.com/Nolane-x/Nolane-search/pull/112) merged into `main` as `e48d6e171c115b2d2154f273d81056cd8dd14bcb`. Production adds five direct AI-callable consumer discovery operations: TheMealDB recipe search, one-field recipe filtering and full recipe details; Wikidata entity search in English/Vietnamese and bilingual entity lookup. The existing **534 file processors** remain unchanged.

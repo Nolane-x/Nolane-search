@@ -3,7 +3,7 @@
 Date: 2026-11-24  
 Branch: feat/wave-54-open-media-sources  
 Base: 5611d2cd2595767a72df89ecc821b36a0a445965  
-Release status: implementation branch; not yet merged or deployed.
+Release status: merged and deployed via [PR #114](https://github.com/Nolane-x/Nolane-search/pull/114) as `8c3d05d40c93be76a28244e792aeb6e3b5990c9a`.
 
 ## New AI-callable media tools
 
@@ -42,8 +42,11 @@ No new dependency, secret, D1 migration or file processor is introduced. The exi
 - R2 private storage, multipart upload, signed playback/share links, Range playback and expiry cleanup remain pending the account owner's R2 activation.
 - No DRM, paywall or access-control bypass is offered.
 
-## Acceptance gates
+## Production verification — 2026-11-24
 
-1. PR CI passes type-check, Vitest, deployment-script checks, Python runner tests and Cloudflare Worker build.
-2. Main CI, Cloudflare deploy and Worker export/health smoke pass after merge.
-3. Live Openverse and Archive query tests should be run after deploy; provider data completeness and item-specific legal rights are separate from code tests.
+- PR CI #500 [45412093218](https://github.com/Nolane-x/Nolane-search/actions/runs/45412093218) passed TypeScript, 32 Vitest files / 333 tests, deployment checks, 449 Python runner tests and Cloudflare Worker build.
+- Main CI #501 [45412464406](https://github.com/Nolane-x/Nolane-search/actions/runs/45412464406) passed the same verification set.
+- Cloudflare deploy #158 [45412464223](https://github.com/Nolane-x/Nolane-search/actions/runs/45412464223) succeeded. Worker Version ID: `a53eafb0-631a-48dd-a65d-ea44af3fbcd7`.
+- Worker export #151 [45412464207](https://github.com/Nolane-x/Nolane-search/actions/runs/45412464207) and public health smoke succeeded. Health response: `ok: true`, database `reachable`, archive enabled.
+- Telegram webhook and command registration succeeded. No D1 migration was required.
+- The CI and health smoke verify code/build/deployment health, not every live upstream search response. A live query/rights check against Openverse and Internet Archive remains separate; public data availability and item-specific reuse rights can vary.
