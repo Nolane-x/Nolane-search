@@ -3,7 +3,17 @@
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
-## Latest production release — Wave 56 (2026-11-24)
+## Latest production release — Wave 57 (2026-11-24)
+
+- [PR #122](https://github.com/Nolane-x/Nolane-search/pull/122) merged into `main` as `17777c5454dce56886ef1dee6e1da347ded1d0bb`. Production adds four SFW AI-callable entertainment catalog functions: anime search/full details and manga search/full details using Jikan API v4's public MyAnimeList-backed records. Searches always send `sfw=true`; result fields include titles, cover, score/rank, synopsis, episode/chapter/volume counts, studios/authors, publication/air dates and canonical catalog links when present. Existing **534 file processors** remain unchanged.
+- PR CI #512 [45420249913](https://github.com/Nolane-x/Nolane-search/actions/runs/45420249913) passed. Main CI #514 [45420656749](https://github.com/Nolane-x/Nolane-search/actions/runs/45420656749) passed TypeScript, **35 Vitest files / 356 tests**, deployment-script checks, **449 Python runner tests** and Cloudflare Worker build.
+- Cloudflare deployment #161 [45420656866](https://github.com/Nolane-x/Nolane-search/actions/runs/45420656866) succeeded. Worker Version ID: `190b79be-f6d1-4c31-a309-352bed4864d0`. Telegram webhook validation and bot command registration succeeded.
+- Worker export #154 [45420657144](https://github.com/Nolane-x/Nolane-search/actions/runs/45420657144) and public `/health` smoke passed. Health returned `ok: true`, database `reachable`, and `archiveEnabled: true`. No D1 migration was needed.
+- Research: [TOOL-RESEARCH-2026-11-24-WAVE57.md](TOOL-RESEARCH-2026-11-24-WAVE57.md). Handoff: [HANDOFF-WAVE-FIFTY-SEVEN-2026-11-24.md](HANDOFF-WAVE-FIFTY-SEVEN-2026-11-24.md).
+- Source boundary: Jikan is an unofficial parser for public MyAnimeList data. Records, rankings, publication/airing status and scores may be delayed or incomplete; verify them using the linked catalog page. This integration does not provide episode streaming, manga reading or downloads.
+- **Downloader status:** arbitrary yt-dlp/gallery-dl downloads and private R2 signed share links remain unavailable until Cloudflare R2 is enabled on the account (API error `10042`). No private media bucket, multipart upload, signed playback links or private Range playback exists.
+
+## Previous production release — Wave 56 (2026-11-24)
 
 - [PR #118](https://github.com/Nolane-x/Nolane-search/pull/118) merged into `main` as `581666372bca99157850552e866d0401a4159a94`. Production adds AI-callable Internet Archive public audio search and a browser-native audio player in the authenticated Media Portal. The tool queries `mediatype:audio`, checks a bounded set of item metadata records and returns only supported, non-private files explicitly marked `source: original`. It rejects restricted/noindex items, derivatives, unsafe filenames, unsupported formats and files with missing source markers. Existing **534 file processors** remain unchanged.
 - PR CI #506 [45417728775](https://github.com/Nolane-x/Nolane-search/actions/runs/45417728775) passed on rerun attempt 2. Main CI #508 [45418371630](https://github.com/Nolane-x/Nolane-search/actions/runs/45418371630) passed TypeScript, **34 Vitest files / 348 tests**, deployment-script checks, **449 Python runner tests** and Cloudflare Worker build.
