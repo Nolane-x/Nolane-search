@@ -14,7 +14,7 @@ import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, v
 import { clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWorkflow, getPendingToolWorkflow, getPendingToolWorkflowPlan, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow, storeToolWorkflowPlan } from "./workflows";
 import { webAppResponse } from "./web-ui";
 import { mediaAppResponse } from "./media-ui";
-import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos } from "./media-discovery-tools";
+import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos, searchInternetArchiveAudio } from "./media-discovery-tools";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import { planToolWorkflow } from "./workflow-planner";
 import type { AiFunctionTool, AiTask } from "./ai-router";
