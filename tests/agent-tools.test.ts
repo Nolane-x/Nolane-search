@@ -130,6 +130,98 @@ describe("Nolane AI callable tools", () => {
       .toContain("about 28,800 photos");
   });
 
+  it("exposes and runs all Wave 43 home, hobby and study tools through the normal AI tool", async () => {
+    const schema = AGENT_TOOL_DEFINITIONS.find(tool => tool.function.name === "process_text_content")?.function.parameters as {
+      properties?: { tool_id?: { enum?: string[] } };
+    };
+    const ids = [
+      "habit-history-analyzer", "plant-care-scheduler", "garden-bed-capacity-calculator",
+      "home-inventory-report", "home-maintenance-scheduler", "pet-routine-planner",
+      "event-seating-planner", "spaced-review-scheduler",
+    ];
+    expect(schema.properties?.tool_id?.enum).toEqual(expect.arrayContaining(ids));
+    expect(TOOL_CATALOG.filter(tool => ids.includes(tool.id) && tool.ready)).toHaveLength(8);
+    const run = (tool_id: string, value: unknown) => executeAgentTool(env, "process_text_content", {
+      tool_id, content: JSON.stringify(value),
+    });
+
+    const habits = await run("habit-history-analyzer", {
+      as_of_date:"2026-11-24",window_days:7,
+      habits:[{name:"Read",target_days_per_week:5,check_ins:["2026-11-21","2026-11-22","2026-11-23","2026-11-24"]}],
+    });
+    expect(habits).toContain("Check-ins in window: 4 / 5 target");
+    expect(habits).toContain("Target completion: 80%");
+    expect(habits).toContain("Current streak: 4 day(s)");
+
+    const plants = await run("plant-care-scheduler", {
+      as_of_date:"2026-11-24",window_days:14,
+      plants:[{name:"Monstera",care_tasks:[
+        {task:"Water",last_done:"2026-11-20",every_days:3},
+        {task:"Rotate pot",last_done:"2026-11-22",every_days:14},
+      ]}],
+    });
+    expect(plants).toContain("2026-11-23 | Monstera | Water");
+    expect(plants).toContain("OVERDUE by 1 day(s)");
+    expect(plants).toContain("2026-12-06");
+
+    const garden = await run("garden-bed-capacity-calculator", {
+      beds:[{name:"Raised bed",length_m:2,width_m:1,plant_spacing_cm:30,row_spacing_cm:25}],
+    });
+    expect(garden).toContain("Rows: 4");
+    expect(garden).toContain("Plants per row: 6");
+    expect(garden).toContain("Estimated capacity: 24 plant(s)");
+
+    const inventory = await run("home-inventory-report", {
+      as_of_date:"2026-11-24",currency:"USD",
+      items:[{name:"Laptop",category:"Electronics",quantity:2,purchase_price_per_item:100,
+        purchase_date:"2025-11-24",warranty_months:12,expected_life_months:24,location:"Desk"}],
+    });
+    expect(inventory).toContain("USD 200.00");
+    expect(inventory).toContain("Warranty: active; through 2026-11-24");
+    expect(inventory).toContain("Expected service-life date entered by user: 2027-11-24");
+
+    const maintenance = await run("home-maintenance-scheduler", {
+      as_of_date:"2026-11-24",window_days:60,
+      tasks:[{name:"Clean air filter",last_completed:"2026-10-24",every_days:30,estimated_minutes:20,priority:4}],
+    });
+    expect(maintenance).toContain("OVERDUE since 2026-11-23 by 1 day(s)");
+    expect(maintenance).toContain("next cycle 2026-12-23");
+
+    const pets = await run("pet-routine-planner", {
+      start_date:"2026-11-24",days:4,
+      pets:[{name:"Milo",routines:[
+        {task:"Walk",time:"08:00",days_of_week:["Tue","Thu"],note:"Short walk"},
+        {task:"Brush",time:"18:00",days_of_week:["Wed"]},
+      ]}],
+    });
+    expect(pets).toContain("2026-11-24 (Tue)");
+    expect(pets).toContain("08:00 | Milo | Walk");
+    expect(pets).toContain("18:00 | Milo | Brush");
+
+    const seating = await run("event-seating-planner", {
+      tables:[{name:"Table A",seats:4},{name:"Table B",seats:2}],
+      guest_groups:[
+        {name:"Family",guests:["Alice","Ben"]},
+        {name:"Friends",guests:["Cara","Dan"]},
+        {name:"Solo",guests:["Eli"]},
+      ],
+      avoid_pairs:[["Alice","Cara"]],
+    });
+    expect(seating).toContain("Assigned guests: 5/5");
+    expect(seating).toContain("Unassigned guests: 0");
+
+    const reviews = await run("spaced-review-scheduler", {
+      as_of_date:"2026-11-24",planning_days:14,
+      topics:[
+        {name:"Chemistry",last_reviewed:"2026-11-20",confidence:3},
+        {name:"History",last_reviewed:"2026-11-01",confidence:5},
+      ],
+    });
+    expect(reviews).toContain("Review today");
+    expect(reviews).toContain("OVERDUE by 9 day(s)");
+    expect(reviews).toContain("not the FSRS algorithm");
+  });
+
   it("exposes and runs all Wave 42 personal planning tools through the normal AI tool", async () => {
     const schema = AGENT_TOOL_DEFINITIONS.find(tool => tool.function.name === "process_text_content")?.function.parameters as {
       properties?: { tool_id?: { enum?: string[] } };
