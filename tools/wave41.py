@@ -208,7 +208,7 @@ def wallpaper_roll_calculator(path: Path) -> dict:
     if repeat_cm > 0:
         repeat_m = repeat_cm / 100
         drop = (height / repeat_m).to_integral_value(rounding=ROUND_CEILING) * repeat_m
-    drops_per_roll = int((roll_length / drop).to_integral_value(rounding=ROUND_CEILING)) if roll_length < drop else int(roll_length // drop)
+    drops_per_roll = int(roll_length // drop)
     if drops_per_roll <= 0:
         raise RuntimeError("A wallpaper roll is shorter than one required wall drop.")
     base_rolls = int((Decimal(strips) / drops_per_roll).to_integral_value(rounding=ROUND_CEILING))
