@@ -71,6 +71,11 @@ from wave42 import (
     weekly_chore_planner, subscription_cost_calculator, commute_cost_calculator,
     reading_plan_calculator, grocery_budget_planner,
 )
+from wave43 import (
+    habit_history_analyzer, plant_care_scheduler, garden_bed_capacity_calculator,
+    home_inventory_report, home_maintenance_scheduler, pet_routine_planner,
+    event_seating_planner, spaced_review_scheduler,
+)
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
@@ -231,6 +236,8 @@ RUNNERS = {
     "shipping-volumetric-weight-calculator", "storage-capacity-calculator",
     "meal-shopping-list-planner", "travel-packing-checklist", "study-plan-scheduler", "weekly-chore-planner",
     "subscription-cost-calculator", "commute-cost-calculator", "reading-plan-calculator", "grocery-budget-planner",
+    "habit-history-analyzer", "plant-care-scheduler", "garden-bed-capacity-calculator", "home-inventory-report",
+    "home-maintenance-scheduler", "pet-routine-planner", "event-seating-planner", "spaced-review-scheduler",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -12530,6 +12537,14 @@ TOOLS={
  "commute-cost-calculator":commute_cost_calculator,
  "reading-plan-calculator":reading_plan_calculator,
  "grocery-budget-planner":grocery_budget_planner,
+ "habit-history-analyzer":habit_history_analyzer,
+ "plant-care-scheduler":plant_care_scheduler,
+ "garden-bed-capacity-calculator":garden_bed_capacity_calculator,
+ "home-inventory-report":home_inventory_report,
+ "home-maintenance-scheduler":home_maintenance_scheduler,
+ "pet-routine-planner":pet_routine_planner,
+ "event-seating-planner":event_seating_planner,
+ "spaced-review-scheduler":spaced_review_scheduler,
 
 }
 

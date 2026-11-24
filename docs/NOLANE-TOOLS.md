@@ -1,5 +1,22 @@
 Nolane Tools hiện có **502 công cụ đã được đăng ký và triển khai trên production** sau Wave 42, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. [PR #95](https://github.com/Nolane-x/Nolane-search/pull/95) đã merge vào `main` bằng commit `caa5bc0ee08a1b584c2099decdad3b8e8b78a890`. Main CI [45317297572](https://github.com/Nolane-x/Nolane-search/actions/runs/45317297572), Worker export và live health smoke [45317299584](https://github.com/Nolane-x/Nolane-search/actions/runs/45317299584), Cloudflare deployment [45317297601](https://github.com/Nolane-x/Nolane-search/actions/runs/45317297601) đều thành công. Latest Worker Version ID: `70089084-aae3-4692-bd88-2368aec4e8a2`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema; tệp tiếp tục được xử lý trên GitHub-hosted runner dùng một lần.
 
+## Wave 43 — home, hobby and learning tools — review pending
+
+The production catalog remains **502 tools** (Wave 42). The following eight additions are implemented on the Wave 43 review branch and are not yet included in the production count.
+
+| ID / command | Công cụ | Chức năng |
+|---|---|---|
+| /tool habit-history-analyzer | Phân tích thói quen | Lịch check-in, tỷ lệ đạt mục tiêu và chuỗi ngày |
+| /tool plant-care-scheduler | Lịch chăm cây | Nhắc việc theo chu kỳ tự đặt |
+| /tool garden-bed-capacity-calculator | Sức chứa luống trồng | Ước lượng hàng và số cây theo kích thước |
+| /tool home-inventory-report | Kiểm kê gia đình | Giá mua lịch sử, bảo hành, vị trí và thời gian sử dụng dự kiến |
+| /tool home-maintenance-scheduler | Lịch bảo trì nhà | Việc định kỳ, số ngày quá hạn và thời lượng |
+| /tool pet-routine-planner | Lịch chăm thú cưng | Checklist việc chăm sóc không mang tính y tế |
+| /tool event-seating-planner | Xếp chỗ sự kiện | Sắp xếp nhóm khách theo sức chứa và cặp cần tách |
+| /tool spaced-review-scheduler | Lịch ôn tập | Ngày ôn theo mức tự đánh giá; heuristic đơn giản, không phải FSRS |
+
+Research: [TOOL-RESEARCH-2026-11-24-WAVE43.md](TOOL-RESEARCH-2026-11-24-WAVE43.md). Handoff: [HANDOFF-WAVE-FORTY-THREE-2026-11-24.md](HANDOFF-WAVE-FORTY-THREE-2026-11-24.md).
+
 ## Wave 42 — personal planning and household tools — deployed to production
 
 Wave 42 increases the production catalog from **494 to 502 registered tools** (+8). All eight tools are connected to the direct AI JSON interface and the Python GitHub Actions runner. PR #95, PR CI, main deployment and Worker export/health smoke completed successfully.
