@@ -193,7 +193,7 @@ function billCashflow(input: Input): string {
     balances.set(event.currency, balance);
     if (!totals.has(event.currency)) totals.set(event.currency, { income: 0, expenses: 0, count: 0 });
     const total = totals.get(event.currency)!;
-    total[event.direction as "income" | "expenses"] += Math.abs(event.signed);
+    total[event.direction === "income" ? "income" : "expenses"] += Math.abs(event.signed);
     total.count++;
     lines.push("- " + dateKey(event.day) + " | " + event.name + " | " + event.direction + " " +
       fmtCents(Math.abs(event.signed)) + " " + event.currency + " | projected balance " + fmtCents(balance) + " " + event.currency);
