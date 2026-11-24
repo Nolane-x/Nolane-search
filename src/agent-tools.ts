@@ -13,6 +13,7 @@ import { EVERYDAY_LIFE_PLANNER_TOOL_IDS, runEverydayLifePlannerTextTool } from "
 import { PERSONAL_FINANCE_MOVING_TOOL_IDS, runPersonalFinanceMovingTextTool } from "./personal-finance-moving-tools";
 import { HOME_VEHICLE_RENTAL_TOOL_IDS, runHomeVehicleRentalTextTool } from "./home-vehicle-rental-tools";
 import { runLiveEverydayTool } from "./live-everyday-tools";
+import { runWorldDataTool } from "./world-data-tools";
 import { translateText } from "./translation";
 import type { Env, SearchMode } from "./types";
 
@@ -351,6 +352,54 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
         year_to: { type: "integer", minimum: 1600, maximum: 2100, description: "Optional latest publication year." },
         limit: { type: "integer", minimum: 1, maximum: 10, description: "Number of results, defaults to 5." }
       }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_country_profiles",
+      description: "Search World Bank country metadata by country name, ISO code, capital or region. Returns ISO alpha-2/alpha-3 codes, capital, World Bank region and income-level classification. Does not provide visa, travel-safety or legal advice.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 120, description: "Country name, ISO code, capital or related query, e.g. Vietnam or VNM." },
+        region: { type: "string", minLength: 2, maxLength: 80, description: "Optional World Bank region filter, e.g. East Asia & Pacific." },
+        limit: { type: "integer", minimum: 1, maximum: 12, description: "Maximum number of country matches, defaults to 6." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_world_bank_indicators",
+      description: "Compare the latest non-empty World Bank World Development Indicators for up to five countries in one request. Use ISO alpha-2 or alpha-3 codes. Values can come from different years; missing values are not estimated or interpolated.",
+      parameters: { type: "object", properties: {
+        country_codes: { type: "array", minItems: 1, maxItems: 5, items: { type: "string", pattern: "^[A-Za-z]{2,3}$" }, description: "One to five ISO country codes, e.g. [VN, THA]." },
+        indicators: { type: "array", minItems: 1, maxItems: 8, uniqueItems: true, items: { type: "string", enum: ["population_total","gdp_current_usd","gdp_per_capita_usd","gdp_growth_annual_percent","life_expectancy_years","internet_users_percent","unemployment_percent","inflation_annual_percent","co2_emissions_per_capita","urban_population_percent"] }, description: "Optional indicator keys. Defaults to population, GDP per capita, GDP growth, life expectancy and internet use." }
+      }, required: ["country_codes"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_gbif_species",
+      description: "Match a scientific or common species name against the GBIF Taxonomic Backbone. Returns the accepted GBIF taxon key, taxonomy, match type and confidence. This is a name lookup, not image-based species identification.",
+      parameters: { type: "object", properties: {
+        name: { type: "string", minLength: 2, maxLength: 160, description: "Scientific or common name, e.g. Panthera tigris." },
+        strict: { type: "boolean", description: "Whether GBIF should only accept stricter matches; defaults to false." }
+      }, required: ["name"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_gbif_observations",
+      description: "Find GBIF human-observation records for a GBIF taxon key, optionally filtered by country and year range. Use the taxon_key returned by search_gbif_species. Returns only CC0 1.0 or CC BY 4.0 records with attribution; hides coordinates and precise locality to protect sensitive species. GBIF search may be rate-limited under load.",
+      parameters: { type: "object", properties: {
+        taxon_key: { type: "integer", minimum: 1, maximum: 2147483647, description: "Accepted GBIF taxon key from search_gbif_species." },
+        country_code: { type: "string", pattern: "^[A-Za-z]{2}$", description: "Optional two-letter ISO country code." },
+        year_from: { type: "integer", minimum: 1600, maximum: 2100, description: "Optional earliest event year." },
+        year_to: { type: "integer", minimum: 1600, maximum: 2100, description: "Optional latest event year." },
+        limit: { type: "integer", minimum: 1, maximum: 10, description: "Maximum number of reusable records returned, defaults to 5." }
+      }, required: ["taxon_key"], additionalProperties: false }
     }
   },
   {
@@ -1872,6 +1921,9 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
     if (!safe || safe.protocol !== "https:") throw new Error("Only valid public HTTPS URLs are allowed.");
     const page = await fetchTinyFishPage(env, safe.toString());
     return JSON.stringify({ title: page.title, url: page.finalUrl, text: page.text.slice(0, 12_000) });
+  }
+  if (["search_country_profiles","get_world_bank_indicators","search_gbif_species","search_gbif_observations"].includes(name)) {
+    return (await runWorldDataTool(name, args)).slice(0, 12_000);
   }
   if (["get_weather_forecast","check_air_quality","convert_currency","get_public_holidays","find_long_weekends","get_marine_forecast","get_earthquake_activity","search_books","lookup_postal_code","define_english_word","search_public_domain_books","search_museum_artworks","get_natural_events","get_local_time","search_tv_shows","get_tv_show_episodes","search_apple_media","search_music_metadata","search_scholarly_works"].includes(name)) {
     return (await runLiveEverydayTool(name, args)).slice(0, 12_000);
