@@ -308,7 +308,7 @@ async function internetArchiveItem(identifier: string, expectedType: "movies" | 
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
     const file = raw as Obj;
     if (file.private === true || file.private === 1 || file.private === "true" || file.private === "1") return [];
-    if (file.source && file.source !== "original") return [];
+    if (file.source !== "original") return [];
     const name = typeof file.name === "string" ? file.name : "";
     const format = typeof file.format === "string" ? file.format.toLowerCase() : "";
     if (!name || name.length > 300 || /[\/\\\u0000-\u001f]/.test(name) || name === "." || name === "..") return [];
