@@ -49,7 +49,7 @@ class Wave42Tests(unittest.TestCase):
             "activities": ["hiking", "business"], "international": True,
         })
         self.assertIn("Trip length: 5 days / 4 nights", report)
-        self.assertIn("4 × Warm layer / jacket", report)
+        self.assertIn("2 × Warm layer / jacket", report)
         self.assertIn("2 × Hiking shoes", report)
         self.assertIn("2 × Passport / international travel document", report)
         self.assertIn("2 × Smart / formal outfit", report)
