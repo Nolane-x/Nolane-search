@@ -1,0 +1,139 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, lookupFoodProduct } from "../src/media-discovery-tools";
+import { executeAgentTool, AGENT_TOOL_DEFINITIONS } from "../src/agent-tools";
+import type { Env } from "../src/types";
+
+afterEach(() => vi.unstubAllGlobals());
+const env = { DB: {} as never, SEARCH_JOBS: {} as never } as Env;
+function json(value: unknown, status = 200): Response {
+  return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
+}
+
+describe("Wave 52 media and product discovery", () => {
+  it("searches Commons files and retains image license, author and original-page links", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("commons.wikimedia.org");
+      expect(url.searchParams.get("gsrnamespace")).toBe("6");
+      expect(url.searchParams.get("iiprop")).toContain("extmetadata");
+      expect(new Headers(init?.headers).get("user-agent")).toContain("NolaneSearch");
+      return json({ query: { pages: [{
+        pageid: 7, title: "File:Example.jpg",
+        imageinfo: [{
+          mime: "image/jpeg", width: 1200, height: 800,
+          url: "https://upload.wikimedia.org/wikipedia/commons/example.jpg",
+          thumburl: "https://upload.wikimedia.org/wikipedia/commons/thumb/example.jpg",
+          descriptionurl: "https://commons.wikimedia.org/wiki/File:Example.jpg",
+          extmetadata: {
+            LicenseShortName: { value: "CC BY-SA 4.0" },
+            LicenseUrl: { value: "https://creativecommons.org/licenses/by-sa/4.0/" },
+            Artist: { value: "Example Artist" },
+            ImageDescription: { value: "<p>Example landscape</p>" },
+          },
+        }],
+      }] } });
+    }));
+    const result = await searchWikimediaImages("landscape", 5);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].license).toBe("CC BY-SA 4.0");
+    expect(result.items[0].credit).toBe("Example Artist");
+    expect(result.items[0].description).toBe("Example landscape");
+    expect(result.items[0].sourceUrl).toContain("commons.wikimedia.org/wiki/File");
+  });
+
+  it("omits Commons files with absent license data or untrusted media URLs", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ query: { pages: [
+      { pageid: 8, title: "File:Unknown.jpg", imageinfo: [{ mime: "image/jpeg", url: "https://upload.wikimedia.org/a.jpg", thumburl: "https://upload.wikimedia.org/a.jpg", descriptionurl: "https://commons.wikimedia.org/wiki/File:Unknown.jpg", extmetadata: {} }] },
+      { pageid: 9, title: "File:Remote.jpg", imageinfo: [{ mime: "image/jpeg", url: "https://evil.example/a.jpg", thumburl: "https://evil.example/a.jpg", descriptionurl: "https://commons.wikimedia.org/wiki/File:Remote.jpg", extmetadata: { LicenseShortName:{value:"CC0"}, LicenseUrl:{value:"https://creativecommons.org/publicdomain/zero/1.0/"} } }] },
+    ] } })));
+    const result = await searchWikimediaImages("test");
+    expect(result.items).toHaveLength(0);
+  });
+
+  it("searches NASA image results and returns preview and source links", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("images-api.nasa.gov");
+      expect(url.pathname).toBe("/search");
+      expect(url.searchParams.get("media_type")).toBe("image");
+      return json({ collection: { items: [{
+        data: [{ nasa_id: "PIA123", title: "Mars Example", media_type: "image", description: "A Martian landscape", center: "JPL", date_created: "2026-01-01" }],
+        links: [{ rel: "preview", href: "https://images-assets.nasa.gov/image/PIA123/PIA123~thumb.jpg" }],
+      }] } });
+    }));
+    const result = await searchNasaMedia("Mars", "image", 4);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].previewUrl).toContain("images-assets.nasa.gov");
+    expect(result.items[0].mediaUrl).toBe(result.items[0].previewUrl);
+  });
+
+  it("resolves public NASA video MP4 from a same-host asset manifest", async () => {
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/search") return json({ collection: { items: [{
+        data: [{ nasa_id: "VID123", title: "Space video", media_type: "video", center: "NASA" }],
+        links: [{ rel: "preview", href: "https://images-assets.nasa.gov/video/VID123/VID123~thumb.jpg" }],
+      }] } });
+      if (url.pathname === "/asset/VID123") return json({ collection: { items: [
+        { href: "https://images-assets.nasa.gov/video/VID123/VID123~orig.mp4" },
+        { href: "https://evil.example/VID123.mp4" },
+      ] } });
+      throw new Error("Unexpected NASA endpoint");
+    });
+    vi.stubGlobal("fetch", mock);
+    const result = await searchNasaMedia("space video", "video", 3);
+    expect(result.items[0].mediaUrl).toBe("https://images-assets.nasa.gov/video/VID123/VID123~orig.mp4");
+    expect(mock).toHaveBeenCalledTimes(2);
+  });
+
+  it("looks up food by barcode and returns bounded ingredients and nutrition", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("world.openfoodfacts.org");
+      expect(url.pathname).toBe("/api/v3/product/3017620422003.json");
+      expect(new Headers(init?.headers).get("user-agent")).toContain("NolaneSearch");
+      return json({ status: 1, product: {
+        product_name: "Example spread", brands: "Example", quantity: "400 g",
+        ingredients_text: "Sugar, oil and cocoa.", allergens: "May contain milk.",
+        nutriscore_grade: "e", nova_group: 4, ecoscore_grade: "c",
+        nutriments: { "energy-kcal_100g": 539, fat_100g: 30, "saturated-fat_100g": 10, sugars_100g: 57, proteins_100g: 6 },
+        image_front_url: "https://images.openfoodfacts.org/images/products/301/762/042/2003/front.jpg",
+      } });
+    }));
+    const result = JSON.parse(await lookupFoodProduct("3017620422003"));
+    expect(result.product.name).toBe("Example spread");
+    expect(result.product.nutrition_per_100g.energy_kcal).toBe(539);
+    expect(result.product.image_front_url).toContain("images.openfoodfacts.org");
+  });
+
+  it("rejects invalid food barcodes before network access", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    await expect(lookupFoodProduct("abc-123")).rejects.toThrow("8 to 14 digits");
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid media types and handles rate limits", async () => {
+    const mock = vi.fn(async () => json({}, 429));
+    vi.stubGlobal("fetch", mock);
+    await expect(searchNasaMedia("space", "audio")).rejects.toThrow("media_type");
+    await expect(searchNasaMedia("space", "video")).rejects.toThrow("rate-limiting");
+  });
+
+  it("exposes and dispatches all Wave 52 tools through the agent interface", async () => {
+    const names = AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name);
+    expect(names).toEqual(expect.arrayContaining([
+      "search_wikimedia_images", "search_nasa_media", "lookup_food_product",
+    ]));
+    vi.stubGlobal("fetch", vi.fn(async () => json({ query: { pages: [{
+      pageid: 8, title: "File:Dispatch.jpg",
+      imageinfo: [{
+        mime: "image/jpeg", url: "https://upload.wikimedia.org/a.jpg", thumburl: "https://upload.wikimedia.org/a.jpg",
+        descriptionurl: "https://commons.wikimedia.org/wiki/File:Dispatch.jpg",
+        extmetadata: { LicenseShortName: { value: "CC0" }, LicenseUrl: { value: "https://creativecommons.org/publicdomain/zero/1.0/" } },
+      }],
+    }] } })));
+    const result = JSON.parse(await executeAgentTool(env, "search_wikimedia_images", { query: "sample image" }));
+    expect(result.items[0].title).toBe("Dispatch.jpg");
+  });
+});
