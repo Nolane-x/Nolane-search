@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos, searchInternetArchiveAudio, lookupFoodProduct } from "../src/media-discovery-tools";
+import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos, searchInternetArchiveAudio, lookupFoodProduct, lookupConsumerProduct, compareFoodProducts } from "../src/media-discovery-tools";
 import { executeAgentTool, AGENT_TOOL_DEFINITIONS } from "../src/agent-tools";
 import type { Env } from "../src/types";
 
 afterEach(() => vi.unstubAllGlobals());
 const env = { DB: {} as never, SEARCH_JOBS: {} as never } as Env;
+type Obj = Record<string, unknown>;
 function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
@@ -282,24 +283,230 @@ describe("Wave 52 media and product discovery", () => {
     expect(result.status).toBe("not_found");
   });
 
-  it("looks up food by barcode and returns bounded ingredients and nutrition", async () => {
+  it("looks up food by barcode using the documented v3 string status and per-100-g data", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
       expect(url.hostname).toBe("world.openfoodfacts.org");
-      expect(url.pathname).toBe("/api/v3/product/3017620422003.json");
+      expect(url.pathname).toBe("/api/v3/product/3017620422003");
+      expect(url.searchParams.get("product_type")).toBe("food");
+      expect(url.searchParams.get("fields")).toContain("environmental_score_grade");
       expect(new Headers(init?.headers).get("user-agent")).toContain("NolaneSearch");
-      return json({ status: 1, product: {
+      expect(init?.redirect).toBe("manual");
+      return json({ status: "success_with_warnings", product: {
+        code: "3017620422003", product_type: "food",
         product_name: "Example spread", brands: "Example", quantity: "400 g",
         ingredients_text: "Sugar, oil and cocoa.", allergens: "May contain milk.",
-        nutriscore_grade: "e", nova_group: 4, ecoscore_grade: "c",
-        nutriments: { "energy-kcal_100g": 539, fat_100g: 30, "saturated-fat_100g": 10, sugars_100g: 57, proteins_100g: 6 },
+        nutriscore_grade: "e", nova_group: 4, environmental_score_grade: "c",
+        nutrition: { aggregated_set: {
+          per: "100g",
+          nutrients: {
+            "energy-kcal": { value: 539, unit: "kcal" },
+            fat: { value: 30, unit: "g" },
+            "saturated-fat": { value: 10, unit: "g" },
+            sugars: { value: 57, unit: "g" },
+            proteins: { value: 6, unit: "g" }
+          }
+        } },
         image_front_url: "https://images.openfoodfacts.org/images/products/301/762/042/2003/front.jpg",
       } });
     }));
     const result = JSON.parse(await lookupFoodProduct("3017620422003"));
+    expect(result.status).toBe("ok");
     expect(result.product.name).toBe("Example spread");
     expect(result.product.nutrition_per_100g.energy_kcal).toBe(539);
+    expect(result.product.environmental_score_grade).toBe("c");
     expect(result.product.image_front_url).toContain("images.openfoodfacts.org");
+  });
+
+  it("automatically follows one validated redirect to Open Beauty Facts", async () => {
+    const barcode = "8710447445990";
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      calls.push(url.hostname + url.pathname);
+      if (url.hostname === "world.openfoodfacts.org") {
+        expect(url.searchParams.get("product_type")).toBe("all");
+        return new Response(null, { status: 302, headers: {
+          location: "https://world.openbeautyfacts.org/api/v3/product/" + barcode
+        }});
+      }
+      expect(url.hostname).toBe("world.openbeautyfacts.org");
+      expect(url.searchParams.get("product_type")).toBe("all");
+      return json({ status: "success", product: {
+        code: barcode, product_type: "beauty", product_name: "Example shampoo",
+        brands: "Example Beauty", categories: "Hair care",
+        image_front_url: "https://images.openbeautyfacts.org/images/products/871/044/744/5990/front.jpg"
+      } });
+    }));
+    const result = JSON.parse(await lookupConsumerProduct(barcode));
+    expect(result.status).toBe("ok");
+    expect(result.source).toBe("Open Beauty Facts");
+    expect(result.product.product_type).toBe("beauty");
+    expect(result.product.nutrition_per_100g.energy_kcal).toBeNull();
+    expect(result.product.source_url).toBe("https://world.openbeautyfacts.org/product/" + barcode);
+    expect(calls).toEqual([
+      "world.openfoodfacts.org/api/v3/product/" + barcode,
+      "world.openbeautyfacts.org/api/v3/product/" + barcode
+    ]);
+  });
+
+  it("supports direct lookup in pet-food and general consumer-product catalogs", async () => {
+    const results = [
+      { type: "petfood", host: "world.openpetfoodfacts.org", name: "Example dog food" },
+      { type: "product", host: "world.openproductsfacts.org", name: "Example household item" }
+    ];
+    let call = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const expected = results[call++];
+      const url = new URL(String(input));
+      expect(url.hostname).toBe(expected.host);
+      expect(url.searchParams.get("product_type")).toBe(expected.type);
+      return json({ status: "success", product: {
+        product_type: expected.type, product_name: expected.name
+      } });
+    }));
+    const pet = JSON.parse(await lookupConsumerProduct("12345678", "petfood"));
+    const item = JSON.parse(await lookupConsumerProduct("12345679", "product"));
+    expect(pet.product.product_type).toBe("petfood");
+    expect(pet.product.name).toBe("Example dog food");
+    expect(item.product.product_type).toBe("product");
+    expect(item.product.name).toBe("Example household item");
+    expect(call).toBe(2);
+  });
+
+  it("rejects redirects outside the approved Open Facts hosts", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, {
+      status: 302,
+      headers: { location: "https://evil.example/api/v3/product/3017620422003" }
+    })));
+    await expect(lookupConsumerProduct("3017620422003")).rejects.toThrow("outside the approved Open Facts databases");
+  });
+
+  it("returns not_found for HTTP 404 and accepts legacy numeric v3 status during migration", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/3017620422003")) return json({}, 404);
+      return json({ status: 1, product: {
+        code: "3017620422004", product_name: "Legacy-shaped product", product_type: "food"
+      } });
+    }));
+    const missing = JSON.parse(await lookupConsumerProduct("3017620422003", "food"));
+    const legacy = JSON.parse(await lookupFoodProduct("3017620422004"));
+    expect(missing.status).toBe("not_found");
+    expect(legacy.status).toBe("ok");
+    expect(legacy.product.name).toBe("Legacy-shaped product");
+  });
+
+  it("keeps absent nutrition unreferenced and rejects negative nutrient readings", async () => {
+    let call = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      call += 1;
+      return json({ status: "success", product: call === 1 ? {
+        code: "3017620422003", product_type: "food", product_name: "Invalid reading",
+        nutrition: { aggregated_set: { per: "100g", nutrients: {
+          sugars: { value: -3 }, proteins: { value: 4 }
+        } } }
+      } : {
+        code: "3017620422004", product_type: "food", product_name: "No nutrition recorded"
+      } });
+    }));
+    const invalid = JSON.parse(await lookupFoodProduct("3017620422003"));
+    const absent = JSON.parse(await lookupFoodProduct("3017620422004"));
+    expect(invalid.product.nutrition_per_100g.sugars_g).toBeNull();
+    expect(invalid.product.nutrition_per_100g.proteins_g).toBe(4);
+    expect(absent.product.nutrition_reference).toBeNull();
+    expect(absent.product.nutrition_per_100g.energy_kcal).toBeNull();
+  });
+
+  it("does not label per-100-ml data as per-100-g nutrition", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ status: "success", product: {
+      code: "3017620422003", product_type: "food",
+      product_name: "Beverage", nutrition: { aggregated_set: {
+        per: "100ml", nutrients: { "energy-kcal": { value: 42, unit: "kcal" } }
+      } }
+    } })));
+    const result = JSON.parse(await lookupFoodProduct("3017620422003"));
+    expect(result.product.nutrition_reference).toBe("100ml");
+    expect(result.product.nutrition_per_100g.energy_kcal).toBeNull();
+  });
+
+  it("compares two to four food barcodes using per-100-g values without inventing missing data", async () => {
+    const records: Record<string, Obj> = {
+      "3017620422003": {
+        code: "3017620422003", product_type: "food", product_name: "Spread A",
+        nutrition: { aggregated_set: { per: "100g", nutrients: {
+          "energy-kcal": { value: 500 }, sugars: { value: 45 }, proteins: { value: 7 }
+        } } }
+      },
+      "5000159484695": {
+        code: "5000159484695", product_type: "food", product_name: "Spread B",
+        nutrition: { aggregated_set: { per: "100g", nutrients: {
+          "energy-kcal": { value: 400 }, sugars: { value: 20 }, proteins: { value: 8 }
+        } } }
+      },
+      "5449000000996": {
+        code: "5449000000996", product_type: "food", product_name: "Drink C",
+        nutrition: { aggregated_set: { per: "100g", nutrients: {
+          "energy-kcal": { value: 5 }, sugars: { value: 0 }
+        } } }
+      }
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      const barcode = url.pathname.split("/").pop() || "";
+      expect(url.hostname).toBe("world.openfoodfacts.org");
+      expect(url.searchParams.get("product_type")).toBe("food");
+      return records[barcode] ? json({ status: "success", product: records[barcode] }) : json({}, 404);
+    }));
+    const result = JSON.parse(await compareFoodProducts(["3017620422003","5000159484695","5449000000996"]));
+    expect(result.status).toBe("ok");
+    expect(result.products).toHaveLength(3);
+    expect(result.comparisons.find((entry: Obj) => entry.metric === "Energy")).toMatchObject({
+      minimum: { barcode: "5449000000996", value: 5 },
+      maximum: { barcode: "3017620422003", value: 500 }
+    });
+    expect(result.comparisons.find((entry: Obj) => entry.metric === "Protein").values).toHaveLength(2);
+    expect(result.comparison_basis).toContain("not a health ranking");
+  });
+
+  it("does not compare a product redirected to a non-food database", async () => {
+    const beautyBarcode = "8710447445990";
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      const barcode = url.pathname.split("/").pop() || "";
+      if (barcode === beautyBarcode && url.hostname === "world.openfoodfacts.org") {
+        return new Response(null, { status: 302, headers: {
+          location: "https://world.openbeautyfacts.org/api/v3/product/" + beautyBarcode
+        }});
+      }
+      if (url.hostname === "world.openbeautyfacts.org") {
+        return json({ status: "success", product: {
+          code: beautyBarcode, product_type: "beauty", product_name: "Beauty item",
+          nutrition: { aggregated_set: { per: "100g", nutrients: { sugars: { value: 10 } } } }
+        } });
+      }
+      return json({ status: "success", product: {
+        code: barcode, product_type: "food", product_name: "Food item",
+        nutrition: { aggregated_set: { per: "100g", nutrients: { sugars: { value: 5 } } } }
+      } });
+    }));
+    const result = JSON.parse(await compareFoodProducts(["3017620422003",beautyBarcode]));
+    expect(result.status).toBe("insufficient_data");
+    expect(result.products[1].product).toMatchObject({
+      not_found: true, reason: "not_a_food_product"
+    });
+    expect(result.comparisons).toHaveLength(0);
+  });
+
+  it("validates food-comparison input bounds and uniqueness before network access", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    await expect(compareFoodProducts(["3017620422003"])).rejects.toThrow("between 2 and 4");
+    await expect(compareFoodProducts(["3017620422003","3017620422003"])).rejects.toThrow("unique");
+    await expect(compareFoodProducts(["3017620422003","12345678","123456789012345"])).rejects.toThrow("8 to 14 digits");
+    await expect(lookupConsumerProduct("../../etc/passwd")).rejects.toThrow("8 to 14 digits");
+    await expect(lookupConsumerProduct("3017620422003","unknown")).rejects.toThrow("product_type");
+    expect(mock).not.toHaveBeenCalled();
   });
 
   it("dispatches Internet Archive audio search through the model tool interface", async () => {

@@ -10,8 +10,45 @@ const env = { DB: {} as never, SEARCH_JOBS: {} as never } as Env;
 describe("Nolane AI callable tools", () => {
   it("exposes the catalog as a real model-callable function", () => {
     expect(AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name)).toEqual([
-      "list_nolane_tools", "search_web", "read_web_page", "get_weather_forecast", "check_air_quality", "convert_currency", "get_public_holidays", "find_long_weekends", "get_marine_forecast", "get_earthquake_activity", "search_books", "lookup_postal_code", "define_english_word", "search_public_domain_books", "search_museum_artworks", "get_natural_events", "get_local_time", "search_tv_shows", "get_tv_show_episodes", "search_apple_media", "search_music_metadata", "search_scholarly_works", "search_country_profiles", "get_world_bank_indicators", "search_gbif_species", "search_gbif_observations", "search_wikimedia_images", "search_nasa_media", "lookup_food_product", "search_openverse_images", "search_internet_archive_videos", "search_internet_archive_audio", "search_wikipedia_articles", "get_wikipedia_article", "search_wikivoyage_guides", "get_wikivoyage_guide", "lookup_wiktionary_entry", "search_meal_recipes", "filter_meal_recipes", "get_meal_recipe_details", "search_wikidata_entities", "get_wikidata_entity", "search_anime_titles", "get_anime_details", "search_manga_titles", "get_manga_details", "process_text_content", "hash_text",
+      "list_nolane_tools", "search_web", "read_web_page", "get_weather_forecast", "check_air_quality", "convert_currency", "get_public_holidays", "find_long_weekends", "get_marine_forecast", "get_earthquake_activity", "search_books", "lookup_postal_code", "define_english_word", "search_public_domain_books", "search_museum_artworks", "get_natural_events", "get_local_time", "search_tv_shows", "get_tv_show_episodes", "search_apple_media", "search_music_metadata", "search_scholarly_works", "search_country_profiles", "get_world_bank_indicators", "search_gbif_species", "search_gbif_observations", "search_wikimedia_images", "search_nasa_media", "lookup_food_product", "lookup_consumer_product", "compare_food_products", "search_openverse_images", "search_internet_archive_videos", "search_internet_archive_audio", "search_wikipedia_articles", "get_wikipedia_article", "search_wikivoyage_guides", "get_wikivoyage_guide", "lookup_wiktionary_entry", "search_meal_recipes", "filter_meal_recipes", "get_meal_recipe_details", "search_wikidata_entities", "get_wikidata_entity", "search_anime_titles", "get_anime_details", "search_manga_titles", "get_manga_details", "process_text_content", "hash_text",
     ]);
+  });
+
+  it("dispatches cross-catalog lookup and nutrition comparison through the normal AI interface", async () => {
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      expect(url.pathname).toMatch(/^\/api\/v3\/product\/\d+$/);
+      expect(url.searchParams.get("fields")).toContain("nutrition");
+      const barcode = url.pathname.split("/").pop();
+      if (barcode === "3017620422003") {
+        return new Response(JSON.stringify({ status: "success", product: {
+          code: barcode, product_type: "food", product_name: "Spread A",
+          nutrition: { aggregated_set: { per: "100g", nutrients: {
+            "energy-kcal": { value: 500 }, sugars: { value: 45 }
+          } } }
+        } }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ status: "success", product: {
+        code: barcode, product_type: "food", product_name: "Spread B",
+        nutrition: { aggregated_set: { per: "100g", nutrients: {
+          "energy-kcal": { value: 400 }, sugars: { value: 20 }
+        } } }
+      } }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const lookedUp = JSON.parse(await executeAgentTool(env, "lookup_consumer_product", {
+      barcode: "3017620422003", product_type: "all"
+    }));
+    expect(lookedUp.product.name).toBe("Spread A");
+
+    const compared = JSON.parse(await executeAgentTool(env, "compare_food_products", {
+      barcodes: ["3017620422003","5000159484695"]
+    }));
+    expect(compared.status).toBe("ok");
+    expect(compared.comparisons.find((item: {metric:string}) => item.metric === "Energy").minimum)
+      .toMatchObject({ barcode: "5000159484695", value: 400 });
+    expect(mock).toHaveBeenCalledTimes(3);
   });
 
   it("discovers the complete catalog in bounded, non-overlapping pages", async () => {
