@@ -1,8 +1,8 @@
-Nolane Tools hiện có **526 công cụ đã được đăng ký và triển khai trên production** sau Wave 45, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. [PR #98](https://github.com/Nolane-x/Nolane-search/pull/98) đã merge vào `main` bằng commit `e98b456dfbf320a57f9469673e3022f323d15b0f`. Main CI [45331424637](https://github.com/Nolane-x/Nolane-search/actions/runs/45331424637), Worker export và live health smoke [45331424996](https://github.com/Nolane-x/Nolane-search/actions/runs/45331424996), Cloudflare deployment [45331424755](https://github.com/Nolane-x/Nolane-search/actions/runs/45331424755) đều thành công. Latest Worker Version ID: `b9168d76-3e11-4cf8-bf84-9276b61d7f04`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema; tệp tiếp tục được xử lý trên GitHub-hosted runner dùng một lần.
+Nolane Tools hiện có **542 công cụ đã được đăng ký và triển khai trên production** sau Wave 46, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. [PR #99](https://github.com/Nolane-x/Nolane-search/pull/99) đã merge vào `main` bằng commit `b80eee059281932193106b5c90f21ce306dea9e2`. Main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609), Worker export và live health smoke [45332866447](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866447), Cloudflare deployment [45332866563](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866563) đều thành công. Latest Worker Version ID: `2b7c15c7-ca12-4721-a248-1cb47b921f2a`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema; tệp tiếp tục được xử lý trên GitHub-hosted runner dùng một lần.
 
-## Wave 46 — home, vehicle and rental tools — proposed in review branch
+## Wave 46 — home, vehicle and rental tools — deployed to production
 
-These eight processors are being reviewed in PR #99 and are not counted as production until CI, merge and deployment are verified.
+Wave 46 tăng catalog production từ **534 lên 542 công cụ** (+8). Tất cả 8 công cụ được nối vào direct AI JSON interface và GitHub Actions runner. PR CI [45332648456](https://github.com/Nolane-x/Nolane-search/actions/runs/45332648456), main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609), Worker export/health smoke và Cloudflare deployment đều hoàn thành thành công.
 
 | ID / command | Công cụ | Chức năng |
 |---|---|---|
@@ -15,7 +15,7 @@ These eight processors are being reviewed in PR #99 and are not counted as produ
 | /tool rental-offer-cost-comparator | So sánh tổng chi phí thuê nhà | Tách tiền hàng tháng, chi phí đầu kỳ và tiền cọc hoàn lại |
 | /tool appliance-service-history-report | Lịch sử sửa chữa thiết bị gia đình | Tổng hợp lần sửa, chi phí, thời gian gián đoạn và hạn bảo hành ước tính |
 
-See [Wave 46 upstream research](TOOL-RESEARCH-2026-11-24-WAVE46.md) and [implementation handoff](HANDOFF-WAVE-FORTY-SIX-2026-11-24.md).
+See [Wave 46 upstream research](TOOL-RESEARCH-2026-11-24-WAVE46.md) and [implementation handoff](HANDOFF-WAVE-FORTY-SIX-2026-11-24.md). Deployment evidence: [PR #99](https://github.com/Nolane-x/Nolane-search/pull/99), [PR CI](https://github.com/Nolane-x/Nolane-search/actions/runs/45332648456), [main CI](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609), [Worker export/health smoke](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866447), [Cloudflare deployment](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866563). Worker Version ID: `2b7c15c7-ca12-4721-a248-1cb47b921f2a`.
 ## Wave 45 — personal finance and moving-life tools — deployed to production
 
 Wave 45 tăng catalog production từ **518 lên 526 công cụ** (+8). Tất cả 8 công cụ được nối vào direct AI JSON interface và GitHub Actions runner. PR CI [45331231407](https://github.com/Nolane-x/Nolane-search/actions/runs/45331231407), main CI, Worker export/health smoke và Cloudflare deployment đều hoàn thành thành công.

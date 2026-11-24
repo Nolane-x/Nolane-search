@@ -2,7 +2,19 @@
 
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## Latest production release — Wave 45 (2026-11-24)
+## Latest production release — Wave 46 (2026-11-24)
+
+- [PR #99](https://github.com/Nolane-x/Nolane-search/pull/99) merged into main as `b80eee059281932193106b5c90f21ce306dea9e2`. Production Tool Center catalog: **542 processors** (+8 over Wave 45).
+- PR CI [45332648456](https://github.com/Nolane-x/Nolane-search/actions/runs/45332648456) and main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609) passed TypeScript type-check, **25 Vitest files / 273 tests**, deployment-script checks, **449 Python runner tests** and Worker build.
+- Worker export/build and live health smoke [45332866447](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866447) passed; health returned `ok: true`, database `reachable`.
+- Cloudflare deployment [45332866563](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866563) passed secret validation, source/bundle checks, Worker upload, Telegram webhook verification (message + callback_query) and bot command registration. Worker Version ID: `2b7c15c7-ca12-4721-a248-1cb47b921f2a`.
+- D1 migration was correctly skipped because Wave 46 adds no schema changes or persistent records.
+- Eight new everyday-user utilities are registered in the catalog, direct Nolane AI interface and GitHub Actions runner: vehicle fuel logs, vehicle ownership expense reports, appliance repair/replace comparison, home repair quote comparison, rental move-in inspections, rental move-out comparisons, rental offer cost comparison and appliance service histories.
+- Reports organise user-entered observations and costs; they do not diagnose faults, certify contractors, determine property damage responsibility or interpret tenancy law.
+- Product research: [TOOL-RESEARCH-2026-11-24-WAVE46.md](TOOL-RESEARCH-2026-11-24-WAVE46.md). Implementation handoff: [HANDOFF-WAVE-FORTY-SIX-2026-11-24.md](HANDOFF-WAVE-FORTY-SIX-2026-11-24.md).
+- Owner-level acceptance remains separate: test selected tools with a real private Telegram command and non-sensitive JSON examples. Automated tests and webhook registration do not prove every client-side interaction.
+
+## Previous production release — Wave 45 (2026-11-24)
 
 - [PR #98](https://github.com/Nolane-x/Nolane-search/pull/98) merged into main as `e98b456dfbf320a57f9469673e3022f323d15b0f`. Production Tool Center catalog: **526 processors** (+8 over Wave 44).
 - PR CI [45331231407](https://github.com/Nolane-x/Nolane-search/actions/runs/45331231407) and main CI [45331424637](https://github.com/Nolane-x/Nolane-search/actions/runs/45331424637) passed TypeScript type-check, **25 Vitest files / 271 tests**, deployment-script checks, **438 Python runner tests** and Worker build.

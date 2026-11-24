@@ -1,7 +1,7 @@
 # Wave 46 — home, vehicle and rental management tools
 
 Date: 2026-11-24
-Status: Proposed on review branch; production remains Wave 45 / 526 tools until all CI and deployment checks pass.
+Status: merged and deployed to production as 542 tools on 2026-11-24.
 
 ## Why these workflows
 
@@ -39,3 +39,11 @@ Searches for small, maintained open-source tenant inspection and neutral quote-c
 - Rental offer totals separate refundable deposit cash from lease expenditure; actual contract fees and utility costs must be checked with the provider.
 - Appliance warranty end dates are estimates using the duration entered by the user, not a coverage determination.
 - No new paid API, secret, external service, D1 schema, persistent property/vehicle profile or Python dependency is introduced.
+
+## Release verification
+
+- PR [#99](https://github.com/Nolane-x/Nolane-search/pull/99) merged as `b80eee059281932193106b5c90f21ce306dea9e2`.
+- PR CI [45332648456](https://github.com/Nolane-x/Nolane-search/actions/runs/45332648456) and main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609) passed TypeScript type-check, 25 Vitest files / 273 tests, deployment-script checks, 449 Python runner tests and Worker build.
+- Worker export/health smoke [45332866447](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866447) returned `ok: true` and database `reachable`.
+- Cloudflare deployment [45332866563](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866563) succeeded. Worker Version ID: `2b7c15c7-ca12-4721-a248-1cb47b921f2a`.
+- Telegram webhook was verified for message + callback_query and bot commands were registered. No D1 migration was needed.

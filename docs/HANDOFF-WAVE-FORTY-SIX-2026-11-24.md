@@ -3,7 +3,7 @@
 Date: 2026-11-24
 Branch: feat/wave-forty-six-home-vehicle-and-rental-tools
 Base: Wave 45 / 526 production tools
-Status: Review branch; CI and deployment pending.
+Status: merged and deployed to production on 2026-11-24.
 
 ## Eight tools
 
@@ -31,15 +31,15 @@ Status: Review branch; CI and deployment pending.
 - docs/TOOL-RESEARCH-2026-11-24-WAVE46.md — upstream workflow research and limits.
 - docs/NOLANE-TOOLS.md — proposed Wave46 tool IDs included for the catalog/documentation sync check.
 
-## Verification gates
+## Verification results
 
-1. TypeScript type-check and complete Vitest suite.
-2. Full Python runner suite, including Wave46 tests.
-3. Confirm all eight IDs align between registry, direct AI interface, Python allowlist/handler and documented command list.
-4. Worker build, production health smoke and Cloudflare deployment after merge.
-5. Telegram webhook/command registration if the deploy workflow runs those steps.
+1. PR CI [45332648456](https://github.com/Nolane-x/Nolane-search/actions/runs/45332648456) and main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609) passed type-check, 25 Vitest files / 273 tests, deployment-script checks, 449 Python runner tests and Worker build.
+2. The catalog contains 542 unique tools. All eight Wave46 IDs are aligned between registry, direct AI callable set, Python runner allowlist/handler map and documented `/tool` IDs.
+3. Worker export/build and production health smoke [45332866447](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866447) passed; health returned `ok: true` and database `reachable`.
+4. Cloudflare deployment [45332866563](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866563) succeeded. Worker Version ID: `2b7c15c7-ca12-4721-a248-1cb47b921f2a`.
+5. Telegram webhook (message + callback_query) was verified and bot commands were registered. D1 migration was skipped because no schema changes were made.
 6. Owner-level acceptance remains separate: try a private Telegram command and a non-sensitive JSON example. Automated tests do not prove every user-facing interaction.
 
 ## Production accounting
 
-Wave 45 / 526 tools remains latest production until Wave46 PR, CI, merge and deployment are successful. Proposed Wave46 catalog total: 534.
+Wave 46 / 542 tools is the latest production release, merged as `b80eee059281932193106b5c90f21ce306dea9e2` in [PR #99](https://github.com/Nolane-x/Nolane-search/pull/99).
