@@ -105,7 +105,7 @@ export function runHouseholdTextTool(toolId: string, content: string): string {
     const perBox = integerValue(input,"tiles_per_box",1,1000);
     const price = round(numberValue(input,"price_per_box",0,1e12,0),digits);
     const area = length * width, tileArea = tileLength * tileWidth / 10000;
-    const tileCount = Math.ceil(Math.ceil(area / tileArea) * (1+waste/100));
+    const tileCount = Math.ceil(area / tileArea * (1+waste/100));
     const boxes = Math.ceil(tileCount / perBox), purchased = boxes * perBox;
     const cost = round(boxes * price,digits);
     return ["Floor tile estimator","Room: "+fmt(length)+" m × "+fmt(width)+" m = "+fmt(area,2)+" m²",
