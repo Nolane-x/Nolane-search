@@ -39,6 +39,15 @@ The current Open Food Facts API v3 response-status schema documents string value
 
 The existing Wave 52 adapter checked only `status === 1`, a legacy numeric status shape shown in older examples. Wave 58 updates the adapter to accept the documented v3 string statuses (while retaining numeric `1` as backward compatibility) and only reports a successful lookup when a valid product object is present. An HTTP 404 is returned to the caller as `not_found`; 429/503 remain rate-limit/availability errors.
 
+### Current nested nutrition representation
+
+The repository's current API v3.5+ product schema exposes nutrition as `product.nutrition.aggregated_set`:
+- `per` identifies the reference quantity (`100g`, `100ml` or `serving`).
+- Nutrients are nested under `aggregated_set.nutrients`.
+- Each nutrient provides a normalized `value` and may also include `value_computed`.
+
+The adapter prefers this current structure and only exposes it as per-100-g data when `per: 100g` is explicit. A 100 ml or per-serving set is never relabeled as per 100 g. When there is no nutrition object, `nutrition_reference` is null. Negative nutrient values are treated as invalid and remain null. Older flat `nutriments.*_100g` values remain supported as a compatibility fallback.
+
 ## New AI-callable operations
 
 - `lookup_consumer_product`: barcode lookup across all Open Facts databases by default, or one explicitly selected catalog. Returns the resolved database, product identity, categories, ingredients/allergens where available, scores/labels, product images and nutrition per 100 g when provided.
@@ -48,8 +57,8 @@ The existing `lookup_food_product` function remains available and now delegates 
 
 ## Data interpretation and limits
 
-- Open Facts records are contributed by users and may be incomplete, incorrect, missing or stale. An absent nutrient is null/missing, never inferred as zero.
-- Nutrition comparison is strictly per 100 g. It reports numerical values only; a lower or higher number is not presented as an overall health ranking or a personalized dietary recommendation.
+- Open Facts records are contributed by users and may be incomplete, incorrect, missing or stale. An absent nutrient is null/missing, never inferred as zero; impossible negative nutrient values are rejected.
+- Nutrition comparison is strictly per 100 g and food-only. A product redirected to Beauty/Pet Food/Products Facts is excluded from food comparison. It reports numerical values only; a lower or higher number is not presented as an overall health ranking or a personalized dietary recommendation.
 - Nutri-Score, NOVA and environmental score values may be absent, not applicable or based on the specific catalog's coverage. The UI/AI must not infer them when absent.
 - Food nutrition fields do not apply to many beauty and general-product records; those results remain useful for identity/ingredients/categorization but expose no invented nutrition.
 - Read API traffic is rate-limited. The Open Food Facts overview documents 15 requests/minute/IP for individual product reads and 10 requests/minute/IP for search, with additional global throttling. A single barcode operation performs at most one request normally and follows at most one provider redirect; a comparison is sequential and limited to four barcodes.
@@ -73,7 +82,7 @@ Search API docs: https://openfoodfacts.github.io/openfoodfacts-server/api/ref/se
 
 ## Validation
 
-Mocked tests cover documented v3 string statuses, legacy numeric compatibility, successful lookup, HTTP 404, automatic beauty-catalog redirect, pet-food/general-product host routing, unsafe redirect rejection, food comparison, missing-value preservation, input bounds, and AI catalog registration/dispatch. CI must also pass TypeScript, deployment-script checks, Python tool runner and Cloudflare Worker build. Provider live availability and data quality remain distinct from mocked CI.
+Mocked tests cover documented v3 string statuses, legacy numeric compatibility, the nested v3.5+ nutrition schema, per-100-g enforcement, 100 ml exclusion, missing/negative nutrient handling, HTTP 404, automatic beauty-catalog redirect, pet-food/general-product host routing, unsafe redirect rejection, non-food exclusion from comparisons, input bounds and AI-dispatch integration. CI passed TypeScript, 35 Vitest files / 356 tests, deployment-script checks, 449 Python runner tests and Cloudflare Worker build. Main deployment and health smoke passed; provider live availability and per-barcode data quality remain distinct from mocked CI.
 
 ## Sources
 - Open Food Facts API v3 specification and response-status schema (links above).
