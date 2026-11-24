@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos, lookupFoodProduct } from "../src/media-discovery-tools";
+import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos, searchInternetArchiveAudio, lookupFoodProduct } from "../src/media-discovery-tools";
 import { executeAgentTool, AGENT_TOOL_DEFINITIONS } from "../src/agent-tools";
 import type { Env } from "../src/types";
 
@@ -219,6 +219,68 @@ describe("Wave 52 media and product discovery", () => {
     expect(result.status).toBe("not_found");
   });
 
+  it("searches public Internet Archive audio and selects an original MP3 file", async () => {
+    const mock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("archive.org");
+      expect(new Headers(init?.headers).get("user-agent")).toContain("NolaneSearch");
+      if (url.pathname === "/advancedsearch.php") {
+        expect(url.searchParams.get("q")).toBe('title:"public lecture" AND mediatype:audio');
+        expect(url.searchParams.getAll("fl[]")).toContain("identifier");
+        expect(url.searchParams.get("rows")).toBe("2");
+        return json({ response: { docs: [{ identifier: "audio-public" }, { identifier: "audio-private" }] } });
+      }
+      if (url.pathname === "/metadata/audio-public") {
+        return json({ metadata: {
+          mediatype: "audio", title: "A Public Lecture", year: "1998",
+          creator: "Public University", licenseurl: "https://creativecommons.org/licenses/by/4.0/",
+          description: "An <i>archived</i> public lecture"
+        }, files: [
+          { name: "lecture_meta.xml", format: "Metadata", size: "120", source: "original" },
+          { name: "lecture_64kb.mp3", format: "VBR MP3", size: "450000", source: "derivative" },
+          { name: "lecture.mp3", format: "MP3", size: "1800000", source: "original" },
+          { name: "private.mp3", format: "MP3", size: "1800000", source: "original", private: "true" },
+          { name: "transcript.pdf", format: "PDF", size: "12000", source: "original" }
+        ] });
+      }
+      if (url.pathname === "/metadata/audio-private") {
+        return json({ metadata: {
+          mediatype: "audio", title: "Restricted Recording", "access-restricted-item": "true"
+        }, files: [{ name: "restricted.mp3", format: "MP3", size: "1000", source: "original" }] });
+      }
+      throw new Error("Unexpected archive audio endpoint: " + url.pathname);
+    });
+    vi.stubGlobal("fetch", mock);
+    const result = await searchInternetArchiveAudio("public lecture", 2);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      provider: "Internet Archive",
+      mediaType: "audio",
+      title: "A Public Lecture",
+      credit: "Public University",
+      license: "Creative Commons (see item)",
+      sourceUrl: "https://archive.org/details/audio-public",
+      mediaUrl: "https://archive.org/download/audio-public/lecture.mp3"
+    });
+    expect(result.items[0].previewUrl).toContain("/services/img/audio-public");
+    expect(mock).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not return audio unless a non-private original audio file with a valid format exists", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/advancedsearch.php") return json({ response: { docs: [{ identifier: "audio-derivative-only" }] } });
+      return json({ metadata: { mediatype: "audio", title: "Derivative Only" }, files: [
+        { name: "only.mp3", format: "VBR MP3", size: "1200", source: "derivative" },
+        { name: "unsafe.mp3", format: "MP3", size: "1200", source: "original", private: "true" },
+        { name: "wrong.wav", format: "JPEG", size: "1200", source: "original" }
+      ] });
+    }));
+    const result = await searchInternetArchiveAudio("derivative only");
+    expect(result.items).toHaveLength(0);
+    expect(result.status).toBe("not_found");
+  });
+
   it("looks up food by barcode and returns bounded ingredients and nutrition", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
@@ -256,7 +318,7 @@ describe("Wave 52 media and product discovery", () => {
   it("exposes and dispatches all Wave 52 tools through the agent interface", async () => {
     const names = AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name);
     expect(names).toEqual(expect.arrayContaining([
-      "search_wikimedia_images", "search_nasa_media", "lookup_food_product", "search_openverse_images", "search_internet_archive_videos",
+      "search_wikimedia_images", "search_nasa_media", "lookup_food_product", "search_openverse_images", "search_internet_archive_videos", "search_internet_archive_audio",
     ]));
     vi.stubGlobal("fetch", vi.fn(async () => json({ query: { pages: [{
       pageid: 8, title: "File:Dispatch.jpg",
