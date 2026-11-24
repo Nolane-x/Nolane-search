@@ -81,6 +81,11 @@ from wave44 import (
     laundry_load_organizer, trip_itinerary_planner, vehicle_maintenance_planner,
     document_renewal_planner, warranty_claim_assistant,
 )
+from wave45 import (
+    bank_csv_expense_analyzer, bill_cashflow_calendar_planner, shared_expense_settler,
+    moving_day_checklist_planner, moving_box_label_maker, return_deadline_tracker,
+    gift_budget_planner, household_emergency_kit_planner,
+)
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
@@ -245,6 +250,8 @@ RUNNERS = {
     "home-maintenance-scheduler", "pet-routine-planner", "event-seating-planner", "spaced-review-scheduler",
     "pantry-use-first-planner", "pantry-recipe-matcher", "meal-prep-timeline-planner", "laundry-load-organizer",
     "trip-itinerary-planner", "vehicle-maintenance-planner", "document-renewal-planner", "warranty-claim-assistant",
+    "bank-csv-expense-analyzer", "bill-cashflow-calendar-planner", "shared-expense-settler", "moving-day-checklist-planner",
+    "moving-box-label-maker", "return-deadline-tracker", "gift-budget-planner", "household-emergency-kit-planner",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -12560,6 +12567,14 @@ TOOLS={
  "vehicle-maintenance-planner":vehicle_maintenance_planner,
  "document-renewal-planner":document_renewal_planner,
  "warranty-claim-assistant":warranty_claim_assistant,
+ "bank-csv-expense-analyzer":bank_csv_expense_analyzer,
+ "bill-cashflow-calendar-planner":bill_cashflow_calendar_planner,
+ "shared-expense-settler":shared_expense_settler,
+ "moving-day-checklist-planner":moving_day_checklist_planner,
+ "moving-box-label-maker":moving_box_label_maker,
+ "return-deadline-tracker":return_deadline_tracker,
+ "gift-budget-planner":gift_budget_planner,
+ "household-emergency-kit-planner":household_emergency_kit_planner,
 
 }
 
