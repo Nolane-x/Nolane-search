@@ -167,7 +167,7 @@ describe("Wave 50 media and academic discovery tools", () => {
       expect(url.pathname).toBe("/works");
       expect(url.searchParams.get("query.bibliographic")).toBe("neural networks in education");
       expect(url.searchParams.get("rows")).toBe("5");
-      expect(url.searchParams.get("filter")).toBe("from-pub-date:2022-01-01,until-pub-date:2025-12-31");
+      expect(url.searchParams.get("filter")).toBe("from-pub-date:2022-01-01,until-pub-date:2026-12-31");
       expect(new Headers(init?.headers).get("user-agent")).toContain("NolaneSearch");
       return json({
         message: {
@@ -187,7 +187,7 @@ describe("Wave 50 media and academic discovery tools", () => {
       });
     }));
     const result = JSON.parse(await runLiveEverydayTool("search_scholarly_works", {
-      query: "neural networks in education", year_from: 2022, year_to: 2025,
+      query: "neural networks in education", year_from: 2022, year_to: 2026,
     }));
     expect(result.status).toBe("ok");
     expect(result.works[0].title).toBe("A Research Paper");
