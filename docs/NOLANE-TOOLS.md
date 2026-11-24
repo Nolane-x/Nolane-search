@@ -19,6 +19,26 @@ Wave 39 increased the production catalog from **462 to 472 registered tools**. T
 
 Research: [TOOL-RESEARCH-2026-11-23-WAVE39.md](TOOL-RESEARCH-2026-11-23-WAVE39.md). Implementation record: [HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md](HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md).
 
+## Wave 41 — daily-life planning and household helpers — implementation branch, not production
+
+Wave 41 raises the branch catalog from **483 to 494 registered tools** (+11). All tools below are connected to the Python runner and direct AI JSON interface; production remains at 483 until PR CI, merge and Cloudflare deployment succeed.
+
+| ID | Công cụ | Chức năng |
+|---|---|---|
+| \`/tool water-bill-calculator\` | Ước tính hóa đơn nước | Lượng nước tiêu thụ, giá/m³ và phụ phí |
+| \`/tool mobile-data-duration-calculator\` | Ước tính dung lượng 4G/5G | Dữ liệu còn lại, số ngày dùng và giới hạn/ngày |
+| \`/tool solar-panel-output-calculator\` | Ước tính điện mặt trời | Sản lượng kWh theo công suất pin, giờ nắng và hao hụt |
+| \`/tool wallpaper-roll-calculator\` | Tính cuộn giấy dán tường | Số dải và số cuộn, kể cả họa tiết lặp |
+| \`/tool curtain-fabric-calculator\` | Tính vải may rèm | Số tấm và mét vải theo kích thước, độ nhún và đường may |
+| \`/tool moving-box-calculator\` | Ước tính thùng chuyển nhà | Số thùng theo thể tích đồ và phần dự phòng |
+| \`/tool event-food-calculator\` | Tính đồ ăn cho buổi tiệc | Khối lượng món chính, đồ ăn nhẹ và lít đồ uống |
+| \`/tool fuel-economy-calculator\` | Tính mức tiêu hao nhiên liệu | L/100 km, km/L, chi phí và giá nhiên liệu/km |
+| \`/tool gas-cylinder-runtime-calculator\` | Ước tính thời gian dùng bình gas | Số giờ/ngày theo lượng gas và mức tiêu thụ |
+| \`/tool shipping-volumetric-weight-calculator\` | Tính cân nặng quy đổi vận chuyển | So sánh khối lượng thực và khối lượng thể tích |
+| \`/tool storage-capacity-calculator\` | Ước tính sức chứa bộ nhớ | Số ảnh, phút video và tài liệu theo dung lượng |
+
+See [upstream product research](TOOL-RESEARCH-2026-11-24-WAVE41.md) and [implementation handoff](HANDOFF-WAVE-FORTY-ONE-2026-11-24.md). All rates, sizes and prices are user-entered; no live service quote is implied.
+
 ## Wave 40 — everyday household, travel and device utilities — deployed to production
 
 Wave 40 increased the production catalog from **472 to 483 registered tools** (+11). The following user-facing processors are wired to the Python runner and direct AI text/JSON interface. PR #93, main CI, Worker export/health smoke and Cloudflare deployment are complete.
