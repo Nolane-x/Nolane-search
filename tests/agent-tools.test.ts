@@ -20,7 +20,7 @@ describe("Nolane AI callable tools", () => {
       tools: Array<{id:string;category:string}>;
     };
     expect(first.total).toBe(TOOL_CATALOG.length);
-    expect(first.total).toBe(526);
+    expect(first.total).toBe(534);
     expect(first.tools).toHaveLength(20);
     expect(first.nextOffset).toBe(20);
     expect(first.tools.every(tool => tool.category === "image")).toBe(true);
@@ -967,6 +967,71 @@ describe("Nolane AI callable tools", () => {
     });
     expect(kit).toContain("Water: target 13 L | on hand 5 L | still needed 8 L");
     expect(kit).toContain("not an official safety standard");
+  });
+
+  it("runs Wave 46 home, vehicle and rental tools through AI-callable tools", async () => {
+    const run = (tool_id: string, value: Record<string, unknown>) =>
+      executeAgentTool(env, "process_text_content", { tool_id, content: JSON.stringify(value) });
+
+    const fuel = await run("vehicle-fuel-log-analyzer", {
+      currency: "VND",
+      entries: [
+        { date: "2026-01-01", odometer_km: 10000, litres: 40, price_per_litre: 25000, full_tank: true },
+        { date: "2026-01-31", odometer_km: 10400, litres: 32, price_per_litre: 26000, full_tank: true },
+      ],
+    });
+    expect(fuel).toContain("400 km | 32 L | 8 L/100 km");
+
+    const ownership = await run("vehicle-ownership-cost-report", {
+      currency: "VND", distance_km: 1000,
+      expenses: [{ date: "2026-01-01", name: "Fuel", category: "Fuel", amount: 500000 }],
+    });
+    expect(ownership).toContain("Recorded cost per kilometre: 500 VND/km");
+
+    const replace = await run("appliance-repair-replace-comparator", {
+      appliance_name: "Fridge", currency: "USD",
+      repair_cost: 200, expected_years_after_repair: 4, annual_energy_cost_after_repair: 120,
+      replacement_cost: 800, replacement_expected_life_years: 10, replacement_annual_energy_cost: 70,
+    });
+    expect(replace).toContain("Replacement has the lower annualised cost proxy by 20 USD/year");
+
+    const quotes = await run("home-repair-quote-comparator", {
+      project_name: "Bathroom", currency: "VND",
+      required_work: [{ id: "pipe", description: "Pipe replacement" }],
+      quotes: [{ provider: "A", labour_cost: 100, materials_cost: 50, included_work_ids: ["pipe"] }],
+    });
+    expect(quotes).toContain("A — 150 VND");
+    expect(quotes).toContain("Scope included: 1/1");
+
+    const moveIn = await run("rental-move-in-inspection-report", {
+      property: "Unit 1", tenant: "A", landlord_or_agent: "B", inspection_date: "2026-11-24",
+      checks: [{ area: "Kitchen", item: "Tap", condition: "good", evidence_refs: ["tap.jpg"] }],
+    });
+    expect(moveIn).toContain("Kitchen | Tap | good");
+    expect(moveIn).toContain("tap.jpg");
+
+    const moveOut = await run("rental-move-out-condition-report", {
+      property: "Unit 1", tenant: "A", move_in_date: "2026-01-01", move_out_date: "2026-11-24",
+      move_in_checks: [{ id: "tap", area: "Kitchen", item: "Tap", condition: "good" }],
+      move_out_checks: [{ id: "tap", area: "Kitchen", item: "Tap", condition: "worn" }],
+    });
+    expect(moveOut).toContain("Condition label changed");
+    expect(moveOut).toContain("Arithmetic remainder: 0 VND");
+
+    const rents = await run("rental-offer-cost-comparator", {
+      currency: "VND", lease_months: 12,
+      offers: [{ name: "A", monthly_rent: 100, refundable_deposit: 200 }],
+    });
+    expect(rents).toContain("Estimated 12-month cost excluding refundable deposit: 1200 VND");
+    expect(rents).toContain("Cash required at start");
+
+    const service = await run("appliance-service-history-report", {
+      as_of_date: "2026-11-24",
+      appliances: [{ name: "Washer", currency: "VND", purchase_date: "2025-01-01", warranty_months: 24,
+        service_entries: [{ date: "2026-03-01", event: "Pump repair", cost: 500000, downtime_days: 2 }] }],
+    });
+    expect(service).toContain("Pump repair (1)");
+    expect(service).toContain("recorded service spend: 500000 VND");
   });
 
 });
