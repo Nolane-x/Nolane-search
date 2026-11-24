@@ -1248,7 +1248,7 @@ async function searchScholarlyWorks(args: Obj): Promise<string> {
     year_to: toYear,
     result_count: works.length,
     works,
-    note: "Crossref supplies bibliographic metadata deposited by publishers and trusted sources. Metadata may be incomplete or contain errors; citation counts are not a measure of research quality. A DOI link may lead to a paywall or a page without full text. This tool returns metadata only, not article text or a guarantee of open access.",
+    note: "Crossref supplies bibliographic metadata deposited by publishers and trusted sources. Metadata may be incomplete or contain errors; citation counts are not a measure of research quality. A DOI link may lead to a paywall or a page without full text. This tool does not retrieve article text; it returns bibliographic metadata only and does not guarantee open access.",
   });
 }
 
