@@ -20,7 +20,7 @@ describe("Nolane AI callable tools", () => {
       tools: Array<{id:string;category:string}>;
     };
     expect(first.total).toBe(TOOL_CATALOG.length);
-    expect(first.total).toBe(483);
+    expect(first.total).toBe(494);
     expect(first.tools).toHaveLength(20);
     expect(first.nextOffset).toBe(20);
     expect(first.tools.every(tool => tool.category === "image")).toBe(true);
@@ -82,6 +82,52 @@ describe("Nolane AI callable tools", () => {
       {name:"Small",price:25000,quantity:500,unit:"g"},
       {name:"Large",price:46000,quantity:1,unit:"kg"},
     ]})).toContain("Best unit price: Large");
+  });
+
+  it("exposes and runs all Wave 41 daily-life calculators through the normal AI tool", async () => {
+    const schema = AGENT_TOOL_DEFINITIONS.find(tool => tool.function.name === "process_text_content")?.function.parameters as {
+      properties?: { tool_id?: { enum?: string[] } };
+    };
+    const ids = [
+      "water-bill-calculator",
+      "mobile-data-duration-calculator",
+      "solar-panel-output-calculator",
+      "wallpaper-roll-calculator",
+      "curtain-fabric-calculator",
+      "moving-box-calculator",
+      "event-food-calculator",
+      "fuel-economy-calculator",
+      "gas-cylinder-runtime-calculator",
+      "shipping-volumetric-weight-calculator",
+      "storage-capacity-calculator"
+    ];
+    expect(schema.properties?.tool_id?.enum).toEqual(expect.arrayContaining(ids));
+    expect(TOOL_CATALOG.filter(tool => ids.includes(tool.id) && tool.ready)).toHaveLength(11);
+    const run = (tool_id: string, value: unknown) => executeAgentTool(env, "process_text_content", {
+      tool_id, content: JSON.stringify(value),
+    });
+    expect(await run("water-bill-calculator", {previous_reading_m3:120.5,current_reading_m3:128.5,price_per_m3:10000,fixed_charge:5000,sewage_percent:10,currency:"VND"}))
+      .toContain("Estimated bill: VND 93000");
+    expect(await run("mobile-data-duration-calculator", {allowance_gb:20,used_gb:5,daily_usage_gb:1.5,reserve_percent:10,days_until_reset:10}))
+      .toContain("Usable data: 13.5 GB");
+    expect(await run("solar-panel-output-calculator", {panel_watts:500,panel_count:4,peak_sun_hours_per_day:4.5,system_loss_percent:20,days:30}))
+      .toContain("Estimated daily energy: 7.2 kWh");
+    expect(await run("wallpaper-roll-calculator", {room_perimeter_m:12,wall_height_m:2.5,roll_width_m:0.53,roll_length_m:10,pattern_repeat_cm:53,extra_rolls:1}))
+      .toContain("Suggested rolls to buy: 9");
+    expect(await run("curtain-fabric-calculator", {window_width_cm:200,window_height_cm:240,fabric_width_cm:140,fullness_ratio:2,side_allowance_cm:30,top_hem_cm:10,bottom_hem_cm:20,pattern_repeat_cm:40}))
+      .toContain("Total fabric length: 11.2 metres");
+    expect(await run("moving-box-calculator", {items_volume_m3:8,box_volume_l:60,usable_fill_percent:75,extra_boxes_percent:10}))
+      .toContain("Suggested boxes: 196");
+    expect(await run("event-food-calculator", {guests:25,food_grams_per_person:250,drink_ml_per_person:500,snack_grams_per_person:50,extra_percent:10}))
+      .toContain("Main food: 6.88 kg");
+    expect(await run("fuel-economy-calculator", {distance_km:400,fuel_litres:32,price_per_litre:25000,currency:"VND"}))
+      .toContain("Average consumption: 8 L/100 km");
+    expect(await run("gas-cylinder-runtime-calculator", {gas_weight_kg:12,consumption_grams_per_hour:150,reserve_percent:10,hours_per_day:3}))
+      .toContain("Estimated runtime: 72 hours");
+    expect(await run("shipping-volumetric-weight-calculator", {length_cm:50,width_cm:40,height_cm:30,actual_weight_kg:8,volumetric_divisor:5000}))
+      .toContain("Estimated billable weight: 12 kg");
+    expect(await run("storage-capacity-calculator", {capacity_gb:128,reserve_percent:10,photo_size_mb:4,video_size_mb_per_minute:150,document_size_mb:1}))
+      .toContain("about 28,800 photos");
   });
 
   it("exposes and runs all Wave 40 household and travel calculators through the normal AI tool", async () => {
