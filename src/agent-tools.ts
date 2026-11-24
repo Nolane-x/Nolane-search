@@ -442,6 +442,27 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
     {
     type: "function",
     function: {
+      name: "lookup_consumer_product",
+      description: "Look up an 8–14 digit barcode across Open Food Facts, Open Beauty Facts, Open Pet Food Facts and Open Products Facts. The official API can redirect a product to the correct catalog; Nolane follows at most one redirect and only to the four allowlisted Open Facts hosts. Returns product identity, categories, ingredients/allergens and nutrition when available. Community records may be incomplete or outdated.",
+      parameters: { type: "object", properties: {
+        barcode: { type: "string", pattern: "^[0-9]{8,14}$", description: "EAN/UPC/GTIN barcode." },
+        product_type: { type: "string", enum: ["all","food","beauty","petfood","product"], description: "Catalog to query; defaults to all for automatic product-type detection." }
+      }, required: ["barcode"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "compare_food_products",
+      description: "Compare 2–4 packaged food products by barcode using Open Food Facts. Returns side-by-side nutrition data per 100 g and numerical minima/maxima for metrics present in at least two records. Missing values remain missing; the comparison is descriptive and does not rank overall healthiness.",
+      parameters: { type: "object", properties: {
+        barcodes: { type: "array", minItems: 2, maxItems: 4, uniqueItems: true, items: { type: "string", pattern: "^[0-9]{8,14}$" }, description: "Two to four distinct food product barcodes." }
+      }, required: ["barcodes"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "search_openverse_images",
       description: "Search Openverse for openly licensed and public-domain images across multiple sources. Returns image previews, source pages, creators and per-image Creative Commons/public-domain license details. Some licenses restrict commercial use or derivatives; preserve attribution and check the original license before reuse.",
       parameters: { type: "object", properties: {
