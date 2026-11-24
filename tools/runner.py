@@ -86,6 +86,11 @@ from wave45 import (
     moving_day_checklist_planner, moving_box_label_maker, return_deadline_tracker,
     gift_budget_planner, household_emergency_kit_planner,
 )
+from wave46 import (
+    vehicle_fuel_log_analyzer, vehicle_ownership_cost_report, appliance_repair_replace_comparator,
+    home_repair_quote_comparator, rental_move_in_inspection_report, rental_move_out_condition_report,
+    rental_offer_cost_comparator, appliance_service_history_report,
+)
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
@@ -252,6 +257,8 @@ RUNNERS = {
     "trip-itinerary-planner", "vehicle-maintenance-planner", "document-renewal-planner", "warranty-claim-assistant",
     "bank-csv-expense-analyzer", "bill-cashflow-calendar-planner", "shared-expense-settler", "moving-day-checklist-planner",
     "moving-box-label-maker", "return-deadline-tracker", "gift-budget-planner", "household-emergency-kit-planner",
+    "vehicle-fuel-log-analyzer", "vehicle-ownership-cost-report", "appliance-repair-replace-comparator", "home-repair-quote-comparator",
+    "rental-move-in-inspection-report", "rental-move-out-condition-report", "rental-offer-cost-comparator", "appliance-service-history-report",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -12575,6 +12582,14 @@ TOOLS={
  "return-deadline-tracker":return_deadline_tracker,
  "gift-budget-planner":gift_budget_planner,
  "household-emergency-kit-planner":household_emergency_kit_planner,
+ "vehicle-fuel-log-analyzer":vehicle_fuel_log_analyzer,
+ "vehicle-ownership-cost-report":vehicle_ownership_cost_report,
+ "appliance-repair-replace-comparator":appliance_repair_replace_comparator,
+ "home-repair-quote-comparator":home_repair_quote_comparator,
+ "rental-move-in-inspection-report":rental_move_in_inspection_report,
+ "rental-move-out-condition-report":rental_move_out_condition_report,
+ "rental-offer-cost-comparator":rental_offer_cost_comparator,
+ "appliance-service-history-report":appliance_service_history_report,
 
 }
 
