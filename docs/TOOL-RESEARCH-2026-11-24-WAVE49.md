@@ -1,9 +1,9 @@
 # Wave 49 — learning, art and world discovery
 
 Date: 2026-11-24
-Status: implementation branch; CI, merge and deployment pending.
-Branch: feat/wave-49-learning-art-world
-Base main commit: 06135aee23663d3b5eeec7e0e41ac4cb4bc6fc8a
+Status: merged and deployed to production on 2026-11-24.
+Pull request: https://github.com/Nolane-x/Nolane-search/pull/104
+Merge commit: 56793e4b01ce985b90c4f78f3ec1e4c7269cdc9
 Scope: five directly model-callable functions aimed at everyday learning and discovery. Existing 534 file processors remain unchanged.
 
 ## Why this wave
@@ -43,3 +43,14 @@ Wave 47–48 added weather, air quality, exchange rates, holidays, marine condit
 ## Validation plan
 
 Mocked API tests cover word definition/404 handling, trusted audio URL filtering, public-domain-only book results, museum public-domain filtering and IIIF URLs, NASA category/status parsing and event locations, local time-zone conversion, invalid-input rejection and AI tool dispatch. CI must pass type-check, all Vitest tests, deployment scripts, Python runner tests and Worker build before merge.
+
+
+## Production verification
+
+- PR #104 merged on 2026-11-24.
+- PR CI: https://github.com/Nolane-x/Nolane-search/actions/runs/45343427454 — passed TypeScript, Vitest, deployment scripts, Python runner tests and Worker build.
+- Main CI: https://github.com/Nolane-x/Nolane-search/actions/runs/45343582511 — passed the full same pipeline on the merge commit.
+- Cloudflare deployment: https://github.com/Nolane-x/Nolane-search/actions/runs/45343582467 — passed required-secret checks, source verification, production bundle validation, Worker/runtime-secret upload and Telegram webhook/command registration.
+- Worker export and smoke test: https://github.com/Nolane-x/Nolane-search/actions/runs/45343582462 — passed build/export and public `/health` smoke test.
+- No D1 migration was required. The visible deployment summary did not expose a Worker version ID.
+- Feature-level real Telegram/Web Chat acceptance is still recommended; successful mocked tests and public health checks are not evidence that every upstream API is reachable from every user request.
