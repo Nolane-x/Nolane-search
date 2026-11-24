@@ -20,7 +20,7 @@ describe("Nolane AI callable tools", () => {
       tools: Array<{id:string;category:string}>;
     };
     expect(first.total).toBe(TOOL_CATALOG.length);
-    expect(first.total).toBe(510);
+    expect(first.total).toBe(518);
     expect(first.tools).toHaveLength(20);
     expect(first.nextOffset).toBe(20);
     expect(first.tools.every(tool => tool.category === "image")).toBe(true);
@@ -854,6 +854,61 @@ describe("Nolane AI callable tools", () => {
     expect(shell).toContain("eval executes");
     expect(shell).toContain("download piped directly");
     expect(shell).not.toContain("secret-no-leak");
+  });
+
+  it("runs Wave 44 everyday life planners through AI-callable tools", async () => {
+    const run = (tool_id: string, value: Record<string, unknown>) =>
+      executeAgentTool(env, "process_text_content", { tool_id, content: JSON.stringify(value) });
+
+    const pantry = await run("pantry-use-first-planner", {
+      as_of_date: "2026-11-24", items: [{ name: "Milk", date: "2026-11-25", date_type: "use_by" }],
+    });
+    expect(pantry).toContain("Milk");
+    expect(pantry).toContain("Within planning window");
+
+    const recipes = await run("pantry-recipe-matcher", {
+      available_ingredients: ["Rice", "Egg", "Scallion"],
+      recipes: [{ name: "Fried rice", ingredients: ["Rice", "Egg", "Scallion"] }],
+    });
+    expect(recipes).toContain("Fried rice");
+    expect(recipes).toContain("100% ingredient match");
+
+    const prep = await run("meal-prep-timeline-planner", {
+      start_time: "16:00", tasks: [{ id: "chop", name: "Chop vegetables", duration_minutes: 10, resource: "hands" }],
+    });
+    expect(prep).toContain("16:00–16:10 | Chop vegetables");
+
+    const laundry = await run("laundry-load-organizer", {
+      machine_capacity_kg: 5, items: [{ name: "White shirt", weight_kg: 0.3, color_group: "white", fabric_group: "normal", drying: "air", max_temp_c: 40 }],
+    });
+    expect(laundry).toContain("White shirt");
+
+    const trip = await run("trip-itinerary-planner", {
+      start_time: "09:00", end_time: "12:00",
+      stops: [{ name: "Museum", travel_minutes_from_previous: 20, duration_minutes: 60 }],
+    });
+    expect(trip).toContain("09:20–10:20 | Visit Museum");
+
+    const vehicle = await run("vehicle-maintenance-planner", {
+      as_of_date: "2026-11-24", current_odometer_km: 10000, maintenance: [{
+        name: "Engine oil", last_service_date: "2025-11-24", last_service_odometer_km: 5000, interval_months: 12, interval_km: 5000,
+      }],
+    });
+    expect(vehicle).toContain("Engine oil");
+    expect(vehicle).toContain("DUE NOW / OVERDUE");
+
+    const documents = await run("document-renewal-planner", {
+      as_of_date: "2026-11-24", documents: [{ name: "Passport", expiry_date: "2027-03-01", remind_days_before: 60 }],
+    });
+    expect(documents).toContain("Passport");
+    expect(documents).toContain("Renewal window approaching");
+
+    const warranty = await run("warranty-claim-assistant", {
+      as_of_date: "2026-11-24", product_name: "Laptop", seller: "Example Store",
+      purchase_date: "2025-01-31", warranty_months: 24, issue_description: "Display flickers.", language: "vi",
+    });
+    expect(warranty).toContain("Bản nháp yêu cầu kiểm tra bảo hành");
+    expect(warranty).toContain("2027-01-31");
   });
 
 });
