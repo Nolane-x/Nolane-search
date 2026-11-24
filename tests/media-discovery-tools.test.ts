@@ -195,7 +195,8 @@ describe("Wave 52 media and product discovery", () => {
       mediaType: "video",
       title: "A Public Documentary",
       credit: "Archive contributor",
-      license: "https://creativecommons.org/publicdomain/zero/1.0/",
+      license: "Creative Commons (see item)",
+      licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
       dateCreated: "1984",
       sourceUrl: "https://archive.org/details/public-film",
       mediaUrl: "https://archive.org/download/public-film/documentary.mp4"
