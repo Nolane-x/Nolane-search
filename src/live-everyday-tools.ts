@@ -1034,14 +1034,14 @@ async function getTvShowEpisodes(args: Obj): Promise<string> {
 async function searchAppleMedia(args: Obj): Promise<string> {
   const query = text(args, "query", 140);
   const mediaType = args.media_type === undefined ? "podcast" : args.media_type;
-  const supported = ["movie", "podcast", "music", "musicVideo", "audiobook", "shortFilm", "ebook"];
+  const supported = ["movie", "podcast", "music", "musicVideo", "audiobook", "shortFilm", "tvShow", "ebook"];
   if (typeof mediaType !== "string" || !supported.includes(mediaType)) {
     throw new Error("media_type must be movie, podcast, music, musicVideo, audiobook, shortFilm or ebook.");
   }
   const country = args.country_code === undefined ? "VN" : countryCode(args.country_code);
   if (!country) throw new Error("country_code must be a two-letter ISO country code.");
   const limit = integer(args.limit, "limit", 8, 1, 10);
-  lastAppleSearchRequestAt = throttleProvider(lastAppleSearchRequestAt, 250, "Apple iTunes Search API");
+  lastAppleSearchRequestAt = throttleProvider(lastAppleSearchRequestAt, 3100, "Apple iTunes Search API");
   const url = new URL("https://itunes.apple.com/search");
   url.searchParams.set("term", query);
   url.searchParams.set("media", mediaType);
@@ -1079,7 +1079,7 @@ async function searchAppleMedia(args: Obj): Promise<string> {
     storefront_country_code: country,
     result_count: results.length,
     results,
-    note: "Results are limited to Apple's selected storefront and are not a complete global media catalog. This lookup returns metadata and official store links only; it deliberately does not return promotional artwork or audio previews. Store links do not guarantee local subscription access or current availability.",
+    note: "Results are limited to Apple's selected storefront and are not a complete global media catalog. Apple documents an approximate 20-search-calls-per-minute limit; this client waits at least 3.1 seconds between requests per warm Worker isolate, not globally across all isolates. This lookup returns metadata and official store links only; it deliberately does not return promotional artwork or audio previews. Store links do not guarantee local subscription access or current availability.",
   });
 }
 
