@@ -2,6 +2,13 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+## In development — Wave 40 (2026-11-24)
+
+- Branch [`feat/wave-forty-everyday-household-tools`](https://github.com/Nolane-x/Nolane-search/tree/feat/wave-forty-everyday-household-tools) adds 11 household, travel and device utilities. Branch catalog target: **483**; production remains at **472** until verification and deployment.
+- New tool areas: appliance electricity estimates, floor tiles, concrete, soil/mulch, monthly household budgets, savings goals, travel budgets, download time, work hours, battery runtime and water-tank capacity.
+- The tools use user-entered measurements, prices and rates; no live tariffs or market data is fetched. Python processors use only the standard library; direct AI chat calls are supported.
+- Research: [TOOL-RESEARCH-2026-11-24-WAVE40.md](TOOL-RESEARCH-2026-11-24-WAVE40.md). Handoff: [HANDOFF-WAVE-FORTY-2026-11-24.md](HANDOFF-WAVE-FORTY-2026-11-24.md).
+
 ## Latest production release — Wave 39 (2026-11-23)
 
 - [PR #92](https://github.com/Nolane-x/Nolane-search/pull/92) merged into `main` as `b81dfde15bf5d63846cac0d92378cb62eefcb2ec`. Production Tool Center catalog: **472 processors** (+10 over Wave 38).
