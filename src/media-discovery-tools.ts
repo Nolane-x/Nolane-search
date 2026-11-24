@@ -410,64 +410,261 @@ export async function searchInternetArchiveAudio(queryInput: unknown, limitInput
   };
 }
 
-export async function lookupFoodProduct(barcodeInput: unknown): Promise<string> {
-  if (typeof barcodeInput !== "string" || !/^\d{8,14}$/.test(barcodeInput.trim())) {
-    throw new Error("barcode must contain 8 to 14 digits (EAN/UPC).");
+type OffProductType = "all" | "food" | "beauty" | "petfood" | "product";
+type OffReadResult = { status: "ok"; host: string; row: Obj } | { status: "not_found"; host: string };
+const OFF_HOSTS: Record<Exclude<OffProductType, "all">, string> = {
+  food: "world.openfoodfacts.org",
+  beauty: "world.openbeautyfacts.org",
+  petfood: "world.openpetfoodfacts.org",
+  product: "world.openproductsfacts.org",
+};
+const OFF_DATABASE_NAMES: Record<Exclude<OffProductType, "all">, string> = {
+  food: "Open Food Facts",
+  beauty: "Open Beauty Facts",
+  petfood: "Open Pet Food Facts",
+  product: "Open Products Facts",
+};
+const OFF_FIELDS = [
+  "code", "product_type", "product_name", "product_name_en", "generic_name", "brands", "quantity",
+  "categories", "categories_tags", "ingredients_text", "ingredients_text_en", "allergens", "allergens_tags",
+  "traces", "traces_tags", "labels", "nutriscore_grade", "nutriscore_score", "nova_group",
+  "environmental_score_grade", "environmental_score_score", "nutriments", "image_front_url", "image_url", "lang",
+].join(",");
+
+function validBarcode(value: unknown): string {
+  if (typeof value !== "string" || !/^\d{8,14}$/.test(value.trim())) {
+    throw new Error("barcode must contain 8 to 14 digits (EAN/UPC/GTIN).");
   }
-  const barcode = barcodeInput.trim();
-  const url = new URL(OFF_API + "/" + barcode + ".json");
-  url.searchParams.set("fields", [
-    "code", "product_name", "product_name_en", "brands", "quantity", "categories",
-    "ingredients_text", "ingredients_text_en", "allergens", "allergens_tags", "labels",
-    "nutriscore_grade", "nutrition_grades_tags", "nova_group", "ecoscore_grade",
-    "nutriments", "image_front_url", "image_url", "url", "lang",
-  ].join(","));
-  const payload = object(await fetchJson<unknown>(url, "Open Food Facts", 350_000), "Open Food Facts");
-  if (payload.status !== 1 || !payload.product || typeof payload.product !== "object" || Array.isArray(payload.product)) {
-    return JSON.stringify({status:"not_found",source:"Open Food Facts",barcode,note:"Barcode not found in the community-maintained database."});
+  return value.trim();
+}
+function offProductType(value: unknown, fallback: OffProductType = "all"): OffProductType {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value !== "string" || !["all","food","beauty","petfood","product"].includes(value)) {
+    throw new Error("product_type must be all, food, beauty, petfood or product.");
   }
-  const row = payload.product as Obj;
+  return value as OffProductType;
+}
+function buildOffProductUrl(host: string, barcode: string, type: OffProductType): URL {
+  const url = new URL("https://" + host + "/api/v3/product/" + encodeURIComponent(barcode));
+  url.searchParams.set("fields", OFF_FIELDS);
+  url.searchParams.set("product_type", type);
+  return url;
+}
+function isOffRedirectTarget(value: string, barcode: string, base: URL): URL | null {
+  try {
+    const target = new URL(value, base);
+    const hosts = Object.values(OFF_HOSTS);
+    const pathPattern = new RegExp("^/api/v3/product/" + barcode + "(?:\\\\.json)?$");
+    if (target.protocol !== "https:" || !hosts.includes(target.hostname) || target.username || target.password ||
+        target.port || !pathPattern.test(target.pathname)) return null;
+    return target;
+  } catch { return null; }
+}
+async function fetchOffProductResponse(url: URL, provider: string, allowRedirect: boolean): Promise<Response | null> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: { accept: "application/json", "user-agent": USER_AGENT },
+      redirect: "manual",
+      signal: AbortSignal.timeout(12_000),
+    });
+  } catch {
+    throw new Error(provider + " could not be reached or the request timed out.");
+  }
+  if (response.status === 404) {
+    await response.body?.cancel().catch(() => undefined);
+    return null;
+  }
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get("location");
+    await response.body?.cancel().catch(() => undefined);
+    if (!allowRedirect || !location) throw new Error(provider + " returned an unexpected redirect.");
+    const target = isOffRedirectTarget(location, url.pathname.split("/").pop()!.replace(/\\.json$/, ""), url);
+    if (!target) throw new Error(provider + " returned a redirect outside the approved Open Facts databases.");
+    target.search = url.search;
+    return fetchOffProductResponse(target, provider, false);
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    if (response.status === 429 || response.status === 503) {
+      throw new Error(provider + " is temporarily rate-limiting requests. Reduce query frequency and retry later.");
+    }
+    throw new Error(provider + " returned HTTP " + response.status + ".");
+  }
+  return response;
+}
+async function readOffProduct(barcode: string, type: OffProductType): Promise<OffReadResult> {
+  const initialHost = type === "all" ? OFF_HOSTS.food : OFF_HOSTS[type];
+  const url = buildOffProductUrl(initialHost, barcode, type);
+  const provider = type === "all" ? "Open Facts" : OFF_DATABASE_NAMES[type];
+  const response = await fetchOffProductResponse(url, provider, true);
+  if (!response) return { status: "not_found", host: initialHost };
+  const payload = object(await readJsonResponse<unknown>(response, 400_000), provider);
+  const statusValue = payload.status;
+  const isSuccessful = statusValue === "success" || statusValue === "success_with_warnings" ||
+    statusValue === "success_with_errors" || statusValue === 1;
+  if (!isSuccessful || !payload.product || typeof payload.product !== "object" || Array.isArray(payload.product)) {
+    if (statusValue === "failure") {
+      const errors = Array.isArray(payload.errors) ? payload.errors.length : 0;
+      if (errors) throw new Error(provider + " could not read this product (API reported a failure).");
+    }
+    return { status: "not_found", host: new URL(response.url || url.toString()).hostname };
+  }
+  return { status: "ok", host: new URL(response.url || url.toString()).hostname, row: payload.product as Obj };
+}
+function offNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && /^-?\\d+(?:\\.\\d+)?$/.test(value.trim())) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+function offImage(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    const allowed = [
+      "images.openfoodfacts.org", "images.openbeautyfacts.org",
+      "images.openpetfoodfacts.org", "images.openproductsfacts.org",
+    ];
+    return url.protocol === "https:" && allowed.includes(url.hostname) && !url.username && !url.password && !url.port
+      ? url.toString() : null;
+  } catch { return null; }
+}
+function offString(value: unknown, max: number): string | null {
+  if (typeof value !== "string") return null;
+  const clean = value.replace(/\\u0000/g, "").trim();
+  return clean ? clean.slice(0, max) : null;
+}
+function offList(value: unknown, maxItems = 20): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string")
+    .map(item => item.slice(0, 100)).slice(0, maxItems);
+}
+function normalizeOffProduct(row: Obj, barcode: string, host: string): Obj {
   const nutrition = row.nutriments && typeof row.nutriments === "object" && !Array.isArray(row.nutriments)
     ? row.nutriments as Obj : {};
-  const safeImage = (v: unknown) => {
-    if (typeof v !== "string" || v.length > 2048) return null;
-    try { const u = new URL(v); return u.protocol === "https:" && ["images.openfoodfacts.org","world.openfoodfacts.org"].includes(u.hostname) ? u.toString() : null; }
-    catch { return null; }
+  const nutritionPer100g = {
+    energy_kcal: offNumber(nutrition["energy-kcal_100g"]),
+    fat_g: offNumber(nutrition.fat_100g),
+    saturated_fat_g: offNumber(nutrition["saturated-fat_100g"]),
+    carbohydrates_g: offNumber(nutrition.carbohydrates_100g),
+    sugars_g: offNumber(nutrition.sugars_100g),
+    fiber_g: offNumber(nutrition.fiber_100g),
+    proteins_g: offNumber(nutrition.proteins_100g),
+    salt_g: offNumber(nutrition.salt_100g),
   };
-  const result = {
+  const productType = typeof row.product_type === "string" && ["food","beauty","petfood","product"].includes(row.product_type)
+    ? row.product_type as Exclude<OffProductType,"all">
+    : (Object.entries(OFF_HOSTS).find(([, value]) => value === host)?.[0] as Exclude<OffProductType,"all"> | undefined) ?? "food";
+  return {
+    barcode: offString(row.code, 24) ?? barcode,
+    product_type: productType,
+    name: offString(row.product_name, 180) ?? offString(row.product_name_en, 180) ?? offString(row.generic_name, 180),
+    generic_name: offString(row.generic_name, 180),
+    brands: offString(row.brands, 220),
+    quantity: offString(row.quantity, 80),
+    categories: typeof row.categories === "string"
+      ? row.categories.split(",").slice(0, 15).map(x => x.trim()).filter(Boolean)
+      : offList(row.categories_tags, 15),
+    ingredients: offString(row.ingredients_text, 1200) ?? offString(row.ingredients_text_en, 1200),
+    allergens: offString(row.allergens, 500),
+    allergens_tags: offList(row.allergens_tags, 30),
+    traces: offString(row.traces, 400),
+    labels: offString(row.labels, 500),
+    nutriscore_grade: offString(row.nutriscore_grade, 12),
+    nutriscore_score: offNumber(row.nutriscore_score),
+    nova_group: offNumber(row.nova_group),
+    environmental_score_grade: offString(row.environmental_score_grade, 12),
+    environmental_score_score: offNumber(row.environmental_score_score),
+    nutrition_per_100g: nutritionPer100g,
+    image_front_url: offImage(row.image_front_url),
+    image_url: offImage(row.image_url),
+    language: offString(row.lang, 12),
+    source_url: "https://" + host + "/product/" + barcode,
+  };
+}
+async function getOffProduct(barcodeInput: unknown, typeInput: unknown): Promise<{status:"ok";provider:string;product:Obj;barcode:string}|{status:"not_found";provider:string;barcode:string}> {
+  const barcode = validBarcode(barcodeInput);
+  const type = offProductType(typeInput);
+  const found = await readOffProduct(barcode, type);
+  if (found.status === "not_found") return { status: "not_found", provider: type === "all" ? "Open Facts" : OFF_DATABASE_NAMES[type], barcode };
+  const product = normalizeOffProduct(found.row, barcode, found.host);
+  const databaseType = product.product_type as Exclude<OffProductType,"all">;
+  return {
     status: "ok",
-    source: "Open Food Facts",
-    source_url: "https://world.openfoodfacts.org/product/" + barcode,
+    provider: OFF_DATABASE_NAMES[databaseType],
+    product,
     barcode,
-    product: {
-      name: typeof row.product_name === "string" ? row.product_name.slice(0,180) : typeof row.product_name_en === "string" ? row.product_name_en.slice(0,180) : null,
-      brands: typeof row.brands === "string" ? row.brands.slice(0,220) : null,
-      quantity: typeof row.quantity === "string" ? row.quantity.slice(0,80) : null,
-      categories: typeof row.categories === "string" ? row.categories.split(",").slice(0,15).map(x=>x.trim()).filter(Boolean) : [],
-      ingredients: typeof row.ingredients_text === "string" ? row.ingredients_text.slice(0,1200) : typeof row.ingredients_text_en === "string" ? row.ingredients_text_en.slice(0,1200) : null,
-      allergens: typeof row.allergens === "string" ? row.allergens.slice(0,500) : null,
-      allergens_tags: Array.isArray(row.allergens_tags) ? row.allergens_tags.filter(x=>typeof x==="string").slice(0,30) : [],
-      labels: typeof row.labels === "string" ? row.labels.slice(0,500) : null,
-      nutriscore_grade: typeof row.nutriscore_grade === "string" ? row.nutriscore_grade : null,
-      nova_group: typeof row.nova_group === "number" ? row.nova_group : null,
-      ecoscore_grade: typeof row.ecoscore_grade === "string" ? row.ecoscore_grade : null,
-      nutrition_per_100g: {
-        energy_kcal: typeof nutrition["energy-kcal_100g"] === "number" ? nutrition["energy-kcal_100g"] : null,
-        fat_g: typeof nutrition.fat_100g === "number" ? nutrition.fat_100g : null,
-        saturated_fat_g: typeof nutrition["saturated-fat_100g"] === "number" ? nutrition["saturated-fat_100g"] : null,
-        carbohydrates_g: typeof nutrition.carbohydrates_100g === "number" ? nutrition.carbohydrates_100g : null,
-        sugars_g: typeof nutrition.sugars_100g === "number" ? nutrition.sugars_100g : null,
-        fiber_g: typeof nutrition.fiber_100g === "number" ? nutrition.fiber_100g : null,
-        proteins_g: typeof nutrition.proteins_100g === "number" ? nutrition.proteins_100g : null,
-        salt_g: typeof nutrition.salt_100g === "number" ? nutrition.salt_100g : null,
-      },
-      image_front_url: safeImage(row.image_front_url),
-      image_url: safeImage(row.image_url),
-      language: typeof row.lang === "string" ? row.lang : null,
-    },
-    note: "Open Food Facts is community-contributed data; product fields may be incomplete, user-entered or outdated. Nutrition values are per 100 g and do not constitute medical or dietary advice. Database contents are published under the Open Database License (ODbL); attribute Open Food Facts and share-alike database adaptations as required.",
   };
-  return JSON.stringify(result);
+}
+const OFF_DATA_NOTE = "Open Facts databases are community-contributed; product fields may be incomplete, user-entered or outdated. Nutrition data, when present, is per 100 g and is not medical or dietary advice. Database contents are published under the Open Database License (ODbL); attribute the source and comply with share-alike requirements.";
+export async function lookupConsumerProduct(barcodeInput: unknown, typeInput?: unknown): Promise<string> {
+  const result = await getOffProduct(barcodeInput, typeInput);
+  if (result.status === "not_found") {
+    return JSON.stringify({
+      status: "not_found",
+      source: result.provider,
+      barcode: result.barcode,
+      note: "No product was found for this barcode in the selected Open Facts catalog. The record may be missing or not yet indexed.",
+    });
+  }
+  return JSON.stringify({
+    status: "ok",
+    source: result.provider,
+    barcode: result.barcode,
+    product: result.product,
+    note: OFF_DATA_NOTE,
+  });
+}
+export async function lookupFoodProduct(barcodeInput: unknown): Promise<string> {
+  const result = await lookupConsumerProduct(barcodeInput, "food");
+  const payload = JSON.parse(result) as Obj;
+  if (payload.status === "ok") payload.source = "Open Food Facts";
+  return JSON.stringify(payload);
+}
+export async function compareFoodProducts(barcodesInput: unknown): Promise<string> {
+  if (!Array.isArray(barcodesInput) || barcodesInput.length < 2 || barcodesInput.length > 4) {
+    throw new Error("barcodes must contain between 2 and 4 food product barcodes.");
+  }
+  const barcodes = barcodesInput.map(value => validBarcode(value));
+  if (new Set(barcodes).size !== barcodes.length) throw new Error("barcodes must be unique.");
+  const products: Array<{ barcode:string; product:Obj }> = [];
+  for (const barcode of barcodes) {
+    const found = await getOffProduct(barcode, "food");
+    if (found.status === "ok") products.push({ barcode, product: found.product });
+    else products.push({ barcode, product: { barcode, not_found: true } });
+  }
+  const metricSpecs: Array<{key:string;label:string;unit:string}> = [
+    { key: "energy_kcal", label: "Energy", unit: "kcal/100 g" },
+    { key: "fat_g", label: "Fat", unit: "g/100 g" },
+    { key: "saturated_fat_g", label: "Saturated fat", unit: "g/100 g" },
+    { key: "sugars_g", label: "Sugars", unit: "g/100 g" },
+    { key: "fiber_g", label: "Fiber", unit: "g/100 g" },
+    { key: "proteins_g", label: "Protein", unit: "g/100 g" },
+    { key: "salt_g", label: "Salt", unit: "g/100 g" },
+  ];
+  const comparisons = metricSpecs.flatMap(spec => {
+    const values = products.flatMap(item => {
+      const nutrition = item.product.nutrition_per_100g && typeof item.product.nutrition_per_100g === "object"
+        ? item.product.nutrition_per_100g as Obj : {};
+      const value = offNumber(nutrition[spec.key]);
+      return item.product.not_found !== true && value !== null ? [{ barcode: item.barcode, value }] : [];
+    });
+    if (values.length < 2) return [];
+    const sorted = [...values].sort((a, b) => a.value - b.value);
+    return [{ metric: spec.label, unit: spec.unit, values, minimum: sorted[0], maximum: sorted[sorted.length - 1] }];
+  });
+  return JSON.stringify({
+    status: products.filter(item => item.product.not_found !== true).length >= 2 ? "ok" : "insufficient_data",
+    source: "Open Food Facts",
+    products,
+    comparison_basis: "Values are compared per 100 g only. Lower or higher values are descriptive comparisons, not a health ranking or dietary recommendation.",
+    comparisons,
+    note: OFF_DATA_NOTE,
+  });
 }
 
 export async function runMediaDiscoveryTool(name: string, rawArgs: unknown): Promise<string> {
@@ -489,5 +686,7 @@ export async function runMediaDiscoveryTool(name: string, rawArgs: unknown): Pro
     return JSON.stringify(await searchInternetArchiveVideos(args.query, args.limit));
   }
   if (name === "lookup_food_product") return lookupFoodProduct(args.barcode);
+  if (name === "lookup_consumer_product") return lookupConsumerProduct(args.barcode, args.product_type);
+  if (name === "compare_food_products") return compareFoodProducts(args.barcodes);
   throw new Error("Unknown media discovery tool.");
 }
