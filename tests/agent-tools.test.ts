@@ -20,7 +20,7 @@ describe("Nolane AI callable tools", () => {
       tools: Array<{id:string;category:string}>;
     };
     expect(first.total).toBe(TOOL_CATALOG.length);
-    expect(first.total).toBe(472);
+    expect(first.total).toBe(483);
     expect(first.tools).toHaveLength(20);
     expect(first.nextOffset).toBe(20);
     expect(first.tools.every(tool => tool.category === "image")).toBe(true);
@@ -82,6 +82,50 @@ describe("Nolane AI callable tools", () => {
       {name:"Small",price:25000,quantity:500,unit:"g"},
       {name:"Large",price:46000,quantity:1,unit:"kg"},
     ]})).toContain("Best unit price: Large");
+  });
+
+  it("exposes and runs all Wave 40 household and travel calculators through the normal AI tool", async () => {
+    const schema = AGENT_TOOL_DEFINITIONS.find(tool => tool.function.name === "process_text_content")?.function.parameters as {
+      properties?: { tool_id?: { enum?: string[] } };
+    };
+    const ids = [
+      "appliance-energy-calculator", "floor-tile-calculator", "concrete-volume-calculator",
+      "soil-mulch-calculator", "household-budget-calculator", "savings-goal-calculator",
+      "travel-budget-calculator", "download-time-calculator", "work-hours-calculator",
+      "battery-runtime-calculator", "water-tank-volume-calculator",
+    ];
+    expect(schema.properties?.tool_id?.enum).toEqual(expect.arrayContaining(ids));
+    expect(TOOL_CATALOG.filter(tool => ids.includes(tool.id) && tool.ready)).toHaveLength(11);
+    const run = (tool_id: string, value: unknown) => executeAgentTool(env, "process_text_content", {
+      tool_id, content: JSON.stringify(value),
+    });
+    expect(await run("appliance-energy-calculator", {price_per_kwh:2000,currency:"VND",appliances:[{name:"Fan",watts:100,hours_per_day:5,days_per_month:30}]}))
+      .toContain("Estimated monthly cost: VND 30000");
+    expect(await run("floor-tile-calculator", {room_length_m:3,room_width_m:4,tile_length_cm:60,tile_width_cm:60,waste_percent:10,tiles_per_box:4,price_per_box:150000,currency:"VND"}))
+      .toContain("Boxes to buy: 10 (40 tiles)");
+    expect(await run("concrete-volume-calculator", {length_m:2,width_m:3,depth_m:0.15,waste_percent:10,bag_yield_l:40}))
+      .toContain("Bags required: 25");
+    expect(await run("soil-mulch-calculator", {area_m2:10,depth_cm:5,waste_percent:10,bag_volume_l:50}))
+      .toContain("Order estimate: 550 litres");
+    expect(await run("household-budget-calculator", {monthly_income:20000000,currency:"VND",expenses:[
+      {name:"Rent",category:"Needs",monthly_amount:6000000},
+      {name:"Food",category:"Needs",monthly_amount:4000000},
+      {name:"Fun",category:"Wants",monthly_amount:2000000},
+    ]})).toContain("Money remaining: VND 8000000");
+    expect(await run("savings-goal-calculator", {target_amount:1000,current_savings:100,monthly_contribution:100,annual_interest_rate_percent:0,currency:"USD"}))
+      .toContain("Estimated time: 9 months");
+    expect(await run("travel-budget-calculator", {travelers:3,days:5,buffer_percent:10,currency:"USD",expenses:[
+      {category:"Hotel",total_cost:1200},{category:"Food",total_cost:600},{category:"Transport",total_cost:300},
+    ]})).toContain("Budget including buffer: USD 2310");
+    expect(await run("download-time-calculator", {file_size:1,file_size_unit:"GB",speed:100,speed_unit:"Mbps",overhead_percent:10}))
+      .toContain("Seconds: 88");
+    expect(await run("work-hours-calculator", {hourly_rate:100000,currency:"VND",shifts:[
+      {start:"09:00",end:"17:00",break_minutes:60},{start:"22:00",end:"02:00",break_minutes:15},
+    ]})).toContain("Total paid hours: 10.75");
+    expect(await run("battery-runtime-calculator", {capacity_mah:10000,voltage_v:3.7,device_power_w:5,efficiency_percent:80,reserve_percent:10}))
+      .toContain("Usable energy estimate: 26.64 Wh");
+    expect(await run("water-tank-volume-calculator", {shape:"rectangular",length_m:2,width_m:1.5,height_m:1,fill_percent:50}))
+      .toContain("Water at this fill level: 1500 litres");
   });
 
   it("keeps technical tools available by explicit category without prioritizing them by default", async () => {
