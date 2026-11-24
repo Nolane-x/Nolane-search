@@ -2,12 +2,16 @@
 
 Last verified: 2026-11-23. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## In development — Wave 40 (2026-11-24)
+## Latest production release — Wave 40 (2026-11-24)
 
-- Branch [`feat/wave-forty-everyday-household-tools`](https://github.com/Nolane-x/Nolane-search/tree/feat/wave-forty-everyday-household-tools) adds 11 household, travel and device utilities. Branch catalog target: **483**; production remains at **472** until verification and deployment.
-- New tool areas: appliance electricity estimates, floor tiles, concrete, soil/mulch, monthly household budgets, savings goals, travel budgets, download time, work hours, battery runtime and water-tank capacity.
-- The tools use user-entered measurements, prices and rates; no live tariffs or market data is fetched. Python processors use only the standard library; direct AI chat calls are supported.
-- Research: [TOOL-RESEARCH-2026-11-24-WAVE40.md](TOOL-RESEARCH-2026-11-24-WAVE40.md). Handoff: [HANDOFF-WAVE-FORTY-2026-11-24.md](HANDOFF-WAVE-FORTY-2026-11-24.md).
+- [PR #93](https://github.com/Nolane-x/Nolane-search/pull/93) merged into `main` as `110278e3e9ecfb34ed95f276f4a4dfb227c90813`. Production Tool Center catalog: **483 processors** (+11 over Wave 39).
+- Main CI [45298825598](https://github.com/Nolane-x/Nolane-search/actions/runs/45298825598) passed TypeScript type-check, **25 Vitest files / 263 tests**, deployment-script checks, **380 Python runner tests** and Worker build.
+- Worker export/build and live `/health` smoke [45298825585](https://github.com/Nolane-x/Nolane-search/actions/runs/45298825585) passed.
+- Cloudflare deployment [45298825591](https://github.com/Nolane-x/Nolane-search/actions/runs/45298825591) passed required-secret validation, source and bundle checks, Worker upload, Telegram webhook verification (message + callback_query) and bot command registration. Worker Version ID: `bb6be828-214c-44a0-9db9-bfc5b5690a52`.
+- D1 migration was correctly skipped because Wave 40 adds no schema changes, data tables or persistent file storage.
+- Eleven household, travel and device tools are now registered in the catalog, runner allowlist and handler map and callable directly from Nolane AI chat: appliance electricity, floor tiles, concrete, soil/mulch, household budgeting, savings goals, travel budgets, download time, work hours, battery runtime and water-tank volume. Python runner implementations use the standard library only; user-supplied prices, rates and measurements are used instead of live tariff/market lookups.
+- Upstream research: [TOOL-RESEARCH-2026-11-24-WAVE40.md](TOOL-RESEARCH-2026-11-24-WAVE40.md). Release handoff: [HANDOFF-WAVE-FORTY-2026-11-24.md](HANDOFF-WAVE-FORTY-2026-11-24.md).
+- Owner-level acceptance remains separate: test selected calculator commands and one non-sensitive JSON upload/result using the real private Telegram account. CI and webhook registration do not prove end-to-end interaction in the owner's client.
 
 ## Latest production release — Wave 39 (2026-11-23)
 
