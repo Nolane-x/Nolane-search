@@ -3,7 +3,7 @@
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
-## Latest production release — Wave 49 (2026-11-24)
+## Previous production release — Wave 49 (2026-11-24)
 
 - [PR #104](https://github.com/Nolane-x/Nolane-search/pull/104) merged into main as `56793e4b01ce985b90c4f78f3ec1e4c7269cdc9`. Production adds five direct AI-callable discovery functions: English word lookup, U.S.-public-domain-filtered book search, Art Institute public-domain artwork search, NASA EONET natural-event browsing and current local time by city. The **534 file processors** remain unchanged.
 - PR CI [45343427454](https://github.com/Nolane-x/Nolane-search/actions/runs/45343427454) and main CI [45343582511](https://github.com/Nolane-x/Nolane-search/actions/runs/45343582511) passed TypeScript, Vitest, deployment-script checks, Python runner tests and Worker build.
