@@ -301,6 +301,22 @@ describe("Wave 52 media and product discovery", () => {
     expect(result.product.image_front_url).toContain("images.openfoodfacts.org");
   });
 
+  it("dispatches Internet Archive audio search through the model tool interface", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/advancedsearch.php") {
+        expect(url.searchParams.get("q")).toBe('title:"field recording" AND mediatype:audio');
+        return json({ response: { docs: [{ identifier: "field-recording" }] } });
+      }
+      expect(url.pathname).toBe("/metadata/field-recording");
+      return json({ metadata: { mediatype: "audio", title: "Field Recording" }, files: [
+        { name: "field.mp3", format: "MP3", size: "1000", source: "original" }
+      ] });
+    }));
+    const result = JSON.parse(await executeAgentTool(env, "search_internet_archive_audio", { query: "field recording" }));
+    expect(result.items[0]).toMatchObject({ title: "Field Recording", mediaType: "audio" });
+  });
+
   it("rejects invalid food barcodes before network access", async () => {
     const mock = vi.fn();
     vi.stubGlobal("fetch", mock);
