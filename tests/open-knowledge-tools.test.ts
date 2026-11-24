@@ -28,7 +28,7 @@ describe("Wave 55 open knowledge discovery", () => {
     expect(result.results).toHaveLength(1);
     expect(result.results[0].title).toBe("Địa lý Việt Nam");
     expect(result.results[0].snippet).toBe("Vị trí địa lý ...");
-    expect(result.results[0].url).toBe("https://vi.wikipedia.org/wiki/Địa_lý_Việt_Nam");
+    expect(result.results[0].url).toBe("https://vi.wikipedia.org/wiki/%C4%90%E1%BB%8Ba_l%C3%BD_Vi%E1%BB%87t_Nam");
   });
 
   it("retrieves a bounded article extract, original page link, categories and thumbnail", async () => {
@@ -107,6 +107,23 @@ describe("Wave 55 open knowledge discovery", () => {
     const mock = vi.fn(async () => json({}, 429));
     vi.stubGlobal("fetch", mock);
     await expect(runOpenKnowledgeTool("search_wikipedia_articles", { query: "Mount Fuji" })).rejects.toThrow("rate-limiting");
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  it("never exposes a thumbnail from an untrusted host", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(apiResponse({
+      pageid: 50, title: "Example", fullurl: "https://en.wikipedia.org/wiki/Example",
+      extract: "Readable article text.",
+      thumbnail: { source: "https://evil.example/image.jpg" }
+    }))));
+    const result = JSON.parse(await runOpenKnowledgeTool("get_wikipedia_article", { title: "Example" }));
+    expect(result.thumbnail_url).toBeNull();
+  });
+
+  it("handles Wikimedia maxlag responses even when the API returns HTTP 200", async () => {
+    const mock = vi.fn(async () => json({ error: { code: "maxlag", info: "Waiting for database replica" } }));
+    vi.stubGlobal("fetch", mock);
+    await expect(runOpenKnowledgeTool("search_wikipedia_articles", { query: "history" })).rejects.toThrow("maxlag is active");
     expect(mock).toHaveBeenCalledTimes(1);
   });
 
