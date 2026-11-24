@@ -87,7 +87,7 @@ export interface MediaSearchItem {
   id: string;
   title: string;
   provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive";
-  mediaType: "image" | "video";
+  mediaType: "image" | "video" | "audio";
   sourceUrl: string;
   previewUrl: string | null;
   mediaUrl: string | null;
@@ -295,14 +295,14 @@ export async function searchOpenverseImages(queryInput: unknown, limitInput?: un
   };
 }
 
-async function internetArchiveItem(identifier: string): Promise<MediaSearchItem | null> {
+async function internetArchiveItem(identifier: string, expectedType: "movies" | "audio"): Promise<MediaSearchItem | null> {
   const url = new URL("https://archive.org/metadata/" + encodeURIComponent(identifier));
   const payload = object(await fetchJson<unknown>(url, "Internet Archive item metadata", 350_000), "Internet Archive item metadata");
   const metadata = payload.metadata && typeof payload.metadata === "object" && !Array.isArray(payload.metadata)
     ? payload.metadata as Obj : {};
   const restricted = [metadata["access-restricted-item"], metadata["access-restricted"], metadata.noindex]
     .some(value => value === true || value === 1 || value === "true" || value === "1");
-  if (restricted || metadata.mediatype !== "movies") return null;
+  if (restricted || metadata.mediatype !== expectedType) return null;
   const files = Array.isArray(payload.files) ? payload.files : [];
   const candidates = files.flatMap(raw => {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
@@ -312,15 +312,18 @@ async function internetArchiveItem(identifier: string): Promise<MediaSearchItem 
     const name = typeof file.name === "string" ? file.name : "";
     const format = typeof file.format === "string" ? file.format.toLowerCase() : "";
     if (!name || name.length > 300 || /[\/\\\u0000-\u001f]/.test(name) || name === "." || name === "..") return [];
-    if (!/\.(mp4|m4v|webm|ogv)$/i.test(name)) return [];
-    if (!/(mpeg.?4|video|webm|ogg)/i.test(format)) return [];
+    const extension = expectedType === "movies" ? /\.(mp4|m4v|webm|ogv)$/i : /\.(mp3|m4a|ogg|oga|opus|flac|wav|aac|aiff)$/i;
+    const formatMatch = expectedType === "movies" ? /(mpeg.?4|video|webm|ogg)/i.test(format) : /(mp3|mpeg.?audio|audio|ogg|vorbis|flac|wave|wav|aac|m4a|opus|aiff)/i.test(format);
+    if (!extension.test(name) || !formatMatch) return [];
     const size = typeof file.size === "string" || typeof file.size === "number" ? Number(file.size) : 0;
     if (!Number.isSafeInteger(size) || size <= 0) return [];
     return [{ name, size, format }];
   });
   if (!candidates.length) return null;
   candidates.sort((a, b) => {
-    const score = (file: {name:string;format:string}) => /\.(mp4|m4v)$/i.test(file.name) ? 0 : /webm/i.test(file.name) ? 1 : 2;
+    const score = (file: {name:string;format:string}) => expectedType === "movies"
+      ? (/\.(mp4|m4v)$/i.test(file.name) ? 0 : /webm/i.test(file.name) ? 1 : 2)
+      : (/\.mp3$/i.test(file.name) ? 0 : /\.(ogg|oga|opus)$/i.test(file.name) ? 1 : /\.(m4a|aac)$/i.test(file.name) ? 2 : 3);
     return score(a) - score(b) || a.size - b.size;
   });
   const selected = candidates[0];
@@ -331,7 +334,7 @@ async function internetArchiveItem(identifier: string): Promise<MediaSearchItem 
     id: identifier,
     title,
     provider: "Internet Archive",
-    mediaType: "video",
+    mediaType: expectedType === "movies" ? "video" : "audio",
     sourceUrl: "https://archive.org/details/" + encodeURIComponent(identifier),
     previewUrl: safeHttpUrl("https://archive.org/services/img/" + encodeURIComponent(identifier), "archive.org"),
     mediaUrl: "https://archive.org/download/" + encodeURIComponent(identifier) + "/" + path,
@@ -364,7 +367,7 @@ export async function searchInternetArchiveVideos(queryInput: unknown, limitInpu
     return typeof identifier === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(identifier)
       ? [identifier] : [];
   }).slice(0, limit);
-  const settled = await Promise.allSettled(identifiers.map(identifier => internetArchiveItem(identifier)));
+  const settled = await Promise.allSettled(identifiers.map(identifier => internetArchiveItem(identifier, "movies")));
   const items = settled.flatMap(result => result.status === "fulfilled" && result.value ? [result.value] : []);
   return {
     status: items.length ? "ok" : "not_found",
@@ -372,6 +375,38 @@ export async function searchInternetArchiveVideos(queryInput: unknown, limitInpu
     query,
     items,
     note: "Only publicly indexed Internet Archive movie items with a direct original MP4, M4V, WebM or Ogg video file are returned. Access-restricted/private files are omitted. Rights vary by item and may be missing or incomplete: check the item page and rights statement before reuse. Playback links point to archive.org and are not rehosted by Nolane.",
+  };
+}
+
+export async function searchInternetArchiveAudio(queryInput: unknown, limitInput?: unknown): Promise<{status:string;source:string;query:string;items:MediaSearchItem[];note:string}> {
+  const query = cleanText(queryInput, "query", 2, 140);
+  const limit = boundedInt(limitInput, "limit", 4, 1, 5);
+  const phrase = query.replace(/["\\]/g, " ").replace(/[^\p{L}\p{N}\s-]/gu, " ").replace(/\s+/g, " ").trim();
+  if (phrase.length < 2) throw new Error("query must include searchable letters or numbers.");
+  const url = new URL("https://archive.org/advancedsearch.php");
+  url.searchParams.set("q", 'title:"' + phrase + '" AND mediatype:audio');
+  for (const field of ["identifier", "title", "year", "creator", "mediatype"]) url.searchParams.append("fl[]", field);
+  url.searchParams.set("rows", String(limit));
+  url.searchParams.set("page", "1");
+  url.searchParams.set("output", "json");
+  const payload = object(await fetchJson<unknown>(url, "Internet Archive audio search", 300_000), "Internet Archive audio search");
+  const response = payload.response && typeof payload.response === "object" && !Array.isArray(payload.response)
+    ? payload.response as Obj : {};
+  const docs = Array.isArray(response.docs) ? response.docs : [];
+  const identifiers = docs.flatMap(raw => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const identifier = (raw as Obj).identifier;
+    return typeof identifier === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(identifier)
+      ? [identifier] : [];
+  }).slice(0, limit);
+  const settled = await Promise.allSettled(identifiers.map(identifier => internetArchiveItem(identifier, "audio")));
+  const items = settled.flatMap(result => result.status === "fulfilled" && result.value ? [result.value] : []);
+  return {
+    status: items.length ? "ok" : "not_found",
+    source: "Internet Archive",
+    query,
+    items,
+    note: "Only public Internet Archive audio items with a listed non-private original MP3, M4A, Ogg, Opus, FLAC, WAV, AAC or AIFF file are returned. Access-restricted/private files and derivatives are omitted. Rights vary by item and may be missing or incomplete: inspect the original item page and rights statement before reuse. Audio links point to archive.org and are not rehosted by Nolane.",
   };
 }
 
@@ -446,6 +481,9 @@ export async function runMediaDiscoveryTool(name: string, rawArgs: unknown): Pro
   }
   if (name === "search_openverse_images") {
     return JSON.stringify(await searchOpenverseImages(args.query, args.limit));
+  }
+  if (name === "search_internet_archive_audio") {
+    return JSON.stringify(await searchInternetArchiveAudio(args.query, args.limit));
   }
   if (name === "search_internet_archive_videos") {
     return JSON.stringify(await searchInternetArchiveVideos(args.query, args.limit));
