@@ -92,7 +92,7 @@ function normalizeCountry(row: Obj): Obj | null {
   };
 }
 function fold(value: string): string {
-  return value.normalize("NFKD").replace(/\p{M}/gu, "").toLocaleLowerCase();
+  return value.normalize("NFKD").replace(/\p{M}/gu, "").toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 }
 async function searchCountries(args: Obj): Promise<string> {
   const query = cleanString(args.query, "query", 2, 120);
