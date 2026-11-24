@@ -60,6 +60,12 @@ from wave40 import (
     travel_budget_calculator, download_time_calculator, work_hours_calculator,
     battery_runtime_calculator, water_tank_volume_calculator,
 )
+from wave41 import (
+    water_bill_calculator, mobile_data_duration_calculator, solar_panel_output_calculator,
+    wallpaper_roll_calculator, curtain_fabric_calculator, moving_box_calculator,
+    event_food_calculator, fuel_economy_calculator, gas_cylinder_runtime_calculator,
+    shipping_volumetric_weight_calculator, storage_capacity_calculator,
+)
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
@@ -214,6 +220,10 @@ RUNNERS = {
     "soil-mulch-calculator", "household-budget-calculator", "savings-goal-calculator",
     "travel-budget-calculator", "download-time-calculator", "work-hours-calculator",
     "battery-runtime-calculator", "water-tank-volume-calculator",
+    "water-bill-calculator", "mobile-data-duration-calculator", "solar-panel-output-calculator",
+    "wallpaper-roll-calculator", "curtain-fabric-calculator", "moving-box-calculator",
+    "event-food-calculator", "fuel-economy-calculator", "gas-cylinder-runtime-calculator",
+    "shipping-volumetric-weight-calculator", "storage-capacity-calculator",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -12494,6 +12504,17 @@ TOOLS={
  "work-hours-calculator":work_hours_calculator,
  "battery-runtime-calculator":battery_runtime_calculator,
  "water-tank-volume-calculator":water_tank_volume_calculator,
+ "water-bill-calculator":water_bill_calculator,
+ "mobile-data-duration-calculator":mobile_data_duration_calculator,
+ "solar-panel-output-calculator":solar_panel_output_calculator,
+ "wallpaper-roll-calculator":wallpaper_roll_calculator,
+ "curtain-fabric-calculator":curtain_fabric_calculator,
+ "moving-box-calculator":moving_box_calculator,
+ "event-food-calculator":event_food_calculator,
+ "fuel-economy-calculator":fuel_economy_calculator,
+ "gas-cylinder-runtime-calculator":gas_cylinder_runtime_calculator,
+ "shipping-volumetric-weight-calculator":shipping_volumetric_weight_calculator,
+ "storage-capacity-calculator":storage_capacity_calculator,
 
 }
 
