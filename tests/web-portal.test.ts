@@ -96,5 +96,9 @@ describe("private browser search portal", () => {
     const search = await worker.fetch(new Request("https://nolane-search.example/api/media/search?q=nebula"), env, context);
     expect(search.status).toBe(401);
     expect(await search.json()).toMatchObject({ error: expect.stringContaining("Phiên đăng nhập") });
+
+    const audioSearch = await worker.fetch(new Request("https://nolane-search.example/api/media/search?q=public+lecture&kind=audio"), env, context);
+    expect(audioSearch.status).toBe(401);
+    expect(await audioSearch.json()).toMatchObject({ error: expect.stringContaining("Phiên đăng nhập") });
   });
 });
