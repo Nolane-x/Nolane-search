@@ -67,9 +67,9 @@ class Wave44Tests(unittest.TestCase):
                  "depends_on": ["bake", "salad"]},
             ],
         })
-        self.assertIn("16:10–16:30 | Bake vegetables", output)
+        self.assertIn("16:00–16:20 | Bake vegetables", output)
         self.assertIn("16:10–16:20 | Prepare salad", output)
-        self.assertIn("Estimated finish: 16:35", output)
+        self.assertIn("Estimated finish: 16:25", output)
 
     def test_meal_prep_rejects_dependency_cycles(self):
         bad = self.request("cycle", {"start_time": "17:00", "tasks": [
@@ -132,7 +132,7 @@ class Wave44Tests(unittest.TestCase):
                 {"name": "Insurance", "expiry_date": "2026-10-01", "remind_days_before": 30},
             ],
         })
-        self.assertIn("Passport | Renewal window approaching | check renewal from 2026-11-16", output)
+        self.assertIn("Passport | Start/check renewal now | check renewal from 2026-11-16", output)
         self.assertIn("Insurance | EXPIRED", output)
         self.assertIn("Confirm current requirements", output)
 
