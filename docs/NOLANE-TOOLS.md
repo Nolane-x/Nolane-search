@@ -1,5 +1,21 @@
 Nolane Tools hiện có **510 công cụ đã được đăng ký và triển khai trên production** sau Wave 43, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. [PR #96](https://github.com/Nolane-x/Nolane-search/pull/96) đã merge vào `main` bằng commit `c633897b6448cf15ea1e25fb1664dfc11a0cc986`. Main CI [45318665956](https://github.com/Nolane-x/Nolane-search/actions/runs/45318665956), Worker export và live health smoke [45318665973](https://github.com/Nolane-x/Nolane-search/actions/runs/45318665973), Cloudflare deployment [45318665976](https://github.com/Nolane-x/Nolane-search/actions/runs/45318665976) đều thành công. Latest Worker Version ID: `79123ac0-c9fc-4616-bee2-4d93d2448ccf`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema; tệp tiếp tục được xử lý trên GitHub-hosted runner dùng một lần.
 
+## Wave 44 — everyday life-administration tools — proposed in PR #97
+
+These eight user-focused processors are under review. They are not counted as production until PR #97, CI and deployment are verified.
+
+| ID / command | Công cụ | Chức năng |
+|---|---|---|
+| /tool pantry-use-first-planner | Ưu tiên thực phẩm cần dùng trước | Sắp thực phẩm theo hạn/ngày do người dùng nhập; không kết luận an toàn thực phẩm |
+| /tool pantry-recipe-matcher | Tìm món từ nguyên liệu sẵn có | Đối chiếu món đã lưu với nguyên liệu hiện có và liệt kê phần thiếu |
+| /tool meal-prep-timeline-planner | Lịch chuẩn bị nhiều món | Xếp bước nấu theo thời lượng, thiết bị và phụ thuộc |
+| /tool laundry-load-organizer | Phân nhóm mẻ giặt | Chia đồ theo màu/chất liệu/cách sấy và giới hạn máy/nhãn giặt |
+| /tool trip-itinerary-planner | Lịch trình chuyến đi | Xếp điểm đến trong khung giờ theo thời lượng người dùng cung cấp |
+| /tool vehicle-maintenance-planner | Lịch bảo dưỡng xe | Theo dõi mốc thời gian và kilomet từ sổ tay/lịch sử dịch vụ |
+| /tool document-renewal-planner | Nhắc gia hạn giấy tờ | Đặt mốc nhắc trước ngày hết hạn theo số ngày người dùng chọn |
+| /tool warranty-claim-assistant | Soạn yêu cầu kiểm tra bảo hành | Tạo bản nháp tiếng Việt/Anh và liệt kê chứng từ cần gửi |
+
+See [Wave 44 upstream research](TOOL-RESEARCH-2026-11-24-WAVE44.md) and [implementation handoff](HANDOFF-WAVE-FORTY-FOUR-2026-11-24.md).
 ## Wave 43 — home, hobby and learning tools — deployed to production
 
 Wave 43 increases the production catalog from **502 to 510 registered tools** (+8). All eight tools are connected to the direct AI JSON interface and the Python GitHub Actions runner. PR #96, PR CI, main CI, Worker export/health smoke and Cloudflare deployment completed successfully.
