@@ -2200,7 +2200,7 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
   if (["search_meal_recipes","filter_meal_recipes","get_meal_recipe_details","search_wikidata_entities","get_wikidata_entity"].includes(name)) {
     return (await runConsumerDiscoveryTool(name, args)).slice(0, 12_000);
   }
-  if (["search_wikimedia_images","search_nasa_media","lookup_food_product","search_openverse_images","search_internet_archive_videos","search_internet_archive_audio"].includes(name)) {
+  if (["search_wikimedia_images","search_nasa_media","lookup_food_product","lookup_consumer_product","compare_food_products","search_openverse_images","search_internet_archive_videos","search_internet_archive_audio"].includes(name)) {
     return (await runMediaDiscoveryTool(name, args)).slice(0, 12_000);
   }
   if (["search_country_profiles","get_world_bank_indicators","search_gbif_species","search_gbif_observations"].includes(name)) {
