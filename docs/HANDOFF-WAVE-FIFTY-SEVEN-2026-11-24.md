@@ -1,9 +1,9 @@
 # Wave 57 handoff — anime and manga discovery
 
 Date: 2026-11-24
-Branch: feat/wave-57-anime-manga-discovery
+Branch: feat/wave-57-anime-manga-discovery-verified
 Base: 1418ef83fa1c76452cc2ed69b61e0f821009c85a
-Release status: implementation branch; not yet merged or deployed.
+Release status: merged and deployed via [PR #122](https://github.com/Nolane-x/Nolane-search/pull/122) as `17777c5454dce56886ef1dee6e1da347ded1d0bb`.
 
 ## New AI-callable tools
 
@@ -36,8 +36,13 @@ No new package, API key, D1 migration, Worker binding or 534-file processor chan
 - This feature does not contain episode/video streaming links, manga reading or download links, torrent links or access-control bypasses.
 - The feature is a catalog, not a source of current legal streaming availability.
 
-## Acceptance gates
+## Production verification — 2026-11-24
 
-1. PR CI passes TypeScript, Vitest, deployment-script checks, Python runner tests and Cloudflare Worker build.
-2. Main CI and Cloudflare deployment/health checks pass after merge.
-3. Live Jikan query availability remains a separate check because the upstream API depends on its own parser and public MyAnimeList.
+- PR CI #512 [45420249913](https://github.com/Nolane-x/Nolane-search/actions/runs/45420249913) passed on the verified PR head.
+- Main CI #514 [45420656749](https://github.com/Nolane-x/Nolane-search/actions/runs/45420656749) passed TypeScript, 35 Vitest files / 356 tests, deployment-script checks, 449 Python runner tests and Worker build.
+- Cloudflare deploy #161 [45420656866](https://github.com/Nolane-x/Nolane-search/actions/runs/45420656866) succeeded. Worker Version ID: `190b79be-f6d1-4c31-a309-352bed4864d0`.
+- Worker export #154 [45420657144](https://github.com/Nolane-x/Nolane-search/actions/runs/45420657144) and public health smoke succeeded: `ok: true`, database `reachable`, archive enabled.
+- Telegram webhook validation and bot command registration completed. No D1 migration was needed.
+- These CI/health checks verify deployment and integration contracts; they do not guarantee that every live Jikan item is current or available in all regions. The upstream provider remains unofficial.
+
+
