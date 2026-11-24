@@ -13,6 +13,8 @@ import type { ToolCategory, ToolPipelineStep } from "./tools";
 import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, validateToolDagTrace, validateToolJobProgress, validateToolStepTrace } from "./tool-jobs";
 import { clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWorkflow, getPendingToolWorkflow, getPendingToolWorkflowPlan, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow, storeToolWorkflowPlan } from "./workflows";
 import { webAppResponse } from "./web-ui";
+import { mediaAppResponse } from "./media-ui";
+import { searchNasaMedia, searchWikimediaImages } from "./media-discovery-tools";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import { planToolWorkflow } from "./workflow-planner";
 import type { AiFunctionTool, AiTask } from "./ai-router";
@@ -287,6 +289,42 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
 
   const session = await getWebSession(request, env);
   if (!session) return jsonResponse({ error: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn." }, 401);
+
+  if (url.pathname === "/api/media/search" && request.method === "GET") {
+    const query = (url.searchParams.get("q") || "").trim();
+    const kind = url.searchParams.get("kind") || "all";
+    const provider = url.searchParams.get("provider") || "all";
+    if (query.length < 2 || query.length > 160) {
+      return jsonResponse({ error: "Từ khóa media phải có từ 2 đến 160 ký tự." }, 400);
+    }
+    if (!["all","image","video"].includes(kind) || !["all","commons","nasa"].includes(provider)) {
+      return jsonResponse({ error: "Bộ lọc media không hợp lệ." }, 400);
+    }
+    if (kind === "video" && provider === "commons") {
+      return jsonResponse({ error: "Wikimedia Commons không được chọn làm nguồn video trong Media Portal." }, 400);
+    }
+    try {
+      const tasks: Array<Promise<{items: unknown[]; source: string}>> = [];
+      if ((provider === "all" || provider === "commons") && kind !== "video") {
+        tasks.push(searchWikimediaImages(query, 8).then(result => ({ items: result.items, source: result.source })));
+      }
+      if (provider === "all" || provider === "nasa") {
+        tasks.push(searchNasaMedia(query, kind, 8).then(result => ({ items: result.items, source: result.source })));
+      }
+      const sources = await Promise.all(tasks);
+      const items = sources.flatMap(result => result.items);
+      items.sort((a, b) => {
+        const left = a as { mediaType?: string; provider?: string };
+        const right = b as { mediaType?: string; provider?: string };
+        return (left.mediaType === "video" ? 0 : 1) - (right.mediaType === "video" ? 0 : 1) ||
+          String(left.provider || "").localeCompare(String(right.provider || ""));
+      });
+      return jsonResponse({ query, kind, provider, result_count: items.length, providers: sources.map(source => source.source), items });
+    } catch (error) {
+      console.warn("Media discovery failed:", error instanceof Error ? error.message : "unknown");
+      return jsonResponse({ error: error instanceof Error ? error.message.slice(0, 300) : "Không thể tìm media lúc này." }, 502);
+    }
+  }
 
   if (url.pathname === "/api/ai/upload" && request.method === "POST") {
     if (session.chatId !== session.userId || !allowedUser(env, session.userId)) {
@@ -3078,6 +3116,10 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/") return webAppResponse();
+    if (request.method === "GET" && url.pathname === "/media") {
+      const session = await getWebSession(request, env);
+      return session ? mediaAppResponse() : Response.redirect(new URL("/", request.url), 302);
+    }
     if (url.pathname === "/internal/tools/translate") return handleToolTranslationApi(request, env);
     if (url.pathname === "/internal/tools/runner") return handleToolRunnerApi(request, env);
     if (url.pathname.startsWith("/api/")) return handleWebApi(request, env);
