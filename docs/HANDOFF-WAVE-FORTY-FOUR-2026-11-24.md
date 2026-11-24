@@ -3,7 +3,7 @@
 Date: 2026-11-24  
 Branch: feat/wave-forty-four-everyday-life-planners  
 Base: Wave 43 / 510 production catalog  
-Status: Review branch; CI, merge and production verification pending.
+Status: Review branch; first PR CI exposed three issues, now corrected on the branch; CI rerun pending.
 
 ## Included tools
 
@@ -30,6 +30,7 @@ Status: Review branch; CI, merge and production verification pending.
 - tests/tools.test.ts: asserts all 518 catalog entries are unique/ready and new IDs are registered.
 - tests/telegram.test.ts: Tool Center expected count updated to 518.
 - docs/TOOL-RESEARCH-2026-11-24-WAVE44.md: upstream workflow research and safety boundaries.
+- docs/NOLANE-TOOLS.md: marks eight Wave44 tools as proposed while PR #97 is pending.
 
 ## Verification gates
 
