@@ -2,6 +2,13 @@
 
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+## In development — Wave 41 (2026-11-24)
+
+- Branch [`feat/wave-forty-one-daily-life-planning-tools`](https://github.com/Nolane-x/Nolane-search/tree/feat/wave-forty-one-daily-life-planning-tools) adds 11 daily-life planning tools. Branch target: **494**; production remains at **483** until PR CI, merge and deployment are verified.
+- New tool areas include water bills, mobile-data plans, solar generation, wallpaper rolls, curtain fabric, moving boxes, event food, fuel economy, gas cylinder runtime, shipping volumetric weight and storage-capacity estimates.
+- All tariffs, rates, carrier divisors, power ratings and prices are user-supplied. No live price or carrier service integration is implied. Python uses the standard library; AI chat can invoke the new processors directly.
+- Research: [TOOL-RESEARCH-2026-11-24-WAVE41.md](TOOL-RESEARCH-2026-11-24-WAVE41.md). Handoff: [HANDOFF-WAVE-FORTY-ONE-2026-11-24.md](HANDOFF-WAVE-FORTY-ONE-2026-11-24.md).
+
 ## Latest production release — Wave 40 (2026-11-24)
 
 - [PR #93](https://github.com/Nolane-x/Nolane-search/pull/93) merged into `main` as `110278e3e9ecfb34ed95f276f4a4dfb227c90813`. Production Tool Center catalog: **483 processors** (+11 over Wave 39).
