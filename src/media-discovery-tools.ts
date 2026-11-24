@@ -545,8 +545,12 @@ function offList(value: unknown, maxItems = 20): string[] {
 function nutritionValue(container: Obj, name: string): number | null {
   const field = container[name];
   if (!field || typeof field !== "object" || Array.isArray(field)) return null;
-  const value = (field as Obj).value ?? (field as Obj).value_computed;
-  return offNumber(value);
+  const value = offNumber((field as Obj).value ?? (field as Obj).value_computed);
+  return value !== null && value >= 0 ? value : null;
+}
+function legacyNutritionValue(container: Obj, name: string): number | null {
+  const value = offNumber(container[name]);
+  return value !== null && value >= 0 ? value : null;
 }
 function normalizeOffProduct(row: Obj, barcode: string, host: string): Obj {
   const v3Nutrition = row.nutrition && typeof row.nutrition === "object" && !Array.isArray(row.nutrition)
@@ -557,17 +561,18 @@ function normalizeOffProduct(row: Obj, barcode: string, host: string): Obj {
       !Array.isArray(aggregatedSet.nutrients) ? aggregatedSet.nutrients as Obj : {};
   const legacyNutrition = row.nutriments && typeof row.nutriments === "object" && !Array.isArray(row.nutriments)
     ? row.nutriments as Obj : {};
+  const hasAggregatedNutrition = Object.keys(aggregatedNutrients).length > 0;
+  const hasLegacyNutrition = Object.keys(legacyNutrition).length > 0;
   const v3Per = aggregatedSet.per;
-  const nutritionReference = v3Per === "100g" || v3Per === "100ml" || v3Per === "serving"
-    ? v3Per : (Object.keys(aggregatedNutrients).length ? "unknown" : "100g");
-  const isPer100g = Object.keys(aggregatedNutrients).length
-    ? v3Per === "100g"
-    : true;
+  const nutritionReference = hasAggregatedNutrition
+    ? (v3Per === "100g" || v3Per === "100ml" || v3Per === "serving" ? v3Per : "unknown")
+    : hasLegacyNutrition ? "100g" : null;
+  const isPer100g = hasAggregatedNutrition ? v3Per === "100g" : true;
   const choose = (modern: string, legacy: string) => {
     if (Object.keys(aggregatedNutrients).length) {
       return isPer100g ? nutritionValue(aggregatedNutrients, modern) : null;
     }
-    return offNumber(legacyNutrition[legacy]);
+    return legacyNutritionValue(legacyNutrition, legacy);
   };
   const nutritionPer100g = {
     energy_kcal: choose("energy-kcal", "energy-kcal_100g"),
