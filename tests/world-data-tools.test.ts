@@ -55,7 +55,7 @@ describe("Wave 51 country and biodiversity discovery tools", () => {
     });
     vi.stubGlobal("fetch", mock);
     const result = JSON.parse(await runWorldDataTool("get_world_bank_indicators", {
-      country_codes: ["VNM", "THA"], indicators: ["population_total", "gdp_per_capita_usd"],
+      country_codes: ["VN", "THA"], indicators: ["population_total", "gdp_per_capita_usd"],
     }));
     expect(result.country_count).toBe(2);
     expect(result.countries[0].indicators.population_total.value).toBe(101000000);
