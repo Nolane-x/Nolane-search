@@ -90,6 +90,11 @@ def _money(value: Decimal, currency: str) -> Decimal:
     return value.quantize(Decimal(1).scaleb(-_minor_units(currency)), rounding=ROUND_HALF_UP)
 
 
+def _money_text(value: Decimal, currency: str) -> str:
+    places = _minor_units(currency)
+    return f"{_money(value, currency):.{places}f}"
+
+
 def _fmt(value: Decimal, places: int = 3) -> str:
     value = value.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)
     rendered = format(value, "f")
@@ -383,13 +388,13 @@ def subscription_cost_calculator(path: Path) -> dict:
     lines = ["Recurring subscription cost report", f"Subscriptions: {len(entries)}",
              "Annualized totals assume the same price and billing cycle for 12 months; no currency conversion is performed.", ""]
     for name, amount, cycle, currency, annual in entries:
-        lines.append(f"- {name}: {currency} {_fmt(_money(amount, currency), _minor_units(currency))} / {cycle}")
-        lines.append(f"  Annualized: {currency} {_fmt(annual, _minor_units(currency))}")
+        lines.append(f"- {name}: {currency} {_money_text(amount, currency)} / {cycle}")
+        lines.append(f"  Annualized: {currency} {_money_text(annual, currency)}")
     lines.extend(["", "Totals by currency"])
     for currency in sorted(totals):
         total = _money(totals[currency], currency)
-        lines.append(f"- {currency}: {currency} {_fmt(total, _minor_units(currency))} per year; "
-                     f"{currency} {_fmt(_money(total / 12, currency), _minor_units(currency))} average per month")
+        lines.append(f"- {currency}: {currency} {_money_text(total, currency)} per year; "
+                     f"{currency} {_money_text(total / 12, currency)} average per month")
     return _write(path, "subscription-costs", "\n".join(lines),
                   f"Annualized {len(entries)} subscriptions in {len(totals)} currency group(s).")
 
@@ -416,27 +421,27 @@ def commute_cost_calculator(path: Path) -> dict:
         per_person = _money(total / shared, currency)
         lines.extend([f"Round-trip distance per commute day: {_fmt(distance * 2, 2)} km",
                       f"Estimated fuel use per month: {_fmt(litres, 2)} L",
-                      f"Fuel cost: {currency} {_fmt(fuel_cost, _minor_units(currency))}",
-                      f"Parking and tolls: {currency} {_fmt(other, _minor_units(currency))}",
-                      f"Total monthly commute cost: {currency} {_fmt(total, _minor_units(currency))}",
+                      f"Fuel cost: {currency} {_money_text(fuel_cost, currency)}",
+                      f"Parking and tolls: {currency} {_money_text(other, currency)}",
+                      f"Total monthly commute cost: {currency} {_money_text(total, currency)}",
                       f"People sharing: {shared}",
-                      f"Estimated monthly cost per person: {currency} {_fmt(per_person, _minor_units(currency))}",
+                      f"Estimated monthly cost per person: {currency} {_money_text(per_person, currency)}",
                       "Estimate uses user-entered fuel consumption, fuel price, parking and tolls."])
     else:
         fare = _decimal(data.get("round_trip_fare"), "round_trip_fare", ZERO, "100000000")
         pass_price = data.get("monthly_pass_price")
         pay_as_you_go = _money(fare * days, currency)
         total = pay_as_you_go
-        lines.append(f"Pay-as-you-go total: {currency} {_fmt(pay_as_you_go, _minor_units(currency))}")
+        lines.append(f"Pay-as-you-go total: {currency} {_money_text(pay_as_you_go, currency)}")
         if pass_price is not None:
             monthly_pass = _money(_decimal(pass_price, "monthly_pass_price", ZERO, "100000000"), currency)
             total = min(pay_as_you_go, monthly_pass)
-            lines.append(f"Monthly pass price: {currency} {_fmt(monthly_pass, _minor_units(currency))}")
+            lines.append(f"Monthly pass price: {currency} {_money_text(monthly_pass, currency)}")
             lines.append("Lower-cost option based on entered values: " + ("monthly pass" if monthly_pass < pay_as_you_go else "pay as you go"))
-        lines.extend([f"Estimated monthly transit cost: {currency} {_fmt(total, _minor_units(currency))}",
+        lines.extend([f"Estimated monthly transit cost: {currency} {_money_text(total, currency)}",
                       "Estimate uses fares supplied by the user; concession, peak and route-specific fares are not checked."])
     return _write(path, "commute-cost", "\n".join(lines),
-                  f"Estimated monthly commute cost: {currency} {_fmt(total, _minor_units(currency))}.")
+                  f"Estimated monthly commute cost: {currency} {_money_text(total, currency)}.")
 
 
 def reading_plan_calculator(path: Path) -> dict:
@@ -488,19 +493,19 @@ def grocery_budget_planner(path: Path) -> dict:
     total = _money(total, currency)
     difference = _money(budget - total, currency)
     lines = ["Grocery and shopping budget", f"Currency: {currency}",
-             f"Budget: {currency} {_fmt(budget, _minor_units(currency))}", ""]
+             f"Budget: {currency} {_money_text(budget, currency)}", ""]
     for name, quantity, unit_price, line_total, category in rows:
-        lines.append(f"- {name} ({category}): {_fmt(quantity)} × {currency} {_fmt(unit_price, _minor_units(currency))} = {currency} {_fmt(line_total, _minor_units(currency))}")
+        lines.append(f"- {name} ({category}): {_fmt(quantity)} × {currency} {_money_text(unit_price, currency)} = {currency} {_money_text(line_total, currency)}")
     lines.extend(["", "Spending by category"])
     for category in sorted(category_totals, key=str.casefold):
-        lines.append(f"- {category}: {currency} {_fmt(_money(category_totals[category], currency), _minor_units(currency))}")
-    lines.extend(["", f"Estimated total: {currency} {_fmt(total, _minor_units(currency))}"])
+        lines.append(f"- {category}: {currency} {_money_text(category_totals[category], currency)}")
+    lines.extend(["", f"Estimated total: {currency} {_money_text(total, currency)}"])
     if difference >= ZERO:
-        lines.append(f"Budget remaining: {currency} {_fmt(difference, _minor_units(currency))}")
+        lines.append(f"Budget remaining: {currency} {_money_text(difference, currency)}")
     else:
-        lines.append(f"Over budget by: {currency} {_fmt(-difference, _minor_units(currency))}")
+        lines.append(f"Over budget by: {currency} {_money_text(-difference, currency)}")
     lines.append("Prices and quantities are user-entered estimates; no retailer prices or stock are checked.")
     return _write(path, "grocery-budget", "\n".join(lines),
-                  f"Shopping total: {currency} {_fmt(total, _minor_units(currency))}.")
+                  f"Shopping total: {currency} {_money_text(total, currency)}.")
 
 
