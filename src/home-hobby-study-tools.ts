@@ -280,7 +280,6 @@ export function runHomeHobbyStudyTextTool(toolId:string,content:string):string {
       lines.push("");
     }
     if(schedule.size===0)lines.push("No routine occurrences fall within this planning window.");
-    const occurrences=[...schedule.values()].reduce((sum,items)=>sum+items.length,0);
     return lines.join("\n");
   }
 
@@ -323,7 +322,7 @@ export function runHomeHobbyStudyTextTool(toolId:string,content:string):string {
         if(!conflict)options.push({remaining:remaining-group.guests.length,index});
       });
       options.sort((a,b)=>a.remaining-b.remaining||a.index-b.index);
-      if(!options.length){unassigned.push(group);return;}
+      if(!options.length){unassigned.push(group);continue;}
       tables[options[0]!.index]!.guests.push(...group.guests);
     }
     const lines=["Event seating plan","Guests: "+guestSet.size,"Tables: "+tables.length,
