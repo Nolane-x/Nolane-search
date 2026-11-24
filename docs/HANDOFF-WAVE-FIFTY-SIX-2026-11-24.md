@@ -26,14 +26,16 @@ The integration queries `mediatype=audio`. Internet Archive identifies Live Musi
 - `src/agent-tools.ts`: direct AI function schema and dispatcher registration.
 - `src/index.ts`: authenticated media API support for `kind=audio`.
 - `src/media-ui.ts`: Audio tab, filter, player and original-file link.
-- `tests/media-discovery-tools.test.ts` and `tests/agent-tools.test.ts`: public/private/derivative filtering and dispatch assertions.
+- `tests/media-discovery-tools.test.ts` and `tests/agent-tools.test.ts`: public/private/derivative/missing-source filtering and AI dispatch assertions.
+- `tests/media-ui.test.ts`: Audio filter, native player and archive media CSP.
+- `tests/web-portal.test.ts`: confirms anonymous audio search remains protected by the Telegram web session.
 - `docs/TOOL-RESEARCH-2026-11-24-WAVE56.md`: source, licensing and integration notes.
 
 No dependency, secret, D1 migration, Cloudflare binding or 534-file processor change is intended.
 
 ## Rights and privacy
 
-- Private, access-restricted, noindex and derivative-only files are excluded.
+- Private, access-restricted, noindex, derivative, missing-source and unsafe files are excluded. A file must explicitly declare `source: original`.
 - Rights may be missing or item-specific; playback does not guarantee permission to reuse or redistribute.
 - Media stays on archive.org; Nolane does not proxy/rehost bytes.
 - No user file upload, arbitrary cross-site downloader, DRM bypass or private R2 share link is included.
