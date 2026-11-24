@@ -463,6 +463,17 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
   {
     type: "function",
     function: {
+      name: "search_internet_archive_audio",
+      description: "Search public Internet Archive audio items and return a playable/downloadable original audio link only when a public, non-private MP3, M4A, Ogg, Opus, FLAC, WAV, AAC or AIFF file is listed in the item's metadata. Rights vary by item; inspect the original item page before reuse. This does not download arbitrary third-party websites.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 140, description: "Artist, album, recording, speech, lecture, podcast or audio title." },
+        limit: { type: "integer", minimum: 1, maximum: 5, description: "Number of public audio items to inspect, defaults to 4." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "search_wikipedia_articles",
       description: "Search Wikipedia articles in English, Vietnamese, Japanese, French, Spanish or German. Returns concise snippets, canonical article links and page metadata. Wikipedia is community-edited; verify important facts in the article's cited sources.",
       parameters: { type: "object", properties: {
@@ -2099,7 +2110,7 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
   if (["search_meal_recipes","filter_meal_recipes","get_meal_recipe_details","search_wikidata_entities","get_wikidata_entity"].includes(name)) {
     return (await runConsumerDiscoveryTool(name, args)).slice(0, 12_000);
   }
-  if (["search_wikimedia_images","search_nasa_media","lookup_food_product","search_openverse_images","search_internet_archive_videos"].includes(name)) {
+  if (["search_wikimedia_images","search_nasa_media","lookup_food_product","search_openverse_images","search_internet_archive_videos","search_internet_archive_audio"].includes(name)) {
     return (await runMediaDiscoveryTool(name, args)).slice(0, 12_000);
   }
   if (["search_country_profiles","get_world_bank_indicators","search_gbif_species","search_gbif_observations"].includes(name)) {
