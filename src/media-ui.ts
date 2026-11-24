@@ -17,13 +17,13 @@ const HTML = String.raw`<!doctype html>
 <span class="eyebrow">MEDIA DISCOVERY · IMAGE & VIDEO</span>
 <h1>Khám phá hình ảnh và video.</h1>
 <p>Tìm ảnh có thông tin tác giả và giấy phép trên Wikimedia Commons; khám phá tư liệu NASA và phát trực tiếp các video có MP4 công khai ngay trong trình duyệt.</p>
-<form id="search" class="search"><input id="q" autocomplete="off" minlength="2" maxlength="160" placeholder="Ví dụ: aurora, Hubble telescope, coral reef…" required><select id="kind" aria-label="Loại media"><option value="all">Ảnh và video</option><option value="image">Chỉ hình ảnh</option><option value="video">Chỉ video</option></select><select id="provider" aria-label="Nguồn media"><option value="all">Tất cả nguồn</option><option value="commons">Wikimedia Commons</option><option value="nasa">NASA</option></select><button id="go" class="btn" type="submit">Tìm media</button></form>
+<form id="search" class="search"><input id="q" autocomplete="off" minlength="2" maxlength="160" placeholder="Ví dụ: aurora, Hubble telescope, coral reef…" required><select id="kind" aria-label="Loại media"><option value="all">Ảnh và video</option><option value="image">Chỉ hình ảnh</option><option value="video">Chỉ video</option></select><select id="provider" aria-label="Nguồn media"><option value="all">Tất cả nguồn</option><option value="commons">Wikimedia Commons</option><option value="nasa">NASA</option><option value="openverse">Openverse · ảnh có giấy phép mở</option><option value="archive">Internet Archive · video công cộng</option></select><button id="go" class="btn" type="submit">Tìm media</button></form>
 <div class="tabs"><button class="tab active" data-kind="all">Tất cả</button><button class="tab" data-kind="image">Hình ảnh</button><button class="tab" data-kind="video">Video</button></div>
 </section>
 <div class="meta"><span id="status">Đang kiểm tra phiên đăng nhập…</span><span id="count"></span></div>
 <div id="notice" class="notice hidden"></div>
 <section id="results" class="grid"></section>
-<div class="footer">Nguồn ảnh/video giữ liên kết gốc, thông tin tác giả và giấy phép nếu có. Tư liệu NASA có thể bao gồm nội dung do bên thứ ba cung cấp. Hãy xem trang nguồn và điều khoản trước khi tái sử dụng. Tải video từ website ngoài đang được phát triển riêng, không vượt DRM/paywall hoặc quyền truy cập.</div>
+<div class="footer">Wikimedia Commons và Openverse cung cấp ảnh kèm nguồn/tác giả/giấy phép khi có. Video Internet Archive chỉ hiện khi hồ sơ công khai có file video gốc; quyền sử dụng khác nhau theo từng mục. NASA có thể chứa tư liệu bên thứ ba. Hãy xem trang nguồn và điều khoản trước khi tái sử dụng. Tải video đa website vẫn là tính năng riêng đang phát triển.</div>
 </main>
 <script>
 (function(){
@@ -31,7 +31,7 @@ const HTML = String.raw`<!doctype html>
 var $=function(id){return document.getElementById(id)};
 var last=[];
 function safeUrl(value,hosts){
- try{var u=new URL(value);if(u.protocol!=='https:'||u.username||u.password||u.port||hosts.indexOf(u.hostname)<0)return null;return u.href}catch(e){return null}
+ try{var u=new URL(value);if(u.protocol!=='https:'||u.username||u.password||u.port||(hosts&&hosts.indexOf(u.hostname)<0))return null;return u.href}catch(e){return null}
 }
 async function api(path,options){
  var response=await fetch(path,Object.assign({credentials:'same-origin',cache:'no-store'},options||{}));
@@ -46,8 +46,8 @@ function card(item){
  var card=document.createElement('article');card.className='card';
  var preview=document.createElement('div');preview.className='preview';
  var imageHosts=['upload.wikimedia.org','images-assets.nasa.gov'];
- var imageUrl=safeUrl(item.previewUrl,imageHosts);
- var mediaUrl=safeUrl(item.mediaUrl,imageHosts);
+ var imageUrl=item.provider==='Openverse'?safeUrl(item.previewUrl,['api.openverse.org']):item.provider==='Internet Archive'?safeUrl(item.previewUrl,['archive.org']):safeUrl(item.previewUrl,imageHosts);
+ var mediaUrl=item.provider==='Openverse'?safeUrl(item.mediaUrl,null):item.provider==='Internet Archive'?safeUrl(item.mediaUrl,['archive.org']):safeUrl(item.mediaUrl,imageHosts);
  if(item.mediaType==='video'&&mediaUrl){
   var video=document.createElement('video');video.controls=true;video.preload='metadata';video.playsInline=true;video.src=mediaUrl;preview.appendChild(video);
  }else if(imageUrl){
@@ -62,10 +62,10 @@ function card(item){
  body.appendChild(badges);
  if(item.credit){var credit=document.createElement('div');credit.className='credit';credit.textContent='Ghi công: '+item.credit;body.appendChild(credit)}
  var actions=document.createElement('div');actions.className='actions';
- var source=safeUrl(item.sourceUrl,['commons.wikimedia.org','images.nasa.gov','www.nasa.gov']);
+ var source=item.provider==='Openverse'?safeUrl(item.sourceUrl,null):item.provider==='Internet Archive'?safeUrl(item.sourceUrl,['archive.org']):safeUrl(item.sourceUrl,['commons.wikimedia.org','images.nasa.gov','www.nasa.gov']);
  var sourceLink=anchor('Trang nguồn',source,false);if(sourceLink)actions.appendChild(sourceLink);
  var file=anchor(item.mediaType==='video'?'Mở video gốc':'Ảnh gốc',mediaUrl,true);if(file)actions.appendChild(file);
- if(item.licenseUrl){var license=safeUrl(item.licenseUrl,['creativecommons.org','www.nasa.gov']);var licenseLink=anchor('Giấy phép',license,false);if(licenseLink)actions.appendChild(licenseLink)}
+ if(item.licenseUrl){var license=safeUrl(item.licenseUrl,['creativecommons.org','rightsstatements.org','www.nasa.gov']);var licenseLink=anchor('Giấy phép',license,false);if(licenseLink)actions.appendChild(licenseLink)}
  body.appendChild(actions);card.appendChild(body);return card;
 }
 function render(items){
@@ -81,7 +81,7 @@ async function search(){
  try{
   var query=new URLSearchParams({q:q,kind:$('kind').value,provider:$('provider').value});
   var data=await api('/api/media/search?'+query.toString());
-  render(data.items||[]);$('status').textContent='Tìm xong · nguồn: '+(data.providers||[]).join(', ');
+  render(data.items||[]);$('status').textContent='Tìm xong · nguồn: '+(data.providers||[]).join(', ');if(data.warnings&&data.warnings.length){$('notice').classList.remove('hidden');$('notice').textContent='Một số nguồn tạm thời không phản hồi: '+data.warnings.join(' · ')}
  }catch(error){$('results').replaceChildren();$('notice').classList.remove('hidden');$('notice').textContent=error.message;$('status').textContent='Không thể tìm media'}
  finally{$('go').disabled=false}
 }
@@ -99,7 +99,7 @@ export function mediaAppResponse(): Response {
       "cache-control": "no-store, max-age=0",
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
-      "content-security-policy": "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data: https://upload.wikimedia.org https://images-assets.nasa.gov; media-src 'self' https://images-assets.nasa.gov; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+      "content-security-policy": "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data: https://upload.wikimedia.org https://images-assets.nasa.gov https://api.openverse.org https://archive.org; media-src 'self' https://images-assets.nasa.gov https://archive.org https://*.archive.org; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
     },
   });
 }
