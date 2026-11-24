@@ -1,4 +1,4 @@
-Nolane Tools hiện có **483 công cụ đã được đăng ký và triển khai trên production** sau Wave 40, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. [PR #93](https://github.com/Nolane-x/Nolane-search/pull/93) đã merge vào `main` bằng commit `110278e3e9ecfb34ed95f276f4a4dfb227c90813`. Main CI [45298825598](https://github.com/Nolane-x/Nolane-search/actions/runs/45298825598), Worker export và live health smoke [45298825585](https://github.com/Nolane-x/Nolane-search/actions/runs/45298825585), Cloudflare deployment [45298825591](https://github.com/Nolane-x/Nolane-search/actions/runs/45298825591) đều thành công. Latest Worker Version ID: `bb6be828-214c-44a0-9db9-bfc5b5690a52`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema. Tệp đầu vào tiếp tục được xử lý trên GitHub-hosted runner dùng một lần; Wave 40 không thêm kho lưu file hay bảng dữ liệu mới.
+Nolane Tools hiện có **494 công cụ đã được đăng ký và triển khai trên production** sau Wave 41, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. [PR #94](https://github.com/Nolane-x/Nolane-search/pull/94) đã merge vào `main` bằng commit `38e6c4a81b147f5445c23682c8e75b138ccf1c60`. Main CI [45300211124](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211124), Worker export và live health smoke [45300211171](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211171), Cloudflare deployment [45300211092](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211092) đều thành công. Latest Worker Version ID: `4d48b314-4548-4a78-8059-2215027cc989`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema; tệp tiếp tục được xử lý trên GitHub-hosted runner dùng một lần.
 
 ## Wave 39 — everyday-user calculators — deployed to production
 
@@ -19,9 +19,9 @@ Wave 39 increased the production catalog from **462 to 472 registered tools**. T
 
 Research: [TOOL-RESEARCH-2026-11-23-WAVE39.md](TOOL-RESEARCH-2026-11-23-WAVE39.md). Implementation record: [HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md](HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md).
 
-## Wave 41 — daily-life planning and household helpers — implementation branch, not production
+## Wave 41 — daily-life planning and household helpers — deployed to production
 
-Wave 41 raises the branch catalog from **483 to 494 registered tools** (+11). All tools below are connected to the Python runner and direct AI JSON interface; production remains at 483 until PR CI, merge and Cloudflare deployment succeed.
+Wave 41 increased the production catalog from **483 to 494 registered tools** (+11). All tools below are connected to the Python runner and direct AI JSON interface. PR #94, main CI, Worker export/health smoke and Cloudflare deployment are complete.
 
 | ID | Công cụ | Chức năng |
 |---|---|---|
