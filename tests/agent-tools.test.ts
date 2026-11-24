@@ -10,7 +10,7 @@ const env = { DB: {} as never, SEARCH_JOBS: {} as never } as Env;
 describe("Nolane AI callable tools", () => {
   it("exposes the catalog as a real model-callable function", () => {
     expect(AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name)).toEqual([
-      "list_nolane_tools", "search_web", "read_web_page", "get_weather_forecast", "check_air_quality", "convert_currency", "get_public_holidays", "find_long_weekends", "get_marine_forecast", "get_earthquake_activity", "search_books", "lookup_postal_code", "define_english_word", "search_public_domain_books", "search_museum_artworks", "get_natural_events", "get_local_time", "process_text_content", "hash_text",
+      "list_nolane_tools", "search_web", "read_web_page", "get_weather_forecast", "check_air_quality", "convert_currency", "get_public_holidays", "find_long_weekends", "get_marine_forecast", "get_earthquake_activity", "search_books", "lookup_postal_code", "define_english_word", "search_public_domain_books", "search_museum_artworks", "get_natural_events", "get_local_time", "search_tv_shows", "get_tv_show_episodes", "search_apple_media", "search_music_metadata", "search_scholarly_works", "process_text_content", "hash_text",
     ]);
   });
 
@@ -1080,6 +1080,26 @@ describe("Nolane AI callable tools", () => {
     const result = JSON.parse(await executeAgentTool(env, "get_natural_events", { category: "wildfires", days_back: 7 }));
     expect(result.events[0].title).toBe("Test wildfire");
     expect(result.events[0].recent_geometry[0].point.latitude).toBe(20.8);
+  });
+
+
+  it("exposes Wave 50 discovery functions to the model and routes a TVmaze search", async () => {
+    const names = AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name);
+    expect(names).toEqual(expect.arrayContaining([
+      "search_tv_shows", "get_tv_show_episodes", "search_apple_media", "search_music_metadata", "search_scholarly_works",
+    ]));
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("api.tvmaze.com");
+      expect(url.pathname).toBe("/search/shows");
+      return new Response(JSON.stringify([{ score: 0.98, show: {
+        id: 42, name: "Example Show", genres: ["Drama"], status: "Ended",
+        url: "https://www.tvmaze.com/shows/42/example-show",
+      } }]), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    const result = JSON.parse(await executeAgentTool(env, "search_tv_shows", { query: "Example Show" }));
+    expect(result.shows[0].name).toBe("Example Show");
+    expect(result.shows[0].tvmaze_url).toContain("tvmaze.com");
   });
 
 });
