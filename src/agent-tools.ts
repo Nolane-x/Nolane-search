@@ -440,6 +440,28 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
   {
     type: "function",
     function: {
+      name: "search_openverse_images",
+      description: "Search Openverse for openly licensed and public-domain images across multiple sources. Returns image previews, source pages, creators and per-image Creative Commons/public-domain license details. Some licenses restrict commercial use or derivatives; preserve attribution and check the original license before reuse.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 160, description: "Image subject, object, animal, place or concept." },
+        limit: { type: "integer", minimum: 1, maximum: 10, description: "Number of licensed image results, defaults to 8." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_internet_archive_videos",
+      description: "Search public Internet Archive movie items and return a playable/downloadable original video link only when a public, non-private MP4/M4V/WebM/Ogg file is listed in the item's metadata. Rights vary by item and may be missing; inspect the original item page before reuse. This does not download arbitrary third-party websites.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 140, description: "Film, documentary, subject or archive title." },
+        limit: { type: "integer", minimum: 1, maximum: 5, description: "Number of public video items to inspect, defaults to 4." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "search_meal_recipes",
       description: "Search a public recipe catalog by dish name and return recipe cards with cuisine, image and original source links. Recipe records are community-submitted and are not allergen or food-safety guarantees. The current personal-workspace integration uses TheMealDB's development key; obtain a supporter key before public app-store distribution.",
       parameters: { type: "object", properties: {
@@ -2016,7 +2038,7 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
   if (["search_meal_recipes","filter_meal_recipes","get_meal_recipe_details","search_wikidata_entities","get_wikidata_entity"].includes(name)) {
     return (await runConsumerDiscoveryTool(name, args)).slice(0, 12_000);
   }
-  if (["search_wikimedia_images","search_nasa_media","lookup_food_product"].includes(name)) {
+  if (["search_wikimedia_images","search_nasa_media","lookup_food_product","search_openverse_images","search_internet_archive_videos"].includes(name)) {
     return (await runMediaDiscoveryTool(name, args)).slice(0, 12_000);
   }
   if (["search_country_profiles","get_world_bank_indicators","search_gbif_species","search_gbif_observations"].includes(name)) {
