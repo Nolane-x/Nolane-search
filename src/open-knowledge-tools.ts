@@ -152,7 +152,8 @@ async function getProjectArticle(project: WikiProject, rawArgs: unknown): Promis
     redirects: "1",
     explaintext: "1",
     exsectionformat: "plain",
-    exchars: "8000",
+    exchars: "1200",
+    exsentences: "10",
     inprop: "url",
     piprop: "thumbnail",
     pithumbsize: "640",
@@ -167,7 +168,7 @@ async function getProjectArticle(project: WikiProject, rawArgs: unknown): Promis
     return JSON.stringify({ status: "not_found", title, language: lang, source: project, note: "No matching page was found in this language edition." });
   }
   const normalizedTitle = typeof page.title === "string" ? page.title.slice(0, 240) : title;
-  const extract = typeof page.extract === "string" ? page.extract.slice(0, 8_000).trim() : "";
+  const extract = typeof page.extract === "string" ? page.extract.slice(0, 1_200).trim() : "";
   if (!extract) {
     return JSON.stringify({ status: "not_found", title: normalizedTitle, language: lang, source: project, note: "The page exists but does not expose a readable text extract." });
   }
