@@ -2,7 +2,19 @@
 
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## Latest production release — Wave 44 (2026-11-24)
+## Latest production release — Wave 45 (2026-11-24)
+
+- [PR #98](https://github.com/Nolane-x/Nolane-search/pull/98) merged into main as `e98b456dfbf320a57f9469673e3022f323d15b0f`. Production Tool Center catalog: **526 processors** (+8 over Wave 44).
+- PR CI [45331231407](https://github.com/Nolane-x/Nolane-search/actions/runs/45331231407) and main CI [45331424637](https://github.com/Nolane-x/Nolane-search/actions/runs/45331424637) passed TypeScript type-check, **25 Vitest files / 271 tests**, deployment-script checks, **438 Python runner tests** and Worker build.
+- Worker export/build and live health smoke [45331424996](https://github.com/Nolane-x/Nolane-search/actions/runs/45331424996) passed; health returned `ok: true`, database `reachable`.
+- Cloudflare deployment [45331424755](https://github.com/Nolane-x/Nolane-search/actions/runs/45331424755) passed secret validation, source/bundle checks, Worker upload, Telegram webhook verification (message + callback_query) and bot command registration. Worker Version ID: `b9168d76-3e11-4cf8-bf84-9276b61d7f04`.
+- D1 migration was correctly skipped because Wave 45 adds no schema changes or persistent financial storage.
+- Eight everyday-user tools are registered in the catalog, direct Nolane AI interface and GitHub Actions runner: bank CSV expense summaries, bill/cash-flow forecasts, shared group-expense settlement, moving-day checklists, moving-box labels, return reminders, gift budgets and user-defined household emergency-supply calculations.
+- Bank records are read-only and currency totals remain separate. Return windows, group splits and emergency-kit quantities use user-entered assumptions; the tools do not connect to banks, decide legal rights or certify emergency readiness.
+- Product research: [TOOL-RESEARCH-2026-11-24-WAVE45.md](TOOL-RESEARCH-2026-11-24-WAVE45.md). Implementation handoff: [HANDOFF-WAVE-FORTY-FIVE-2026-11-24.md](HANDOFF-WAVE-FORTY-FIVE-2026-11-24.md).
+- Owner-level acceptance remains separate: test a real private Telegram AI command and upload a non-sensitive CSV/JSON example. CI and webhook registration do not prove every client-side interaction.
+
+## Previous production release — Wave 44 (2026-11-24)
 
 - [PR #97](https://github.com/Nolane-x/Nolane-search/pull/97) merged into main as `4e7489aeca23de36c1cbf20db5ddf692f276d723`. Production Tool Center catalog: **518 processors** (+8 over Wave 43).
 - PR CI [45327140857](https://github.com/Nolane-x/Nolane-search/actions/runs/45327140857) and main CI [45327334511](https://github.com/Nolane-x/Nolane-search/actions/runs/45327334511) passed TypeScript type-check, **25 Vitest files / 269 tests**, deployment-script checks, **424 Python runner tests** and Worker build.

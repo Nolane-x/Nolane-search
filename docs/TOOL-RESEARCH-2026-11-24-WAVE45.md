@@ -1,7 +1,7 @@
 # Wave 45 — personal finance and moving-life workflows
 
 Date: 2026-11-24
-Status: Proposed on review branch; production remains Wave 44 / 518 tools until all CI and deployment checks pass.
+Status: merged and deployed to production as 526 tools on 2026-11-24.
 
 ## Why these workflows
 
@@ -42,3 +42,11 @@ Searches for dedicated open-source moving-day, retail-return and household emerg
 - Gift budgeting is arithmetic, not a recommendation to spend.
 - Emergency-kit quantities are multiplied strictly from user-defined rates and stock. They are not an official safety standard, medical advice or a guarantee of readiness; review local authority guidance and household needs.
 - No new paid API, external service, database schema, persistent financial storage, credential or Python dependency is added.
+
+## Release verification
+
+- PR [#98](https://github.com/Nolane-x/Nolane-search/pull/98) merged as `e98b456dfbf320a57f9469673e3022f323d15b0f`.
+- PR CI [45331231407](https://github.com/Nolane-x/Nolane-search/actions/runs/45331231407) and main CI [45331424637](https://github.com/Nolane-x/Nolane-search/actions/runs/45331424637) passed TypeScript type-check, 25 Vitest files / 271 tests, deployment-script checks, 438 Python runner tests and Worker build.
+- Worker export/health smoke [45331424996](https://github.com/Nolane-x/Nolane-search/actions/runs/45331424996) returned `ok: true` and database `reachable`.
+- Cloudflare deployment [45331424755](https://github.com/Nolane-x/Nolane-search/actions/runs/45331424755) succeeded. Worker Version ID: `b9168d76-3e11-4cf8-bf84-9276b61d7f04`.
+- Telegram webhook was verified for message + callback_query and bot commands were registered. No D1 migration was needed.

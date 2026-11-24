@@ -3,7 +3,7 @@
 Date: 2026-11-24
 Branch: feat/wave-forty-five-personal-finance-and-moving-tools
 Base: Wave 44 / 518 production tools
-Status: Review branch; CI and deployment pending.
+Status: merged and deployed to production on 2026-11-24.
 
 ## Eight tools
 
@@ -31,17 +31,15 @@ Status: Review branch; CI and deployment pending.
 - docs/TOOL-RESEARCH-2026-11-24-WAVE45.md — source research and safety boundaries.
 - docs/NOLANE-TOOLS.md — proposed Wave45 IDs listed so catalogue-sync tests can verify complete documentation.
 
-## Verification gates
+## Verification results
 
-1. TypeScript type-check and complete Vitest suite.
-2. Full Python runner suite; Wave45 tests must pass.
-3. Validate catalog, AI allowlist/direct implementation, runner allowlist/handler and documented /tool IDs all contain the same eight new IDs.
-4. Cloudflare Worker build.
-5. Merge only after required PR checks succeed.
-6. Verify main CI, Worker export/production health smoke and Cloudflare deploy after merge.
-7. Confirm Telegram webhook/commands if the deploy workflow runs those checks.
-8. Owner acceptance remains separate: test one private Telegram AI command and upload one non-sensitive CSV/JSON example. Automated tests and webhook registration do not prove every user-facing interaction.
+1. PR CI [45331231407](https://github.com/Nolane-x/Nolane-search/actions/runs/45331231407) and main CI [45331424637](https://github.com/Nolane-x/Nolane-search/actions/runs/45331424637) passed type-check, 25 Vitest files / 271 tests, deployment-script checks, 438 Python runner tests and Worker build.
+2. The catalog contains 526 unique tools. All eight Wave45 IDs are aligned between catalog, AI-callable set, runner allowlist/handler map and documented `/tool` IDs.
+3. Worker export/build and production health smoke [45331424996](https://github.com/Nolane-x/Nolane-search/actions/runs/45331424996) passed; health returned `ok: true` and database `reachable`.
+4. Cloudflare deployment [45331424755](https://github.com/Nolane-x/Nolane-search/actions/runs/45331424755) succeeded. Worker Version ID: `b9168d76-3e11-4cf8-bf84-9276b61d7f04`.
+5. Telegram webhook (message + callback_query) was verified and bot commands were registered. D1 migration was skipped because no schema changes were made.
+6. Owner acceptance remains separate: test one private Telegram AI command and upload one non-sensitive CSV/JSON example. Automated tests and webhook registration do not prove every user-facing interaction.
 
 ## Production count
 
-Wave 44 / 518 tools remains the production release until merge and deployment have succeeded. Proposed Wave45 catalog total: 526.
+Wave 45 / 526 tools is the latest production release, merged as `e98b456dfbf320a57f9469673e3022f323d15b0f` in [PR #98](https://github.com/Nolane-x/Nolane-search/pull/98).
