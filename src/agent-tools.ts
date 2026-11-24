@@ -439,49 +439,7 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
       }, required: ["barcode"], additionalProperties: false }
     }
   },
-  {
-    type: "function",
-    function: {
-      name: "lookup_consumer_product",
-      description: "Look up an 8–14 digit barcode across Open Food Facts, Open Beauty Facts, Open Pet Food Facts and Open Products Facts. The catalog is selected automatically when product_type is all; the official API redirect is followed only to one of the four allowlisted Open Facts domains. Returns product identity, ingredients/allergens and per-100-g nutrition when that catalog provides it. Community records may be incomplete or outdated.",
-      parameters: { type: "object", properties: {
-        barcode: { type: "string", pattern: "^[0-9]{8,14}$", description: "EAN/UPC/GTIN barcode." },
-        product_type: { type: "string", enum: ["all","food","beauty","petfood","product"], description: "Catalog to query; defaults to all for automatic cross-catalog lookup." }
-      }, required: ["barcode"], additionalProperties: false }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "compare_food_products",
-      description: "Compare 2 to 4 packaged food products by EAN/UPC/GTIN using Open Food Facts. Returns side-by-side nutrition data per 100 g and simple numerical minima/maxima for available metrics. Missing values stay missing; lower or higher is descriptive only and is not a health ranking or dietary recommendation.",
-      parameters: { type: "object", properties: {
-        barcodes: { type: "array", minItems: 2, maxItems: 4, uniqueItems: true, items: { type: "string", pattern: "^[0-9]{8,14}$" }, description: "Two to four distinct food product barcodes." }
-      }, required: ["barcodes"], additionalProperties: false }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "lookup_consumer_product",
-      description: "Look up an 8–14 digit barcode across Open Food Facts, Open Beauty Facts, Open Pet Food Facts and Open Products Facts. The official API can automatically redirect to the matching catalog, but Nolane only follows one redirect to the four allowlisted Open Facts domains. Returns product identity, ingredients/allergens and per-100-g nutrition where the selected catalog provides it. Community data can be incomplete or outdated.",
-      parameters: { type: "object", properties: {
-        barcode: { type: "string", pattern: "^[0-9]{8,14}$", description: "EAN/UPC/GTIN barcode." },
-        product_type: { type: "string", enum: ["all","food","beauty","petfood","product"], description: "Catalog to query; defaults to all for automatic product-type detection." }
-      }, required: ["barcode"], additionalProperties: false }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "compare_food_products",
-      description: "Compare 2–4 packaged food products by barcode using Open Food Facts. Returns side-by-side nutrition data per 100 g and numerical minima/maxima for metrics present in at least two records. Missing values stay missing; lower/higher values are descriptive and do not rank overall healthiness.",
-      parameters: { type: "object", properties: {
-        barcodes: { type: "array", minItems: 2, maxItems: 4, uniqueItems: true, items: { type: "string", pattern: "^[0-9]{8,14}$" }, description: "Two to four distinct food product barcodes." }
-      }, required: ["barcodes"], additionalProperties: false }
-    }
-  },
-  {
+    {
     type: "function",
     function: {
       name: "search_openverse_images",
