@@ -1,7 +1,8 @@
 # Wave 52 research — image, video and product discovery
 
 Date: 2026-11-24
-Branch: feat/wave-52-media-discovery
+Branch: feat/wave-52-media-discovery  
+Status: merged and deployed via [PR #110](https://github.com/Nolane-x/Nolane-search/pull/110) as 26ffcb727d606a5a16ef7574ef98d81f426956b0
 
 ## Scope delivered
 
@@ -124,3 +125,12 @@ Provider tests mock:
 - private Media Portal route and auth-protected media search API.
 
 CI and /health prove the application builds and deploys; they do not prove every upstream asset is available or licensed for the user's specific reuse. Downloader + R2 upload/player tests remain a separate follow-up once R2 is enabled.
+
+## Production verification
+
+- PR CI [45400994501](https://github.com/Nolane-x/Nolane-search/actions/runs/45400994501) passed.
+- Main CI [45401261882](https://github.com/Nolane-x/Nolane-search/actions/runs/45401261882) passed TypeScript, 31 Vitest files / 320 tests, deployment-script checks, 449 Python runner tests and Worker build.
+- Cloudflare deploy [45401261939](https://github.com/Nolane-x/Nolane-search/actions/runs/45401261939) succeeded; Worker Version ID: cf7e950e-b81f-463e-b671-af7cc502c0b6. Telegram webhook verification and bot command registration succeeded; no D1 migration was needed.
+- Worker export/build and public /health smoke [45401261641](https://github.com/Nolane-x/Nolane-search/actions/runs/45401261641) succeeded.
+- Cloudflare R2 returned error 10042 (not enabled); Cloudflare Stream also reported not enabled. Large-file downloader/share links remain unshipped. The R2 onboarding process is documented at https://developers.cloudflare.com/r2/get-started/.
+- CI and Worker health do not verify every live upstream image/video item or per-item reuse permissions. User-level feature acceptance remains separate.

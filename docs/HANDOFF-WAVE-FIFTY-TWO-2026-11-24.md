@@ -1,7 +1,8 @@
 # Wave 52 handoff — Media Portal and discovery
 
 Date: 2026-11-24
-Branch: feat/wave-52-media-discovery
+Branch: feat/wave-52-media-discovery  
+Release status: merged and deployed via [PR #110](https://github.com/Nolane-x/Nolane-search/pull/110) as 26ffcb727d606a5a16ef7574ef98d81f426956b0
 
 ## Implementation in this branch
 
@@ -35,7 +36,17 @@ The 534 existing file processors are not changed. No new secrets, packages or D1
 
 Not yet production-enabled. The plan is yt-dlp + gallery-dl + FFmpeg on the existing GitHub Actions hosted runner, with private R2 multipart storage and a short-lived same-origin share/player endpoint supporting byte-range video seek. No DRM/paywall/access-control bypass or credential/cookie support.
 
-**Owner action needed:** Cloudflare R2 is not activated. The Cloudflare API returned error 10042 for the connected account, requiring R2 to be enabled manually in the Cloudflare Dashboard. Do not merge/deploy a feature that claims large-file downloads until R2 activation, bucket binding, multipart upload, signed share access, HTTP Range streaming, expiry cleanup and CI end-to-end tests all pass.
+**Owner action needed:** both R2 and Stream are currently unavailable on the connected Cloudflare account. R2 returned error 10042; Stream returned "Cloudflare Stream not enabled".
+
+To enable R2:
+1. Open the [Cloudflare Dashboard](https://dash.cloudflare.com/).
+2. Go to **Storage & databases → R2 → Overview**.
+3. Complete the R2 subscription checkout. Cloudflare documents an included free monthly usage tier, but usage beyond the included quotas is billed.
+4. Create a private bucket named `nolane-search-media` and tell the developer when it is ready.
+
+Official setup guide: https://developers.cloudflare.com/r2/get-started/
+
+Do not merge/deploy a feature that claims large-file downloads until R2 activation, bucket binding, multipart upload, signed share access, HTTP Range streaming, expiry cleanup and CI end-to-end tests all pass.
 
 ## References
 

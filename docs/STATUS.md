@@ -3,16 +3,22 @@
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
-## Latest production release — Wave 51 (2026-11-24)
+## Latest production release — Wave 52 (2026-11-24)
+
+- [PR #110](https://github.com/Nolane-x/Nolane-search/pull/110) merged into main as `26ffcb727d606a5a16ef7574ef98d81f426956b0`. Production adds an authenticated `/media` portal and three model-callable tools: Wikimedia Commons image discovery with per-file license/credit metadata, NASA image/video discovery with public MP4 playback when a trusted asset manifest provides a direct MP4, and Open Food Facts barcode lookup. The **534 file processors** remain unchanged.
+- PR CI [45400994501](https://github.com/Nolane-x/Nolane-search/actions/runs/45400994501) and main CI [45401261882](https://github.com/Nolane-x/Nolane-search/actions/runs/45401261882) succeeded. Main CI passed TypeScript, **31 Vitest files / 320 tests**, deployment-script checks, **449 Python runner tests** and Worker build.
+- Cloudflare deployment [45401261939](https://github.com/Nolane-x/Nolane-search/actions/runs/45401261939) succeeded: secrets validated, Worker uploaded, triggers deployed, Telegram webhook verified and bot commands registered. Current Worker Version ID: `cf7e950e-b81f-463e-b671-af7cc502c0b6`.
+- Worker export/build and public `/health` smoke [45401261641](https://github.com/Nolane-x/Nolane-search/actions/runs/45401261641) succeeded. D1 migration was skipped because no schema changes were needed.
+- Research: [TOOL-RESEARCH-2026-11-24-WAVE52.md](TOOL-RESEARCH-2026-11-24-WAVE52.md). Handoff: [HANDOFF-WAVE-FIFTY-TWO-2026-11-24.md](HANDOFF-WAVE-FIFTY-TWO-2026-11-24.md).
+- Media guardrails: Commons results without per-file license name and URL are omitted; creator, credit and file-page link are preserved. NASA direct video links are returned only from the trusted images-assets.nasa.gov host and only when the public asset manifest identifies an MP4. Open Food Facts is community data and is not medical advice.
+- **Downloader status:** the yt-dlp/gallery-dl/FFmpeg + private large-file-share flow is researched but not enabled. Cloudflare API returned R2 error 10042 and Stream reports not enabled for this account. The account owner must add an R2 subscription via Dashboard (Storage & databases → R2 → Overview) before a private bucket can be provisioned. No public bucket or public GitHub artifact is used as a workaround. Feature-level tests for each external live asset remain separate from mocked provider contracts and Worker health.
+
+## Previous production release — Wave 51 (2026-11-24)
 
 - [PR #108](https://github.com/Nolane-x/Nolane-search/pull/108) merged into main as `666c871c8a056b1b0cc7f3569242ab79ede1482b`. Production adds four direct AI-callable functions: World Bank country profiles, multi-country World Development Indicators, GBIF taxonomic-name matching and GBIF biodiversity observation discovery. The **534 file processors** remain unchanged.
 - PR CI [45394865842](https://github.com/Nolane-x/Nolane-search/actions/runs/45394865842) and main CI [45395128765](https://github.com/Nolane-x/Nolane-search/actions/runs/45395128765) succeeded. Main CI passed TypeScript, **30 Vitest files / 311 tests**, deployment-script checks, **449 Python runner tests** and Worker build.
-- Cloudflare deployment [45395128692](https://github.com/Nolane-x/Nolane-search/actions/runs/45395128692) succeeded: required secrets validated, Worker uploaded, triggers deployed, Telegram webhook verified and bot commands registered. Current Worker Version ID: `3e54ef9b-edfb-44e1-b954-736f086aca3f`.
-- Worker export/build and public `/health` smoke [45395128757](https://github.com/Nolane-x/Nolane-search/actions/runs/45395128757) succeeded, including build-output publication and production health check.
-- D1 migration was skipped because no schema changes were needed.
+- Cloudflare deployment [45395128692](https://github.com/Nolane-x/Nolane-search/actions/runs/45395128692) succeeded; Worker Version ID: `3e54ef9b-edfb-44e1-b954-736f086aca3f`. Worker export/build and public health smoke [45395128757](https://github.com/Nolane-x/Nolane-search/actions/runs/45395128757) succeeded. Telegram webhook verification and bot commands succeeded; D1 migration was not required.
 - Research: [TOOL-RESEARCH-2026-11-24-WAVE51.md](TOOL-RESEARCH-2026-11-24-WAVE51.md). Handoff: [HANDOFF-WAVE-FIFTY-ONE-2026-11-24.md](HANDOFF-WAVE-FIFTY-ONE-2026-11-24.md).
-- Data guardrails: World Bank indicator years remain attached to each value and missing data are not filled. GBIF observation output is restricted to CC0/CC BY 4.0, retains attribution, and omits exact coordinates/locality; 429 rate limits are surfaced without aggressive retries.
-- Owner-level acceptance remains separate: live World Bank/GBIF queries through Telegram/Web Chat should be sampled. Mocked provider tests and Worker `/health` establish code/runtime deployment health, not guaranteed upstream availability for every feature query.
 
 ## Previous production release — Wave 50 (2026-11-24)
 
