@@ -349,7 +349,7 @@ export async function searchInternetArchiveVideos(queryInput: unknown, limitInpu
   const phrase = query.replace(/["\\]/g, " ").replace(/[^\p{L}\p{N}\s-]/gu, " ").replace(/\s+/g, " ").trim();
   if (phrase.length < 2) throw new Error("query must include searchable letters or numbers.");
   const url = new URL("https://archive.org/advancedsearch.php");
-  url.searchParams.set("q", 'mediatype:movies AND title:("' + phrase + '")');
+  url.searchParams.set("q", 'title:"' + phrase + '" AND mediatype:movies');
   for (const field of ["identifier", "title", "year", "creator", "mediatype"]) url.searchParams.append("fl[]", field);
   url.searchParams.set("rows", String(limit));
   url.searchParams.set("page", "1");
