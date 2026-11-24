@@ -354,11 +354,12 @@ function warrantyClaim(input: Input): string {
   const evidence = evidenceRaw.map(item => textValue(item, "evidence item", 100));
   const language = String(input.language ?? "vi").trim().toLowerCase();
   if (language !== "vi" && language !== "en") throw new Error("language chỉ nhận vi hoặc en.");
+  if (purchase.getTime() > asOf.getTime()) throw new Error("purchase_date không được sau as_of_date.");
   const warrantyEnd = monthAdd(purchase, months);
   const remaining = asOf.getTime() <= warrantyEnd.getTime() ? dayDifference(warrantyEnd, asOf) : 0;
-  const status = remaining || asOf.getTime() <= warrantyEnd.getTime()
-    ? "Inside the user-entered estimated warranty period"
-    : "User-entered estimated warranty end date has passed";
+  const status = asOf.getTime() <= warrantyEnd.getTime()
+    ? (language === "vi" ? "Trong thời hạn bảo hành ước tính theo dữ liệu đã nhập" : "Inside the user-entered estimated warranty period")
+    : (language === "vi" ? "Ngày kết thúc bảo hành ước tính đã qua" : "User-entered estimated warranty end date has passed");
   const lines = language === "vi" ? [
     "Bản nháp yêu cầu kiểm tra bảo hành", "Người nhận: " + seller, "Sản phẩm: " + product,
     "Ngày mua: " + dateKey(purchase), "Thời hạn bảo hành người dùng nhập: " + months + " tháng",
@@ -377,7 +378,6 @@ function warrantyClaim(input: Input): string {
     "I can provide the following evidence:", ...evidence.map(item => "- " + item), "", "Thank you.", "",
     "Note: the end date is only a calculation based on the duration entered by the user. Check the actual warranty document, exclusions, activation date and seller/manufacturer terms before concluding coverage.",
   ];
-  lines.splice(language === "vi" ? 7 : 6, 1, language === "vi" ? "Tình trạng theo dữ liệu đã nhập: " + status : "Status from supplied data: " + status);
   return lines.join("\n");
 }
 
