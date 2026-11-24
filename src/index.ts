@@ -14,7 +14,7 @@ import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, v
 import { clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWorkflow, getPendingToolWorkflow, getPendingToolWorkflowPlan, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow, storeToolWorkflowPlan } from "./workflows";
 import { webAppResponse } from "./web-ui";
 import { mediaAppResponse } from "./media-ui";
-import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos } from "./media-discovery-tools";
+import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos, searchInternetArchiveAudio } from "./media-discovery-tools";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import { planToolWorkflow } from "./workflow-planner";
 import type { AiFunctionTool, AiTask } from "./ai-router";
@@ -297,38 +297,47 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     if (query.length < 2 || query.length > 160) {
       return jsonResponse({ error: "Từ khóa media phải có từ 2 đến 160 ký tự." }, 400);
     }
-    if (!["all","image","video"].includes(kind) || !["all","commons","nasa","openverse","archive"].includes(provider)) {
+    if (!["all","image","video","audio"].includes(kind) || !["all","commons","nasa","openverse","archive"].includes(provider)) {
       return jsonResponse({ error: "Bộ lọc media không hợp lệ." }, 400);
     }
     if (kind === "video" && ["commons","openverse"].includes(provider)) {
       return jsonResponse({ error: "Nguồn được chọn chỉ hỗ trợ hình ảnh trong Media Portal." }, 400);
     }
+    if (kind === "audio" && provider !== "all" && provider !== "archive") {
+      return jsonResponse({ error: "Nguồn được chọn chưa hỗ trợ audio trong Media Portal." }, 400);
+    }
     if (kind === "image" && provider === "archive") {
-      return jsonResponse({ error: "Internet Archive được tích hợp ở đây như nguồn video; hãy chọn Ảnh và video hoặc nguồn ảnh khác." }, 400);
+      return jsonResponse({ error: "Internet Archive được tích hợp ở đây cho video và audio; hãy chọn Ảnh và video hoặc nguồn ảnh khác." }, 400);
     }
     try {
       const tasks: Array<{name:string;run:()=>Promise<{items:unknown[];source:string}>}> = [];
-      if ((provider === "all" || provider === "commons") && kind !== "video") {
+      if ((provider === "all" || provider === "commons") && (kind === "all" || kind === "image")) {
         tasks.push({ name: "Wikimedia Commons", run: async () => {
           const result = await searchWikimediaImages(query, 8);
           return { items: result.items, source: result.source };
         }});
       }
-      if ((provider === "all" || provider === "openverse") && kind !== "video") {
+      if ((provider === "all" || provider === "openverse") && (kind === "all" || kind === "image")) {
         tasks.push({ name: "Openverse", run: async () => {
           const result = await searchOpenverseImages(query, 8);
           return { items: result.items, source: result.source };
         }});
       }
-      if (provider === "all" || provider === "nasa") {
+      if ((provider === "all" || provider === "nasa") && kind !== "audio") {
         tasks.push({ name: "NASA", run: async () => {
           const result = await searchNasaMedia(query, kind, 8);
           return { items: result.items, source: result.source };
         }});
       }
-      if ((provider === "all" || provider === "archive") && kind !== "image") {
-        tasks.push({ name: "Internet Archive", run: async () => {
+      if ((provider === "all" || provider === "archive") && (kind === "all" || kind === "video")) {
+        tasks.push({ name: "Internet Archive video", run: async () => {
           const result = await searchInternetArchiveVideos(query, 4);
+          return { items: result.items, source: result.source };
+        }});
+      }
+      if ((provider === "all" || provider === "archive") && (kind === "all" || kind === "audio")) {
+        tasks.push({ name: "Internet Archive audio", run: async () => {
+          const result = await searchInternetArchiveAudio(query, 4);
           return { items: result.items, source: result.source };
         }});
       }
@@ -349,7 +358,8 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
       items.sort((a, b) => {
         const left = a as { mediaType?: string; provider?: string };
         const right = b as { mediaType?: string; provider?: string };
-        return (left.mediaType === "video" ? 0 : 1) - (right.mediaType === "video" ? 0 : 1) ||
+        const rank = (type: string | undefined) => type === "video" ? 0 : type === "audio" ? 1 : 2;
+        return rank(left.mediaType) - rank(right.mediaType) ||
           String(left.provider || "").localeCompare(String(right.provider || ""));
       });
       return jsonResponse({
