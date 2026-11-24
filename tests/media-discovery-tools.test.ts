@@ -297,7 +297,16 @@ describe("Wave 52 media and product discovery", () => {
         product_name: "Example spread", brands: "Example", quantity: "400 g",
         ingredients_text: "Sugar, oil and cocoa.", allergens: "May contain milk.",
         nutriscore_grade: "e", nova_group: 4, environmental_score_grade: "c",
-        nutriments: { "energy-kcal_100g": 539, fat_100g: 30, "saturated-fat_100g": 10, sugars_100g: 57, proteins_100g: 6 },
+        nutrition: { aggregated_set: {
+          per: "100g",
+          nutrients: {
+            "energy-kcal": { value: 539, unit: "kcal" },
+            fat: { value: 30, unit: "g" },
+            "saturated-fat": { value: 10, unit: "g" },
+            sugars: { value: 57, unit: "g" },
+            proteins: { value: 6, unit: "g" }
+          }
+        } },
         image_front_url: "https://images.openfoodfacts.org/images/products/301/762/042/2003/front.jpg",
       } });
     }));
@@ -386,6 +395,18 @@ describe("Wave 52 media and product discovery", () => {
     expect(missing.status).toBe("not_found");
     expect(legacy.status).toBe("ok");
     expect(legacy.product.name).toBe("Legacy-shaped product");
+  });
+
+  it("does not label per-100-ml data as per-100-g nutrition", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ status: "success", product: {
+      code: "3017620422003", product_type: "food",
+      product_name: "Beverage", nutrition: { aggregated_set: {
+        per: "100ml", nutrients: { "energy-kcal": { value: 42, unit: "kcal" } }
+      } }
+    } })));
+    const result = JSON.parse(await lookupFoodProduct("3017620422003"));
+    expect(result.product.nutrition_reference).toBe("100ml");
+    expect(result.product.nutrition_per_100g.energy_kcal).toBeNull();
   });
 
   it("compares two to four food barcodes using per-100-g values without inventing missing data", async () => {
