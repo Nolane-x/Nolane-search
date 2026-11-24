@@ -36,7 +36,7 @@ describe("Wave 51 country and biodiversity discovery tools", () => {
     const mock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
       expect(url.hostname).toBe("api.worldbank.org");
-      expect(url.pathname).toContain("/country/VNM;THA/indicator/");
+      expect(url.pathname).toContain("/country/VN;THA/indicator/");
       expect(url.searchParams.get("format")).toBe("json");
       expect(url.searchParams.get("source")).toBe("2");
       expect(url.searchParams.get("mrnev")).toBe("1");
@@ -127,7 +127,7 @@ describe("Wave 51 country and biodiversity discovery tools", () => {
     expect(result.records[0].license).toBe("CC_BY_4_0");
     expect(result.records[0].decimalLatitude).toBeUndefined();
     expect(result.records[0].locality).toBeUndefined();
-    expect(result.note).toContain("coordinates and locality descriptions are deliberately omitted");
+    expect(result.note).toContain("Coordinates and locality descriptions are deliberately omitted");
     expect(result.note).toContain("CC BY");
   });
 
