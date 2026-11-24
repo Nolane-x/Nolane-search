@@ -15,6 +15,7 @@ import { HOME_VEHICLE_RENTAL_TOOL_IDS, runHomeVehicleRentalTextTool } from "./ho
 import { runLiveEverydayTool } from "./live-everyday-tools";
 import { runWorldDataTool } from "./world-data-tools";
 import { runMediaDiscoveryTool } from "./media-discovery-tools";
+import { runConsumerDiscoveryTool } from "./consumer-discovery-tools";
 import { translateText } from "./translation";
 import type { Env, SearchMode } from "./types";
 
@@ -434,6 +435,62 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
       parameters: { type: "object", properties: {
         barcode: { type: "string", pattern: "^[0-9]{8,14}$", description: "Product barcode, for example a 13-digit EAN." }
       }, required: ["barcode"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_meal_recipes",
+      description: "Search a public recipe catalog by dish name and return recipe cards with cuisine, image and original source links. Recipe records are community-submitted and are not allergen or food-safety guarantees. The current personal-workspace integration uses TheMealDB's development key; obtain a supporter key before public app-store distribution.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 100, description: "Dish or recipe name, for example chicken curry or phở." },
+        limit: { type: "integer", minimum: 1, maximum: 8, description: "Number of recipe cards, default 6." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "filter_meal_recipes",
+      description: "Find recipe ideas by exactly one main ingredient, meal category or cuisine area. The provider's free filter supports only one filter at a time; it is not a multi-ingredient pantry matcher. Verify ingredients and allergies from the original recipe.",
+      parameters: { type: "object", properties: {
+        ingredient: { type: "string", minLength: 2, maxLength: 80, description: "One ingredient, e.g. chicken_breast." },
+        category: { type: "string", minLength: 2, maxLength: 80, description: "Meal category, e.g. Seafood or Vegetarian." },
+        area: { type: "string", minLength: 2, maxLength: 80, description: "Cuisine area, e.g. Japanese, Italian or Vietnamese." },
+        limit: { type: "integer", minimum: 1, maximum: 10, description: "Number of results, default 8." }
+      }, additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_meal_recipe_details",
+      description: "Retrieve the full instructions and ingredient measures for a TheMealDB recipe ID returned by search_meal_recipes or filter_meal_recipes. Catalog instructions may be incomplete; this is not an allergen or food-safety certification.",
+      parameters: { type: "object", properties: {
+        meal_id: { type: "string", pattern: "^[0-9]{1,16}$", description: "TheMealDB recipe ID." }
+      }, required: ["meal_id"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_wikidata_entities",
+      description: "Search and disambiguate people, places, organizations, scientific concepts and other knowledge-base entities in English or Vietnamese. Returns Wikidata item IDs, descriptions and canonical item links. Wikidata is community-maintained and may be incomplete or out of date.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 120, description: "Name or concept to search." },
+        language: { type: "string", enum: ["en","vi"], description: "Search language, defaults to English." },
+        limit: { type: "integer", minimum: 1, maximum: 10, description: "Number of candidate entities, default 6." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_wikidata_entity",
+      description: "Look up a Wikidata item ID and retrieve its English and Vietnamese labels, descriptions, aliases and available Wikipedia article links. Use after search_wikidata_entities to avoid confusing similarly named entities; records are community-maintained.",
+      parameters: { type: "object", properties: {
+        entity_id: { type: "string", pattern: "^Q[1-9][0-9]{0,11}$", description: "Wikidata item ID, e.g. Q42." }
+      }, required: ["entity_id"], additionalProperties: false }
     }
   },
   {
@@ -1955,6 +2012,9 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
     if (!safe || safe.protocol !== "https:") throw new Error("Only valid public HTTPS URLs are allowed.");
     const page = await fetchTinyFishPage(env, safe.toString());
     return JSON.stringify({ title: page.title, url: page.finalUrl, text: page.text.slice(0, 12_000) });
+  }
+  if (["search_meal_recipes","filter_meal_recipes","get_meal_recipe_details","search_wikidata_entities","get_wikidata_entity"].includes(name)) {
+    return (await runConsumerDiscoveryTool(name, args)).slice(0, 12_000);
   }
   if (["search_wikimedia_images","search_nasa_media","lookup_food_product"].includes(name)) {
     return (await runMediaDiscoveryTool(name, args)).slice(0, 12_000);
