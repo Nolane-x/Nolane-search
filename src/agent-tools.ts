@@ -17,6 +17,7 @@ import { runWorldDataTool } from "./world-data-tools";
 import { runMediaDiscoveryTool } from "./media-discovery-tools";
 import { runConsumerDiscoveryTool } from "./consumer-discovery-tools";
 import { runOpenKnowledgeTool } from "./open-knowledge-tools";
+import { runAnimeCatalogTool } from "./anime-catalog-tools";
 import { translateText } from "./translation";
 import type { Env, SearchMode } from "./types";
 
@@ -582,6 +583,50 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
       parameters: { type: "object", properties: {
         entity_id: { type: "string", pattern: "^Q[1-9][0-9]{0,11}$", description: "Wikidata item ID, e.g. Q42." }
       }, required: ["entity_id"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_anime_titles",
+      description: "Search SFW anime titles using the Jikan catalog, which parses public MyAnimeList records. Returns title variants, type, release/status information, episode count, score, studios, genres, cover image and the original MyAnimeList link. This is catalog discovery, not a streaming or download service; records may lag behind the source.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 120, description: "Anime title, English/Japanese title or common title variant." },
+        type: { type: "string", enum: ["TV","OVA","Movie","Special","ONA","Music","CM","PV","TV Special"], description: "Optional anime format filter." },
+        limit: { type: "integer", minimum: 1, maximum: 8, description: "Number of SFW anime results, defaults to 6." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_anime_details",
+      description: "Retrieve full SFW anime catalog details by a MyAnimeList numeric ID returned by search_anime_titles, including synopsis, episodes, dates, score, studios, genres, themes, demographics and the original source link. Jikan is unofficial and is not a streaming availability service.",
+      parameters: { type: "object", properties: {
+        anime_id: { type: "string", pattern: "^[1-9][0-9]{0,9}$", description: "Positive MyAnimeList anime ID." }
+      }, required: ["anime_id"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_manga_titles",
+      description: "Search SFW manga, novels, light novels, one-shots, doujin, manhwa and manhua using Jikan's public MyAnimeList catalog parser. Returns title variants, chapters, volumes, publication status, score, authors, genres, cover image and source link. Records may lag; this does not provide reading or download links.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 120, description: "Manga or comic title, English/Japanese title or common title variant." },
+        type: { type: "string", enum: ["manga","novel","lightnovel","oneshot","doujin","manhwa","manhua"], description: "Optional manga format filter." },
+        limit: { type: "integer", minimum: 1, maximum: 8, description: "Number of SFW manga results, defaults to 6." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_manga_details",
+      description: "Retrieve full SFW manga catalog details by a MyAnimeList numeric ID returned by search_manga_titles, including synopsis, chapter/volume count, publication dates, score, authors, serializations, genres, demographics and the original source link. This is catalog lookup, not a reading or download service.",
+      parameters: { type: "object", properties: {
+        manga_id: { type: "string", pattern: "^[1-9][0-9]{0,9}$", description: "Positive MyAnimeList manga ID." }
+      }, required: ["manga_id"], additionalProperties: false }
     }
   },
   {
@@ -2103,6 +2148,9 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
     if (!safe || safe.protocol !== "https:") throw new Error("Only valid public HTTPS URLs are allowed.");
     const page = await fetchTinyFishPage(env, safe.toString());
     return JSON.stringify({ title: page.title, url: page.finalUrl, text: page.text.slice(0, 12_000) });
+  }
+  if (["search_anime_titles","get_anime_details","search_manga_titles","get_manga_details"].includes(name)) {
+    return (await runAnimeCatalogTool(name, args)).slice(0, 12_000);
   }
   if (["search_wikipedia_articles","get_wikipedia_article","search_wikivoyage_guides","get_wikivoyage_guide","lookup_wiktionary_entry"].includes(name)) {
     return (await runOpenKnowledgeTool(name, args)).slice(0, 12_000);
