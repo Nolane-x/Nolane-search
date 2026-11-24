@@ -1,10 +1,12 @@
 # Wave 41 — daily-life planning tools
 
 Date: 2026-11-24  
-Status: implementation branch; PR/CI/deployment pending.  
-Branch: \`feat/wave-forty-one-daily-life-planning-tools\`  
-Production baseline: **483 processors**.  
-Branch target: **494 processors** (+11).
+Status: **merged and deployed to production**.  
+PR: [#94](https://github.com/Nolane-x/Nolane-search/pull/94)  
+Merge commit: `38e6c4a81b147f5445c23682c8e75b138ccf1c60`  
+Production catalog: **494 tools** (+11 from Wave 40).  
+Worker Version ID: `4d48b314-4548-4a78-8059-2215027cc989`  
+Worker: https://nolane-search.nolane-file.workers.dev
 
 ## User direction
 
@@ -26,32 +28,35 @@ Keep expanding useful tools for ordinary people, with less emphasis on specialis
 
 ## Changed implementation points
 
-- \`tools/wave41.py\`: standard-library Python calculators.
-- \`tools/test_wave41.py\`: 14 focused Python tests.
-- \`tools/runner.py\`: Wave 41 imports, allowlist and handler mappings.
-- \`src/tools.ts\`: 11 new utility catalog entries.
-- \`src/daily-life-tools.ts\`: direct AI JSON calculator implementations.
-- \`src/agent-tools.ts\`: Wave 41 IDs and JSON schema examples for AI calls.
-- \`tests/tools.test.ts\`: current catalog count and registration checks.
-- \`tests/agent-tools.test.ts\`: direct AI tests for all 11 new tools.
-- \`tests/telegram.test.ts\`: Tool Center count updated from 483 to 494.
-- \`docs/TOOL-RESEARCH-2026-11-24-WAVE41.md\`: product-research context.
+- `tools/wave41.py`: standard-library Python calculators.
+- `tools/test_wave41.py`: 14 focused Python tests.
+- `tools/runner.py`: Wave 41 imports, allowlist and handler mappings.
+- `src/tools.ts`: 11 new utility catalog entries.
+- `src/daily-life-tools.ts`: direct AI JSON calculator implementations.
+- `src/agent-tools.ts`: Wave 41 IDs and JSON schema examples for AI calls.
+- `tests/tools.test.ts`, `tests/agent-tools.test.ts`, `tests/telegram.test.ts`: registry, AI access and Tool Center count checks.
+- `docs/TOOL-RESEARCH-2026-11-24-WAVE41.md`: product research and use-case references.
+- README, verified status and tool inventory updated for production.
+
+## Validation and deployment — passed
+
+- PR CI [45299967122](https://github.com/Nolane-x/Nolane-search/actions/runs/45299967122) passed type-check, **25 Vitest files / 265 tests**, Python runner tests and Worker build.
+- Main CI [45300211124](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211124) passed TypeScript, **25 Vitest files / 265 tests**, deployment-script checks, **394 Python runner tests** and Worker build.
+- Worker export/build and live `/health` smoke [45300211171](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211171) passed.
+- Cloudflare deployment [45300211092](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211092) passed secret validation, bundle validation, Worker upload, Telegram webhook verification and bot command registration.
+- Telegram webhook was verified for `message` and `callback_query`; bot commands were registered.
+- D1 migration was skipped because there are no schema changes.
+- The 494 catalog IDs match the runner allowlist and handler map; the documentation parity check covers all registered `/tool` IDs.
+- Worker Version ID: `4d48b314-4548-4a78-8059-2215027cc989`.
 
 ## Scope and data handling
 
-- All tariff, carrier divisor, energy yield, average file size, fuel use and prices are supplied by the user.
-- No live tariff, ISP or carrier quote is fetched.
-- No new paid API, secret, Cloudflare product, D1 schema migration or persistent file store.
-- Python implementations use the standard library only.
-- Existing ephemeral runner, upload limits and output validation are unchanged.
+- All tariffs, energy yields, plan allowances, rates, prices, volumetric divisors, dimensions and average file sizes are user-supplied.
+- No live utility, mobile carrier, solar installer, retailer or shipping quote is implied.
+- No new paid API, secret, Cloudflare resource, D1 schema change or persistent file store.
+- Python implementations use the standard library only; existing ephemeral runner, upload limits and output validation are unchanged.
+- Estimates state their assumptions and known omissions.
 
-## Remaining verification
+## Remaining owner-level acceptance
 
-1. Pass TypeScript type-check and all Vitest tests.
-2. Pass the full Python runner suite and catalog/runner/docs parity test.
-3. Pass Cloudflare Worker build.
-4. Merge only after green PR CI, then verify main CI, Worker export/health smoke and Cloudflare deployment.
-5. Confirm the production catalog is 494 after deployment.
-6. Owner-side smoke test: try selected calculator commands in the private Telegram bot and a non-sensitive JSON upload. CI cannot prove client-side Telegram interaction.
-
-Until verification and deployment finish, **494 is the branch target; production remains 483**.
+Try selected calculator commands in the actual private Telegram bot and one non-sensitive JSON file upload. CI, deployment and webhook checks verify production integration but do not prove client-side interaction in the owner's Telegram account.
