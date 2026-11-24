@@ -106,7 +106,8 @@ export function runHomeHobbyStudyTextTool(toolId:string,content:string):string {
       let cursor=dates.has(dateKey(asOf))?asOf:addDays(asOf,-1);
       let streak=0;
       while(dates.has(dateKey(cursor))){streak++;cursor=addDays(cursor,-1);}
-      const last=[...dates].sort().at(-1);
+      const sortedDates=[...dates].sort();
+      const last=sortedDates[sortedDates.length-1];
       lines.push(name,"- Target: "+target+" check-in day(s) per week",
         "- Check-ins in window: "+recent.length+" / "+required+" target",
         "- Target completion: "+completion+"%",
