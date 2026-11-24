@@ -14,6 +14,7 @@ describe("private browser search portal", () => {
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
     expect(html).toContain("Nolane Search");
+    expect(html).toContain('id="mediaBtn"');
     expect(html).toContain("AI Overview");
     expect(html).toContain("Nolane Chat");
     expect(html).toContain("Personal Web Index");
@@ -86,5 +87,14 @@ describe("private browser search portal", () => {
       body: JSON.stringify({ ticket: "a".repeat(64) }),
     }), env, context);
     expect(response.status).toBe(403);
+  });
+  it("serves the private Media Portal and keeps media discovery API session-protected", async () => {
+    const page = await worker.fetch(new Request("https://nolane-search.example/media"), env, context);
+    expect(page.status).toBe(302);
+    expect(page.headers.get("location")).toBe("https://nolane-search.example/");
+
+    const search = await worker.fetch(new Request("https://nolane-search.example/api/media/search?q=nebula"), env, context);
+    expect(search.status).toBe(401);
+    expect(await search.json()).toMatchObject({ error: expect.stringContaining("Phiên đăng nhập") });
   });
 });
