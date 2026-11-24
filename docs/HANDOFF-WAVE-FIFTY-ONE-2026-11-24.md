@@ -1,7 +1,8 @@
 # Wave 51 handoff — country and biodiversity discovery
 
 Date: 2026-11-24  
-Branch: `feat/wave-51-country-biodiversity`
+Branch: `feat/wave-51-country-biodiversity`  
+Release status: merged and deployed via [PR #108](https://github.com/Nolane-x/Nolane-search/pull/108) as `666c871c8a056b1b0cc7f3569242ab79ede1482b`.
 
 ## Work in this wave
 
@@ -27,9 +28,15 @@ The existing 534 file processors are unchanged. No API keys, dependencies, migra
 - GBIF search can be rate-limited based on server load. The tool surfaces HTTP 429 as a back-off instruction; it does not retry aggressively.
 - iNaturalist was deferred until a shared request-budget mechanism can respect its approximately one-request-per-second recommended API use.
 
-## Validation state
+## Validation and production status
 
-This document describes the branch implementation, not a production release. Update this file after PR CI, merge, Cloudflare deployment and Worker health/export evidence are available. Keep feature-level live-provider acceptance separate from mocked tests and health checks.
+- PR #108 was merged on 2026-11-24; merge commit: `666c871c8a056b1b0cc7f3569242ab79ede1482b`.
+- PR CI [45394865842](https://github.com/Nolane-x/Nolane-search/actions/runs/45394865842) passed.
+- Main CI [45395128765](https://github.com/Nolane-x/Nolane-search/actions/runs/45395128765) passed TypeScript, 30 Vitest files / 311 tests, deployment-script checks, 449 Python runner tests and Worker build.
+- Cloudflare deploy [45395128692](https://github.com/Nolane-x/Nolane-search/actions/runs/45395128692) succeeded; Worker Version ID: `3e54ef9b-edfb-44e1-b954-736f086aca3f`. Telegram webhook verification and bot-command registration succeeded. D1 migration was skipped because this wave adds no schema changes.
+- Worker export/build and public `/health` smoke [45395128757](https://github.com/Nolane-x/Nolane-search/actions/runs/45395128757) succeeded.
+- Mocked tests validate parsing, filtering, attribution, redaction and dispatch. They do not prove that every live World Bank/GBIF query will succeed. Perform feature-level sample queries through Telegram/Web Chat separately.
+
 
 ## Primary references
 

@@ -1,7 +1,8 @@
 # Wave 51 research — country data and biodiversity discovery
 
 Date: 2026-11-24  
-Branch: `feat/wave-51-country-biodiversity`
+Branch: `feat/wave-51-country-biodiversity`  
+Status: merged and deployed via [PR #108](https://github.com/Nolane-x/Nolane-search/pull/108) as `666c871c8a056b1b0cc7f3569242ab79ede1482b`.
 
 ## Scope
 
@@ -77,3 +78,12 @@ Taxon matching is a taxonomy lookup, not photo recognition and not a confirmatio
 ## Validation plan
 
 Mocked tests cover World Bank country response parsing, aggregate exclusion, ISO alpha-2/alpha-3 comparison, multi-country/multi-indicator requests, indicator allowlists, GBIF species matches and unmatched names, license filtering, attribution retention, coordinate/locality redaction, input validation and HTTP 429 handling. The full repository CI must also pass before merge. A CI success or Worker health check is not represented as proof that every live provider query works for every user.
+
+## Production evidence
+
+- PR CI [45394865842](https://github.com/Nolane-x/Nolane-search/actions/runs/45394865842) succeeded.
+- Main CI [45395128765](https://github.com/Nolane-x/Nolane-search/actions/runs/45395128765) succeeded: type-check, 30 Vitest files / 311 tests, deployment-script checks, 449 Python runner tests and Worker build.
+- Cloudflare deployment [45395128692](https://github.com/Nolane-x/Nolane-search/actions/runs/45395128692) succeeded. Worker Version ID: `3e54ef9b-edfb-44e1-b954-736f086aca3f`. Telegram webhook was verified and bot commands were registered; no D1 migration was required.
+- Worker build/export and public `/health` smoke [45395128757](https://github.com/Nolane-x/Nolane-search/actions/runs/45395128757) succeeded.
+- These CI and health results do not establish successful real queries to every live World Bank or GBIF route. Keep feature-level acceptance separate.
+
