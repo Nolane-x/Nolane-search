@@ -1180,7 +1180,7 @@ async function searchScholarlyWorks(args: Obj): Promise<string> {
   const url = new URL("https://api.crossref.org/works");
   url.searchParams.set("query.bibliographic", query);
   url.searchParams.set("rows", String(limit));
-  url.searchParams.set("select", "DOI,title,author,published,published-print,published-online,issued,type,publisher,container-title,reference-count,is-referenced-by-count,score");
+  url.searchParams.set("select", "DOI,title,author,published,published-print,published-online,issued,created,type,publisher,container-title,references-count,is-referenced-by-count");
   const filters: string[] = [];
   if (fromYear !== null) filters.push("from-pub-date:" + fromYear + "-01-01");
   if (toYear !== null) filters.push("until-pub-date:" + toYear + "-12-31");
@@ -1215,9 +1215,8 @@ async function searchScholarlyWorks(args: Obj): Promise<string> {
       publication: journal,
       publisher,
       document_type: typeof row.type === "string" ? row.type.slice(0, 80) : null,
-      reference_count: maybeNumber(row["reference-count"]),
+      reference_count: maybeNumber(row["references-count"]) ?? maybeNumber(row["reference-count"]),
       citation_count_reported_by_crossref: maybeNumber(row["is-referenced-by-count"]),
-      relevance_score: maybeNumber(row.score),
     }];
   });
   return JSON.stringify({
