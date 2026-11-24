@@ -319,7 +319,7 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
     type: "function",
     function: {
       name: "search_apple_media",
-      description: "Search Apple's country-specific iTunes Store catalog for movies, podcasts, music, music videos, audiobooks, short films or ebooks. Returns text metadata and official store links only; it does not return artwork or audio previews and does not confirm subscription availability.",
+      description: "Search Apple's country-specific iTunes Store catalog for movies, TV shows, podcasts, music, music videos, audiobooks, short films or ebooks. Returns text metadata and official store links only; it does not return artwork or audio previews and does not confirm subscription availability.",
       parameters: { type: "object", properties: {
         query: { type: "string", minLength: 2, maxLength: 140, description: "Title, creator or keywords." },
         media_type: { type: "string", enum: ["movie","podcast","music","musicVideo","audiobook","shortFilm","tvShow","ebook"], description: "Catalog type; defaults to podcast." },
