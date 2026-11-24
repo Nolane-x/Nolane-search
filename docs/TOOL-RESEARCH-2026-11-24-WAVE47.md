@@ -1,9 +1,9 @@
 # Wave 47 — live everyday information tools
 
 Date: 2026-11-24
-Status: implementation branch; CI, merge and deployment pending.
-Branch: feat/wave-47-live-everyday-information
-Base main commit: 9f8d4ea0972299d7f09d59889d68557cbacbedf5
+Status: merged and deployed to production on 2026-11-24.
+Pull request: https://github.com/Nolane-x/Nolane-search/pull/100
+Merge commit: 76337ff06613b851359ade8330966c925b825316
 Scope: five AI-callable public-information functions. Existing 534 file processors remain unchanged.
 
 ## Why this wave
@@ -46,3 +46,14 @@ Earlier waves also reviewed consumer workflow projects including Omni Tools, Pri
 CI must pass TypeScript type-check, full Vitest suite, Python runner tests and Worker build. Focused mocked-fetch tests cover every function, source dates, ambiguity, AQI classification, regional filtering, weekend calculations and upstream errors. CI does not make live upstream calls.
 
 Open-Meteo's free endpoint must not be used for commercial deployment. Select an appropriately licensed provider or self-hosted/commercial service before commercial use.
+
+
+## Release verification
+
+- PR #100 merged at 2026-11-24T05:47:55Z using squash merge.
+- PR CI: https://github.com/Nolane-x/Nolane-search/actions/runs/45335641289 — passed.
+- Main CI: https://github.com/Nolane-x/Nolane-search/actions/runs/45335826762 — passed TypeScript, Vitest, deployment-script checks, Python runner tests and Cloudflare Worker build.
+- Cloudflare deployment: https://github.com/Nolane-x/Nolane-search/actions/runs/45335826780 — passed, including source verification, bundle dry-run validation, Worker upload, runtime-secret upload and Telegram webhook/command registration.
+- Worker export and smoke test: https://github.com/Nolane-x/Nolane-search/actions/runs/45335826815 — passed build/export and live /health smoke check.
+- D1 migration step was skipped because the merge introduced no database migration.
+- This validates the hosted Worker deployment path; it does not establish a commercial right to use Open-Meteo's free API. Keep that integration for non-commercial use or replace it before commercial operation.
