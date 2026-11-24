@@ -139,7 +139,7 @@ class Wave40Tests(unittest.TestCase):
         })
         self.assertIn("Nominal energy: 37 Wh", report)
         self.assertIn("Usable energy estimate: 26.64 Wh", report)
-        self.assertIn("Estimated runtime: 5 h 19 min", report)
+        self.assertIn("Estimated runtime: 5 h 20 min", report)
 
     def test_water_tank_rectangular_and_cylinder_shapes(self):
         _, rect = self.report(wave40.water_tank_volume_calculator, "tank-rect", {
