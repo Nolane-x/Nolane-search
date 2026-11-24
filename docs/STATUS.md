@@ -5,7 +5,7 @@ Last verified: 2026-11-24. Production deployment evidence is separated from owne
 ## Latest production release — Wave 42 (2026-11-24)
 
 - [PR #95](https://github.com/Nolane-x/Nolane-search/pull/95) merged into main as `caa5bc0ee08a1b584c2099decdad3b8e8b78a890`. Production Tool Center catalog: **502 processors** (+8 over Wave 41).
-- PR CI [45312352260](https://github.com/Nolane-x/Nolane-search/actions/runs/45312352260) passed TypeScript type-check, **25 Vitest files / 266 tests**, deployment-script checks, **404 Python runner tests** and Worker build. Main CI [45317297572](https://github.com/Nolane-x/Nolane-search/actions/runs/45317297572) is running the same checks on the merge commit.
+- PR CI [45312352260](https://github.com/Nolane-x/Nolane-search/actions/runs/45312352260) passed TypeScript type-check, **25 Vitest files / 266 tests**, deployment-script checks, **404 Python runner tests** and Worker build. Main CI [45317297572](https://github.com/Nolane-x/Nolane-search/actions/runs/45317297572) passed TypeScript, **25 Vitest files / 266 tests**, deployment-script checks, **404 Python runner tests** and Worker build.
 - Worker export/build and health smoke [45317299584](https://github.com/Nolane-x/Nolane-search/actions/runs/45317299584) passed.
 - Cloudflare deployment [45317297601](https://github.com/Nolane-x/Nolane-search/actions/runs/45317297601) passed required-secret validation, source and bundle checks, Worker upload and Telegram webhook verification (message + callback_query) and bot command registration. Worker Version ID: `70089084-aae3-4692-bd88-2368aec4e8a2`.
 - D1 migration was correctly skipped because Wave 42 adds no schema changes or persistent storage.
@@ -14,7 +14,6 @@ Last verified: 2026-11-24. Production deployment evidence is separated from owne
 - Owner-level acceptance remains separate: try the new commands in the real private Telegram bot and upload a non-sensitive JSON file. Successful deployment and webhook registration do not prove each client-side interaction.
 
 ## Previous production release — Wave 41 (2026-11-24)
-## Latest production release — Wave 41 (2026-11-24)
 
 - [PR #94](https://github.com/Nolane-x/Nolane-search/pull/94) merged into `main` as `38e6c4a81b147f5445c23682c8e75b138ccf1c60`. Production Tool Center catalog: **494 processors** (+11 over Wave 40).
 - Main CI [45300211124](https://github.com/Nolane-x/Nolane-search/actions/runs/45300211124) passed TypeScript type-check, **25 Vitest files / 265 tests**, deployment-script checks, **394 Python runner tests** and Worker build.
