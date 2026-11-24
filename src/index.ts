@@ -14,7 +14,7 @@ import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, v
 import { clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWorkflow, getPendingToolWorkflow, getPendingToolWorkflowPlan, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow, storeToolWorkflowPlan } from "./workflows";
 import { webAppResponse } from "./web-ui";
 import { mediaAppResponse } from "./media-ui";
-import { searchNasaMedia, searchWikimediaImages } from "./media-discovery-tools";
+import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos } from "./media-discovery-tools";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import { planToolWorkflow } from "./workflow-planner";
 import type { AiFunctionTool, AiTask } from "./ai-router";
@@ -297,21 +297,54 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     if (query.length < 2 || query.length > 160) {
       return jsonResponse({ error: "Từ khóa media phải có từ 2 đến 160 ký tự." }, 400);
     }
-    if (!["all","image","video"].includes(kind) || !["all","commons","nasa"].includes(provider)) {
+    if (!["all","image","video"].includes(kind) || !["all","commons","nasa","openverse","archive"].includes(provider)) {
       return jsonResponse({ error: "Bộ lọc media không hợp lệ." }, 400);
     }
-    if (kind === "video" && provider === "commons") {
-      return jsonResponse({ error: "Wikimedia Commons không được chọn làm nguồn video trong Media Portal." }, 400);
+    if (kind === "video" && ["commons","openverse"].includes(provider)) {
+      return jsonResponse({ error: "Nguồn được chọn chỉ hỗ trợ hình ảnh trong Media Portal." }, 400);
+    }
+    if (kind === "image" && provider === "archive") {
+      return jsonResponse({ error: "Internet Archive được tích hợp ở đây như nguồn video; hãy chọn Ảnh và video hoặc nguồn ảnh khác." }, 400);
     }
     try {
-      const tasks: Array<Promise<{items: unknown[]; source: string}>> = [];
+      const tasks: Array<{name:string;run:()=>Promise<{items:unknown[];source:string}>}> = [];
       if ((provider === "all" || provider === "commons") && kind !== "video") {
-        tasks.push(searchWikimediaImages(query, 8).then(result => ({ items: result.items, source: result.source })));
+        tasks.push({ name: "Wikimedia Commons", run: async () => {
+          const result = await searchWikimediaImages(query, 8);
+          return { items: result.items, source: result.source };
+        }});
+      }
+      if ((provider === "all" || provider === "openverse") && kind !== "video") {
+        tasks.push({ name: "Openverse", run: async () => {
+          const result = await searchOpenverseImages(query, 8);
+          return { items: result.items, source: result.source };
+        }});
       }
       if (provider === "all" || provider === "nasa") {
-        tasks.push(searchNasaMedia(query, kind, 8).then(result => ({ items: result.items, source: result.source })));
+        tasks.push({ name: "NASA", run: async () => {
+          const result = await searchNasaMedia(query, kind, 8);
+          return { items: result.items, source: result.source };
+        }});
       }
-      const sources = await Promise.all(tasks);
+      if ((provider === "all" || provider === "archive") && kind !== "image") {
+        tasks.push({ name: "Internet Archive", run: async () => {
+          const result = await searchInternetArchiveVideos(query, 4);
+          return { items: result.items, source: result.source };
+        }});
+      }
+      const settled = await Promise.allSettled(tasks.map(task => task.run()));
+      const sources: Array<{items:unknown[];source:string}> = [];
+      const warnings: string[] = [];
+      settled.forEach((result, index) => {
+        if (result.status === "fulfilled") sources.push(result.value);
+        else {
+          const reason = result.reason instanceof Error ? result.reason.message : "unknown provider error";
+          warnings.push(tasks[index].name + ": " + reason.slice(0, 180));
+        }
+      });
+      if (!sources.length && warnings.length) {
+        return jsonResponse({ error: warnings.join(" · ").slice(0, 500) }, 502);
+      }
       const items = sources.flatMap(result => result.items);
       items.sort((a, b) => {
         const left = a as { mediaType?: string; provider?: string };
@@ -319,7 +352,13 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
         return (left.mediaType === "video" ? 0 : 1) - (right.mediaType === "video" ? 0 : 1) ||
           String(left.provider || "").localeCompare(String(right.provider || ""));
       });
-      return jsonResponse({ query, kind, provider, result_count: items.length, providers: sources.map(source => source.source), items });
+      return jsonResponse({
+        query, kind, provider,
+        result_count: items.length,
+        providers: sources.map(source => source.source),
+        warnings,
+        items,
+      });
     } catch (error) {
       console.warn("Media discovery failed:", error instanceof Error ? error.message : "unknown");
       return jsonResponse({ error: error instanceof Error ? error.message.slice(0, 300) : "Không thể tìm media lúc này." }, 502);
