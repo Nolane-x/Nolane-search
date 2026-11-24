@@ -448,6 +448,35 @@ describe("Wave 52 media and product discovery", () => {
     expect(result.comparison_basis).toContain("not a health ranking");
   });
 
+  it("does not compare a product redirected to a non-food database", async () => {
+    const beautyBarcode = "8710447445990";
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      const barcode = url.pathname.split("/").pop() || "";
+      if (barcode === beautyBarcode && url.hostname === "world.openfoodfacts.org") {
+        return new Response(null, { status: 302, headers: {
+          location: "https://world.openbeautyfacts.org/api/v3/product/" + beautyBarcode
+        }});
+      }
+      if (url.hostname === "world.openbeautyfacts.org") {
+        return json({ status: "success", product: {
+          code: beautyBarcode, product_type: "beauty", product_name: "Beauty item",
+          nutrition: { aggregated_set: { per: "100g", nutrients: { sugars: { value: 10 } } } }
+        } });
+      }
+      return json({ status: "success", product: {
+        code: barcode, product_type: "food", product_name: "Food item",
+        nutrition: { aggregated_set: { per: "100g", nutrients: { sugars: { value: 5 } } } }
+      } });
+    }));
+    const result = JSON.parse(await compareFoodProducts(["3017620422003",beautyBarcode]));
+    expect(result.status).toBe("insufficient_data");
+    expect(result.products[1].product).toMatchObject({
+      not_found: true, reason: "not_a_food_product"
+    });
+    expect(result.comparisons).toHaveLength(0);
+  });
+
   it("validates food-comparison input bounds and uniqueness before network access", async () => {
     const mock = vi.fn();
     vi.stubGlobal("fetch", mock);
