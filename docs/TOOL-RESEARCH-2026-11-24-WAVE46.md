@@ -1,7 +1,7 @@
 # Wave 46 — home, vehicle and rental management tools
 
 Date: 2026-11-24
-Status: merged and deployed to production as 542 tools on 2026-11-24.
+Status: merged and deployed to production as 534 tools on 2026-11-24.
 
 ## Why these workflows
 

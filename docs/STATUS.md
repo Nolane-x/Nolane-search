@@ -4,7 +4,7 @@ Last verified: 2026-11-24. Production deployment evidence is separated from owne
 
 ## Latest production release — Wave 46 (2026-11-24)
 
-- [PR #99](https://github.com/Nolane-x/Nolane-search/pull/99) merged into main as `b80eee059281932193106b5c90f21ce306dea9e2`. Production Tool Center catalog: **542 processors** (+8 over Wave 45).
+- [PR #99](https://github.com/Nolane-x/Nolane-search/pull/99) merged into main as `b80eee059281932193106b5c90f21ce306dea9e2`. Production Tool Center catalog: **534 processors** (+8 over Wave 45).
 - PR CI [45332648456](https://github.com/Nolane-x/Nolane-search/actions/runs/45332648456) and main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609) passed TypeScript type-check, **25 Vitest files / 273 tests**, deployment-script checks, **449 Python runner tests** and Worker build.
 - Worker export/build and live health smoke [45332866447](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866447) passed; health returned `ok: true`, database `reachable`.
 - Cloudflare deployment [45332866563](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866563) passed secret validation, source/bundle checks, Worker upload, Telegram webhook verification (message + callback_query) and bot command registration. Worker Version ID: `2b7c15c7-ca12-4721-a248-1cb47b921f2a`.
@@ -274,7 +274,7 @@ Last verified: 2026-11-24. Production deployment evidence is separated from owne
 - Main CI [44982433603](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433603) passed TypeScript type-check, Vitest, deployment-script checks, **136 Python runner tests**, and Worker build.
 - Worker export and production health smoke [44982433601](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433601) passed.
 - Cloudflare deployment [44982433602](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433602) passed source/bundle validation, Worker upload, runtime-secret upload and Telegram webhook/command-menu registration. D1 migration was skipped because Wave 20 has no schema changes.
-- Production Worker Version ID: `8eeb9bd7-77f7-4205-898a-db49f35424ce`.
+- Production Worker Version ID: `8eeb9bd7-77f7-4205-898a-db49f35344ce`.
 - Added tools: RSS/Atom audit, sitemap XML audit, robots.txt audit, JSONL profiling, image metadata privacy audit, SVG active-content audit, WCAG contrast checker, SSH public-key audit and ZIP SHA-256 manifest.
 - Owner-level E2E remains: upload representative RSS/Atom, sitemap/robots, JSONL, image, SVG, color-pair TXT, SSH public-key and ZIP files in private Telegram; inspect outputs and test `/tool_retry`. CI/deployment does not prove that direct Telegram journey.
 
@@ -1029,7 +1029,7 @@ The registry expands from 17 to 23 implemented tools.
 - Main CI [44982433603](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433603) passed TypeScript type-check, Vitest, deployment-script checks, **136 Python runner tests**, and Worker build.
 - Worker export and production health smoke [44982433601](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433601) passed.
 - Cloudflare deployment [44982433602](https://github.com/Nolane-x/Nolane-search/actions/runs/44982433602) passed source/bundle validation, Worker upload, runtime-secret upload and Telegram webhook/command-menu registration. D1 migration was skipped because Wave 20 has no schema changes.
-- Production Worker Version ID: `8eeb9bd7-77f7-4205-898a-db49f35424ce`.
+- Production Worker Version ID: `8eeb9bd7-77f7-4205-898a-db49f35344ce`.
 - Added tools: RSS/Atom audit, sitemap XML audit, robots.txt audit, JSONL profiling, image metadata privacy audit, SVG active-content audit, WCAG contrast checker, SSH public-key audit and ZIP SHA-256 manifest.
 - Owner-level E2E remains: upload representative RSS/Atom, sitemap/robots, JSONL, image, SVG, color-pair TXT, SSH public-key and ZIP files in private Telegram; inspect outputs and test `/tool_retry`. CI/deployment does not prove that direct Telegram journey.
 

@@ -34,7 +34,7 @@ Status: merged and deployed to production on 2026-11-24.
 ## Verification results
 
 1. PR CI [45332648456](https://github.com/Nolane-x/Nolane-search/actions/runs/45332648456) and main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609) passed type-check, 25 Vitest files / 273 tests, deployment-script checks, 449 Python runner tests and Worker build.
-2. The catalog contains 542 unique tools. All eight Wave46 IDs are aligned between registry, direct AI callable set, Python runner allowlist/handler map and documented `/tool` IDs.
+2. The catalog contains 534 unique tools. All eight Wave46 IDs are aligned between registry, direct AI callable set, Python runner allowlist/handler map and documented `/tool` IDs.
 3. Worker export/build and production health smoke [45332866447](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866447) passed; health returned `ok: true` and database `reachable`.
 4. Cloudflare deployment [45332866563](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866563) succeeded. Worker Version ID: `2b7c15c7-ca12-4721-a248-1cb47b921f2a`.
 5. Telegram webhook (message + callback_query) was verified and bot commands were registered. D1 migration was skipped because no schema changes were made.
@@ -42,4 +42,4 @@ Status: merged and deployed to production on 2026-11-24.
 
 ## Production accounting
 
-Wave 46 / 542 tools is the latest production release, merged as `b80eee059281932193106b5c90f21ce306dea9e2` in [PR #99](https://github.com/Nolane-x/Nolane-search/pull/99).
+Wave 46 / 534 tools is the latest production release, merged as `b80eee059281932193106b5c90f21ce306dea9e2` in [PR #99](https://github.com/Nolane-x/Nolane-search/pull/99).
