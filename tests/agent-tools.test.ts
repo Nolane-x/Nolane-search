@@ -14,6 +14,43 @@ describe("Nolane AI callable tools", () => {
     ]);
   });
 
+  it("dispatches cross-catalog lookup and nutrition comparison through the normal AI interface", async () => {
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      expect(url.pathname).toMatch(/^\/api\/v3\/product\/\d+$/);
+      expect(url.searchParams.get("fields")).toContain("nutrition");
+      const barcode = url.pathname.split("/").pop();
+      if (barcode === "3017620422003") {
+        return new Response(JSON.stringify({ status: "success", product: {
+          code: barcode, product_type: "food", product_name: "Spread A",
+          nutrition: { aggregated_set: { per: "100g", nutrients: {
+            "energy-kcal": { value: 500 }, sugars: { value: 45 }
+          } } }
+        } }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ status: "success", product: {
+        code: barcode, product_type: "food", product_name: "Spread B",
+        nutrition: { aggregated_set: { per: "100g", nutrients: {
+          "energy-kcal": { value: 400 }, sugars: { value: 20 }
+        } } }
+      } }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const lookedUp = JSON.parse(await executeAgentTool(env, "lookup_consumer_product", {
+      barcode: "3017620422003", product_type: "all"
+    }));
+    expect(lookedUp.product.name).toBe("Spread A");
+
+    const compared = JSON.parse(await executeAgentTool(env, "compare_food_products", {
+      barcodes: ["3017620422003","5000159484695"]
+    }));
+    expect(compared.status).toBe("ok");
+    expect(compared.comparisons.find((item: {metric:string}) => item.metric === "Energy").minimum)
+      .toMatchObject({ barcode: "5000159484695", value: 400 });
+    expect(mock).toHaveBeenCalledTimes(3);
+  });
+
   it("discovers the complete catalog in bounded, non-overlapping pages", async () => {
     const first = JSON.parse(await executeAgentTool(env, "list_nolane_tools", {})) as {
       total: number; offset: number; limit: number; nextOffset: number | null;
