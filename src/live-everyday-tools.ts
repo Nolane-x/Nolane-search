@@ -884,6 +884,355 @@ async function localTime(args: Obj): Promise<string> {
   });
 }
 
+
+// Wave 50: media and research discovery. These endpoints return metadata only.
+let lastTvMazeRequestAt = 0;
+let lastMusicBrainzRequestAt = 0;
+let lastCrossrefRequestAt = 0;
+let lastAppleSearchRequestAt = 0;
+
+function throttleProvider(last: number, minimumMs: number, provider: string): number {
+  const now = Date.now();
+  if (now - last < minimumMs) {
+    throw new Error(provider + " is rate-limited. Please wait briefly before searching again.");
+  }
+  return now;
+}
+
+function cleanHtmlText(value: unknown, max: number): string | null {
+  if (typeof value !== "string") return null;
+  const clean = decodeHtml(value
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/(?:p|div|li|h[1-6])\s*>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim());
+  return clean ? clean.slice(0, max) : null;
+}
+
+function mapTvMazeShow(raw: unknown): Obj | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const row = raw as Obj;
+  if (typeof row.id !== "number" || !Number.isSafeInteger(row.id) || row.id < 1 ||
+      typeof row.name !== "string" || !row.name.trim()) return null;
+  const rating = row.rating && typeof row.rating === "object" && !Array.isArray(row.rating)
+    ? row.rating as Obj : {};
+  const network = row.network && typeof row.network === "object" && !Array.isArray(row.network)
+    ? row.network as Obj : {};
+  const webChannel = row.webChannel && typeof row.webChannel === "object" && !Array.isArray(row.webChannel)
+    ? row.webChannel as Obj : {};
+  const country = network.country && typeof network.country === "object" && !Array.isArray(network.country)
+    ? network.country as Obj : {};
+  return {
+    id: row.id,
+    name: row.name.slice(0, 220),
+    type: typeof row.type === "string" ? row.type.slice(0, 60) : null,
+    language: typeof row.language === "string" ? row.language.slice(0, 60) : null,
+    genres: Array.isArray(row.genres) ? row.genres.filter((x): x is string => typeof x === "string").slice(0, 10).map(x => x.slice(0, 60)) : [],
+    status: typeof row.status === "string" ? row.status.slice(0, 40) : null,
+    premiered: typeof row.premiered === "string" ? row.premiered.slice(0, 20) : null,
+    ended: typeof row.ended === "string" ? row.ended.slice(0, 20) : null,
+    runtime_minutes: maybeNumber(row.averageRuntime) ?? maybeNumber(row.runtime),
+    rating_average: maybeNumber(rating.average),
+    network: typeof network.name === "string" ? network.name.slice(0, 120) : null,
+    network_country: typeof country.name === "string" ? country.name.slice(0, 100) : null,
+    streaming_channel: typeof webChannel.name === "string" ? webChannel.name.slice(0, 120) : null,
+    schedule: row.schedule && typeof row.schedule === "object" && !Array.isArray(row.schedule)
+      ? {
+          time: typeof (row.schedule as Obj).time === "string" ? ((row.schedule as Obj).time as string).slice(0, 20) : null,
+          days: Array.isArray((row.schedule as Obj).days) ? ((row.schedule as Obj).days as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 7) : [],
+        }
+      : null,
+    summary: cleanHtmlText(row.summary, 700),
+    official_site: safeExternalHttpsUrl(row.officialSite),
+    tvmaze_url: trustedHttpsUrl(row.url, ["www.tvmaze.com"]),
+  };
+}
+
+async function searchTvShows(args: Obj): Promise<string> {
+  const query = text(args, "query", 140);
+  const limit = integer(args.limit, "limit", 5, 1, 8);
+  lastTvMazeRequestAt = throttleProvider(lastTvMazeRequestAt, 600, "TVmaze");
+  const url = new URL("https://api.tvmaze.com/search/shows");
+  url.searchParams.set("q", query);
+  const payload = await getJson<unknown>(url, "TVmaze public TV API", {
+    "user-agent": "NolaneSearch/1.0 (https://github.com/Nolane-x/Nolane-search)",
+  });
+  if (!Array.isArray(payload)) throw new Error("TVmaze returned an unexpected show-search response.");
+  const shows = payload.slice(0, 40).flatMap((raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const result = raw as Obj;
+    const show = mapTvMazeShow(result.show);
+    if (!show) return [];
+    return [{ relevance_score: maybeNumber(result.score), ...show }];
+  }).slice(0, limit);
+  return JSON.stringify({
+    status: shows.length ? "ok" : "not_found",
+    source: "TVmaze",
+    source_url: "https://www.tvmaze.com/api",
+    project_url: "https://github.com/tvmaze/tvmaze",
+    query,
+    result_count: shows.length,
+    shows,
+    attribution: "TVmaze data is licensed under CC BY-SA. Keep the TVmaze source link with reused data; ShareAlike conditions apply to adapted database content.",
+    note: "TVmaze is a television metadata catalog, not a streaming-availability checker. A show record or network name does not prove that a title is currently available in the user's country or subscription plan. Search results are cached by TVmaze and can lag site updates.",
+  });
+}
+
+async function getTvShowEpisodes(args: Obj): Promise<string> {
+  const showId = integer(args.tvmaze_show_id, "tvmaze_show_id", 0, 1, 2_147_483_647);
+  const limit = integer(args.limit, "limit", 20, 1, 40);
+  const includeSpecials = args.include_specials === true;
+  if (args.include_specials !== undefined && typeof args.include_specials !== "boolean") {
+    throw new Error("include_specials must be true or false.");
+  }
+  const season = args.season === undefined ? null : integer(args.season, "season", 1, 1, 100);
+  lastTvMazeRequestAt = throttleProvider(lastTvMazeRequestAt, 600, "TVmaze");
+  const url = new URL("https://api.tvmaze.com/shows/" + showId + "/episodes");
+  if (includeSpecials) url.searchParams.set("specials", "1");
+  const payload = await getJson<unknown>(url, "TVmaze episode guide", {
+    "user-agent": "NolaneSearch/1.0 (https://github.com/Nolane-x/Nolane-search)",
+  });
+  if (!Array.isArray(payload)) throw new Error("TVmaze returned an unexpected episode-list response.");
+  const episodes = payload.slice(0, 3000).flatMap((raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const row = raw as Obj;
+    if (typeof row.id !== "number" || !Number.isSafeInteger(row.id) ||
+        typeof row.name !== "string" || typeof row.season !== "number" || !Number.isSafeInteger(row.season)) return [];
+    if (season !== null && row.season !== season) return [];
+    return [{
+      id: row.id,
+      name: row.name.slice(0, 220),
+      season: row.season,
+      episode_number: maybeNumber(row.number),
+      episode_type: typeof row.type === "string" ? row.type.slice(0, 40) : null,
+      air_date: typeof row.airdate === "string" ? row.airdate.slice(0, 20) : null,
+      air_time: typeof row.airtime === "string" ? row.airtime.slice(0, 20) : null,
+      air_timestamp: typeof row.airstamp === "string" ? row.airstamp.slice(0, 40) : null,
+      runtime_minutes: maybeNumber(row.runtime),
+      summary: cleanHtmlText(row.summary, 600),
+      tvmaze_url: trustedHttpsUrl(row.url, ["www.tvmaze.com"]),
+    }];
+  });
+  const selected = episodes.slice(0, limit);
+  return JSON.stringify({
+    status: selected.length ? "ok" : "not_found",
+    source: "TVmaze",
+    source_url: "https://www.tvmaze.com/api",
+    show_id: showId,
+    show_page: "https://www.tvmaze.com/shows/" + showId,
+    season_filter: season,
+    include_specials: includeSpecials,
+    total_matching_episodes_in_response: episodes.length,
+    result_count: selected.length,
+    episodes: selected,
+    attribution: "TVmaze data is licensed under CC BY-SA. Keep the TVmaze source link with reused data; ShareAlike conditions apply to adapted database content.",
+    note: "This is the episode ordering and published schedule recorded by TVmaze. Dates and times may be incomplete or revised by broadcasters; it is not a live streaming schedule.",
+  });
+}
+
+async function searchAppleMedia(args: Obj): Promise<string> {
+  const query = text(args, "query", 140);
+  const mediaType = args.media_type === undefined ? "podcast" : args.media_type;
+  const supported = ["movie", "podcast", "music", "musicVideo", "audiobook", "shortFilm", "ebook"];
+  if (typeof mediaType !== "string" || !supported.includes(mediaType)) {
+    throw new Error("media_type must be movie, podcast, music, musicVideo, audiobook, shortFilm or ebook.");
+  }
+  const country = args.country_code === undefined ? "VN" : countryCode(args.country_code);
+  if (!country) throw new Error("country_code must be a two-letter ISO country code.");
+  const limit = integer(args.limit, "limit", 8, 1, 10);
+  lastAppleSearchRequestAt = throttleProvider(lastAppleSearchRequestAt, 250, "Apple iTunes Search API");
+  const url = new URL("https://itunes.apple.com/search");
+  url.searchParams.set("term", query);
+  url.searchParams.set("media", mediaType);
+  url.searchParams.set("country", country.toLowerCase());
+  url.searchParams.set("limit", String(limit));
+  const data = obj(await getJson<unknown>(url, "Apple iTunes Search API"), "Apple media search");
+  const rawResults = Array.isArray(data.results) ? data.results : [];
+  const appleHosts = ["itunes.apple.com", "music.apple.com", "podcasts.apple.com", "books.apple.com", "tv.apple.com"];
+  const results = rawResults.slice(0, limit).flatMap((raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const row = raw as Obj;
+    const title = typeof row.trackName === "string" ? row.trackName :
+      typeof row.collectionName === "string" ? row.collectionName :
+      typeof row.artistName === "string" ? row.artistName : null;
+    if (!title) return [];
+    return [{
+      title: title.slice(0, 240),
+      artist_or_creator: typeof row.artistName === "string" ? row.artistName.slice(0, 180) : null,
+      collection: typeof row.collectionName === "string" ? row.collectionName.slice(0, 200) : null,
+      media_kind: typeof row.kind === "string" ? row.kind.slice(0, 60) :
+        typeof row.wrapperType === "string" ? row.wrapperType.slice(0, 60) : mediaType,
+      genre: typeof row.primaryGenreName === "string" ? row.primaryGenreName.slice(0, 100) : null,
+      release_date: typeof row.releaseDate === "string" ? row.releaseDate.slice(0, 30) : null,
+      track_count: maybeNumber(row.trackCount),
+      duration_ms: maybeNumber(row.trackTimeMillis),
+      store_url: trustedHttpsUrl(row.trackViewUrl ?? row.collectionViewUrl, appleHosts),
+    }];
+  });
+  return JSON.stringify({
+    status: results.length ? "ok" : "not_found",
+    source: "Apple iTunes Search API",
+    source_url: "https://performance-partners.apple.com/search-api",
+    query,
+    media_type: mediaType,
+    storefront_country_code: country,
+    result_count: results.length,
+    results,
+    note: "Results are limited to Apple's selected storefront and are not a complete global media catalog. This lookup returns metadata and official store links only; it deliberately does not return promotional artwork or audio previews. Store links do not guarantee local subscription access or current availability.",
+  });
+}
+
+async function searchMusicMetadata(args: Obj): Promise<string> {
+  const query = text(args, "query", 140);
+  const rawEntity = args.entity_type === undefined ? "artist" : args.entity_type;
+  const entities = ["artist", "recording", "release-group"];
+  if (typeof rawEntity !== "string" || !entities.includes(rawEntity)) {
+    throw new Error("entity_type must be artist, recording or release-group.");
+  }
+  const entity = rawEntity as "artist" | "recording" | "release-group";
+  const limit = integer(args.limit, "limit", 5, 1, 10);
+  lastMusicBrainzRequestAt = throttleProvider(lastMusicBrainzRequestAt, 1100, "MusicBrainz");
+  const url = new URL("https://musicbrainz.org/ws/2/" + entity + "/");
+  url.searchParams.set("query", query);
+  url.searchParams.set("fmt", "json");
+  url.searchParams.set("limit", String(limit));
+  const data = obj(await getJson<unknown>(url, "MusicBrainz Web Service", {
+    "user-agent": "NolaneSearch/1.0 (https://github.com/Nolane-x/Nolane-search)",
+  }), "MusicBrainz search");
+  const listKey = entity === "release-group" ? "release-groups" : entity === "recording" ? "recordings" : "artists";
+  const rows = Array.isArray(data[listKey]) ? data[listKey] as unknown[] : [];
+  const records = rows.slice(0, limit).flatMap((raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const row = raw as Obj;
+    const mbid = typeof row.id === "string" && /^[a-f0-9-]{36}$/i.test(row.id) ? row.id : null;
+    const name = typeof row.name === "string" ? row.name : typeof row.title === "string" ? row.title : null;
+    if (!mbid || !name) return [];
+    const credits = Array.isArray(row["artist-credit"]) ? (row["artist-credit"] as unknown[]).slice(0, 5).flatMap((credit) => {
+      if (typeof credit === "string") return [credit.slice(0, 100)];
+      if (!credit || typeof credit !== "object" || Array.isArray(credit)) return [];
+      const item = credit as Obj;
+      if (typeof item.name === "string") return [item.name.slice(0, 100)];
+      if (item.artist && typeof item.artist === "object" && !Array.isArray(item.artist) && typeof (item.artist as Obj).name === "string") {
+        return [((item.artist as Obj).name as string).slice(0, 100)];
+      }
+      return [];
+    }) : [];
+    const lifeSpan = row["life-span"] && typeof row["life-span"] === "object" && !Array.isArray(row["life-span"])
+      ? row["life-span"] as Obj : {};
+    const area = row.area && typeof row.area === "object" && !Array.isArray(row.area) ? row.area as Obj : {};
+    const tags = Array.isArray(row.tags) ? row.tags.slice(0, 5).flatMap((tag) => {
+      if (!tag || typeof tag !== "object" || Array.isArray(tag) || typeof (tag as Obj).name !== "string") return [];
+      return [{ name: ((tag as Obj).name as string).slice(0, 80), count: maybeNumber((tag as Obj).count) }];
+    }) : [];
+    return [{
+      id: mbid,
+      name: name.slice(0, 240),
+      disambiguation: typeof row.disambiguation === "string" ? row.disambiguation.slice(0, 180) : null,
+      score: maybeNumber(row.score),
+      entity_type: entity,
+      country: typeof row.country === "string" ? row.country.slice(0, 60) : null,
+      area: typeof area.name === "string" ? area.name.slice(0, 100) : null,
+      artist_credits: credits,
+      primary_type: typeof row["primary-type"] === "string" ? (row["primary-type"] as string).slice(0, 60) : null,
+      first_release_date: typeof row["first-release-date"] === "string" ? (row["first-release-date"] as string).slice(0, 30) : null,
+      duration_ms: maybeNumber(row.length),
+      begin_date: typeof lifeSpan.begin === "string" ? lifeSpan.begin.slice(0, 30) : null,
+      end_date: typeof lifeSpan.end === "string" ? lifeSpan.end.slice(0, 30) : null,
+      tags,
+      musicbrainz_url: "https://musicbrainz.org/" + entity + "/" + mbid,
+    }];
+  });
+  return JSON.stringify({
+    status: records.length ? "ok" : "not_found",
+    source: "MusicBrainz Web Service v2",
+    source_url: "https://musicbrainz.org/doc/MusicBrainz_API",
+    data_license_url: "https://musicbrainz.org/doc/About/Data_License",
+    query,
+    entity_type: entity,
+    result_count: records.length,
+    records,
+    note: "MusicBrainz is a community metadata catalog; it does not provide music recordings. Its core data is CC0, while some supplementary data is CC BY-NC-SA 3.0. Non-commercial use only unless separately licensed. The service requires a meaningful User-Agent and no more than one request per second per source IP; this client applies a per-warm-isolate throttle, which is not a global cross-isolate quota.",
+  });
+}
+
+function crossrefYear(row: Obj): number | null {
+  for (const key of ["published-print", "published-online", "issued", "created"]) {
+    const date = row[key];
+    if (!date || typeof date !== "object" || Array.isArray(date)) continue;
+    const parts = (date as Obj)["date-parts"];
+    if (!Array.isArray(parts) || !Array.isArray(parts[0]) || typeof parts[0][0] !== "number") continue;
+    const year = parts[0][0] as number;
+    if (Number.isInteger(year) && year >= 1000 && year <= 9999) return year;
+  }
+  return null;
+}
+
+async function searchScholarlyWorks(args: Obj): Promise<string> {
+  const query = text(args, "query", 160);
+  const limit = integer(args.limit, "limit", 5, 1, 10);
+  const fromYear = args.year_from === undefined ? null : integer(args.year_from, "year_from", 0, 1600, 2100);
+  const toYear = args.year_to === undefined ? null : integer(args.year_to, "year_to", 0, 1600, 2100);
+  if (fromYear !== null && toYear !== null && fromYear > toYear) {
+    throw new Error("year_from must be less than or equal to year_to.");
+  }
+  lastCrossrefRequestAt = throttleProvider(lastCrossrefRequestAt, 1100, "Crossref public REST API");
+  const url = new URL("https://api.crossref.org/works");
+  url.searchParams.set("query.bibliographic", query);
+  url.searchParams.set("rows", String(limit));
+  url.searchParams.set("select", "DOI,title,author,published,published-print,published-online,issued,type,publisher,container-title,reference-count,is-referenced-by-count,score");
+  const filters: string[] = [];
+  if (fromYear !== null) filters.push("from-pub-date:" + fromYear + "-01-01");
+  if (toYear !== null) filters.push("until-pub-date:" + toYear + "-12-31");
+  if (filters.length) url.searchParams.set("filter", filters.join(","));
+  const data = obj(await getJson<unknown>(url, "Crossref REST API", {
+    "user-agent": "NolaneSearch/1.0 (https://github.com/Nolane-x/Nolane-search)",
+  }), "Crossref search");
+  const message = obj(data.message, "Crossref message");
+  const rawItems = Array.isArray(message.items) ? message.items : [];
+  const works = rawItems.slice(0, limit).flatMap((raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const row = raw as Obj;
+    const title = Array.isArray(row.title) && typeof row.title[0] === "string" ? row.title[0] as string : null;
+    if (!title) return [];
+    const doi = typeof row.DOI === "string" && /^10\.\d{4,9}\/[-._;()/:A-Z0-9]+$/i.test(row.DOI) ? row.DOI : null;
+    const authors = Array.isArray(row.author) ? row.author.slice(0, 5).flatMap((rawAuthor) => {
+      if (!rawAuthor || typeof rawAuthor !== "object" || Array.isArray(rawAuthor)) return [];
+      const author = rawAuthor as Obj;
+      const fullName = typeof author.name === "string" ? author.name :
+        [author.given, author.family].filter((part): part is string => typeof part === "string").join(" ");
+      return fullName ? [fullName.slice(0, 140)] : [];
+    }) : [];
+    const journal = Array.isArray(row["container-title"]) && typeof row["container-title"][0] === "string"
+      ? (row["container-title"][0] as string).slice(0, 200) : null;
+    const publisher = typeof row.publisher === "string" ? row.publisher.slice(0, 160) : null;
+    return [{
+      title: title.slice(0, 320),
+      doi,
+      doi_url: doi ? "https://doi.org/" + encodeURIComponent(doi).replace(/%2F/gi, "/") : null,
+      authors,
+      published_year: crossrefYear(row),
+      publication: journal,
+      publisher,
+      document_type: typeof row.type === "string" ? row.type.slice(0, 80) : null,
+      reference_count: maybeNumber(row["reference-count"]),
+      citation_count_reported_by_crossref: maybeNumber(row["is-referenced-by-count"]),
+      relevance_score: maybeNumber(row.score),
+    }];
+  });
+  return JSON.stringify({
+    status: works.length ? "ok" : "not_found",
+    source: "Crossref REST API",
+    source_url: "https://www.crossref.org/documentation/retrieve-metadata/rest-api",
+    query,
+    year_from: fromYear,
+    year_to: toYear,
+    result_count: works.length,
+    works,
+    note: "Crossref supplies bibliographic metadata deposited by publishers and trusted sources. Metadata may be incomplete or contain errors; citation counts are not a measure of research quality. A DOI link may lead to a paywall or a page without full text. This tool returns metadata only, not article text or a guarantee of open access.",
+  });
+}
+
 export async function runLiveEverydayTool(name: string, rawArgs: unknown): Promise<string> {
   const args = obj(rawArgs, "Tool arguments");
   if (name === "get_weather_forecast") return weather(args);
@@ -900,5 +1249,10 @@ export async function runLiveEverydayTool(name: string, rawArgs: unknown): Promi
   if (name === "search_museum_artworks") return searchMuseumArtworks(args);
   if (name === "get_natural_events") return naturalEvents(args);
   if (name === "get_local_time") return localTime(args);
+  if (name === "search_tv_shows") return searchTvShows(args);
+  if (name === "get_tv_show_episodes") return getTvShowEpisodes(args);
+  if (name === "search_apple_media") return searchAppleMedia(args);
+  if (name === "search_music_metadata") return searchMusicMetadata(args);
+  if (name === "search_scholarly_works") return searchScholarlyWorks(args);
   throw new Error("Unknown live everyday information tool.");
 }
