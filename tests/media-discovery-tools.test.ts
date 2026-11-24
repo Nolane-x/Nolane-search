@@ -413,15 +413,21 @@ describe("Wave 52 media and product discovery", () => {
     const records: Record<string, Obj> = {
       "3017620422003": {
         code: "3017620422003", product_type: "food", product_name: "Spread A",
-        nutriments: { "energy-kcal_100g": 500, sugars_100g: 45, proteins_100g: 7 }
+        nutrition: { aggregated_set: { per: "100g", nutrients: {
+          "energy-kcal": { value: 500 }, sugars: { value: 45 }, proteins: { value: 7 }
+        } } }
       },
       "5000159484695": {
         code: "5000159484695", product_type: "food", product_name: "Spread B",
-        nutriments: { "energy-kcal_100g": 400, sugars_100g: 20, proteins_100g: 8 }
+        nutrition: { aggregated_set: { per: "100g", nutrients: {
+          "energy-kcal": { value: 400 }, sugars: { value: 20 }, proteins: { value: 8 }
+        } } }
       },
       "5449000000996": {
         code: "5449000000996", product_type: "food", product_name: "Drink C",
-        nutriments: { "energy-kcal_100g": 5, sugars_100g: 0 }
+        nutrition: { aggregated_set: { per: "100g", nutrients: {
+          "energy-kcal": { value: 5 }, sugars: { value: 0 }
+        } } }
       }
     };
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
