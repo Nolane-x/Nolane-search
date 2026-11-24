@@ -397,6 +397,27 @@ describe("Wave 52 media and product discovery", () => {
     expect(legacy.product.name).toBe("Legacy-shaped product");
   });
 
+  it("keeps absent nutrition unreferenced and rejects negative nutrient readings", async () => {
+    let call = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      call += 1;
+      return json({ status: "success", product: call === 1 ? {
+        code: "3017620422003", product_type: "food", product_name: "Invalid reading",
+        nutrition: { aggregated_set: { per: "100g", nutrients: {
+          sugars: { value: -3 }, proteins: { value: 4 }
+        } } }
+      } : {
+        code: "3017620422004", product_type: "food", product_name: "No nutrition recorded"
+      } });
+    }));
+    const invalid = JSON.parse(await lookupFoodProduct("3017620422003"));
+    const absent = JSON.parse(await lookupFoodProduct("3017620422004"));
+    expect(invalid.product.nutrition_per_100g.sugars_g).toBeNull();
+    expect(invalid.product.nutrition_per_100g.proteins_g).toBe(4);
+    expect(absent.product.nutrition_reference).toBeNull();
+    expect(absent.product.nutrition_per_100g.energy_kcal).toBeNull();
+  });
+
   it("does not label per-100-ml data as per-100-g nutrition", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ status: "success", product: {
       code: "3017620422003", product_type: "food",
