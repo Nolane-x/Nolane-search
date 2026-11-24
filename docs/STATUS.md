@@ -3,7 +3,17 @@
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
-## Latest production release — Wave 52 (2026-11-24)
+## Latest production release — Wave 53 (2026-11-24)
+
+- [PR #112](https://github.com/Nolane-x/Nolane-search/pull/112) merged into \`main\` as \`e48d6e171c115b2d2154f273d81056cd8dd14bcb\`. Production adds five direct AI-callable consumer discovery operations: TheMealDB recipe search, one-field recipe filtering and full recipe details; Wikidata entity search in English/Vietnamese and bilingual entity lookup. The existing **534 file processors** remain unchanged.
+- PR CI [45408553468](https://github.com/Nolane-x/Nolane-search/actions/runs/45408553468) passed. Main CI [45408855220](https://github.com/Nolane-x/Nolane-search/actions/runs/45408855220) passed TypeScript, **32 Vitest files / 329 tests**, deployment-script checks, **449 Python runner tests** and Cloudflare Worker build.
+- Cloudflare deployment [45408855289](https://github.com/Nolane-x/Nolane-search/actions/runs/45408855289) succeeded: deployment secrets were validated, Worker uploaded, triggers deployed, Telegram webhook checked and commands registered. Worker Version ID: \`e5dcdc69-0a58-4b37-9933-0ab73c0fb6ef\`.
+- Worker export/build and public \`/health\` smoke [45408855306](https://github.com/Nolane-x/Nolane-search/actions/runs/45408855306) succeeded. Health returned \`ok: true\`, database \`reachable\`, and \`archiveEnabled: true\`. D1 migration was skipped because no schema changed.
+- Research: [TOOL-RESEARCH-2026-11-24-WAVE53.md](TOOL-RESEARCH-2026-11-24-WAVE53.md). Handoff: [HANDOFF-WAVE-FIFTY-THREE-2026-11-24.md](HANDOFF-WAVE-FIFTY-THREE-2026-11-24.md).
+- Provider boundaries: TheMealDB's public test key is intended for development/educational use; a supporter key is required before public app-store distribution. One free filter request supports one field only. Recipe instructions/ingredients may be incomplete and are not allergen or food-safety guarantees. Wikidata is community-maintained and should be used for discovery/disambiguation, not authoritative verification.
+- **Downloader status:** Wave 53 does not enable yt-dlp/gallery-dl/FFmpeg downloads or private share links. The prior R2 activation, private bucket, multipart upload, access-controlled signed links, HTTP Range playback and expiry-cleanup gates remain open. No public bucket or public GitHub artifact was introduced.
+
+## Previous production release — Wave 52 (2026-11-24)
 
 - [PR #110](https://github.com/Nolane-x/Nolane-search/pull/110) merged into main as `26ffcb727d606a5a16ef7574ef98d81f426956b0`. Production adds an authenticated `/media` portal and three model-callable tools: Wikimedia Commons image discovery with per-file license/credit metadata, NASA image/video discovery with public MP4 playback when a trusted asset manifest provides a direct MP4, and Open Food Facts barcode lookup. The **534 file processors** remain unchanged.
 - PR CI [45400994501](https://github.com/Nolane-x/Nolane-search/actions/runs/45400994501) and main CI [45401261882](https://github.com/Nolane-x/Nolane-search/actions/runs/45401261882) succeeded. Main CI passed TypeScript, **31 Vitest files / 320 tests**, deployment-script checks, **449 Python runner tests** and Worker build.
