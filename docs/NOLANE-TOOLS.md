@@ -1,4 +1,4 @@
-Nolane Tools hiện có **472 công cụ đã được đăng ký và triển khai trên production** sau Wave 39, phát hành ngày 2026-11-23 trên Cloudflare Worker `nolane-search`. [PR #92](https://github.com/Nolane-x/Nolane-search/pull/92) đã merge vào `main` bằng commit `b81dfde15bf5d63846cac0d92378cb62eefcb2ec`. Main CI [45202094613](https://github.com/Nolane-x/Nolane-search/actions/runs/45202094613), Worker export và live health smoke [45202094578](https://github.com/Nolane-x/Nolane-search/actions/runs/45202094578), Cloudflare deployment [45202094802](https://github.com/Nolane-x/Nolane-search/actions/runs/45202094802) đều thành công. Latest Worker Version ID: `10cdb714-b7f7-464b-9b75-f6390dde0b4c`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema. Tệp đầu vào tiếp tục được xử lý trên GitHub-hosted runner dùng một lần; không có dữ liệu file gốc mới được lưu vào D1. Nguồn upstream và phạm vi Wave 39 được ghi tại docs/TOOL-RESEARCH-2026-11-23-WAVE39.md.
+Nolane Tools hiện có **483 công cụ đã được đăng ký và triển khai trên production** sau Wave 40, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. [PR #93](https://github.com/Nolane-x/Nolane-search/pull/93) đã merge vào `main` bằng commit `110278e3e9ecfb34ed95f276f4a4dfb227c90813`. Main CI [45298825598](https://github.com/Nolane-x/Nolane-search/actions/runs/45298825598), Worker export và live health smoke [45298825585](https://github.com/Nolane-x/Nolane-search/actions/runs/45298825585), Cloudflare deployment [45298825591](https://github.com/Nolane-x/Nolane-search/actions/runs/45298825591) đều thành công. Latest Worker Version ID: `bb6be828-214c-44a0-9db9-bfc5b5690a52`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema. Tệp đầu vào tiếp tục được xử lý trên GitHub-hosted runner dùng một lần; Wave 40 không thêm kho lưu file hay bảng dữ liệu mới.
 
 ## Wave 39 — everyday-user calculators — deployed to production
 
@@ -19,9 +19,9 @@ Wave 39 increased the production catalog from **462 to 472 registered tools**. T
 
 Research: [TOOL-RESEARCH-2026-11-23-WAVE39.md](TOOL-RESEARCH-2026-11-23-WAVE39.md). Implementation record: [HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md](HANDOFF-WAVE-THIRTY-NINE-2026-11-23.md).
 
-## Wave 40 — everyday household, travel and device utilities — implementation branch, not production
+## Wave 40 — everyday household, travel and device utilities — deployed to production
 
-Wave 40 raises the branch catalog from **472 to 483 registered tools** (+11). The following user-facing processors are wired to the Python runner and direct AI text/JSON interface. Production remains at 472 until PR CI, merge and Cloudflare deployment succeed.
+Wave 40 increased the production catalog from **472 to 483 registered tools** (+11). The following user-facing processors are wired to the Python runner and direct AI text/JSON interface. PR #93, main CI, Worker export/health smoke and Cloudflare deployment are complete.
 
 | ID | Công cụ | Chức năng |
 |---|---|---|
