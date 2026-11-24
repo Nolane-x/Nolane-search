@@ -5,7 +5,6 @@ const USER_AGENT = "NolaneSearch/0.1 (+https://github.com/Nolane-x/Nolane-search
 const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
 const NASA_API = "https://images-api.nasa.gov";
 const NASA_ASSET_HOST = "images-assets.nasa.gov";
-const OFF_API = "https://world.openfoodfacts.org/api/v3/product";
 
 function object(value: unknown, label: string): Obj {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(label + " returned an unexpected response.");
@@ -454,13 +453,13 @@ function isOffRedirectTarget(value: string, barcode: string, base: URL): URL | n
   try {
     const target = new URL(value, base);
     const hosts = Object.values(OFF_HOSTS);
-    const pathPattern = new RegExp("^/api/v3/product/" + barcode + "(?:\\\\.json)?$");
+    const pathPattern = new RegExp("^/api/v3/product/" + barcode + "(?:\\.json)?$");
     if (target.protocol !== "https:" || !hosts.includes(target.hostname) || target.username || target.password ||
         target.port || !pathPattern.test(target.pathname)) return null;
     return target;
   } catch { return null; }
 }
-async function fetchOffProductResponse(url: URL, provider: string, allowRedirect: boolean): Promise<Response | null> {
+async function fetchOffProductResponse(url: URL, provider: string, barcode: string, allowRedirect: boolean): Promise<{response:Response;finalUrl:URL}|null> {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -480,10 +479,10 @@ async function fetchOffProductResponse(url: URL, provider: string, allowRedirect
     const location = response.headers.get("location");
     await response.body?.cancel().catch(() => undefined);
     if (!allowRedirect || !location) throw new Error(provider + " returned an unexpected redirect.");
-    const target = isOffRedirectTarget(location, url.pathname.split("/").pop()!.replace(/\\.json$/, ""), url);
+    const target = isOffRedirectTarget(location, barcode, url);
     if (!target) throw new Error(provider + " returned a redirect outside the approved Open Facts databases.");
     target.search = url.search;
-    return fetchOffProductResponse(target, provider, false);
+    return fetchOffProductResponse(target, provider, barcode, false);
   }
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
@@ -492,15 +491,15 @@ async function fetchOffProductResponse(url: URL, provider: string, allowRedirect
     }
     throw new Error(provider + " returned HTTP " + response.status + ".");
   }
-  return response;
+  return { response, finalUrl: url };
 }
 async function readOffProduct(barcode: string, type: OffProductType): Promise<OffReadResult> {
   const initialHost = type === "all" ? OFF_HOSTS.food : OFF_HOSTS[type];
   const url = buildOffProductUrl(initialHost, barcode, type);
   const provider = type === "all" ? "Open Facts" : OFF_DATABASE_NAMES[type];
-  const response = await fetchOffProductResponse(url, provider, true);
-  if (!response) return { status: "not_found", host: initialHost };
-  const payload = object(await readJsonResponse<unknown>(response, 400_000), provider);
+  const fetched = await fetchOffProductResponse(url, provider, barcode, true);
+  if (!fetched) return { status: "not_found", host: initialHost };
+  const payload = object(await readJsonResponse<unknown>(fetched.response, 400_000), provider);
   const statusValue = payload.status;
   const isSuccessful = statusValue === "success" || statusValue === "success_with_warnings" ||
     statusValue === "success_with_errors" || statusValue === 1;
@@ -509,13 +508,13 @@ async function readOffProduct(barcode: string, type: OffProductType): Promise<Of
       const errors = Array.isArray(payload.errors) ? payload.errors.length : 0;
       if (errors) throw new Error(provider + " could not read this product (API reported a failure).");
     }
-    return { status: "not_found", host: new URL(response.url || url.toString()).hostname };
+    return { status: "not_found", host: fetched.finalUrl.hostname };
   }
-  return { status: "ok", host: new URL(response.url || url.toString()).hostname, row: payload.product as Obj };
+  return { status: "ok", host: fetched.finalUrl.hostname, row: payload.product as Obj };
 }
 function offNumber(value: unknown): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "string" && /^-?\\d+(?:\\.\\d+)?$/.test(value.trim())) {
+  if (typeof value === "string" && /^-?\d+(?:\.\d+)?$/.test(value.trim())) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
@@ -535,7 +534,7 @@ function offImage(value: unknown): string | null {
 }
 function offString(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
-  const clean = value.replace(/\\u0000/g, "").trim();
+  const clean = value.replace(/\u0000/g, "").trim();
   return clean ? clean.slice(0, max) : null;
 }
 function offList(value: unknown, maxItems = 20): string[] {
