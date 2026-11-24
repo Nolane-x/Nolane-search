@@ -17,7 +17,7 @@ const HTML = String.raw`<!doctype html>
 <span class="eyebrow">MEDIA DISCOVERY · IMAGE & VIDEO</span>
 <h1>Khám phá hình ảnh và video.</h1>
 <p>Tìm ảnh có thông tin tác giả và giấy phép trên Wikimedia Commons; khám phá tư liệu NASA và phát trực tiếp các video có MP4 công khai ngay trong trình duyệt.</p>
-<form id="search" class="search"><input id="q" autocomplete="off" minlength="2" maxlength="160" placeholder="Ví dụ: aurora, Hubble telescope, coral reef…" required><select id="kind" aria-label="Loại media"><option value="all">Ảnh và video</option><option value="image">Chỉ hình ảnh</option><option value="video">Chỉ video</option></select><select id="provider" aria-label="Nguồn media"><option value="all">Tất cả nguồn</option><option value="commons">Wikimedia Commons</option><option value="nasa">NASA</option><option value="openverse">Openverse · ảnh có giấy phép mở</option><option value="archive">Internet Archive · video công cộng</option></select><button id="go" class="btn" type="submit">Tìm media</button></form>
+<form id="search" class="search"><input id="q" autocomplete="off" minlength="2" maxlength="160" placeholder="Ví dụ: aurora, Hubble telescope, coral reef…" required><select id="kind" aria-label="Loại media"><option value="all">Ảnh, video và audio</option><option value="image">Chỉ hình ảnh</option><option value="video">Chỉ video</option><option value="audio">Chỉ audio</option></select><select id="provider" aria-label="Nguồn media"><option value="all">Tất cả nguồn</option><option value="commons">Wikimedia Commons</option><option value="nasa">NASA</option><option value="openverse">Openverse · ảnh có giấy phép mở</option><option value="archive">Internet Archive · video/audio công cộng</option></select><button id="go" class="btn" type="submit">Tìm media</button></form>
 <div class="tabs"><button class="tab active" data-kind="all">Tất cả</button><button class="tab" data-kind="image">Hình ảnh</button><button class="tab" data-kind="video">Video</button></div>
 </section>
 <div class="meta"><span id="status">Đang kiểm tra phiên đăng nhập…</span><span id="count"></span></div>
@@ -50,21 +50,23 @@ function card(item){
  var mediaUrl=item.provider==='Openverse'?safeUrl(item.mediaUrl,null):item.provider==='Internet Archive'?safeUrl(item.mediaUrl,['archive.org']):safeUrl(item.mediaUrl,imageHosts);
  if(item.mediaType==='video'&&mediaUrl){
   var video=document.createElement('video');video.controls=true;video.preload='metadata';video.playsInline=true;video.src=mediaUrl;preview.appendChild(video);
+ }else if(item.mediaType==='audio'&&mediaUrl){
+  var audio=document.createElement('audio');audio.controls=true;audio.preload='metadata';audio.src=mediaUrl;preview.appendChild(audio);
  }else if(imageUrl){
   var img=document.createElement('img');img.loading='lazy';img.alt=item.title||'';img.src=imageUrl;preview.appendChild(img);
- }else{var empty=document.createElement('div');empty.className='no-preview';empty.textContent=item.mediaType==='video'?'Nguồn chưa cung cấp MP4 phát trực tiếp':'Không có ảnh xem trước';preview.appendChild(empty)}
+ }else{var empty=document.createElement('div');empty.className='no-preview';empty.textContent=item.mediaType==='video'?'Nguồn chưa cung cấp MP4 phát trực tiếp':item.mediaType==='audio'?'Không có audio phát trực tiếp':'Không có ảnh xem trước';preview.appendChild(empty)}
  card.appendChild(preview);
  var body=document.createElement('div');body.className='body';
  var title=document.createElement('h2');title.textContent=item.title||'Media không có tiêu đề';body.appendChild(title);
  if(item.description){var d=document.createElement('p');d.className='description';d.textContent=item.description;body.appendChild(d)}
  var badges=document.createElement('div');badges.className='badges';
- [item.provider,item.mediaType==='video'?'VIDEO':'IMAGE',item.license].filter(Boolean).forEach(function(value){var b=document.createElement('span');b.className='badge';b.textContent=value;badges.appendChild(b)});
+ [item.provider,item.mediaType==='video'?'VIDEO':item.mediaType==='audio'?'AUDIO':'IMAGE',item.license].filter(Boolean).forEach(function(value){var b=document.createElement('span');b.className='badge';b.textContent=value;badges.appendChild(b)});
  body.appendChild(badges);
  if(item.credit){var credit=document.createElement('div');credit.className='credit';credit.textContent='Ghi công: '+item.credit;body.appendChild(credit)}
  var actions=document.createElement('div');actions.className='actions';
  var source=item.provider==='Openverse'?safeUrl(item.sourceUrl,null):item.provider==='Internet Archive'?safeUrl(item.sourceUrl,['archive.org']):safeUrl(item.sourceUrl,['commons.wikimedia.org','images.nasa.gov','www.nasa.gov']);
  var sourceLink=anchor('Trang nguồn',source,false);if(sourceLink)actions.appendChild(sourceLink);
- var file=anchor(item.mediaType==='video'?'Mở video gốc':'Ảnh gốc',mediaUrl,true);if(file)actions.appendChild(file);
+ var file=anchor(item.mediaType==='video'?'Mở video gốc':item.mediaType==='audio'?'Mở audio gốc':'Ảnh gốc',mediaUrl,true);if(file)actions.appendChild(file);
  if(item.licenseUrl){var license=safeUrl(item.licenseUrl,['creativecommons.org','rightsstatements.org','www.nasa.gov']);var licenseLink=anchor('Giấy phép',license,false);if(licenseLink)actions.appendChild(licenseLink)}
  body.appendChild(actions);card.appendChild(body);return card;
 }
