@@ -56,7 +56,7 @@ describe("Wave 57 anime and manga discovery", () => {
         broadcast: { string: "Sundays at 17:00 (JST)" },
         titles: [{ type: "Default", title: "Fullmetal Alchemist: Brotherhood" }, { type: "Japanese", title: "鋼の錬金術師 FULLMETAL ALCHEMIST" }],
         themes: [{ name: "Military" }], demographics: [{ name: "Shounen" }]
-      } }));
+      } });
     }));
     const result = JSON.parse(await runAnimeCatalogTool("get_anime_details", { anime_id: "5114" }));
     expect(result.item).toMatchObject({
@@ -105,7 +105,7 @@ describe("Wave 57 anime and manga discovery", () => {
         authors: [{ name: "Oda, Eiichiro" }],
         genres: [{ name: "Adventure" }], demographics: [{ name: "Shounen" }],
         titles: [{ type: "Default", title: "One Piece" }]
-      } }));
+      } });
     }));
     const result = JSON.parse(await runAnimeCatalogTool("get_manga_details", { manga_id: 13 }));
     expect(result.item).toMatchObject({
