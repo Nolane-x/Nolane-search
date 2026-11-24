@@ -1,4 +1,4 @@
-const HOUSEHOLD_TOOL_IDS = new Set([
+export const HOUSEHOLD_TOOL_IDS = new Set([
   "appliance-energy-calculator", "floor-tile-calculator", "concrete-volume-calculator",
   "soil-mulch-calculator", "household-budget-calculator", "savings-goal-calculator",
   "travel-budget-calculator", "download-time-calculator", "work-hours-calculator",
