@@ -495,12 +495,14 @@ def warranty_claim_assistant(path: Path) -> dict:
     language = str(data.get("language", "vi")).strip().lower()
     if language not in {"vi", "en"}:
         raise RuntimeError("language must be vi or en.")
+    if purchase > as_of:
+        raise RuntimeError("purchase_date cannot be after as_of_date.")
     warranty_end = _month_add(purchase, months)
     if as_of <= warranty_end:
-        status = "Inside the user-entered estimated warranty period"
+        status = "Trong thời hạn bảo hành ước tính theo dữ liệu đã nhập" if language == "vi" else "Inside the user-entered estimated warranty period"
         remaining = (warranty_end - as_of).days
     else:
-        status = "User-entered estimated warranty end date has passed"
+        status = "Ngày kết thúc bảo hành ước tính đã qua" if language == "vi" else "User-entered estimated warranty end date has passed"
         remaining = 0
     if language == "vi":
         lines = [
