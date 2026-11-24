@@ -32,6 +32,20 @@ function safeHttpUrl(value: unknown, host: string): string | null {
     return url.toString();
   } catch { return null; }
 }
+function safeExternalHttpsUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.port || url.username || url.password) return null;
+    return url.toString();
+  } catch { return null; }
+}
+function metadataText(value: unknown, max = 500): string | null {
+  if (typeof value === "string") return htmlText(value, max);
+  if (Array.isArray(value)) return value.flatMap(item => typeof item === "string" ? [item] : [])
+    .map(item => item.trim()).filter(Boolean).join(", ").slice(0, max) || null;
+  return null;
+}
 async function fetchJson<T>(url: URL, provider: string, maxBytes = 500_000): Promise<T> {
   let response: Response;
   try {
@@ -72,7 +86,7 @@ function extValue(metadata: Obj, key: string): string | null {
 export interface MediaSearchItem {
   id: string;
   title: string;
-  provider: "Wikimedia Commons" | "NASA";
+  provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive";
   mediaType: "image" | "video";
   sourceUrl: string;
   previewUrl: string | null;
@@ -232,6 +246,135 @@ export async function searchNasaMedia(queryInput: unknown, mediaTypeInput?: unkn
   };
 }
 
+export async function searchOpenverseImages(queryInput: unknown, limitInput?: unknown): Promise<{status:string;source:string;query:string;items:MediaSearchItem[];note:string}> {
+  const query = cleanText(queryInput, "query", 2, 160);
+  const limit = boundedInt(limitInput, "limit", 8, 1, 10);
+  const url = new URL("https://api.openverse.org/v1/images/");
+  url.searchParams.set("q", query);
+  url.searchParams.set("page_size", String(limit));
+  url.searchParams.set("mature", "false");
+  url.searchParams.set("filter_dead", "true");
+  const payload = object(await fetchJson<unknown>(url, "Openverse", 400_000), "Openverse image search");
+  const rows = Array.isArray(payload.results) ? payload.results : [];
+  const items = rows.flatMap((raw): MediaSearchItem[] => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const row = raw as Obj;
+    if (row.mature === true || row.removed_from_source === true) return [];
+    const id = typeof row.id === "string" && /^[a-zA-Z0-9-]{8,80}$/.test(row.id) ? row.id : "";
+    const title = metadataText(row.title, 220);
+    const mediaUrl = safeExternalHttpsUrl(row.url);
+    const previewUrl = safeHttpUrl(row.thumbnail, "api.openverse.org");
+    const sourceUrl = safeExternalHttpsUrl(row.foreign_landing_url);
+    const licenseCode = typeof row.license === "string" ? row.license.toLowerCase().slice(0, 40) : "";
+    const licenseUrl = safeHttpUrl(row.license_url, "creativecommons.org");
+    if (!id || !title || !mediaUrl || !previewUrl || !sourceUrl || !licenseCode || !licenseUrl) return [];
+    const version = typeof row.license_version === "string" ? row.license_version.slice(0, 20) : "";
+    return [{
+      id,
+      title,
+      provider: "Openverse",
+      mediaType: "image",
+      sourceUrl,
+      previewUrl,
+      mediaUrl,
+      description: metadataText(row.description, 600),
+      credit: metadataText(row.creator, 240),
+      license: (licenseCode.toUpperCase() + (version ? " " + version : "")).slice(0, 60),
+      licenseUrl,
+      dateCreated: typeof row.indexed_on === "string" ? row.indexed_on.slice(0, 40) : null,
+      width: typeof row.width === "number" && Number.isFinite(row.width) ? row.width : null,
+      height: typeof row.height === "number" && Number.isFinite(row.height) ? row.height : null,
+    }];
+  }).slice(0, limit);
+  return {
+    status: items.length ? "ok" : "not_found",
+    source: "Openverse",
+    query,
+    items,
+    note: "Openverse indexes openly licensed and public-domain images, but the license may include attribution, share-alike, non-commercial or no-derivatives conditions. Preserve creator and source links and review the original license before reuse; open licensing does not automatically permit every use.",
+  };
+}
+
+async function internetArchiveItem(identifier: string): Promise<MediaSearchItem | null> {
+  const url = new URL("https://archive.org/metadata/" + encodeURIComponent(identifier));
+  const payload = object(await fetchJson<unknown>(url, "Internet Archive item metadata", 350_000), "Internet Archive item metadata");
+  const metadata = payload.metadata && typeof payload.metadata === "object" && !Array.isArray(payload.metadata)
+    ? payload.metadata as Obj : {};
+  const restricted = [metadata["access-restricted-item"], metadata["access-restricted"], metadata.noindex]
+    .some(value => value === true || value === 1 || value === "true" || value === "1");
+  if (restricted || metadata.mediatype !== "movies") return null;
+  const files = Array.isArray(payload.files) ? payload.files : [];
+  const candidates = files.flatMap(raw => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const file = raw as Obj;
+    if (file.private === true || file.private === 1 || file.private === "true" || file.private === "1") return [];
+    if (file.source && file.source !== "original") return [];
+    const name = typeof file.name === "string" ? file.name : "";
+    const format = typeof file.format === "string" ? file.format.toLowerCase() : "";
+    if (!name || name.length > 300 || /[\/\\\u0000-\u001f]/.test(name) || name === "." || name === "..") return [];
+    if (!/\.(mp4|m4v|webm|ogv)$/i.test(name)) return [];
+    if (!/(mpeg.?4|video|webm|ogg)/i.test(format)) return [];
+    const size = typeof file.size === "string" || typeof file.size === "number" ? Number(file.size) : 0;
+    if (!Number.isSafeInteger(size) || size <= 0) return [];
+    return [{ name, size, format }];
+  });
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => {
+    const score = (file: {name:string;format:string}) => /\.(mp4|m4v)$/i.test(file.name) ? 0 : /webm/i.test(file.name) ? 1 : 2;
+    return score(a) - score(b) || a.size - b.size;
+  });
+  const selected = candidates[0];
+  const title = metadataText(metadata.title, 220) ?? identifier;
+  const path = selected.name.split("/").map(segment => encodeURIComponent(segment)).join("/");
+  const licenseUrl = safeHttpUrl(metadata.licenseurl, "creativecommons.org");
+  return {
+    id: identifier,
+    title,
+    provider: "Internet Archive",
+    mediaType: "video",
+    sourceUrl: "https://archive.org/details/" + encodeURIComponent(identifier),
+    previewUrl: safeHttpUrl("https://archive.org/services/img/" + encodeURIComponent(identifier), "archive.org"),
+    mediaUrl: "https://archive.org/download/" + encodeURIComponent(identifier) + "/" + path,
+    description: metadataText(metadata.description, 700),
+    credit: metadataText(metadata.creator ?? metadata.contributor, 240),
+    license: metadataText(metadata.license ?? metadata.rights, 120) ?? (licenseUrl ? "Creative Commons (see item)" : "Rights not specified"),
+    licenseUrl,
+    dateCreated: metadataText(metadata.year ?? metadata.date, 40),
+  };
+}
+
+export async function searchInternetArchiveVideos(queryInput: unknown, limitInput?: unknown): Promise<{status:string;source:string;query:string;items:MediaSearchItem[];note:string}> {
+  const query = cleanText(queryInput, "query", 2, 140);
+  const limit = boundedInt(limitInput, "limit", 4, 1, 5);
+  const phrase = query.replace(/["\\]/g, " ").replace(/[^\p{L}\p{N}\s-]/gu, " ").replace(/\s+/g, " ").trim();
+  if (phrase.length < 2) throw new Error("query must include searchable letters or numbers.");
+  const url = new URL("https://archive.org/advancedsearch.php");
+  url.searchParams.set("q", 'mediatype:movies AND title:("' + phrase + '")');
+  for (const field of ["identifier", "title", "year", "creator", "mediatype"]) url.searchParams.append("fl[]", field);
+  url.searchParams.set("rows", String(limit));
+  url.searchParams.set("page", "1");
+  url.searchParams.set("output", "json");
+  const payload = object(await fetchJson<unknown>(url, "Internet Archive search", 300_000), "Internet Archive search");
+  const response = payload.response && typeof payload.response === "object" && !Array.isArray(payload.response)
+    ? payload.response as Obj : {};
+  const docs = Array.isArray(response.docs) ? response.docs : [];
+  const identifiers = docs.flatMap(raw => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const identifier = (raw as Obj).identifier;
+    return typeof identifier === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(identifier)
+      ? [identifier] : [];
+  }).slice(0, limit);
+  const settled = await Promise.allSettled(identifiers.map(identifier => internetArchiveItem(identifier)));
+  const items = settled.flatMap(result => result.status === "fulfilled" && result.value ? [result.value] : []);
+  return {
+    status: items.length ? "ok" : "not_found",
+    source: "Internet Archive",
+    query,
+    items,
+    note: "Only publicly indexed Internet Archive movie items with a direct original MP4, M4V, WebM or Ogg video file are returned. Access-restricted/private files are omitted. Rights vary by item and may be missing or incomplete: check the item page and rights statement before reuse. Playback links point to archive.org and are not rehosted by Nolane.",
+  };
+}
+
 export async function lookupFoodProduct(barcodeInput: unknown): Promise<string> {
   if (typeof barcodeInput !== "string" || !/^\d{8,14}$/.test(barcodeInput.trim())) {
     throw new Error("barcode must contain 8 to 14 digits (EAN/UPC).");
@@ -300,6 +443,12 @@ export async function runMediaDiscoveryTool(name: string, rawArgs: unknown): Pro
   }
   if (name === "search_nasa_media") {
     return JSON.stringify(await searchNasaMedia(args.query, args.media_type, args.limit));
+  }
+  if (name === "search_openverse_images") {
+    return JSON.stringify(await searchOpenverseImages(args.query, args.limit));
+  }
+  if (name === "search_internet_archive_videos") {
+    return JSON.stringify(await searchInternetArchiveVideos(args.query, args.limit));
   }
   if (name === "lookup_food_product") return lookupFoodProduct(args.barcode);
   throw new Error("Unknown media discovery tool.");
