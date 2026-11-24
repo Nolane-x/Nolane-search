@@ -66,6 +66,11 @@ from wave41 import (
     event_food_calculator, fuel_economy_calculator, gas_cylinder_runtime_calculator,
     shipping_volumetric_weight_calculator, storage_capacity_calculator,
 )
+from wave42 import (
+    meal_shopping_list_planner, travel_packing_checklist, study_plan_scheduler,
+    weekly_chore_planner, subscription_cost_calculator, commute_cost_calculator,
+    reading_plan_calculator, grocery_budget_planner,
+)
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
@@ -224,6 +229,8 @@ RUNNERS = {
     "wallpaper-roll-calculator", "curtain-fabric-calculator", "moving-box-calculator",
     "event-food-calculator", "fuel-economy-calculator", "gas-cylinder-runtime-calculator",
     "shipping-volumetric-weight-calculator", "storage-capacity-calculator",
+    "meal-shopping-list-planner", "travel-packing-checklist", "study-plan-scheduler", "weekly-chore-planner",
+    "subscription-cost-calculator", "commute-cost-calculator", "reading-plan-calculator", "grocery-budget-planner",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -12515,6 +12522,14 @@ TOOLS={
  "gas-cylinder-runtime-calculator":gas_cylinder_runtime_calculator,
  "shipping-volumetric-weight-calculator":shipping_volumetric_weight_calculator,
  "storage-capacity-calculator":storage_capacity_calculator,
+ "meal-shopping-list-planner":meal_shopping_list_planner,
+ "travel-packing-checklist":travel_packing_checklist,
+ "study-plan-scheduler":study_plan_scheduler,
+ "weekly-chore-planner":weekly_chore_planner,
+ "subscription-cost-calculator":subscription_cost_calculator,
+ "commute-cost-calculator":commute_cost_calculator,
+ "reading-plan-calculator":reading_plan_calculator,
+ "grocery-budget-planner":grocery_budget_planner,
 
 }
 
