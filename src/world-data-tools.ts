@@ -86,8 +86,8 @@ function normalizeCountry(row: Obj): Obj | null {
     region: typeof region.value === "string" ? region.value : null,
     income_level: typeof income.value === "string" ? income.value : null,
     lending_type: typeof lending.value === "string" ? lending.value : null,
-    latitude: numberOrNull(typeof row.latitude === "string" ? Number(row.latitude) : row.latitude),
-    longitude: numberOrNull(typeof row.longitude === "string" ? Number(row.longitude) : row.longitude),
+    latitude: numberOrNull(typeof row.latitude === "string" && row.latitude.trim() ? Number(row.latitude) : row.latitude),
+    longitude: numberOrNull(typeof row.longitude === "string" && row.longitude.trim() ? Number(row.longitude) : row.longitude),
     world_bank_country_url: "https://api.worldbank.org/v2/country/" + iso3 + "?format=json",
   };
 }
@@ -147,7 +147,7 @@ function indicatorKeys(value: unknown): IndicatorKey[] {
   const seen = new Set<string>();
   const result: IndicatorKey[] = [];
   for (const item of value) {
-    if (typeof item !== "string" || !(item in INDICATORS)) throw new Error("Unsupported indicator key: " + String(item) + ".");
+    if (typeof item !== "string" || !Object.prototype.hasOwnProperty.call(INDICATORS, item)) throw new Error("Unsupported indicator key: " + String(item) + ".");
     if (!seen.has(item)) { seen.add(item); result.push(item as IndicatorKey); }
   }
   return result;
