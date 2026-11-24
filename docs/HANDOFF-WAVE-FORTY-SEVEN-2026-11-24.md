@@ -1,9 +1,9 @@
 # Wave 47 — implementation handoff
 
 Date: 2026-11-24
-Branch: feat/wave-47-live-everyday-information
-Base main commit: 9f8d4ea0972299d7f09d59889d68557cbacbedf5
-Status: implementation committed; PR, CI and deployment pending.
+PR: https://github.com/Nolane-x/Nolane-search/pull/100
+Merge commit: 76337ff06613b851359ade8330966c925b825316
+Status: merged and deployed to production on 2026-11-24.
 
 ## Scope
 
@@ -33,9 +33,15 @@ Five AI-callable live-information functions, separate from the unchanged 534 fil
 - Open-Meteo's free API is non-commercial only and each response includes CC BY 4.0 attribution.
 - No API credentials, D1 migration, dependencies, persistent user profile or upstream copied source.
 
-## Acceptance still pending
+## Production verification
 
-1. CI type-check, complete Vitest suite, Python runner tests and Worker build.
-2. Merge to main and verify Cloudflare deployment/health.
-3. Record actual main-branch deployment run and Worker version.
-4. Test live Telegram/Web Chat requests for one weather lookup, one currency conversion and one country holiday lookup.
+- PR CI #45335641289 passed.
+- Main CI #45335826762 passed TypeScript, all Vitest tests, deployment checks, Python runner tests and Worker build.
+- Cloudflare deploy #45335826780 passed source verification, production bundle dry-run, Worker/runtime-secret upload and Telegram webhook + bot menu registration.
+- Export build #45335826815 passed and completed its public Worker `/health` smoke check.
+- No D1 migration was required.
+- Deployment workflow did not return a Worker version identifier in the visible run summary; do not invent one.
+
+## Remaining product acceptance
+
+The pipeline confirms successful deployment and health, but an owner-side real Telegram/Web Chat acceptance remains useful for a weather lookup, a currency conversion and a public-holiday query. Open-Meteo free API remains restricted to non-commercial use.
