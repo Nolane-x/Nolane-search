@@ -10,14 +10,13 @@ Extend the authenticated Media Portal and AI discovery catalog from images/video
 
 ## Official source and metadata model
 
-Internet Archive metadata documentation:
-https://internetarchive.readthedocs.io/en/stable/metadata.html
+Internet Archive item search API: https://doc-tools.readthedocs.io/en/ia-test-gsod/item-search-apis.html
 
-Internet Archive metadata API reference:
-https://internetarchive.readthedocs.io/en/stable/api.html
+Internet Archive metadata read API: https://doc-tools.readthedocs.io/en/ia-test-gsod/md-read.html
 
-Internet Archive CLI/API documentation:
-https://internetarchive.readthedocs.io/en/stable/cli.html
+Internet Archive metadata fields: https://internetarchive.readthedocs.io/en/stable/metadata.html
+
+Internet Archive files, formats and derivatives: https://archivesupport.zendesk.com/hc/en-us/articles/360014487651-Files-Formats-and-Derivatives-A-Basic-Guide
 
 The Archive's metadata model defines `mediatype=audio` for the majority of audio items and `mediatype=movies` for video. Live Music Archive items may use the distinct `etree` mediatype; this first integration does not query `etree` because it has separate upload/metadata conventions.
 
@@ -36,7 +35,7 @@ The Archive's metadata model defines `mediatype=audio` for the majority of audio
 
 - Explicit `access-restricted-item`, `access-restricted` and `noindex` items are omitted.
 - Files marked `private` are omitted.
-- Files explicitly marked as derivatives are omitted; only an original file or a file with no derivative marker is considered.
+- Only files explicitly marked `source: original` are returned; a missing source marker is treated as unverified and rejected. Derivatives, metadata XML, transcripts, cover art and spectrogram/research files are not exposed as playable audio.
 - Metadata item IDs are constrained to a safe identifier alphabet before API calls.
 - Filenames with slash, backslash, control characters, dot traversal names or excessive length are omitted.
 - A matching extension alone is insufficient: the Archive file-format metadata must also identify audio.
