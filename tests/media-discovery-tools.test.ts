@@ -164,7 +164,7 @@ describe("Wave 52 media and product discovery", () => {
       expect(url.hostname).toBe("archive.org");
       expect(new Headers(init?.headers).get("user-agent")).toContain("NolaneSearch");
       if (url.pathname === "/advancedsearch.php") {
-        expect(url.searchParams.get("q")).toContain("mediatype:movies");
+        expect(url.searchParams.get("q")).toBe('title:"public documentary" AND mediatype:movies');
         expect(url.searchParams.getAll("fl[]")).toContain("identifier");
         expect(url.searchParams.get("rows")).toBe("2");
         return json({ response: { docs: [{ identifier: "public-film" }, { identifier: "restricted-film" }] } });
