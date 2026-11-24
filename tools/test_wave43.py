@@ -51,7 +51,7 @@ class Wave43Tests(unittest.TestCase):
         })
         self.assertIn("2026-11-23 | Monstera | Water", report)
         self.assertIn("OVERDUE by 1 day(s)", report)
-        self.assertIn("next due 2026-12-06", report)
+        self.assertIn("2026-12-06 | Monstera | Rotate pot", report)
 
     def test_garden_bed_capacity_uses_user_supplied_spacing(self):
         _, report = self.report(wave43.garden_bed_capacity_calculator, "garden", {
