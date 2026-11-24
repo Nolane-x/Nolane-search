@@ -519,6 +519,371 @@ async function postalCodeLookup(args: Obj): Promise<string> {
   });
 }
 
+
+let lastDictionaryRequestAt = 0;
+let lastGutendexRequestAt = 0;
+let lastAicRequestAt = 0;
+let lastEonetRequestAt = 0;
+
+function requireMinInterval(last: number, minimumMs: number, provider: string): number {
+  const now = Date.now();
+  if (now - last < minimumMs) {
+    throw new Error(provider + " requests are limited to one request per second per warm Worker isolate. Please retry shortly.");
+  }
+  return now;
+}
+
+function boundedString(value: unknown, key: string, max: number): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string") throw new Error(key + " must be text.");
+  const clean = value.normalize("NFKC").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  if (clean.length < 2 || clean.length > max) throw new Error(key + " must contain 2 to " + max + " characters.");
+  return clean;
+}
+
+function safeExternalHttpsUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password || !url.hostname.includes(".")) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function trustedHttpsUrl(value: unknown, allowedHosts: string[]): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value.startsWith("//") ? "https:" + value : value);
+    if (url.protocol !== "https:" || url.username || url.password || !allowedHosts.includes(url.hostname.toLowerCase())) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function defineEnglishWord(args: Obj): Promise<string> {
+  const word = text(args, "word", 50);
+  if (!/^[A-Za-z][A-Za-z'-]{0,49}$/.test(word)) {
+    throw new Error("Enter one English word using letters, apostrophes or hyphens only.");
+  }
+  lastDictionaryRequestAt = requireMinInterval(lastDictionaryRequestAt, 1000, "Free Dictionary API");
+  const normalized = word.toLowerCase();
+  const url = new URL("https://api.dictionaryapi.dev/api/v2/entries/en/" + encodeURIComponent(normalized));
+  let payload: unknown;
+  try {
+    payload = await getJson<unknown>(url, "Free Dictionary API");
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("HTTP 404")) {
+      return JSON.stringify({
+        status: "not_found",
+        word: normalized,
+        message: "No English entry was returned for this spelling. Check the spelling or try a different word.",
+        source: "Free Dictionary API",
+        source_url: "https://dictionaryapi.dev/",
+      });
+    }
+    throw error;
+  }
+  if (!Array.isArray(payload)) throw new Error("Free Dictionary API returned an unexpected dictionary record.");
+  const entries = payload.slice(0, 3).flatMap((raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const entry = raw as Obj;
+    const phonetics = Array.isArray(entry.phonetics) ? entry.phonetics : [];
+    const pronunciations = phonetics.slice(0, 5).flatMap((rawPhonetic) => {
+      if (!rawPhonetic || typeof rawPhonetic !== "object" || Array.isArray(rawPhonetic)) return [];
+      const phonetic = rawPhonetic as Obj;
+      const audio = trustedHttpsUrl(phonetic.audio, ["ssl.gstatic.com", "api.dictionaryapi.dev"]);
+      return [{
+        ipa: typeof phonetic.text === "string" ? phonetic.text.slice(0, 80) : null,
+        audio_url: audio,
+      }];
+    });
+    const meanings = Array.isArray(entry.meanings) ? entry.meanings.slice(0, 6).flatMap((rawMeaning) => {
+      if (!rawMeaning || typeof rawMeaning !== "object" || Array.isArray(rawMeaning)) return [];
+      const meaning = rawMeaning as Obj;
+      const definitions = Array.isArray(meaning.definitions) ? meaning.definitions.slice(0, 4).flatMap((rawDefinition) => {
+        if (!rawDefinition || typeof rawDefinition !== "object" || Array.isArray(rawDefinition)) return [];
+        const definition = rawDefinition as Obj;
+        if (typeof definition.definition !== "string") return [];
+        return [{
+          definition: definition.definition.slice(0, 700),
+          example: typeof definition.example === "string" ? definition.example.slice(0, 350) : null,
+          synonyms: Array.isArray(definition.synonyms) ? definition.synonyms.filter((item): item is string => typeof item === "string").slice(0, 6) : [],
+          antonyms: Array.isArray(definition.antonyms) ? definition.antonyms.filter((item): item is string => typeof item === "string").slice(0, 6) : [],
+        }];
+      }) : [];
+      if (!definitions.length) return [];
+      return [{
+        part_of_speech: typeof meaning.partOfSpeech === "string" ? meaning.partOfSpeech.slice(0, 40) : null,
+        definitions,
+      }];
+    }) : [];
+    if (!meanings.length) return [];
+    return [{
+      word: typeof entry.word === "string" ? entry.word.slice(0, 80) : normalized,
+      phonetic: typeof entry.phonetic === "string" ? entry.phonetic.slice(0, 100) : pronunciations.find(item => item.ipa)?.ipa ?? null,
+      pronunciations,
+      origin: typeof entry.origin === "string" ? entry.origin.slice(0, 500) : null,
+      meanings,
+    }];
+  });
+  if (!entries.length) return JSON.stringify({
+    status: "not_found", word: normalized, source: "Free Dictionary API",
+    message: "The provider returned no usable English definitions for this spelling.",
+  });
+  return JSON.stringify({
+    status: "ok",
+    source: "Free Dictionary API",
+    source_url: "https://dictionaryapi.dev/",
+    project_url: "https://github.com/meetDeveloper/freeDictionaryAPI",
+    word: normalized,
+    entries,
+    note: "Definitions are supplied by a community-maintained English dictionary API and may be incomplete. Pronunciation audio is linked from the provider's returned audio host. Results are short, on-demand lookup excerpts, not a licensed dictionary export.",
+  });
+}
+
+async function searchPublicDomainBooks(args: Obj): Promise<string> {
+  const query = text(args, "query", 140);
+  const languageRaw = args.language === undefined ? "en" : typeof args.language === "string" ? args.language.trim() : "";
+  if (!/^[A-Za-z]{2}$/.test(languageRaw)) throw new Error("language must be a two-letter language code, such as en, fr, de or es.");
+  const topic = boundedString(args.topic, "topic", 80);
+  const limit = integer(args.limit, "limit", 8, 1, 10);
+  lastGutendexRequestAt = requireMinInterval(lastGutendexRequestAt, 1000, "Gutendex");
+  const url = new URL("https://gutendex.com/books/");
+  url.searchParams.set("search", query);
+  url.searchParams.set("languages", languageRaw.toLowerCase());
+  url.searchParams.set("copyright", "false");
+  if (topic) url.searchParams.set("topic", topic);
+  url.searchParams.set("page", "1");
+  const data = obj(await getJson<unknown>(url, "Gutendex public-domain book catalog", {
+    "user-agent": "NolaneSearch/1.0 (https://github.com/Nolane-x/Nolane-search)",
+  }), "Gutendex");
+  const rawBooks = Array.isArray(data.results) ? data.results : [];
+  const books = rawBooks.slice(0, 32).flatMap((raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const book = raw as Obj;
+    if (book.copyright !== false || typeof book.id !== "number" || !Number.isSafeInteger(book.id) || book.id < 1 ||
+        typeof book.title !== "string") return [];
+    const authors = Array.isArray(book.authors) ? book.authors.slice(0, 4).flatMap((rawPerson) => {
+      if (!rawPerson || typeof rawPerson !== "object" || Array.isArray(rawPerson)) return [];
+      const person = rawPerson as Obj;
+      return [{
+        name: typeof person.name === "string" ? person.name.slice(0, 120) : "Unknown author",
+        birth_year: maybeNumber(person.birth_year),
+        death_year: maybeNumber(person.death_year),
+      }];
+    }) : [];
+    const subjects = Array.isArray(book.subjects) ? book.subjects.filter((item): item is string => typeof item === "string").slice(0, 6).map(item => item.slice(0, 120)) : [];
+    const bookshelves = Array.isArray(book.bookshelves) ? book.bookshelves.filter((item): item is string => typeof item === "string").slice(0, 5).map(item => item.slice(0, 100)) : [];
+    const languages = Array.isArray(book.languages) ? book.languages.filter((item): item is string => typeof item === "string").slice(0, 5) : [];
+    return [{
+      id: book.id,
+      title: book.title.slice(0, 240),
+      authors,
+      languages,
+      subjects,
+      bookshelves,
+      download_count: maybeNumber(book.download_count),
+      available_formats: book.formats && typeof book.formats === "object" && !Array.isArray(book.formats)
+        ? Object.keys(book.formats as Obj).filter(item => item.length <= 80).slice(0, 8)
+        : [],
+      catalog_url: "https://www.gutenberg.org/ebooks/" + book.id,
+      copyright_status: "Gutendex marks this record as public domain in the United States.",
+    }];
+  }).slice(0, limit);
+  return JSON.stringify({
+    status: "ok",
+    source: "Gutendex / Project Gutenberg catalog",
+    source_url: "https://gutendex.com/",
+    project_url: "https://github.com/garethbjohnson/gutendex",
+    query,
+    language: languageRaw.toLowerCase(),
+    public_domain_filter: "copyright=false (U.S. public-domain status as represented by Gutendex)",
+    total_matching_records: maybeNumber(data.count),
+    result_count: books.length,
+    books,
+    note: "Project Gutenberg follows U.S. copyright law. A book marked public domain in the United States may still be copyrighted or restricted in Vietnam or another country. Check local law before downloading, redistributing or reusing a title. This tool searches catalog metadata only; it does not download books.",
+  });
+}
+
+async function searchMuseumArtworks(args: Obj): Promise<string> {
+  const query = text(args, "query", 140);
+  const limit = integer(args.limit, "limit", 6, 1, 8);
+  lastAicRequestAt = requireMinInterval(lastAicRequestAt, 1000, "Art Institute of Chicago API");
+  const url = new URL("https://api.artic.edu/api/v1/artworks/search");
+  url.searchParams.set("params", JSON.stringify({
+    q: query,
+    query: { term: { is_public_domain: true } },
+    page: 1,
+    limit,
+    fields: [
+      "id", "title", "artist_title", "date_display", "medium_display", "dimensions",
+      "main_reference_number", "image_id", "is_public_domain", "copyright_notice",
+      "web_url", "place_of_origin", "artwork_type_title",
+    ],
+  }));
+  const data = obj(await getJson<unknown>(url, "Art Institute of Chicago API", {
+    "AIC-User-Agent": "NolaneSearch/1.0 (https://github.com/Nolane-x/Nolane-search)",
+  }), "Art Institute artwork search");
+  const rawArtworks = Array.isArray(data.data) ? data.data : [];
+  const artworks = rawArtworks.slice(0, limit).flatMap((raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const artwork = raw as Obj;
+    if (artwork.is_public_domain !== true || typeof artwork.id !== "number" ||
+        typeof artwork.image_id !== "string" || !/^[a-f0-9-]{36}$/i.test(artwork.image_id) ||
+        typeof artwork.title !== "string") return [];
+    const museumUrl = trustedHttpsUrl(artwork.web_url, ["www.artic.edu"]);
+    return [{
+      id: artwork.id,
+      title: artwork.title.slice(0, 240),
+      artist: typeof artwork.artist_title === "string" ? artwork.artist_title.slice(0, 140) : null,
+      date: typeof artwork.date_display === "string" ? artwork.date_display.slice(0, 100) : null,
+      medium: typeof artwork.medium_display === "string" ? artwork.medium_display.slice(0, 220) : null,
+      dimensions: typeof artwork.dimensions === "string" ? artwork.dimensions.slice(0, 180) : null,
+      origin: typeof artwork.place_of_origin === "string" ? artwork.place_of_origin.slice(0, 100) : null,
+      artwork_type: typeof artwork.artwork_type_title === "string" ? artwork.artwork_type_title.slice(0, 80) : null,
+      reference_number: typeof artwork.main_reference_number === "string" ? artwork.main_reference_number.slice(0, 60) : null,
+      is_public_domain: true,
+      copyright_notice: typeof artwork.copyright_notice === "string" ? artwork.copyright_notice.slice(0, 240) : null,
+      image_url: "https://www.artic.edu/iiif/2/" + artwork.image_id + "/full/843,/0/default.jpg",
+      museum_page: museumUrl,
+      image_license_note: "Returned only when the museum API marks the artwork as public domain. Check the item's notice and the museum's terms before reuse.",
+    }];
+  });
+  const pagination = data.pagination && typeof data.pagination === "object" && !Array.isArray(data.pagination)
+    ? data.pagination as Obj : {};
+  return JSON.stringify({
+    status: "ok",
+    source: "Art Institute of Chicago",
+    source_url: "https://api.artic.edu/docs/",
+    repository_url: "https://github.com/art-institute-of-chicago/api-data",
+    query,
+    public_domain_only: true,
+    total_matching_records: maybeNumber(pagination.total),
+    result_count: artworks.length,
+    artworks,
+    note: "Small, on-demand search only. The API allows 60 anonymous requests per minute; this client self-throttles per warm Worker isolate and sends the requested AIC-User-Agent header. Artwork image links are returned only for records tagged public domain.",
+  });
+}
+
+async function naturalEvents(args: Obj): Promise<string> {
+  const category = boundedString(args.category, "category", 40);
+  if (category && !/^[A-Za-z][A-Za-z0-9_-]{0,39}$/.test(category)) {
+    throw new Error("category must be a NASA EONET category ID, such as wildfires, severeStorms or landslides.");
+  }
+  const rawStatus = args.status === undefined ? "open" : args.status;
+  if (rawStatus !== "open" && rawStatus !== "closed" && rawStatus !== "all") {
+    throw new Error("status must be open, closed or all.");
+  }
+  const days = integer(args.days_back, "days_back", 30, 1, 90);
+  const limit = integer(args.limit, "limit", 10, 1, 30);
+  lastEonetRequestAt = requireMinInterval(lastEonetRequestAt, 1000, "NASA EONET");
+  const url = new URL("https://eonet.gsfc.nasa.gov/api/v3/events");
+  url.searchParams.set("status", rawStatus);
+  url.searchParams.set("days", String(days));
+  url.searchParams.set("limit", String(limit));
+  if (category) url.searchParams.set("category", category);
+  const data = obj(await getJson<unknown>(url, "NASA Earth Observatory Natural Event Tracker"), "NASA EONET");
+  const rawEvents = Array.isArray(data.events) ? data.events : [];
+  const events = rawEvents.slice(0, limit).flatMap((raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const event = raw as Obj;
+    if (typeof event.title !== "string") return [];
+    const apiLink = trustedHttpsUrl(event.link, ["eonet.gsfc.nasa.gov"]);
+    const categories = Array.isArray(event.categories) ? event.categories.slice(0, 6).flatMap((rawCategory) => {
+      if (!rawCategory || typeof rawCategory !== "object" || Array.isArray(rawCategory)) return [];
+      const item = rawCategory as Obj;
+      return [{
+        id: typeof item.id === "string" ? item.id.slice(0, 60) : null,
+        title: typeof item.title === "string" ? item.title.slice(0, 100) : null,
+      }];
+    }) : [];
+    const sources = Array.isArray(event.sources) ? event.sources.slice(0, 5).flatMap((rawSource) => {
+      if (!rawSource || typeof rawSource !== "object" || Array.isArray(rawSource)) return [];
+      const item = rawSource as Obj;
+      return [{
+        title: typeof item.title === "string" ? item.title.slice(0, 100) : null,
+        source_url: safeExternalHttpsUrl(item.source ?? item.url),
+        api_url: trustedHttpsUrl(item.link, ["eonet.gsfc.nasa.gov"]),
+      }];
+    }) : [];
+    const geometry = Array.isArray(event.geometry) ? event.geometry.slice(-3).flatMap((rawGeometry) => {
+      if (!rawGeometry || typeof rawGeometry !== "object" || Array.isArray(rawGeometry)) return [];
+      const item = rawGeometry as Obj;
+      const coordinates = Array.isArray(item.coordinates) ? item.coordinates : [];
+      const point = item.type === "Point" && coordinates.length >= 2 &&
+        typeof coordinates[0] === "number" && typeof coordinates[1] === "number"
+        ? { longitude: coordinates[0], latitude: coordinates[1] } : null;
+      return [{
+        date: typeof item.date === "string" ? item.date.slice(0, 40) : null,
+        geometry_type: typeof item.type === "string" ? item.type.slice(0, 30) : null,
+        point,
+      }];
+    }) : [];
+    return [{
+      id: typeof event.id === "string" ? event.id.slice(0, 100) : null,
+      title: event.title.slice(0, 240),
+      description: typeof event.description === "string" ? event.description.slice(0, 700) : null,
+      status: event.closed ? "closed" : "open",
+      closed_at: typeof event.closed === "string" ? event.closed.slice(0, 40) : null,
+      categories,
+      sources,
+      recent_geometry: geometry,
+      nasa_event_api_url: apiLink,
+    }];
+  });
+  return JSON.stringify({
+    status: "ok",
+    source: "NASA Earth Observatory Natural Event Tracker (EONET) v3",
+    source_url: "https://eonet.gsfc.nasa.gov/docs/v3",
+    query: { category: category ?? null, status: rawStatus, days_back: days, limit },
+    event_count: events.length,
+    events,
+    note: "EONET is a curated natural-event metadata feed, not an emergency alert, official warning, or exhaustive real-time sensor network. Event descriptions and locations can be approximate or delayed. Follow local meteorological, geological and emergency authorities for safety decisions.",
+  });
+}
+
+async function localTime(args: Obj): Promise<string> {
+  const resolved = await locate(args);
+  if (resolved.choices) return ambiguity(resolved.choices);
+  const place = resolved.place!;
+  if (!place.timezone) throw new Error("The geocoding service did not provide a time zone for this location.");
+  const now = new Date();
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: place.timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      weekday: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+      timeZoneName: "longOffset",
+    }).formatToParts(now);
+  } catch {
+    throw new Error("The returned time zone is not a valid IANA time-zone identifier.");
+  }
+  const values: Record<string, string> = {};
+  for (const part of parts) if (part.type !== "literal") values[part.type] = part.value;
+  return JSON.stringify({
+    status: "ok",
+    source: "Cloudflare Worker clock + Open-Meteo geocoding time-zone identifier",
+    location: place,
+    time_zone: place.timezone,
+    local_date: values.year && values.month && values.day ? values.year + "-" + values.month + "-" + values.day : null,
+    local_time: values.hour && values.minute && values.second ? values.hour + ":" + values.minute + ":" + values.second : null,
+    weekday: values.weekday ?? null,
+    utc_offset: values.timeZoneName ?? null,
+    observed_at_utc: now.toISOString(),
+    note: "Local time is calculated from the current server clock and the geocoder's IANA time zone. It is not a forecast or opening-hours check.",
+  });
+}
+
 export async function runLiveEverydayTool(name: string, rawArgs: unknown): Promise<string> {
   const args = obj(rawArgs, "Tool arguments");
   if (name === "get_weather_forecast") return weather(args);
@@ -530,5 +895,10 @@ export async function runLiveEverydayTool(name: string, rawArgs: unknown): Promi
   if (name === "get_earthquake_activity") return earthquakeActivity(args);
   if (name === "search_books") return searchBooks(args);
   if (name === "lookup_postal_code") return postalCodeLookup(args);
+  if (name === "define_english_word") return defineEnglishWord(args);
+  if (name === "search_public_domain_books") return searchPublicDomainBooks(args);
+  if (name === "search_museum_artworks") return searchMuseumArtworks(args);
+  if (name === "get_natural_events") return naturalEvents(args);
+  if (name === "get_local_time") return localTime(args);
   throw new Error("Unknown live everyday information tool.");
 }

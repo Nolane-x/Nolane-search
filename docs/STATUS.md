@@ -2,7 +2,26 @@
 
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## Latest production release — Wave 46 (2026-11-24)
+
+## Latest production release — Wave 48 (2026-11-24)
+
+- [PR #102](https://github.com/Nolane-x/Nolane-search/pull/102) merged into main as `903fd0e63b8ed4aa2633f5cdb432b41946fa56ae`. Production adds four direct AI-callable everyday services: marine forecasts, USGS earthquake-event lookup, Open Library book search and postal-code lookup. The **534 file processors** are unchanged.
+- PR CI [45336663336](https://github.com/Nolane-x/Nolane-search/actions/runs/45336663336) and main CI [45336845318](https://github.com/Nolane-x/Nolane-search/actions/runs/45336845318) passed TypeScript type-check, Vitest, deployment-script checks, Python runner tests and Worker build.
+- Worker export/build and public health smoke [45336845328](https://github.com/Nolane-x/Nolane-search/actions/runs/45336845328) passed. Cloudflare deployment [45336845278](https://github.com/Nolane-x/Nolane-search/actions/runs/45336845278) passed secret validation, source/bundle checks, Worker upload, Telegram webhook registration and bot-command registration.
+- D1 migration was correctly skipped because the wave adds no database schema or persistent records.
+- Research: [TOOL-RESEARCH-2026-11-24-WAVE48.md](TOOL-RESEARCH-2026-11-24-WAVE48.md). Handoff: [HANDOFF-WAVE-FORTY-EIGHT-2026-11-24.md](HANDOFF-WAVE-FORTY-EIGHT-2026-11-24.md).
+- Owner-level acceptance remains separate: real Telegram/Web Chat tests are still useful for a coastal forecast, earthquake lookup, book search and postal-code lookup. A successful Worker health check does not prove every feature-level query.
+
+## Previous production release — Wave 47 (2026-11-24)
+
+- [PR #100](https://github.com/Nolane-x/Nolane-search/pull/100) merged into main as `76337ff06613b851359ade8330966c925b825316`. Five direct AI-callable live-information tools provide weather forecasts, modeled air quality, dated currency conversion, public-holiday lookup and potential long-weekend planning. The **534 file processors** are unchanged.
+- PR CI [45335641289](https://github.com/Nolane-x/Nolane-search/actions/runs/45335641289) and main CI [45335826762](https://github.com/Nolane-x/Nolane-search/actions/runs/45335826762) passed TypeScript, Vitest, deployment-script checks, Python runner tests and Worker build.
+- Cloudflare deployment [45335826780](https://github.com/Nolane-x/Nolane-search/actions/runs/45335826780) and Worker export/health smoke [45335826815](https://github.com/Nolane-x/Nolane-search/actions/runs/45335826815) succeeded. Telegram webhook and bot commands were registered. D1 migration was skipped because no schema change was needed.
+- Research: [TOOL-RESEARCH-2026-11-24-WAVE47.md](TOOL-RESEARCH-2026-11-24-WAVE47.md). Handoff: [HANDOFF-WAVE-FORTY-SEVEN-2026-11-24.md](HANDOFF-WAVE-FORTY-SEVEN-2026-11-24.md).
+- Provider limits remain important: Open-Meteo free service use is non-commercial; Frankfurter provides dated reference rates; Nager.Date does not establish city, school or employer closure policy.
+
+
+## Previous production release — Wave 46 (2026-11-24)
 
 - [PR #99](https://github.com/Nolane-x/Nolane-search/pull/99) merged into main as `b80eee059281932193106b5c90f21ce306dea9e2`. Production Tool Center catalog: **534 processors** (+8 over Wave 45).
 - PR CI [45332648456](https://github.com/Nolane-x/Nolane-search/actions/runs/45332648456) and main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609) passed TypeScript type-check, **25 Vitest files / 273 tests**, deployment-script checks, **449 Python runner tests** and Worker build.

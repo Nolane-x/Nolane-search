@@ -236,6 +236,64 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
   {
     type: "function",
     function: {
+      name: "define_english_word",
+      description: "Look up an English word's pronunciation, phonetics, meanings, examples, synonyms and antonyms. Use for vocabulary questions and language learning. It covers English only; if the spelling is not found, ask the user to check it.",
+      parameters: { type: "object", properties: {
+        word: { type: "string", minLength: 1, maxLength: 50, description: "One English word." }
+      }, required: ["word"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_public_domain_books",
+      description: "Search Project Gutenberg catalog metadata for free classic books, filtered to records Gutendex marks as public domain in the United States. Can filter by two-letter language and subject. Warn that copyright status may differ outside the US; this tool searches metadata and does not download books.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 140, description: "Book title, author or words to search." },
+        language: { type: "string", pattern: "^[A-Za-z]{2}$", description: "Optional two-letter language code, defaults to en." },
+        topic: { type: "string", minLength: 2, maxLength: 80, description: "Optional subject or bookshelves topic, e.g. adventure or poetry." },
+        limit: { type: "integer", minimum: 1, maximum: 10, description: "Number of results to return, defaults to 8." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_museum_artworks",
+      description: "Discover artworks from the Art Institute of Chicago by artist, title, movement or subject. Only returns artworks the museum API marks as public domain and with an image. Results include metadata, an image link and the museum page.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 140, description: "Artist, title, style, period or subject." },
+        limit: { type: "integer", minimum: 1, maximum: 8, description: "Number of results, defaults to 6." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_natural_events",
+      description: "Look up NASA EONET's recent curated global natural-event records such as wildfires, severe storms, volcanoes or landslides. Filter by category, open/closed status and days. This is not an emergency warning service.",
+      parameters: { type: "object", properties: {
+        category: { type: "string", minLength: 2, maxLength: 40, description: "Optional EONET category ID, e.g. wildfires, severeStorms or landslides." },
+        status: { type: "string", enum: ["open","closed","all"], description: "Event status, defaults to open." },
+        days_back: { type: "integer", minimum: 1, maximum: 90, description: "Lookback window, defaults to 30 days." },
+        limit: { type: "integer", minimum: 1, maximum: 30, description: "Maximum number of events, defaults to 10." }
+      }, required: [], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_local_time",
+      description: "Get the current local date, time, weekday, time zone and UTC offset for a named city. Use when comparing time zones or checking what time it is somewhere. Add country_code when the place name is ambiguous.",
+      parameters: { type: "object", properties: {
+        location: { type: "string", minLength: 2, maxLength: 100, description: "City or town name, not a street address." },
+        country_code: { type: "string", pattern: "^[A-Za-z]{2}$", description: "Optional two-letter ISO country code." }
+      }, required: ["location"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "process_text_content",
       description: "Run bounded text/data processors on supplied content: environment-file auditing/redaction/template generation, INI inspection/conversion, Dockerfile/requirements/package manifest/gitignore static audits, environment-reference extraction, Terraform/Nginx/Apache/Caddy/systemd/shell static audits, everyday calculators and planners for bills, loans, dates, time zones, recipes, grades, paint, fuel, discounts, unit prices, home energy/materials, household budgets, travel packing, meal shopping lists, study schedules, chores, subscriptions, commuting, reading goals, grocery budgets, habit history, plant care, garden beds, home inventory, home maintenance, pet routines, event seating and spaced review, work hours, battery life, storage tanks, bank CSV spending summaries, recurring bill cash-flow forecasts, group expense settlement, moving-day tasks and box labels, product return deadlines, gift budgets, user-defined household emergency supply quantities, vehicle fuel logs and ownership costs, appliance repair/replacement and service history, repair-quote comparison, rental move-in/move-out inspections and rental-offer costs, translation, developer text and network extraction, Markdown/HTML extraction, JSON/CSV/SQL/YAML conversions and statistics. Never executes shell commands, SQL, package scripts, uploaded code or arbitrary commands.",
       parameters: {
@@ -1753,7 +1811,7 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
     const page = await fetchTinyFishPage(env, safe.toString());
     return JSON.stringify({ title: page.title, url: page.finalUrl, text: page.text.slice(0, 12_000) });
   }
-  if (["get_weather_forecast","check_air_quality","convert_currency","get_public_holidays","find_long_weekends","get_marine_forecast","get_earthquake_activity","search_books","lookup_postal_code"].includes(name)) {
+  if (["get_weather_forecast","check_air_quality","convert_currency","get_public_holidays","find_long_weekends","get_marine_forecast","get_earthquake_activity","search_books","lookup_postal_code","define_english_word","search_public_domain_books","search_museum_artworks","get_natural_events","get_local_time"].includes(name)) {
     return (await runLiveEverydayTool(name, args)).slice(0, 12_000);
   }
   if (name === "process_text_content") {
@@ -1797,6 +1855,7 @@ export async function runAgentLoop(
   const instruction = [
     "You are Nolane Agent with access to Nolane's real, allowlisted tools. Use the available tools when they materially improve the result; never invent a tool or claim execution without a returned result.",
     "Use list_nolane_tools to discover the all ready file processors. Results are paginated: inspect total/tools/nextOffset, use targeted query/category filters, and pass nextOffset to continue. The default ordering prioritizes everyday tasks: images, documents, audio/video, utilities and data. Developer and repository tools remain available, but use them only when the user asks for technical or software-repository work.",
+    "Use define_english_word for on-demand English vocabulary lookups; do not invent API definitions or imply that the source covers every language. Use search_public_domain_books for Project Gutenberg titles marked public domain in the US and state the jurisdiction caveat. Use search_museum_artworks for Art Institute of Chicago public-domain collection discovery only. Use get_natural_events for NASA EONET curated events, never as an emergency alert. Use get_local_time for current city time from geocoded IANA time zones.",
     "Use get_marine_forecast for general wave/swell outlooks only, never for navigation or rescue advice. Use get_earthquake_activity for USGS recorded events, never as an early-warning or safety-clearance service. Use search_books for human reading/catalog requests and lookup_postal_code for postcode reference data, preserving each provider’s coverage and accuracy limits.",
     "Use get_weather_forecast and check_air_quality for location-specific model data; use convert_currency for dated daily reference rates; use get_public_holidays and find_long_weekends for country or subdivision holiday planning. Do not guess current readings. Ask for a country when a city is ambiguous. Distinguish forecast data from ground-station readings and daily currency reference rates from trading or retail exchange quotes. Open-Meteo free API use is non-commercial and must follow its fair-use terms.",
     "process_text_content is for bounded text input up to 40,000 characters. For an uploaded image, PDF, Office file, audio/video, archive or other catalog-supported file, use prepare_file_processing only when that function is available and the user explicitly wants the file processed or says they will upload it. It only prepares a private Telegram upload session; the user must still send the file, and no processor has run until the job returns.",
