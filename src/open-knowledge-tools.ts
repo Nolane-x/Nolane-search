@@ -53,7 +53,7 @@ async function wikiRequest<T>(project: WikiProject, lang: string, params: Record
   try {
     response = await fetch(url, {
       method: "GET",
-      headers: { accept: "application/json", "user-agent": USER_AGENT },
+      headers: { accept: "application/json", "user-agent": USER_AGENT, "api-user-agent": USER_AGENT },
       redirect: "error",
       signal: AbortSignal.timeout(12_000),
     });
@@ -66,7 +66,26 @@ async function wikiRequest<T>(project: WikiProject, lang: string, params: Record
     if (response.status === 503) throw new Error(project + " is temporarily unavailable. Retry later.");
     throw new Error(project + " returned HTTP " + response.status + ".");
   }
-  return readJsonResponse<T>(response, maxBytes);
+  const payload = await readJsonResponse<T>(response, maxBytes);
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    const error = (payload as Obj).error;
+    if (error && typeof error === "object" && !Array.isArray(error)) {
+      const details = error as Obj;
+      const code = typeof details.code === "string" ? details.code : "api_error";
+      const info = typeof details.info === "string" ? details.info.slice(0, 220) : "Wikimedia API rejected the request.";
+      if (code === "maxlag") throw new Error(project + " is busy; Wikimedia maxlag is active. Retry later.");
+      throw new Error(project + " API error (" + code + "): " + info);
+    }
+  }
+  return payload;
+}
+function safeWikiThumbnail(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.hostname !== "upload.wikimedia.org" || url.username || url.password || url.port) return null;
+    return url.toString();
+  } catch { return null; }
 }
 function normalizedSnippet(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -167,8 +186,7 @@ async function getProjectArticle(project: WikiProject, rawArgs: unknown): Promis
     page_id: pageId,
     title: normalizedTitle,
     url: canonicalUrl(project, lang, page.fullurl, normalizedTitle),
-    thumbnail_url: canonicalUrl(project, lang, thumb.source, normalizedTitle) === wikiOrigin(project, lang) + "/wiki/" + encodeURIComponent(normalizedTitle.replace(/ /g, "_"))
-      ? null : (typeof thumb.source === "string" && /^https:\/\//.test(thumb.source) ? thumb.source.slice(0, 2048) : null),
+    thumbnail_url: safeWikiThumbnail(thumb.source),
     text: extract,
     categories,
     note: PROJECT_NOTES[project],
