@@ -37,7 +37,8 @@ describe("Wave 55 open knowledge discovery", () => {
       expect(url.hostname).toBe("en.wikipedia.org");
       expect(url.searchParams.get("prop")).toContain("extracts");
       expect(url.searchParams.get("explaintext")).toBe("1");
-      expect(url.searchParams.get("exchars")).toBe("8000");
+      expect(url.searchParams.get("exsentences")).toBe("10");
+      expect(url.searchParams.get("exchars")).toBe("1200");
       return json(apiResponse({
         pageid: 42, title: "Douglas Adams", fullurl: "https://en.wikipedia.org/wiki/Douglas_Adams",
         extract: "Douglas Adams was an English author and humorist.",
