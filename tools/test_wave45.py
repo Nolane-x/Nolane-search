@@ -167,7 +167,7 @@ class Wave45Tests(unittest.TestCase):
             "as_of_date": "2026-11-24", "default_remind_days": 5,
             "purchases": [
                 {"product": "Headphones", "seller": "Store A", "purchase_date": "2026-11-01", "return_window_days": 14},
-                {"product": "Keyboard", "seller": "Store B", "purchase_date": "2026-11-20", "return_window_days": 14},
+                {"product": "Keyboard", "seller": "Store B", "purchase_date": "2026-11-20", "return_window_days": 8},
                 {"product": "Mouse", "seller": "Store C", "purchase_date": "2026-11-23", "return_window_days": 14, "return_started": True},
             ],
         })
