@@ -1,7 +1,7 @@
 # Wave 44 — everyday life-administration planners
 
 Date: 2026-11-24  
-Status: Implementation on review branch; production remains Wave 43 / 510 tools until CI, merge and deployment are verified.
+Status: merged and deployed to production as 518 tools on 2026-11-24.
 
 ## Product selection
 
@@ -39,3 +39,12 @@ The implementations are independent Nolane code. Upstream repositories were revi
 - Renewal dates and notice windows are user-entered. Check current rules and processing times with the issuing authority/provider.
 - Warranty end dates are simple calendar calculations based on the input. They do not decide legal coverage; read the actual terms and exclusions.
 - No new paid API, credential, persistent storage, D1 migration or Python runtime dependency is added.
+
+## Release verification
+
+- PR [#97](https://github.com/Nolane-x/Nolane-search/pull/97) merged as `4e7489aeca23de36c1cbf20db5ddf692f276d723`.
+- PR CI [45327140857](https://github.com/Nolane-x/Nolane-search/actions/runs/45327140857) and main CI [45327334511](https://github.com/Nolane-x/Nolane-search/actions/runs/45327334511) passed TypeScript type-check, 25 Vitest files / 269 tests, deployment-script checks, 424 Python runner tests and Worker build.
+- Worker export/health smoke [45327334519](https://github.com/Nolane-x/Nolane-search/actions/runs/45327334519) returned `ok: true` and database `reachable`.
+- Cloudflare deployment [45327334621](https://github.com/Nolane-x/Nolane-search/actions/runs/45327334621) succeeded. Worker Version ID: `adc960a0-89a4-4287-9431-9204636de49e`.
+- Telegram webhook was verified for message + callback_query and bot commands were registered.
+- No D1 migration or new runtime dependency was needed.

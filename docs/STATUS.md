@@ -2,7 +2,18 @@
 
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
-## Latest production release — Wave 43 (2026-11-24)
+## Latest production release — Wave 44 (2026-11-24)
+
+- [PR #97](https://github.com/Nolane-x/Nolane-search/pull/97) merged into main as `4e7489aeca23de36c1cbf20db5ddf692f276d723`. Production Tool Center catalog: **518 processors** (+8 over Wave 43).
+- PR CI [45327140857](https://github.com/Nolane-x/Nolane-search/actions/runs/45327140857) and main CI [45327334511](https://github.com/Nolane-x/Nolane-search/actions/runs/45327334511) passed TypeScript type-check, **25 Vitest files / 269 tests**, deployment-script checks, **424 Python runner tests** and Worker build.
+- Worker export/build and live health smoke [45327334519](https://github.com/Nolane-x/Nolane-search/actions/runs/45327334519) passed; health returned `ok: true`, database `reachable`.
+- Cloudflare deployment [45327334621](https://github.com/Nolane-x/Nolane-search/actions/runs/45327334621) passed secret validation, source/bundle checks, Worker upload, Telegram webhook verification (message + callback_query) and bot command registration. Worker Version ID: `adc960a0-89a4-4287-9431-9204636de49e`.
+- D1 migration was correctly skipped because Wave 44 adds no schema changes or persistent storage.
+- Eight new everyday-user tools are registered in the catalog, direct Nolane AI interface and GitHub Actions runner: pantry use-first list, recipe matching, meal-preparation timeline, laundry-load organiser, day-trip itinerary, vehicle maintenance reminders, document renewal reminders and warranty-request drafts.
+- Product research: [TOOL-RESEARCH-2026-11-24-WAVE44.md](TOOL-RESEARCH-2026-11-24-WAVE44.md). Implementation handoff: [HANDOFF-WAVE-FORTY-FOUR-2026-11-24.md](HANDOFF-WAVE-FORTY-FOUR-2026-11-24.md).
+- Owner-level acceptance remains separate: test selected tools in the real private Telegram bot and upload a non-sensitive JSON file. CI and webhook registration do not prove every client-side interaction.
+
+## Previous production release — Wave 43 (2026-11-24)
 
 - [PR #96](https://github.com/Nolane-x/Nolane-search/pull/96) merged into main as `c633897b6448cf15ea1e25fb1664dfc11a0cc986`. Production Tool Center catalog: **510 processors** (+8 over Wave 42).
 - PR CI [45318520850](https://github.com/Nolane-x/Nolane-search/actions/runs/45318520850) passed TypeScript, **25 Vitest files / 267 tests**, deployment-script checks, **414 Python runner tests** and Worker build. Main CI [45318665956](https://github.com/Nolane-x/Nolane-search/actions/runs/45318665956) passed the same checks on the merge commit.

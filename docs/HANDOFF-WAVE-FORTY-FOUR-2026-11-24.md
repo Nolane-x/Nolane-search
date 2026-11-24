@@ -3,7 +3,7 @@
 Date: 2026-11-24  
 Branch: feat/wave-forty-four-everyday-life-planners  
 Base: Wave 43 / 510 production catalog  
-Status: Review branch; first PR CI exposed three issues, now corrected on the branch; CI rerun pending.
+Status: merged and deployed to production on 2026-11-24.
 
 ## Included tools
 
@@ -32,7 +32,7 @@ Status: Review branch; first PR CI exposed three issues, now corrected on the br
 - docs/TOOL-RESEARCH-2026-11-24-WAVE44.md: upstream workflow research and safety boundaries.
 - docs/NOLANE-TOOLS.md: marks eight Wave44 tools as proposed while PR #97 is pending.
 
-## Verification gates
+## Verification results
 
 1. TypeScript type-check and full Vitest suite.
 2. Python compile and full python -m unittest discover -s tools -p 'test_*.py' suite, including Wave44 tests.
@@ -45,4 +45,4 @@ Status: Review branch; first PR CI exposed three issues, now corrected on the br
 
 ## Production accounting
 
-Wave 43 / 510 tools remains the latest production release until merge and deployment checks have passed. Wave44's proposed catalog total is 518.
+Wave 44 / 518 tools is the latest production release, merged as `4e7489aeca23de36c1cbf20db5ddf692f276d723` in [PR #97](https://github.com/Nolane-x/Nolane-search/pull/97).
