@@ -16,6 +16,7 @@ import { runLiveEverydayTool } from "./live-everyday-tools";
 import { runWorldDataTool } from "./world-data-tools";
 import { runMediaDiscoveryTool } from "./media-discovery-tools";
 import { runConsumerDiscoveryTool } from "./consumer-discovery-tools";
+import { runOpenKnowledgeTool } from "./open-knowledge-tools";
 import { translateText } from "./translation";
 import type { Env, SearchMode } from "./types";
 
@@ -457,6 +458,63 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
         query: { type: "string", minLength: 2, maxLength: 140, description: "Film, documentary, subject or archive title." },
         limit: { type: "integer", minimum: 1, maximum: 5, description: "Number of public video items to inspect, defaults to 4." }
       }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_wikipedia_articles",
+      description: "Search Wikipedia articles in English, Vietnamese, Japanese, French, Spanish or German. Returns concise snippets, canonical article links and page metadata. Wikipedia is community-edited; verify important facts in the article's cited sources.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 120, description: "Person, place, event, object, subject or question keywords." },
+        language: { type: "string", enum: ["en","vi","ja","fr","es","de"], description: "Wikipedia language edition, defaults to English." },
+        limit: { type: "integer", minimum: 1, maximum: 10, description: "Number of article results, defaults to 6." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_wikipedia_article",
+      description: "Retrieve a bounded plain-text Wikipedia article extract, article URL, optional thumbnail and categories. Use a title from search_wikipedia_articles to disambiguate. Wikipedia is community-edited and may be incomplete or outdated.",
+      parameters: { type: "object", properties: {
+        title: { type: "string", minLength: 1, maxLength: 220, description: "Exact Wikipedia article title." },
+        language: { type: "string", enum: ["en","vi","ja","fr","es","de"], description: "Wikipedia language edition, defaults to English." }
+      }, required: ["title"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_wikivoyage_guides",
+      description: "Search community-written travel guides in English or Vietnamese for destinations and practical trip information. Results may be incomplete; current transport, prices, opening hours, visa and safety details must be checked with official providers.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 120, description: "Destination, city, region or travel topic." },
+        language: { type: "string", enum: ["en","vi"], description: "Travel-guide language, defaults to English." },
+        limit: { type: "integer", minimum: 1, maximum: 7, description: "Number of travel guide results, defaults to 5." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_wikivoyage_guide",
+      description: "Retrieve a bounded travel-guide extract for a destination, including available sections, category labels, and its original Wikivoyage link. Verify current prices, hours, transport, visa and safety details before travelling.",
+      parameters: { type: "object", properties: {
+        title: { type: "string", minLength: 1, maxLength: 220, description: "Exact Wikivoyage guide title." },
+        language: { type: "string", enum: ["en","vi"], description: "Travel-guide language, defaults to English." }
+      }, required: ["title"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "lookup_wiktionary_entry",
+      description: "Look up an English or Vietnamese Wiktionary entry and return its original plain-text entry, pronunciation/meaning information when present, categories and source link. This is not an automatic translation or a guarantee that a usage is appropriate in every context.",
+      parameters: { type: "object", properties: {
+        title: { type: "string", minLength: 1, maxLength: 220, description: "Exact word or phrase to look up." },
+        language: { type: "string", enum: ["en","vi"], description: "Wiktionary language edition, defaults to English." }
+      }, required: ["title"], additionalProperties: false }
     }
   },
   {
@@ -2034,6 +2092,9 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
     if (!safe || safe.protocol !== "https:") throw new Error("Only valid public HTTPS URLs are allowed.");
     const page = await fetchTinyFishPage(env, safe.toString());
     return JSON.stringify({ title: page.title, url: page.finalUrl, text: page.text.slice(0, 12_000) });
+  }
+  if (["search_wikipedia_articles","get_wikipedia_article","search_wikivoyage_guides","get_wikivoyage_guide","lookup_wiktionary_entry"].includes(name)) {
+    return (await runOpenKnowledgeTool(name, args)).slice(0, 12_000);
   }
   if (["search_meal_recipes","filter_meal_recipes","get_meal_recipe_details","search_wikidata_entities","get_wikidata_entity"].includes(name)) {
     return (await runConsumerDiscoveryTool(name, args)).slice(0, 12_000);
