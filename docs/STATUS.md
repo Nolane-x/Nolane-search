@@ -3,7 +3,17 @@
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
-## Latest production release — Wave 49 (2026-11-24)
+## Latest production release — Wave 50 (2026-11-24)
+
+- [PR #106](https://github.com/Nolane-x/Nolane-search/pull/106) merged into main as `5e423c98cc1c5a28aae558468c03d6f375e07bf4`. Production adds five direct AI-callable discovery functions: TVmaze show search and episode guides, Apple country-storefront media search, MusicBrainz artist/recording/release metadata and Crossref scholarly bibliographic search. Existing **534 file processors** remain unchanged.
+- PR CI [45382180134](https://github.com/Nolane-x/Nolane-search/actions/runs/45382180134) and main CI [45382454398](https://github.com/Nolane-x/Nolane-search/actions/runs/45382454398) succeeded. Main CI passed TypeScript, **29 Vitest files / 303 tests**, deployment-script checks, **449 Python runner tests** and Worker build.
+- Cloudflare deployment [45382454250](https://github.com/Nolane-x/Nolane-search/actions/runs/45382454250) succeeded: required secrets validated, Worker uploaded, triggers deployed, and Telegram webhook/command menu registered. Worker Version ID: `366f58b7-abb7-4ce4-9857-5997e48b2a66`.
+- Worker export/build and public health smoke [45382454329](https://github.com/Nolane-x/Nolane-search/actions/runs/45382454329) succeeded, including build-output publication.
+- D1 migration was skipped because no schema changes were needed.
+- Research: [TOOL-RESEARCH-2026-11-24-WAVE50.md](TOOL-RESEARCH-2026-11-24-WAVE50.md). Handoff: [HANDOFF-WAVE-FIFTY-2026-11-24.md](HANDOFF-WAVE-FIFTY-2026-11-24.md).
+- Owner-level acceptance remains separate: real Telegram/Web Chat queries should verify one sample per provider. Mocked API tests and Worker health do not prove every external endpoint will succeed for every user query.
+
+## Previous production release — Wave 49 (2026-11-24)
 
 - [PR #104](https://github.com/Nolane-x/Nolane-search/pull/104) merged into main as `56793e4b01ce985b90c4f78f3ec1e4c7269cdc9`. Production adds five direct AI-callable discovery functions: English word lookup, U.S.-public-domain-filtered book search, Art Institute public-domain artwork search, NASA EONET natural-event browsing and current local time by city. The **534 file processors** remain unchanged.
 - PR CI [45343427454](https://github.com/Nolane-x/Nolane-search/actions/runs/45343427454) and main CI [45343582511](https://github.com/Nolane-x/Nolane-search/actions/runs/45343582511) passed TypeScript, Vitest, deployment-script checks, Python runner tests and Worker build.

@@ -1,9 +1,19 @@
 # Wave 50 — media and academic discovery
 
 Date: 2026-11-24
-Status: implementation branch; CI, merge and deployment pending.
-Branch: feat/wave-50-media-academic-discovery
+Status: merged into main and deployed to production.
+Branch: feat/wave-50-media-academic-discovery (merged)
 Base main commit: 3244da33d64d2ca366bced502d4ce6b3af8e918b
+Squash merge commit: 5e423c98cc1c5a28aae558468c03d6f375e07bf4
+
+## Production verification — 2026-11-24
+
+- [PR #106](https://github.com/Nolane-x/Nolane-search/pull/106) merged to `main` as `5e423c98cc1c5a28aae558468c03d6f375e07bf4`.
+- PR CI [45382180134](https://github.com/Nolane-x/Nolane-search/actions/runs/45382180134) and main CI [45382454398](https://github.com/Nolane-x/Nolane-search/actions/runs/45382454398) succeeded. Main CI passed TypeScript, 29 Vitest files / 303 tests, deployment-script checks, 449 Python runner tests and Worker build.
+- Cloudflare deployment [45382454250](https://github.com/Nolane-x/Nolane-search/actions/runs/45382454250) succeeded. Worker Version ID: `366f58b7-abb7-4ce4-9857-5997e48b2a66`; runtime secrets uploaded, triggers deployed, Telegram webhook and command menu registered.
+- Worker export/build and public health smoke [45382454329](https://github.com/Nolane-x/Nolane-search/actions/runs/45382454329) succeeded.
+- No D1 migration was required. Existing 534 file processors were not changed.
+- Real Telegram/Web Chat feature acceptance remains a separate owner-level check; mocked provider tests and health smoke do not establish live success for every provider.
 
 Scope: five directly model-callable discovery functions. The 534 file processors and the D1 schema are unchanged. These features return compact metadata and authoritative source/store links; they do not stream, download, reproduce or redistribute copyrighted media or research papers.
 
