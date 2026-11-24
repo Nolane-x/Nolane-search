@@ -3,7 +3,17 @@
 Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
-## Latest production release — Wave 54 (2026-11-24)
+## Latest production release — Wave 55 (2026-11-24)
+
+- [PR #116](https://github.com/Nolane-x/Nolane-search/pull/116) merged into `main` as `d44aaed6c938eda2212387e60b5bc0a7df4ae693`. Production adds five AI-callable open-knowledge tools: Wikipedia search/read across EN/VI/JA/FR/ES/DE, Wikivoyage destination search/read in EN/VI, and Wiktionary dictionary lookup in EN/VI. The adapters use the Wikimedia Action API, fixed project hosts, identifying User-Agent headers, `maxlag=5`, bounded responses/results and a maximum 1,200-character / 10-sentence article extract. Existing **534 file processors** remain unchanged.
+- PR CI [45414597298](https://github.com/Nolane-x/Nolane-search/actions/runs/45414597298) passed. Main CI #505 [45415054045](https://github.com/Nolane-x/Nolane-search/actions/runs/45415054045) passed TypeScript, **33 Vitest files / 343 tests**, deployment-script checks, **449 Python runner tests** and Cloudflare Worker build.
+- Cloudflare deployment #159 [45415054134](https://github.com/Nolane-x/Nolane-search/actions/runs/45415054134) succeeded. Worker Version ID: `753f8c11-a10b-40f2-a5f2-e09b4bc56923`. Telegram webhook validation and command registration succeeded.
+- Worker export #152 [45415054129](https://github.com/Nolane-x/Nolane-search/actions/runs/45415054129) and public `/health` smoke succeeded. Health returned `ok: true`, database `reachable`, and `archiveEnabled: true`. No D1 migration was required.
+- Research: [TOOL-RESEARCH-2026-11-24-WAVE55.md](TOOL-RESEARCH-2026-11-24-WAVE55.md). Handoff: [HANDOFF-WAVE-FIFTY-FIVE-2026-11-24.md](HANDOFF-WAVE-FIFTY-FIVE-2026-11-24.md).
+- Wikimedia source limits: Wikipedia/Wikivoyage/Wiktionary content is community-edited and can be incomplete or outdated. Wikivoyage is not live booking/visa/safety data; verify current travel details with official providers. Article text is deliberately limited to the TextExtracts API maximum.
+- **Downloader status:** arbitrary yt-dlp/gallery-dl downloads and private R2 share links are still not production-enabled. A direct Cloudflare account API check still returns R2 error `10042` (“Please enable R2 through the Cloudflare Dashboard”). No R2 bucket, multipart upload, signed private links or private Range playback exists.
+
+## Previous production release — Wave 54 (2026-11-24)
 
 - [PR #114](https://github.com/Nolane-x/Nolane-search/pull/114) merged into `main` as `8c3d05d40c93be76a28244e792aeb6e3b5990c9a`. Production adds two AI-callable media discovery operations: Openverse image search with creator/source/Creative Commons metadata and Internet Archive public video search that returns links only for listed non-private original video files. The authenticated Media Portal now combines Wikimedia Commons + Openverse + NASA for images and NASA + Internet Archive for videos. Per-provider failures are surfaced as warnings rather than discarding successful sources. Existing **534 file processors** remain unchanged.
 - PR CI [45412093218](https://github.com/Nolane-x/Nolane-search/actions/runs/45412093218) passed. Main CI [45412464406](https://github.com/Nolane-x/Nolane-search/actions/runs/45412464406) passed TypeScript, **32 Vitest files / 333 tests**, deployment-script checks, **449 Python runner tests** and Cloudflare Worker build.
