@@ -21,7 +21,7 @@ Tools:
 
 Limits:
 - One request returns at most 10 search results.
-- Article extract is capped at 8,000 characters.
+- Article extract is capped at 1,200 characters and at most 10 sentences.
 - Page image is accepted only from upload.wikimedia.org.
 - Search and article titles are passed as query parameters; no user-controlled host or API path.
 - Page metadata and snippets are bounded before returning to the model.
