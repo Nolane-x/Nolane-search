@@ -646,7 +646,7 @@ async function defineEnglishWord(args: Obj): Promise<string> {
 
 async function searchPublicDomainBooks(args: Obj): Promise<string> {
   const query = text(args, "query", 140);
-  const languageRaw = boundedString(args.language, "language", 2) ?? "en";
+  const languageRaw = args.language === undefined ? "en" : typeof args.language === "string" ? args.language.trim() : "";
   if (!/^[A-Za-z]{2}$/.test(languageRaw)) throw new Error("language must be a two-letter language code, such as en, fr, de or es.");
   const topic = boundedString(args.topic, "topic", 80);
   const limit = integer(args.limit, "limit", 8, 1, 10);
