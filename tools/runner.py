@@ -76,6 +76,11 @@ from wave43 import (
     home_inventory_report, home_maintenance_scheduler, pet_routine_planner,
     event_seating_planner, spaced_review_scheduler,
 )
+from wave44 import (
+    pantry_use_first_planner, pantry_recipe_matcher, meal_prep_timeline_planner,
+    laundry_load_organizer, trip_itinerary_planner, vehicle_maintenance_planner,
+    document_renewal_planner, warranty_claim_assistant,
+)
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
@@ -238,6 +243,8 @@ RUNNERS = {
     "subscription-cost-calculator", "commute-cost-calculator", "reading-plan-calculator", "grocery-budget-planner",
     "habit-history-analyzer", "plant-care-scheduler", "garden-bed-capacity-calculator", "home-inventory-report",
     "home-maintenance-scheduler", "pet-routine-planner", "event-seating-planner", "spaced-review-scheduler",
+    "pantry-use-first-planner", "pantry-recipe-matcher", "meal-prep-timeline-planner", "laundry-load-organizer",
+    "trip-itinerary-planner", "vehicle-maintenance-planner", "document-renewal-planner", "warranty-claim-assistant",
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -12545,6 +12552,14 @@ TOOLS={
  "pet-routine-planner":pet_routine_planner,
  "event-seating-planner":event_seating_planner,
  "spaced-review-scheduler":spaced_review_scheduler,
+ "pantry-use-first-planner":pantry_use_first_planner,
+ "pantry-recipe-matcher":pantry_recipe_matcher,
+ "meal-prep-timeline-planner":meal_prep_timeline_planner,
+ "laundry-load-organizer":laundry_load_organizer,
+ "trip-itinerary-planner":trip_itinerary_planner,
+ "vehicle-maintenance-planner":vehicle_maintenance_planner,
+ "document-renewal-planner":document_renewal_planner,
+ "warranty-claim-assistant":warranty_claim_assistant,
 
 }
 
