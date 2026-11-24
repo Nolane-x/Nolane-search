@@ -3,35 +3,35 @@
 Date: 2026-11-24  
 Branch: feat/wave-53-recipes-wikidata  
 Base: 1a49af3607257dea93ddb5879d48ef93133df5b6  
-Release status: implementation branch; not yet merged or deployed.
+Release status: merged and deployed via [PR #112](https://github.com/Nolane-x/Nolane-search/pull/112) as `e48d6e171c115b2d2154f273d81056cd8dd14bcb`.
 
 ## New AI-callable tools
 
 TheMealDB:
-- \`search_meal_recipes\` — search recipe names and return compact recipe cards.
-- \`filter_meal_recipes\` — filter by exactly one main ingredient, category or cuisine/area.
-- \`get_meal_recipe_details\` — return recipe instructions, measured ingredients, image, source and video links.
+- `search_meal_recipes` — search recipe names and return compact recipe cards.
+- `filter_meal_recipes` — filter by exactly one main ingredient, category or cuisine/area.
+- `get_meal_recipe_details` — return recipe instructions, measured ingredients, image, source and video links.
 
 Wikidata:
-- \`search_wikidata_entities\` — search and disambiguate items in English or Vietnamese.
-- \`get_wikidata_entity\` — retrieve English/Vietnamese labels, descriptions, aliases and Wikipedia article links.
+- `search_wikidata_entities` — search and disambiguate items in English or Vietnamese.
+- `get_wikidata_entity` — retrieve English/Vietnamese labels, descriptions, aliases and Wikipedia article links.
 
 ## Implementation
 
 New files:
-- \`src/consumer-discovery-tools.ts\`
-- \`tests/consumer-discovery-tools.test.ts\`
-- \`docs/TOOL-RESEARCH-2026-11-24-WAVE53.md\`
+- `src/consumer-discovery-tools.ts`
+- `tests/consumer-discovery-tools.test.ts`
+- `docs/TOOL-RESEARCH-2026-11-24-WAVE53.md`
 
 Updated integration:
-- \`src/agent-tools.ts\` — tool schemas, import and dispatch.
-- \`tests/agent-tools.test.ts\` — exact AI-tool catalog assertion.
+- `src/agent-tools.ts` — tool schemas, import and dispatch.
+- `tests/agent-tools.test.ts` — exact AI-tool catalog assertion.
 
 No new package, secret, D1 migration, Cloudflare binding or file processor was introduced. The existing 534 file processors remain unchanged.
 
 ## Important use boundaries
 
-- TheMealDB test key \`1\` is for development/educational use. The provider documentation says public app-store releases require a supporter key. Keep the integration limited to the authenticated personal workspace unless a valid supporter key is obtained.
+- TheMealDB test key `1` is for development/educational use. The provider documentation says public app-store releases require a supporter key. Keep the integration limited to the authenticated personal workspace unless a valid supporter key is obtained.
 - TheMealDB's free filter endpoint supports only one filter field per request; ingredient filtering is not a multi-ingredient pantry matcher.
 - Recipe instructions and allergens are not guaranteed. Users must verify ingredients and food safety independently.
 - Wikidata is community-maintained reference data; item descriptions and linked Wikipedia articles are discovery references, not proof of correctness.
@@ -42,3 +42,13 @@ No new package, secret, D1 migration, Cloudflare binding or file processor was i
 1. PR CI passes type-check, Vitest, deployment-script checks, Python runner tests and Cloudflare Worker build.
 2. Main CI and Cloudflare deploy are verified separately after merge; until then this branch is not production.
 3. Provider live availability and owner-side user acceptance remain separate from mocked CI.
+
+
+## Production verification — 2026-11-24
+
+- PR CI #497 [45408553468](https://github.com/Nolane-x/Nolane-search/actions/runs/45408553468) passed.
+- Main CI #498 [45408855220](https://github.com/Nolane-x/Nolane-search/actions/runs/45408855220) passed TypeScript, 32 Vitest files / 329 tests, deployment-script checks, 449 Python runner tests and Worker build.
+- Cloudflare deploy #157 [45408855289](https://github.com/Nolane-x/Nolane-search/actions/runs/45408855289) succeeded. Worker Version ID: \`e5dcdc69-0a58-4b37-9933-0ab73c0fb6ef\`.
+- Worker export/build #150 and public health smoke [45408855306](https://github.com/Nolane-x/Nolane-search/actions/runs/45408855306) succeeded. The health response reports \`ok: true\`, database \`reachable\` and archive enabled.
+- Deployment verified secret validation, Worker upload, triggers, Telegram webhook and slash-command registration. No D1 migration was needed.
+- These CI and health results verify the deployed Worker and tool registration path; live upstream provider availability and owner-side Telegram conversation acceptance remain separate checks.
