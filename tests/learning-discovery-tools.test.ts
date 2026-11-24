@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runLiveEverydayTool } from "../src/live-everyday-tools";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
@@ -39,6 +39,9 @@ describe("Wave 49 learning and world discovery tools", () => {
   });
 
   it("returns a friendly not-found response for an unknown English word", async () => {
+    const future = Date.now() + 1500;
+    vi.useFakeTimers();
+    vi.setSystemTime(future);
     vi.stubGlobal("fetch", vi.fn(async () => json({ title: "No Definitions Found" }, 404)));
     const result = JSON.parse(await runLiveEverydayTool("define_english_word", { word: "notarealwordxyz" }));
     expect(result.status).toBe("not_found");
@@ -99,7 +102,7 @@ describe("Wave 49 learning and world discovery tools", () => {
         id: "EONET_123", title: "Test wildfire", description: "A curated event.",
         link: "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_123", closed: null,
         categories: [{ id: "wildfires", title: "Wildfires" }],
-        sources: [{ id: "EO", title: "Earth Observatory", url: "https://earthobservatory.nasa.gov/" }],
+        sources: [{ id: "EO", title: "Earth Observatory", source: "https://earthobservatory.nasa.gov/", link: "https://eonet.gsfc.nasa.gov/api/v3/sources/EO" }],
         geometry: [
           { date: "2026-11-24T00:00:00Z", type: "Point", coordinates: [106.7,20.8] },
           { date: "2026-11-24T01:00:00Z", type: "Polygon", coordinates: [] },
@@ -110,7 +113,8 @@ describe("Wave 49 learning and world discovery tools", () => {
     const result = JSON.parse(await runLiveEverydayTool("get_natural_events", { category: "wildfires", days_back: 7 }));
     expect(result.event_count).toBe(1);
     expect(result.events[0].recent_geometry[0].point.latitude).toBe(20.8);
-    expect(result.events[0].sources[0].url).toBe("https://earthobservatory.nasa.gov/");
+    expect(result.events[0].sources[0].source_url).toBe("https://earthobservatory.nasa.gov/");
+    expect(result.events[0].sources[0].api_url).toContain("eonet.gsfc.nasa.gov");
     expect(result.note).toContain("not an emergency alert");
   });
 

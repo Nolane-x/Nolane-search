@@ -541,6 +541,17 @@ function boundedString(value: unknown, key: string, max: number): string | undef
   return clean;
 }
 
+function safeExternalHttpsUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password || !url.hostname.includes(".")) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function trustedHttpsUrl(value: unknown, allowedHosts: string[]): string | null {
   if (typeof value !== "string" || value.length > 2048) return null;
   try {
@@ -794,7 +805,8 @@ async function naturalEvents(args: Obj): Promise<string> {
       const item = rawSource as Obj;
       return [{
         title: typeof item.title === "string" ? item.title.slice(0, 100) : null,
-        url: trustedHttpsUrl(item.url, item.url && typeof item.url === "string" ? [new URL(item.url).hostname] : []),
+        source_url: safeExternalHttpsUrl(item.source ?? item.url),
+        api_url: trustedHttpsUrl(item.link, ["eonet.gsfc.nasa.gov"]),
       }];
     }) : [];
     const geometry = Array.isArray(event.geometry) ? event.geometry.slice(-3).flatMap((rawGeometry) => {
