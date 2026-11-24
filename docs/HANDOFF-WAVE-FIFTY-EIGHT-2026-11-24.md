@@ -1,9 +1,9 @@
 # Wave 58 handoff — Open Facts barcode lookup and food comparison
 
 Date: 2026-11-24
-Branch: feat/wave-58-open-product-lookup
+Branch: feat/wave-58-open-product-lookup-final
 Base: a37bdd07b96e3bfc7a50829b41f55d2bf097f2a2
-Release status: implementation branch; not yet merged or deployed.
+Release status: merged and deployed via [PR #126](https://github.com/Nolane-x/Nolane-search/pull/126) as `a7551a00ee290e7506d6a38d9ec00d088f01f559`.
 
 ## New AI-callable tools
 
@@ -14,6 +14,8 @@ Release status: implementation branch; not yet merged or deployed.
 ## API correctness fix
 
 The API v3 response schema documents string statuses (`success`, `success_with_warnings`, `success_with_errors`, `failure`). The previous code accepted only numeric status `1`. The new shared reader accepts the current documented string forms when a valid product object is present, but also keeps numeric 1 for compatibility with older response examples. HTTP 404 becomes a not-found result; 429/503 are explicit rate-limit/temporary-unavailable errors.
+
+The current v3.5+ product schema nests nutrients at `product.nutrition.aggregated_set.nutrients`. Values are read from `value` or `value_computed`; the adapter only exposes them as per-100-g measurements when `aggregated_set.per` is explicitly `100g`. Per-100-ml and serving sets are not mislabeled. Missing nutrition has a null reference; negative nutrient values are rejected as invalid. The legacy flat `nutriments.*_100g` format is still supported.
 
 ## Safety and data interpretation
 
@@ -37,9 +39,12 @@ Search-a-licious issue #469 reported that its production product index stopped u
 
 No new dependencies, API secrets, D1 migrations, Cloudflare bindings or changes to the 534 file-processor catalog.
 
-## Acceptance gates
+## Production verification — 2026-11-24
 
-1. PR CI passes TypeScript, Vitest, deployment-script checks, Python runner tests and Cloudflare Worker build.
-2. Main CI, Cloudflare deployment and Worker export/health smoke pass after merge.
-3. Live barcode lookups across food/beauty/petfood/product remain separate from mocked tests; not every barcode exists in every catalog.
-4. Product-name full-text search remains deferred until Open Food Facts confirms the production search index has been reinitialized and current.
+- PR CI #523 [45427879864](https://github.com/Nolane-x/Nolane-search/actions/runs/45427879864) passed on the verified PR head.
+- Main CI #524 [45428128612](https://github.com/Nolane-x/Nolane-search/actions/runs/45428128612) passed TypeScript, 35 Vitest files / 356 tests, deployment-script checks, 449 Python runner tests and Worker build.
+- Cloudflare deploy #162 [45428128141](https://github.com/Nolane-x/Nolane-search/actions/runs/45428128141) succeeded. Worker Version ID: `959b78b3-38a6-45d5-b5a4-c2231de31bf7`.
+- Worker export #155 [45428128360](https://github.com/Nolane-x/Nolane-search/actions/runs/45428128360) and public health smoke succeeded: `ok: true`, database `reachable`, archive enabled.
+- Telegram webhook validation and bot command registration completed. No D1 migration was needed.
+- The release checks verify code, Worker build, deployment and health endpoint. They do not prove every barcode exists or that every community-maintained product field is current. Product-name full-text search is not part of this release.
+
