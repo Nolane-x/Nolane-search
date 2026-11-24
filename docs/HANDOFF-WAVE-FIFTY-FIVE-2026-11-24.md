@@ -9,7 +9,7 @@ Release status: implementation branch; not yet merged or deployed.
 
 Wikipedia:
 - search_wikipedia_articles — search en/vi/ja/fr/es/de editions.
-- get_wikipedia_article — fetch a bounded 8,000-character extract, canonical page link, categories and optional Wikimedia thumbnail.
+- get_wikipedia_article — fetch a bounded 1,200-character extract, canonical page link, categories and optional Wikimedia thumbnail.
 
 Wikivoyage:
 - search_wikivoyage_guides — discover travel guides in English or Vietnamese.
@@ -25,7 +25,7 @@ Wiktionary:
 - AI schemas/dispatch: src/agent-tools.ts and tests/agent-tools.test.ts.
 - Uses fixed Wikimedia project hostnames and query parameters; no user-controlled URL or HTML scraping.
 - Descriptive User-Agent + Api-User-Agent, JSON, maxlag=5, 12-second timeout and bounded response bodies.
-- Search result caps are 10 for Wikipedia and 7 for Wikivoyage; article text is capped at 8,000 characters.
+- Search result caps are 10 for Wikipedia and 7 for Wikivoyage; article text is capped at 1,200 characters.
 - Thumbnail URLs are accepted only from upload.wikimedia.org.
 - HTTP 429/503 and MediaWiki maxlag/API error payloads are surfaced without retry storms.
 
