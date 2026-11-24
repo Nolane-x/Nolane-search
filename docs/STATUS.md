@@ -14,7 +14,6 @@ Last verified: 2026-11-24. Production deployment evidence is separated from owne
 - Owner-level acceptance remains separate: test selected tools in the real private Telegram bot and upload a non-sensitive JSON file. CI and webhook registration do not prove every client-side interaction.
 
 ## Previous production release — Wave 42 (2026-11-24)
-## Previous production release — Wave 42 (2026-11-24)
 
 - [PR #95](https://github.com/Nolane-x/Nolane-search/pull/95) merged into main as `caa5bc0ee08a1b584c2099decdad3b8e8b78a890`. Production Tool Center catalog: **502 processors** (+8 over Wave 41).
 - PR CI [45312352260](https://github.com/Nolane-x/Nolane-search/actions/runs/45312352260) passed TypeScript type-check, **25 Vitest files / 266 tests**, deployment-script checks, **404 Python runner tests** and Worker build. Main CI [45317297572](https://github.com/Nolane-x/Nolane-search/actions/runs/45317297572) passed TypeScript, **25 Vitest files / 266 tests**, deployment-script checks, **404 Python runner tests** and Worker build.
