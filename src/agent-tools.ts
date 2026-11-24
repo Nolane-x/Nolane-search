@@ -14,6 +14,7 @@ import { PERSONAL_FINANCE_MOVING_TOOL_IDS, runPersonalFinanceMovingTextTool } fr
 import { HOME_VEHICLE_RENTAL_TOOL_IDS, runHomeVehicleRentalTextTool } from "./home-vehicle-rental-tools";
 import { runLiveEverydayTool } from "./live-everyday-tools";
 import { runWorldDataTool } from "./world-data-tools";
+import { runMediaDiscoveryTool } from "./media-discovery-tools";
 import { translateText } from "./translation";
 import type { Env, SearchMode } from "./types";
 
@@ -400,6 +401,39 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
         year_to: { type: "integer", minimum: 1600, maximum: 2100, description: "Optional latest event year." },
         limit: { type: "integer", minimum: 1, maximum: 10, description: "Maximum number of reusable records returned, defaults to 5." }
       }, required: ["taxon_key"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_wikimedia_images",
+      description: "Search Wikimedia Commons for reusable images. Returns a thumbnail, original file link, source page, creator/credit and file-specific license metadata. Check the license and attribution requirements before reuse; not every Commons license permits every use.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 160, description: "Image subject, place, object or concept." },
+        limit: { type: "integer", minimum: 1, maximum: 12, description: "Number of image results, defaults to 8." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_nasa_media",
+      description: "Search the NASA Image and Video Library for public NASA imagery and video. For videos, returns a direct MP4 only when the public NASA asset manifest lists a safe MP4 URL. Check the NASA media guidelines and any third-party credit notes before reuse.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 160, description: "NASA subject, mission, spacecraft, planet or event." },
+        media_type: { type: "string", enum: ["all","image","video"], description: "Media type to search; defaults to all." },
+        limit: { type: "integer", minimum: 1, maximum: 8, description: "Number of media results, defaults to 6." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "lookup_food_product",
+      description: "Look up a packaged food by its 8–14 digit EAN/UPC barcode using the community-maintained Open Food Facts database. Returns ingredients, allergens, nutrition per 100 g and product images when available. Records may be incomplete or outdated; this is not medical or dietary advice.",
+      parameters: { type: "object", properties: {
+        barcode: { type: "string", pattern: "^[0-9]{8,14}$", description: "Product barcode, for example a 13-digit EAN." }
+      }, required: ["barcode"], additionalProperties: false }
     }
   },
   {
@@ -1921,6 +1955,9 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
     if (!safe || safe.protocol !== "https:") throw new Error("Only valid public HTTPS URLs are allowed.");
     const page = await fetchTinyFishPage(env, safe.toString());
     return JSON.stringify({ title: page.title, url: page.finalUrl, text: page.text.slice(0, 12_000) });
+  }
+  if (["search_wikimedia_images","search_nasa_media","lookup_food_product"].includes(name)) {
+    return (await runMediaDiscoveryTool(name, args)).slice(0, 12_000);
   }
   if (["search_country_profiles","get_world_bank_indicators","search_gbif_species","search_gbif_observations"].includes(name)) {
     return (await runWorldDataTool(name, args)).slice(0, 12_000);
