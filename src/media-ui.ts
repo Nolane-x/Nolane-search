@@ -24,7 +24,7 @@ const HTML = String.raw`<!doctype html>
 <div class="meta"><span id="status">Đang kiểm tra phiên đăng nhập…</span><span id="count"></span></div>
 <div id="notice" class="notice hidden"></div>
 <section id="results" class="grid"></section>
-<div class="footer">Wikimedia Commons và Openverse cung cấp ảnh kèm nguồn/tác giả/giấy phép khi có. Video và audio Internet Archive chỉ hiện khi hồ sơ công khai liệt kê tệp gốc phù hợp; quyền sử dụng khác nhau theo từng mục. NASA có thể chứa tư liệu bên thứ ba. Hãy xem trang nguồn và điều khoản trước khi tái sử dụng. PeerTube dùng chỉ mục liên mạng SepiaSearch, không bao phủ mọi instance; video mở tại máy chủ gốc và giấy phép cần được kiểm tra tại đó. Tải video đa website vẫn là tính năng riêng đang phát triển.</div>
+<div class="footer">Wikimedia Commons và Openverse cung cấp ảnh kèm nguồn/tác giả/giấy phép khi có. NASA và Internet Archive có thể phát hoặc mở/tải tệp gốc khi hồ sơ công khai liệt kê URL phù hợp; quyền sử dụng khác nhau theo từng mục. PeerTube dùng chỉ mục liên mạng SepiaSearch, không bao phủ mọi instance; video mở tại máy chủ gốc. <strong>Hiện chưa có downloader đa website hoặc kho chia sẻ file riêng tư.</strong> Luồng xử lý tệp qua Telegram vẫn chịu giới hạn tải 20 MB của Bot API. Tính năng tải từ nhiều website, lưu vào private storage và chia sẻ bằng link có hạn dùng cần R2 được kích hoạt trước. Hãy xem trang nguồn và điều khoản trước khi tải hoặc tái sử dụng.</div>
 </main>
 <script>
 (function(){
@@ -69,7 +69,7 @@ function card(item){
  var actions=document.createElement('div');actions.className='actions';
  var source=item.provider==='PeerTube'?safeUrl(item.sourceUrl,[item.instanceHost]):item.provider==='Openverse'?safeUrl(item.sourceUrl,null):item.provider==='Internet Archive'?safeUrl(item.sourceUrl,['archive.org']):safeUrl(item.sourceUrl,['commons.wikimedia.org','images.nasa.gov','www.nasa.gov']);
  var sourceLink=anchor(item.provider==='PeerTube'?'Xem trên PeerTube':'Trang nguồn',source,item.provider==='PeerTube');if(sourceLink)actions.appendChild(sourceLink);
- var file=anchor(item.mediaType==='video'?'Mở video gốc':item.mediaType==='audio'?'Mở audio gốc':'Ảnh gốc',mediaUrl,true);if(file)actions.appendChild(file);
+ var file=anchor(item.mediaType==='video'?'Mở / tải video gốc':item.mediaType==='audio'?'Mở / tải audio gốc':'Mở / tải ảnh gốc',mediaUrl,true);if(file)actions.appendChild(file);
  if(item.licenseUrl){var license=safeUrl(item.licenseUrl,['creativecommons.org','rightsstatements.org','www.nasa.gov']);var licenseLink=anchor('Giấy phép',license,false);if(licenseLink)actions.appendChild(licenseLink)}
  body.appendChild(actions);card.appendChild(body);return card;
 }
