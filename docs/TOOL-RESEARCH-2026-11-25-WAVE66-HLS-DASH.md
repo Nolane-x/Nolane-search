@@ -57,28 +57,31 @@ The official dash.js v5 API specifies that `setRepresentationForTypeByIndex` exp
 
 ## Verification
 
-GitHub Actions CI run [#579](https://github.com/Nolane-x/Nolane-search/actions/runs/45597411033) completed successfully on code commit `5383069da69a347f0cc62ae4bed9b308b26b661b` before the final DASH representation-scope fix. A fresh run is required for the latest fix.
+GitHub Actions CI run [#595](https://github.com/Nolane-x/Nolane-search/actions/runs/45609295933) completed successfully on commit `d9a93e703189e1d31b8a21cfd95c6b3bb9d6618b`, which includes the HLS/DASH quality, retry, playback-rate, audio-track, subtitle-track and responsive player changes.
 
 - TypeScript type-check: passed.
-- Vitest: 38 files, 399 tests passed (before the last DASH event-scope regression assertion).
+- Vitest: 38 files, 399 tests passed.
 - Deployment-script checks: passed.
 - Pinned PRONOM installation: passed.
 - Python tool-runner: 449 tests passed.
 - Cloudflare Worker build: completed.
 
-The resolver tests cover valid HLS/DASH paths, signed query retention, HTTPS and unsafe-host rejection, and prove that the Worker does not fetch the supplied manifest URL. UI tests cover lazy library loading, request filtering, no-credential mode, cleanup, DRM license request handling, CSP and generated inline-script syntax. Automated CI does not establish that a third-party live stream is currently online or playable.
+The tests cover valid HLS/DASH paths, signed query retention, HTTPS and unsafe-host rejection, no Worker-side fetch, lazy player loading, request filtering, no-credential mode, player cleanup and retry lifecycle, CDN promise recovery, adaptive/manual quality, audio and subtitle track wiring, playback-rate controls, responsive stream layout, DRM license request handling, CSP and generated inline-script syntax. Automated CI does not establish that a third-party live stream is currently online or playable; manual browser validation against live, CORS-enabled sample manifests remains a release gate.
 
 ## External references
 
 - HLS.js README and compatibility/CORS notes: https://github.com/video-dev/hls.js
-- HLS.js npm package: https://www.npmjs.com/package/hls.js
+- HLS.js package: https://www.npmjs.com/package/hls.js
+- HLS.js API and track controls: https://hlsjs.video-dev.org/api-docs/hls.js.hls
+- HLS.js event enumeration: https://hlsjs.video-dev.org/api-docs/hls.js.events
 - dash.js 5.3.0 release: https://github.com/Dash-Industry-Forum/dash.js/releases/tag/v5.3.0
 - dash.js project and player documentation: https://dashif.org/dash.js/
 - dash.js network interceptors: https://dashif.org/dash.js/pages/usage/network-interceptor.html
 - dash.js CommonMediaRequest fields: https://cdn.dashjs.org/latest/jsdoc/CommonMediaRequest.html
-- dash.js manual quality selection: https://cdn.dashjs.org/latest/jsdoc/module-MediaPlayer.html
+- dash.js manual quality selection and MediaPlayer APIs: https://cdn.dashjs.org/latest/jsdoc/module-MediaPlayer.html
 - dash.js ABR settings: https://dashif.org/dash.js/pages/usage/abr/settings.html
-- HLS.js quality switch API: https://hlsjs.video-dev.org/api-docs/hls.js.hls
+- dash.js audio track selection: https://dashif.org/dash.js/pages/usage/track-selection.html
+- dash.js subtitle selection: https://dashif.org/dash.js/pages/usage/subtitles-and-captions/subtitle-handling.html
 
 ## Not implemented
 
