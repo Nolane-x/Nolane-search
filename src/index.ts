@@ -93,6 +93,7 @@ async function sendHomeDashboard(env: Env, chatId: number, userId: number): Prom
     disable_web_page_preview: true,
     reply_markup: buildHomeKeyboard(miniAppUrl),
   });
+  await setTelegramWorkspaceMenuButton(env, chatId, userId);
 }
 
 async function editTelegramDashboard(env: Env, chatId: number, messageId: number, text: string, replyMarkup: TelegramInlineKeyboardMarkup): Promise<void> {
@@ -142,6 +143,24 @@ async function createWebLoginUrl(env: Env, userId: number, chatId: number, path 
   const url = new URL(path, WEB_APP_ORIGIN);
   url.searchParams.set("ticket", token);
   return url.toString();
+}
+
+/** Configure a persistent per-chat launcher; the inline /start button still performs the one-time login. */
+async function setTelegramWorkspaceMenuButton(env: Env, chatId: number, userId: number): Promise<void> {
+  if (chatId !== userId || !allowedUser(env, userId)) return;
+  try {
+    await telegramApi(env, "setChatMenuButton", {
+      chat_id: chatId,
+      menu_button: {
+        type: "web_app",
+        text: "Workspace",
+        web_app: { url: new URL("/telegram", WEB_APP_ORIGIN).toString() },
+      },
+    });
+  } catch (error) {
+    // The inline keyboard remains a working fallback if the per-chat menu shortcut cannot be set.
+    console.warn("Telegram Mini App menu button setup failed:", error instanceof Error ? error.message : "unknown");
+  }
 }
 interface AiSynthesisCache {
   answer: string;
@@ -900,6 +919,7 @@ async function handleUiCallback(env: Env, callback: TelegramCallbackQuery): Prom
     await clearPendingTelegramMode(env, callback.from.id, message.chat.id);
     const miniAppUrl = await createWebLoginUrl(env, callback.from.id, message.chat.id, "/telegram");
     await editTelegramDashboard(env, message.chat.id, message.message_id, formatHomeMenu(), buildHomeKeyboard(miniAppUrl));
+    await setTelegramWorkspaceMenuButton(env, message.chat.id, callback.from.id);
     return;
   }
   if (data.startsWith("ui:mode:")) {
