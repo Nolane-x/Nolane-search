@@ -37,7 +37,7 @@ jobs:
       - name: Build Cloudflare Worker
         run: npm run build
       - name: Enable Safari WebDriver
-        run: safaridriver --enable
+        run: sudo safaridriver --enable
       - name: Check Safari browser test script
         run: node --check scripts/media-safari-native-hls-e2e.mjs
       - name: Run native HLS decode in Apple Safari
