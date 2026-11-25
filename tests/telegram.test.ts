@@ -60,20 +60,19 @@ describe("Telegram browser file handoff", () => {
 });
 
 describe("Telegram interactive workspace UI", () => {
-  it("builds a menu with all search/AI modes and a web workspace URL", () => {
-    const menu = buildHomeKeyboard();
+  it("keeps native Telegram controls compact and opens the authenticated Mini App", () => {
+    const miniAppUrl = "https://search.example.test/telegram?ticket=" + "a".repeat(64);
+    const menu = buildHomeKeyboard(miniAppUrl);
     const buttons = menu.inline_keyboard.flat();
+    expect(menu.inline_keyboard.length).toBeLessThanOrEqual(7);
+    expect(buttons.some(button => button.web_app?.url === miniAppUrl)).toBe(true);
     expect(buttons.some(button => button.callback_data === "ui:mode:web")).toBe(true);
     expect(buttons.some(button => button.callback_data === "ui:mode:ask")).toBe(true);
     expect(buttons.some(button => button.callback_data === "ui:mode:deep")).toBe(true);
     expect(buttons.some(button => button.callback_data === "ui:mode:local")).toBe(true);
     expect(buttons.some(button => button.callback_data === "tc:home")).toBe(true);
-    expect(buttons.some(button => button.text.includes("Media Portal") && button.url === "https://nolane-search.nolane-file.workers.dev/media")).toBe(true);
-    expect(buttons.some(button => button.url === "https://nolane-search.nolane-file.workers.dev/")).toBe(true);
-    const customMenu = buildHomeKeyboard("https://search.example.test/workspace");
-    expect(customMenu.inline_keyboard.flat().find(button => button.text.includes("Media Portal"))?.url).toBe("https://search.example.test/media");
-    expect(buttons.some(button => button.url?.startsWith("https://"))).toBe(true);
     expect(buttons.every(button => new TextEncoder().encode(button.callback_data || "").length <= 64)).toBe(true);
+    expect(buttons.filter(button => button.web_app).length).toBe(1);
   });
 
   it("shows an explicit next-message prompt and cancel/home navigation", () => {
