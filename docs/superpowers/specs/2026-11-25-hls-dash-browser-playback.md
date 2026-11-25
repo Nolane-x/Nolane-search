@@ -25,6 +25,9 @@ Allow an authenticated Media Portal user to paste a direct HLS or MPEG-DASH mani
 - DASH manual selection uses the relative index from `getRepresentationsByType('video')` and disables `autoSwitchBitrate.video`; Auto re-enables ABR.
 - Display height and bitrate where the manifest provides them; do not invent labels for missing metadata.
 - Provide a shared playback-rate selector for HLS, DASH and native HLS with 0.5×, 0.75×, 1×, 1.25×, 1.5× and 2×.
+- HLS.js: expose alternate audio tracks and subtitle tracks from the manifest; include a subtitle-off choice.
+- dash.js: expose alternate audio tracks through `getTracksFor('audio')` / `setCurrentTrack()` and text tracks through `TEXT_TRACKS_ADDED` / `setTextTrack()`, including a subtitle-off choice.
+- Hide selectors when the manifest does not expose alternate audio or subtitle tracks.
 - Show source-page and manifest links; do not label a manifest as a downloaded video file.
 
 ## Network policy
