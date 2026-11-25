@@ -246,14 +246,21 @@ function showStreamPlayer(preview,item,streamUrl){
   audioTrack.row.hidden=true;audioTrack.select.replaceChildren();subtitleTrack.row.hidden=true;subtitleTrack.select.replaceChildren();retry.hidden=true;
   status.textContent='Đang khởi tạo player…';
   if(item.streamType==='hls'){
+   function canUseAppleNativeHls(){
+    var ua=navigator.userAgent||'';var vendor=navigator.vendor||'';
+    var appleWebKit=/AppleWebKit/i.test(ua)&&/Apple Computer, Inc\./i.test(vendor);
+    var blinkOrGecko=/(Chrome|Chromium|Edg\/|OPR\/|Firefox\/|SamsungBrowser)/i.test(ua);
+    return appleWebKit&&!blinkOrGecko&&Boolean(video.canPlayType('application/vnd.apple.mpegurl'));
+   }
    function startNativeHls(){
     video.src=streamUrl;status.textContent='Đang dùng HLS native của trình duyệt. Máy chủ nguồn vẫn cần CORS.';
     video.addEventListener('error',function(){if(!cancelled&&attempt===generation)fail('Không phát được HLS native. Kiểm tra CORS, playlist và codec của nguồn.',true)},{once:true});
    }
-   if(video.canPlayType('application/vnd.apple.mpegurl')){startNativeHls();return}
+   if(canUseAppleNativeHls()){startNativeHls();return}
    loadPinnedMediaScript('hls','https://cdn.jsdelivr.net/npm/hls.js@1.7.4/dist/hls.min.js','Hls').then(function(Hls){
     if(cancelled||attempt!==generation)return;
     if(!Hls.isSupported()){
+     if(canUseAppleNativeHls()){startNativeHls();return}
      fail('Trình duyệt này không hỗ trợ Media Source Extensions hoặc HLS native.',false);
      return;
     }
@@ -318,7 +325,11 @@ function showStreamPlayer(preview,item,streamUrl){
     });
     status.textContent='Đang tải HLS manifest…';
     hls.loadSource(streamUrl);hls.attachMedia(video);
-   }).catch(function(error){if(!cancelled&&attempt===generation)fail(error.message||'Không thể tải HLS player.',true)});
+   }).catch(function(error){
+    if(cancelled||attempt!==generation)return;
+    if(canUseAppleNativeHls()){startNativeHls();return}
+    fail(error.message||'Không thể tải HLS player.',true);
+   });
    return;
   }
   loadPinnedMediaScript('dash','https://cdn.jsdelivr.net/npm/dashjs@5.3.0/dist/legacy/umd/dash.all.min.js','dashjs').then(function(dashjs){
