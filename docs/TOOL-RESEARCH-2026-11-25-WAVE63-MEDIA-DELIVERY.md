@@ -19,8 +19,8 @@ Official PeerTube API reference for video embeds:
 ## Verification
 
 The first PR CI run was intentionally red after tests were added before production code: it identified the missing embed URL and missing frame policy. The implementation was added afterward.
-- Final CI for the current branch head: pending at the time this note was written.
-- Do not treat PR CI as a production deployment or a live test against arbitrary PeerTube instances.
+- Final GitHub Actions CI run #553 on HEAD `9e209ac30034506f17aff7ffc7880f603873c1ab`: **success**. TypeScript type-check, Vitest suite (383 tests), deployment-script checks, Python tool runner and Cloudflare Worker build all passed.
+- This confirms build/test integrity, not a production deployment or a live test against arbitrary PeerTube instances.
 - A valid embed still depends on the source instance allowing external embeds and the browser reaching that instance.
 
 ## What this does not implement
