@@ -22,7 +22,7 @@ const samples = [
     id: "hls-shaka-audio",
     label: "HLS · Shaka Angel One · alternate audio",
     url: "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8",
-    expected: { audio: 2 },
+    expected: { quality: 2, audio: 2, subtitles: 1 },
   },
   {
     id: "hls-webvtt-subtitles",
@@ -318,9 +318,21 @@ async function runSample(browser, origin, sample) {
     const minimumAudioOptions = sample.expected.audio || 0;
     const minimumSubtitleOptions = sample.expected.subtitles ? sample.expected.subtitles + 1 : 0;
 
-    result.quality = await waitForExpectedOptions(page, "select.stream-quality", minimumQualityOptions, "Quality", result.errors);
-    result.audio = await waitForExpectedOptions(page, "select.stream-track[aria-label='Ngôn ngữ âm thanh']", minimumAudioOptions, "Audio", result.errors);
-    result.subtitles = await waitForExpectedOptions(page, "select.stream-track[aria-label='Ngôn ngữ phụ đề']", minimumSubtitleOptions, "Subtitle", result.errors);
+    const qualitySelector = "select.stream-quality";
+    const audioSelector = "select.stream-track[aria-label='Ngôn ngữ âm thanh']";
+    const subtitleSelector = "select.stream-track[aria-label='Ngôn ngữ phụ đề']";
+    result.quality = await optionSnapshot(page, qualitySelector).catch(() => null);
+    result.audio = await optionSnapshot(page, audioSelector).catch(() => null);
+    result.subtitles = await optionSnapshot(page, subtitleSelector).catch(() => null);
+    if (minimumQualityOptions > 0) {
+      result.quality = await waitForExpectedOptions(page, qualitySelector, minimumQualityOptions, "Quality", result.errors);
+    }
+    if (minimumAudioOptions > 0) {
+      result.audio = await waitForExpectedOptions(page, audioSelector, minimumAudioOptions, "Audio", result.errors);
+    }
+    if (minimumSubtitleOptions > 0) {
+      result.subtitles = await waitForExpectedOptions(page, subtitleSelector, minimumSubtitleOptions, "Subtitle", result.errors);
+    }
 
     if (result.quality?.visible && (sample.expected.quality || 0) > 0) {
       const manual = result.quality.options.find((option) => option.value !== "-1");
