@@ -25,7 +25,7 @@ const samples = [
     expected: { audio: 2 },
   },
   {
-    id: "hls-jw-captions",
+    id: "hls-webvtt-subtitles",
     label: "HLS · HLS Test Streams · WebVTT subtitles",
     url: "https://mtoczko.github.io/hls-test-streams/test-vtt-ts-segments/playlist.m3u8",
     expected: { subtitles: 1 },
@@ -137,6 +137,12 @@ async function startHarness() {
   return { server, origin: "http://127.0.0.1:" + address.port };
 }
 
+function classifyRequestFailures(entries) {
+  const cancellations = entries.filter((entry) => /net::ERR_ABORTED/i.test(entry.error || ""));
+  const failures = entries.filter((entry) => !/net::ERR_ABORTED/i.test(entry.error || ""));
+  return { failures, cancellations };
+}
+
 function safeResourceUrl(value) {
   try {
     const url = new URL(value);
@@ -227,7 +233,8 @@ async function runSample(browser, origin, sample) {
     playbackSeconds: 0,
     manifestResponse: null,
     corsEvidence: [],
-    requestFailures: failures,
+    requestFailures: [],
+    requestCancellations: [],
     consoleErrors,
     errors: [],
   };
@@ -396,10 +403,14 @@ async function runSample(browser, origin, sample) {
     result.playbackSeconds = result.videoDiagnostics.currentTime;
     result.manifestResponse = mediaResponses.find((entry) => entry.url.startsWith(new URL(sample.url).origin)) || null;
     result.corsEvidence = mediaResponses.slice(0, 12);
-    result.requestFailures = failures.slice(0, 20);
+    const classifiedRequests = classifyRequestFailures(failures);
+    result.requestFailures = classifiedRequests.failures.slice(0, 20);
+    result.requestCancellations = classifiedRequests.cancellations.slice(0, 20);
     result.consoleErrors = consoleErrors.slice(0, 20);
 
-    if (failures.length > 0) result.errors.push("Browser reported " + failures.length + " failed HTTPS request(s).");
+    if (classifiedRequests.failures.length > 0) {
+      result.errors.push("Browser reported " + classifiedRequests.failures.length + " failed HTTPS request(s).");
+    }
     if (consoleErrors.some((message) => /cors|access-control|media error|manifest.*error/i.test(message))) {
       result.errors.push("Browser console reported a CORS or media/manifest error.");
     }
@@ -432,7 +443,9 @@ async function runSample(browser, origin, sample) {
         dashEventNames: Object.keys(dash?.MediaPlayer?.events || {}),
       };
     }).catch((diagnosticError) => ({ diagnosticError: diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError) }));
-    result.requestFailures = failures.slice(0, 20);
+    const classifiedRequests = classifyRequestFailures(failures);
+    result.requestFailures = classifiedRequests.failures.slice(0, 20);
+    result.requestCancellations = classifiedRequests.cancellations.slice(0, 20);
     result.consoleErrors = consoleErrors.slice(0, 20);
     result.corsEvidence = mediaResponses.slice(0, 12);
   } finally {
@@ -471,6 +484,7 @@ async function main() {
       if (result.videoDiagnostics) console.log("  VIDEO:", JSON.stringify(result.videoDiagnostics));
       if (result.consoleErrors.length) console.log("  BROWSER CONSOLE:", JSON.stringify(result.consoleErrors.slice(0, 15)));
       if (result.requestFailures.length) console.log("  FAILED REQUESTS:", JSON.stringify(result.requestFailures.slice(0, 15)));
+      if (result.requestCancellations.length) console.log("  EXPECTED REQUEST CANCELLATIONS:", JSON.stringify(result.requestCancellations.slice(0, 15)));
     }
   } finally {
     if (browser) await browser.close().catch(() => {});
