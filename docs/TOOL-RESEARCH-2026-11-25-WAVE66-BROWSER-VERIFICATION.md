@@ -56,6 +56,21 @@ The workflow is available by manual dispatch and automatically for changes to th
 
 The browser test deliberately uses the app's actual generated HTML. It does not start the production Worker or pretend the test harness's synthetic owner session is a test of production authentication. It focuses only on the missing browser/media interoperability evidence. Authentication, URL resolver, request-filter and security boundaries remain covered by the existing Worker/Vitest tests.
 
+## First live-browser findings (2026-11-25)
+
+The initial real-browser matrix produced a useful split result rather than a pass:
+
+- The HLS Mux ABR, Shaka Angel One HLS and HLS WebVTT cases all reached at least two seconds of playback in Chromium. The browser observed multiple quality options for Mux and Shaka; Shaka exposed six audio entries plus text tracks; the WebVTT playlist exposed a subtitle track plus Off. CORS evidence showed successful public manifest/child-playlist responses with `Access-Control-Allow-Origin: *`.
+- That run also exposed a real UI defect: the playback-rate select had been created but was not appended to its label. The player now appends the caption and select, and the browser test verifies 1.25×.
+- HLS.js can emit WebVTT track content using a `data:,WEBVTT` URL. Chromium reported the previous `media-src` policy blocking this in-band data track, so `data:` was added only to `media-src` (not `script-src`).
+- Both DASH samples initially failed before any MPD request. The browser diagnostic recorded `event type cannot be null or undefined`. Source inspection of dash.js 5.3.0 showed that license/protection events are exposed through `dashjs.Protection.events`, not `dashjs.MediaPlayer.events`. The DRM stop listener now uses `dashjs.Protection.events.LICENSE_REQUEST_SENDING`. This keeps the intended no-DRM policy while allowing a non-DRM player to initialize.
+- The corrected implementation is running again in the release gate. Do not call DASH verified until the new run records the MPD request, media advancement and expected quality/audio/subtitle controls.
+
+Sources for the dash.js 5.3.0 event namespace:
+- https://github.com/Dash-Industry-Forum/dash.js/blob/v5.3.0/src/streaming/protection/ProtectionEvents.js
+- https://github.com/Dash-Industry-Forum/dash.js/blob/v5.3.0/index.js
+- https://github.com/Dash-Industry-Forum/dash.js/blob/v5.3.0/index.d.ts
+
 ## Boundaries that remain
 
 - This gate is Chromium/MSE coverage. It does not simulate Safari's native HLS stack. Native HLS remains a separate manual test on a real iPhone/iPad or Safari/macOS client.
