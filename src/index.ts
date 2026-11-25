@@ -15,6 +15,8 @@ import { clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWork
 import { webAppResponse } from "./web-ui";
 import { telegramMiniAppResponse } from "./telegram-mini-app-ui";
 import { mediaAppResponse } from "./media-ui";
+import { nearbyAppResponse } from "./nearby-ui";
+import { searchNearbyPlaces, NearbyPlacesInputError } from "./nearby-places-tools";
 import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos, searchInternetArchiveAudio, searchPeerTubeVideos } from "./media-discovery-tools";
 import { resolveMediaEmbed } from "./media-embed-resolver";
 import { completeAi, getAiRouterStatus } from "./ai-router";
@@ -337,6 +339,21 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
 
   const session = await getWebSession(request, env);
   if (!session) return jsonResponse({ error: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn." }, 401);
+
+  if (url.pathname === "/api/nearby/search" && request.method === "POST") {
+    const body = await parseJsonObjectBody(request, 8_000);
+    if (!body) return jsonResponse({ error: "Dữ liệu tìm địa điểm không hợp lệ hoặc vượt giới hạn." }, 400);
+    try {
+      return jsonResponse(await searchNearbyPlaces(body));
+    } catch (error) {
+      if (error instanceof NearbyPlacesInputError) {
+        return jsonResponse({ error: error.message }, 400);
+      }
+      return jsonResponse({
+        error: error instanceof Error ? error.message.slice(0, 220) : "Không thể tìm địa điểm lúc này.",
+      }, 502);
+    }
+  }
 
   if (url.pathname === "/api/media/resolve" && request.method === "GET") {
     const mediaUrl = url.searchParams.get("url");
@@ -3284,6 +3301,10 @@ export default {
     if (request.method === "GET" && url.pathname === "/media") {
       const session = await getWebSession(request, env);
       return session ? mediaAppResponse(env.MEDIA_ALLOW_NSFW === "true") : Response.redirect(new URL("/", request.url), 302);
+    }
+    if (request.method === "GET" && url.pathname === "/nearby") {
+      const session = await getWebSession(request, env);
+      return session ? nearbyAppResponse() : Response.redirect(new URL("/", request.url), 302);
     }
     if (url.pathname === "/internal/tools/translate") return handleToolTranslationApi(request, env);
     if (url.pathname === "/internal/tools/runner") return handleToolRunnerApi(request, env);

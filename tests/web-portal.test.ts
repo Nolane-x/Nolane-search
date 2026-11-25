@@ -115,6 +115,27 @@ describe("private browser search portal", () => {
     }), env, context);
     expect(response.status).toBe(403);
   });
+  it("keeps Nearby Places UI and search API private until an owner session exists", async () => {
+    const page = await worker.fetch(new Request("https://nolane-search.example/nearby"), env, context);
+    expect(page.status).toBe(302);
+    expect(page.headers.get("location")).toBe("https://nolane-search.example/");
+
+    const anonymous = await worker.fetch(new Request("https://nolane-search.example/api/nearby/search", {
+      method: "POST",
+      headers: { origin: "https://nolane-search.example", "content-type": "application/json" },
+      body: JSON.stringify({ latitude: 20.8449, longitude: 106.6881, category: "pharmacy" }),
+    }), env, context);
+    expect(anonymous.status).toBe(401);
+    expect(await anonymous.json()).toMatchObject({ error: expect.stringContaining("Phiên đăng nhập") });
+
+    const crossOrigin = await worker.fetch(new Request("https://nolane-search.example/api/nearby/search", {
+      method: "POST",
+      headers: { origin: "https://attacker.example", "content-type": "application/json" },
+      body: JSON.stringify({ latitude: 20.8449, longitude: 106.6881, category: "pharmacy" }),
+    }), env, context);
+    expect(crossOrigin.status).toBe(403);
+  });
+
   it("serves the private Media Portal and keeps media discovery API session-protected", async () => {
     const page = await worker.fetch(new Request("https://nolane-search.example/media"), env, context);
     expect(page.status).toBe(302);
