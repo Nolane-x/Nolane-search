@@ -98,6 +98,22 @@ describe("Nearby Places · OpenStreetMap", () => {
     ]);
   });
 
+  it("only exposes public HTTPS business websites, never local or private targets", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      elements: [
+        { type: "node", id: 31, lat: 20.8450, lon: 106.6882, tags: { name: "Public site", amenity: "pharmacy", website: "https://example.com/info" } },
+        { type: "node", id: 32, lat: 20.8451, lon: 106.6883, tags: { name: "Loopback", amenity: "pharmacy", website: "https://127.0.0.1/admin" } },
+        { type: "node", id: 33, lat: 20.8452, lon: 106.6884, tags: { name: "Private IP", amenity: "pharmacy", website: "https://192.168.1.20" } },
+        { type: "node", id: 34, lat: 20.8453, lon: 106.6885, tags: { name: "Credentials", amenity: "pharmacy", website: "https://user:secret@example.org" } },
+        { type: "node", id: 35, lat: 20.8454, lon: 106.6886, tags: { name: "Custom port", amenity: "pharmacy", website: "https://example.org:8443" } },
+      ],
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+    const result = await searchNearbyPlaces(coordinates);
+    expect(result.places.map((place) => place.website)).toEqual([
+      "https://example.com/info", null, null, null, null,
+    ]);
+  });
+
   it("rejects malformed coordinates, categories and out-of-policy limits before fetch", async () => {
     const mock = vi.fn();
     vi.stubGlobal("fetch", mock);
@@ -106,6 +122,7 @@ describe("Nearby Places · OpenStreetMap", () => {
     await expect(searchNearbyPlaces({ ...coordinates, category: "all" })).rejects.toThrow("category");
     await expect(searchNearbyPlaces({ ...coordinates, radius_m: 5001 })).rejects.toThrow("radius_m");
     await expect(searchNearbyPlaces({ ...coordinates, limit: 26 })).rejects.toThrow("limit");
+    await expect(searchNearbyPlaces({ ...coordinates, category: "essentials", radius_m: 5000 })).rejects.toThrow("3000 m");
     expect(mock).not.toHaveBeenCalled();
   });
 
