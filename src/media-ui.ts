@@ -121,9 +121,12 @@ function clearStreamPlayers(){
 function showStreamPlayer(preview,item,streamUrl){
  var video=document.createElement('video');video.className='stream-video';video.controls=true;video.playsInline=true;video.preload='none';video.crossOrigin='anonymous';video.referrerPolicy='no-referrer';
  var status=document.createElement('div');status.className='stream-status';status.setAttribute('role','status');status.textContent='Đang khởi tạo player…';
+ var cancelled=false;
+ streamPlayerCleanups.push(function(){cancelled=true;video.pause();video.removeAttribute('src');video.load()});
  preview.replaceChildren(video,status);
  if(item.streamType==='hls'){
   loadPinnedMediaScript('hls','https://cdn.jsdelivr.net/npm/hls.js@1.7.4/dist/hls.min.js','Hls').then(function(Hls){
+   if(cancelled)return;
    if(!Hls.isSupported()){
     if(video.canPlayType('application/vnd.apple.mpegurl')){
      video.src=streamUrl;status.textContent='Đang dùng HLS native của trình duyệt. Máy chủ nguồn vẫn cần CORS.';
@@ -152,10 +155,11 @@ function showStreamPlayer(preview,item,streamUrl){
    });
    status.textContent='Đang tải HLS manifest…';
    hls.loadSource(streamUrl);hls.attachMedia(video);
-  }).catch(function(error){status.textContent=error.message||'Không thể tải HLS player.'});
+  }).catch(function(error){if(!cancelled)status.textContent=error.message||'Không thể tải HLS player.'});
   return;
  }
  loadPinnedMediaScript('dash','https://cdn.jsdelivr.net/npm/dashjs@5.3.0/dist/legacy/umd/dash.all.min.js','dashjs').then(function(dashjs){
+  if(cancelled)return;
   var player=dashjs.MediaPlayer().create();
   player.addRequestInterceptor(function(request){
    if(!request||!isSafePublicMediaRequest(request.url))return Promise.reject(new Error('DASH chứa URL manifest/segment không an toàn.'));
@@ -164,11 +168,11 @@ function showStreamPlayer(preview,item,streamUrl){
    request.credentials='omit';request.mode='cors';
    return Promise.resolve(request);
   });
-  streamPlayerCleanups.push(function(){player.reset()});
+  streamPlayerCleanups.push(function(){player.destroy()});
   player.on(dashjs.MediaPlayer.events.ERROR,function(){status.textContent='DASH lỗi khi tải MPD/segment. Cần HTTPS, CORS GET và codec tương thích; DRM không được hỗ trợ.'});
   status.textContent='Đang tải DASH manifest…';
   player.initialize(video,streamUrl,false);
- }).catch(function(error){status.textContent=error.message||'Không thể tải DASH player.'});
+ }).catch(function(error){if(!cancelled)status.textContent=error.message||'Không thể tải DASH player.'});
 }
 async function api(path,options){
  var response=await fetch(path,Object.assign({credentials:'same-origin',cache:'no-store'},options||{}));
