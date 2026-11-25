@@ -19,6 +19,7 @@ import { runConsumerDiscoveryTool } from "./consumer-discovery-tools";
 import { runOpenKnowledgeTool } from "./open-knowledge-tools";
 import { runAnimeCatalogTool } from "./anime-catalog-tools";
 import { runSteamGamesTool } from "./steam-games-tools";
+import { searchNearbyPlaces } from "./nearby-places-tools";
 import { translateText } from "./translation";
 import type { Env, SearchMode } from "./types";
 
@@ -295,6 +296,20 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
         location: { type: "string", minLength: 2, maxLength: 100, description: "City or town name, not a street address." },
         country_code: { type: "string", pattern: "^[A-Za-z]{2}$", description: "Optional two-letter ISO country code." }
       }, required: ["location"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_nearby_places",
+      description: "Find named public places around coordinates the user explicitly provided or deliberately shared: food, shopping, pharmacies, healthcare, ATMs/banks, fuel, EV charging, parks, attractions or accommodation. Never guess the user's location, convert a city name or infer coordinates. Ask the user to share a location or provide latitude/longitude first. Results are community-maintained OpenStreetMap records; distances are straight-line, opening hours are not live status.",
+      parameters: { type: "object", properties: {
+        latitude: { type: "number", minimum: -90, maximum: 90, description: "Latitude explicitly supplied by the user or their shared location." },
+        longitude: { type: "number", minimum: -180, maximum: 180, description: "Longitude explicitly supplied by the user or their shared location." },
+        category: { type: "string", enum: ["food", "shopping", "pharmacy", "medical", "atm", "fuel", "charging", "parks", "sightseeing", "stay"], description: "One place category to search; a single bounded category is requested per call." },
+        radius_m: { type: "integer", minimum: 200, maximum: 5000, description: "Search radius in metres; defaults to 1500." },
+        limit: { type: "integer", minimum: 1, maximum: 25, description: "Maximum number of returned named places; defaults to 12." }
+      }, required: ["latitude", "longitude", "category"], additionalProperties: false }
     }
   },
   {
@@ -2207,6 +2222,9 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
     if (!safe || safe.protocol !== "https:") throw new Error("Only valid public HTTPS URLs are allowed.");
     const page = await fetchTinyFishPage(env, safe.toString());
     return JSON.stringify({ title: page.title, url: page.finalUrl, text: page.text.slice(0, 12_000) });
+  }
+  if (name === "search_nearby_places") {
+    return JSON.stringify(await searchNearbyPlaces(args));
   }
   if (["search_steam_games","get_steam_game_details"].includes(name)) {
     return (await runSteamGamesTool(name, args)).slice(0, 12_000);
