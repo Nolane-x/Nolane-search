@@ -373,7 +373,7 @@ async function runSample(browser, origin, sample) {
       };
     });
 
-    const rateControl = result.uiDiagnostics.selects.find((select) => select.className.split(/\\s+/).includes("stream-rate"));
+    const rateControl = result.uiDiagnostics.selects.find((select) => select.className === "stream-rate" || select.className.includes("stream-rate"));
     if (!rateControl) {
       result.errors.push("Playback-rate selector is missing from the rendered player DOM.");
     } else if (rateControl.hidden || rateControl.disabled || !rateControl.options.some((option) => option.value === "1.25")) {
@@ -440,6 +440,10 @@ async function main() {
       );
       for (const error of result.errors) console.error("  - " + error);
       if (result.corsEvidence.length) console.log("  CORS evidence:", JSON.stringify(result.corsEvidence.slice(0, 3)));
+      if (result.uiDiagnostics) console.log("  PLAYER DOM:", JSON.stringify(result.uiDiagnostics));
+      if (result.videoDiagnostics) console.log("  VIDEO:", JSON.stringify(result.videoDiagnostics));
+      if (result.consoleErrors.length) console.log("  BROWSER CONSOLE:", JSON.stringify(result.consoleErrors.slice(0, 15)));
+      if (result.requestFailures.length) console.log("  FAILED REQUESTS:", JSON.stringify(result.requestFailures.slice(0, 15)));
     }
   } finally {
     if (browser) await browser.close().catch(() => {});
