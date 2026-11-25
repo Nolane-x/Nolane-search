@@ -168,7 +168,7 @@ async function main() {
         try { return await webdriver("GET", "/status"); }
         catch { return null; }
       },
-      (state) => Boolean(state?.ready !== false),
+      (state) => Boolean(state && state.ready !== false),
       "Safari WebDriver status",
       20_000,
     );
@@ -182,6 +182,7 @@ async function main() {
       },
     });
     sessionId = created.sessionId || created.value?.sessionId;
+    report.safariCapabilities = created.capabilities || null;
     if (!sessionId) throw new Error("Safari WebDriver created no session ID");
     await webdriver("POST", "/session/" + sessionId + "/timeouts", {
       script: 15_000,
