@@ -56,6 +56,8 @@ const requiredMarkers = [
   'data-tab="library"',
   'href="/media"',
   "Media Studio",
+  'href="/nearby"',
+  "Địa điểm quanh đây",
   "/api/auth/exchange",
 ];
 
@@ -64,4 +66,37 @@ if (missing.length) {
   throw new Error("Telegram Mini App HTML is missing required UI markers: " + missing.join(", "));
 }
 
-console.log("Telegram Mini App smoke test passed: HTTPS route, private cache policy, CSP, auth bootstrap, five workspace tabs and Media Studio link.");
+const nearbyUrl = new URL("/nearby", url.origin);
+const nearbyPage = await fetch(nearbyUrl, {
+  method: "GET",
+  headers: { accept: "text/html" },
+  redirect: "manual",
+  signal: AbortSignal.timeout(15_000),
+});
+if (nearbyPage.status !== 302) {
+  await nearbyPage.body?.cancel().catch(() => undefined);
+  throw new Error("Private Nearby Places page must redirect anonymous visitors; got HTTP " + nearbyPage.status + ".");
+}
+if (nearbyPage.headers.get("location") !== url.origin + "/") {
+  await nearbyPage.body?.cancel().catch(() => undefined);
+  throw new Error("Nearby Places anonymous redirect did not point to the private workspace sign-in page.");
+}
+await nearbyPage.body?.cancel().catch(() => undefined);
+
+const nearbyApi = await fetch(new URL("/api/nearby/search", url.origin), {
+  method: "POST",
+  headers: {
+    origin: url.origin,
+    "content-type": "application/json",
+  },
+  body: JSON.stringify({ latitude: 20.8449, longitude: 106.6881, category: "pharmacy" }),
+  redirect: "error",
+  signal: AbortSignal.timeout(15_000),
+});
+if (nearbyApi.status !== 401) {
+  await nearbyApi.body?.cancel().catch(() => undefined);
+  throw new Error("Nearby Places API must reject anonymous POSTs with HTTP 401; got " + nearbyApi.status + ".");
+}
+await nearbyApi.body?.cancel().catch(() => undefined);
+
+console.log("Telegram Workspace production smoke passed: /telegram HTML/CSP/auth/tabs, Media Studio and Nearby links; /nearby private redirect; nearby search API anonymous 401.");
