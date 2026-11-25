@@ -104,7 +104,7 @@ function card(item){
    var frameUrl=new URL(embedUrl);
    if(item.provider==='Twitch'){
     var parent=location.hostname.toLowerCase().replace(/\.$/,'');
-    if(location.protocol!=='https:'||!parent.includes('.')||parent==='localhost'||parent.endsWith('.localhost')||parent.endsWith('.local')||parent.endsWith('.test')||/^(?:\d{1,3}\.){3}\d{1,3}$/.test(parent)){
+    if(location.protocol!=='https:'||!parent.includes('.')||parent==='localhost'||parent.endsWith('.localhost')||parent.endsWith('.local')||parent.endsWith('.internal')||parent.endsWith('.invalid')||parent.endsWith('.example')||parent.endsWith('.test')||/^(?:\d{1,3}\.){3}\d{1,3}$/.test(parent)){
      preview.textContent='Twitch player cần một tên miền HTTPS công khai để xác định tham số parent.';
      return;
     }
