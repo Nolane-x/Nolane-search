@@ -90,7 +90,7 @@ describe("Telegram Tool Center UI", () => {
     expect(home).toContain("534 processor");
     expect(home).toContain("được gom vào <b>Workspace</b>");
     expect(home).not.toContain("Lập trình &amp; văn bản");
-    const miniAppUrl = "https://search.example.test/telegram#tools?ticket=" + "a".repeat(64);
+    const miniAppUrl = "https://search.example.test/telegram?ticket=" + "a".repeat(64) + "#tools";
     const keyboard = buildToolCenterKeyboard(TOOL_CATALOG, miniAppUrl);
     const buttons = keyboard.inline_keyboard.flat();
     expect(keyboard.inline_keyboard.length).toBeLessThanOrEqual(3);
