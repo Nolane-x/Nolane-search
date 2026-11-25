@@ -26,7 +26,7 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("strict-origin-when-cross-origin");
     expect(html).toContain("frame.sandbox.add('allow-scripts','allow-same-origin','allow-popups','allow-forms','allow-presentation')");
     expect(html).toContain("/api/media/resolve?url='+encodeURIComponent(q)");
-    expect(html).toContain("var isUrl=/^https?:\\/\\//i.test(q)");
+    expect(html).toContain("var isUrl=q.indexOf('https://')===0||q.indexOf('http://')===0");
     expect(html).toContain('maxlength="2048"');
   });
 
@@ -51,7 +51,7 @@ describe("Media Portal media discovery experience", () => {
     const html = await (await mediaAppResponse()).text();
     expect(html).toContain('<option value="peertube">PeerTube · video liên mạng</option>');
     expect(html).toContain("item.provider==='PeerTube'?safeUrl(item.sourceUrl,[item.instanceHost])");
-    expect(html).toContain("item.provider==='PeerTube'?'Xem trên PeerTube':'Trang nguồn'");
+    expect(html).toContain("item.provider==='PeerTube'?'Xem trên PeerTube':item.provider==='YouTube'?'Mở trên YouTube'");
     expect(html).toContain("Mở trang PeerTube gốc để xem video");
     expect(html).toContain("PeerTube dùng chỉ mục liên mạng SepiaSearch");
   });
