@@ -514,6 +514,27 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     })) });
   }
 
+  if (url.pathname === "/api/tools/jobs/retry" && request.method === "POST") {
+    if (session.chatId !== session.userId || !allowedUser(env, session.userId)) {
+      return jsonResponse({ error: "Retry chỉ hoạt động trong Workspace gắn với chat riêng Telegram được cấp quyền." }, 403);
+    }
+    const body = await parseJsonBody(request);
+    const jobId = typeof body?.jobId === "string" ? body.jobId.trim() : "";
+    if (!/^[a-f0-9-]{36}$/i.test(jobId)) {
+      return jsonResponse({ error: "Job ID không hợp lệ." }, 400);
+    }
+    try {
+      const job = await retryToolJob(env, session.userId, session.chatId, jobId);
+      return jsonResponse({
+        ok: true, sourceJobId: jobId, jobId: job.id, toolId: job.toolId,
+        fileName: job.fileName, status: job.status, attempt: job.attempt || 1,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không thể retry job lúc này.";
+      return jsonResponse({ error: message.slice(0, 300) }, 422);
+    }
+  }
+
   if (url.pathname === "/api/search" && request.method === "GET") {
     const query = (url.searchParams.get("q") || "").trim();
     const rawMode = url.searchParams.get("mode") || "web";
