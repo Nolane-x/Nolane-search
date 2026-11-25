@@ -50,6 +50,14 @@ describe("Media Portal media discovery experience", () => {
     expect(csp).toContain("worker-src 'self' blob:");
     expect(html).toContain("hls.js@1.7.4/dist/hls.min.js");
     expect(html).toContain("dashjs@5.3.0/dist/legacy/umd/dash.all.min.js");
+    expect(html).toContain("function startPlayer()");
+    expect(html).toContain("function cleanUp()");
+    expect(html).toContain("var attempt=++generation");
+    expect(html).toContain("if(cancelled||attempt!==generation)return");
+    expect(html).toContain("destroyCurrent=function(){hls.destroy()}");
+    expect(html).toContain("destroyCurrent=function(){player.destroy()}");
+    expect(html).toContain("retry.addEventListener('click',function(){startPlayer()})");
+    expect(html).toContain("Thử phát lại");
     expect(html).toContain("function makeQualityControl()");
     expect(html).toContain("function populateQualityControl(control,representations)");
     expect(html).toContain("hls.currentLevel=selected");
