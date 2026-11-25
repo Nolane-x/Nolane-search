@@ -1032,8 +1032,10 @@ async function handleToolCenterCallback(env: Env, callback: TelegramCallbackQuer
   }
   const data = callback.data || "";
   if (data === "tc:home") {
+    const miniAppUrl = await createWebLoginUrl(env, callback.from.id, message.chat.id, "/telegram#tools");
     await editTelegramDashboard(env, message.chat.id, message.message_id,
-      formatToolCenterHome(TOOL_CATALOG, Boolean(env.NOLANE_GH_ACTIONS_TOKEN)), buildToolCenterKeyboard(TOOL_CATALOG));
+      formatToolCenterHome(TOOL_CATALOG, Boolean(env.NOLANE_GH_ACTIONS_TOKEN)), buildToolCenterKeyboard(TOOL_CATALOG, miniAppUrl));
+    await setTelegramWorkspaceMenuButton(env, message.chat.id, callback.from.id);
     return;
   }
   if (data === "tc:jobs") {
@@ -1419,13 +1421,19 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   }
 
   if (command === "tools") {
+    if (chatId !== userId) {
+      await reply(env, chatId, "Tool Center chỉ khả dụng trong chat riêng được cấp quyền. Hãy mở bot riêng và gửi /tools.");
+      return;
+    }
+    const miniAppUrl = await createWebLoginUrl(env, userId, chatId, "/telegram#tools");
     await telegramApi(env, "sendMessage", {
       chat_id: chatId,
       text: formatToolCenterHome(TOOL_CATALOG, Boolean(env.NOLANE_GH_ACTIONS_TOKEN)),
       parse_mode: "HTML",
       disable_web_page_preview: true,
-      reply_markup: buildToolCenterKeyboard(TOOL_CATALOG),
+      reply_markup: buildToolCenterKeyboard(TOOL_CATALOG, miniAppUrl),
     });
+    await setTelegramWorkspaceMenuButton(env, chatId, userId);
     return;
   }
 
