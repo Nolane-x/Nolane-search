@@ -19,7 +19,7 @@ This follow-up adds two complementary checks:
 |---|---|---|---|
 | HLS Mux ABR | `https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8` | Multiple variants and manual/Auto quality | Public Big Buck Bunny HLS sample; community catalogue identifies it as multi-bitrate |
 | HLS Shaka Angel One | `https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8` | Alternate audio tracks | Shaka test asset catalog identifies multilingual HLS |
-| HLS WebVTT captions | `https://playertest.longtailvideo.com/adaptive/captions/playlist.m3u8` | Subtitle track and Off control | Public JW Player captions test stream |
+| HLS WebVTT subtitles | `https://mtoczko.github.io/hls-test-streams/test-vtt-ts-segments/playlist.m3u8` | External WebVTT subtitle track and Off control | Explicit WebVTT + TS vector listed by hls-test-streams |
 | DASH Shaka Angel One | `https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd` | Video representations, multilingual audio and subtitles | Clear, non-DRM Shaka test asset |
 | DASH Shaka Sintel | `https://storage.googleapis.com/shaka-demo-assets/sintel/dash.mpd` | Multiple representations and subtitle tracks | Shaka demo content with subtitles |
 
