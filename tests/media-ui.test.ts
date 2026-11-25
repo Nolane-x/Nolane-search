@@ -28,6 +28,15 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("/api/media/resolve?url='+encodeURIComponent(q)");
     expect(html).toContain("var isUrl=q.indexOf('https://')===0||q.indexOf('http://')===0");
     expect(html).toContain('maxlength="2048"');
+    expect(html).toContain("BROWSER COMPATIBILITY BENCH");
+    expect(html).toContain("Playback Lab");
+    expect(html).toContain("data-stream-url=\"https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8\"");
+    expect(html).toContain("data-stream-url=\"https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8\"");
+    expect(html).toContain("data-stream-url=\"https://playertest.longtailvideo.com/adaptive/captions/playlist.m3u8\"");
+    expect(html).toContain("data-stream-url=\"https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd\"");
+    expect(html).toContain("data-stream-url=\"https://storage.googleapis.com/shaka-demo-assets/sintel/dash.mpd\"");
+    expect(html).toContain("document.querySelectorAll('[data-stream-url]')");
+    expect(html).toContain("Nguồn thử do bên thứ ba lưu trữ");
   });
 
   it("serves syntactically valid inline browser JavaScript", async () => {
