@@ -68,6 +68,10 @@ describe("Telegram interactive workspace UI", () => {
     expect(buttons.some(button => button.callback_data === "ui:mode:deep")).toBe(true);
     expect(buttons.some(button => button.callback_data === "ui:mode:local")).toBe(true);
     expect(buttons.some(button => button.callback_data === "tc:home")).toBe(true);
+    expect(buttons.some(button => button.text.includes("Media Portal") && button.url === "https://nolane-search.nolane-file.workers.dev/media")).toBe(true);
+    expect(buttons.some(button => button.url === "https://nolane-search.nolane-file.workers.dev/")).toBe(true);
+    const customMenu = buildHomeKeyboard("https://search.example.test/workspace");
+    expect(customMenu.inline_keyboard.flat().find(button => button.text.includes("Media Portal"))?.url).toBe("https://search.example.test/media");
     expect(buttons.some(button => button.url?.startsWith("https://"))).toBe(true);
     expect(buttons.every(button => new TextEncoder().encode(button.callback_data || "").length <= 64)).toBe(true);
   });
