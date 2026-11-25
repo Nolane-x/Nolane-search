@@ -61,6 +61,9 @@ describe("Media Portal media discovery experience", () => {
     expect(csp).toContain("media-src 'self' blob:");
     expect(csp).toContain("media-src 'self' blob: data:");
     expect(csp).toContain("worker-src 'self' blob:");
+    expect(html).toContain("video.canPlayType('application/vnd.apple.mpegurl')");
+    expect(html).toContain("if(video.canPlayType('application/vnd.apple.mpegurl')){startNativeHls();return}");
+    expect(html).toContain("Đang dùng HLS native của trình duyệt");
     expect(html).toContain("hls.js@1.7.4/dist/hls.min.js");
     expect(html).toContain("dashjs@5.3.0/dist/legacy/umd/dash.all.min.js");
     expect(html).toContain("function startPlayer()");
