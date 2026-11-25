@@ -71,6 +71,25 @@ Sources for the dash.js 5.3.0 event namespace:
 - https://github.com/Dash-Industry-Forum/dash.js/blob/v5.3.0/index.js
 - https://github.com/Dash-Industry-Forum/dash.js/blob/v5.3.0/index.d.ts
 
+## Confirmed Chromium matrix — run #25
+
+**Result: 5/5 samples passed** on 2026-11-25 with Playwright 1.65.1 Chromium, HLS.js 1.7.4 and dash.js 5.3.0. The workflow ran the full repository checks before playback: TypeScript, 38 Vitest files / 399 tests, and Cloudflare Worker build.
+
+Run: https://github.com/Nolane-x/Nolane-search/actions/runs/45629068286  
+Machine-readable report artifact: `media-playback-browser-report` (artifact ID `15028893107`, retained through 2026-12-16).
+
+| Sample | Quality choices | Audio choices | Subtitle choices | Observed playback |
+|---|---:|---:|---:|---:|
+| Mux HLS ABR | 6 (Auto + 5 levels) | 0 | 1 (Off only) | 2.1 s |
+| Shaka Angel One HLS | 6 | 6 | 5 (Off + 4 tracks) | 2.1 s |
+| HLS Test Streams WebVTT | 2 (Auto + 1 level) | 0 | 2 (Off + 1 track) | 2.1 s |
+| Shaka Angel One DASH | 6 | 10 | 5 (Off + 4 tracks) | 2.1 s |
+| Shaka Sintel DASH | 10 | 2 | 11 (Off + 10 tracks) | 2.1 s |
+
+The Chromium run observed HTTP 200 manifests/playlists and HTTP 206 media range responses with `Access-Control-Allow-Origin: *` for the representative source and segment responses captured in the report/log. It exercised the quality, alternate-audio and subtitle controls where those tracks existed, and set playback to 1.25×. The Sintel test now explicitly requires alternate audio as well as multiple quality levels and subtitles.
+
+The run is time-bound evidence for these exact public test sources and this Chromium environment, not a guarantee that the third-party hosts will remain online. This run does not exercise Safari's native-HLS fallback or DRM playback.
+
 ## Boundaries that remain
 
 - This gate is Chromium/MSE coverage. It does not simulate Safari's native HLS stack. Native HLS remains a separate manual test on a real iPhone/iPad or Safari/macOS client.
