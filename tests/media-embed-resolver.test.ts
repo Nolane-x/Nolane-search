@@ -127,6 +127,14 @@ describe("Wave 64 user-provided media URL resolver", () => {
     });
   });
 
+  it("rejects inputs longer than the URL parsing limit before provider access", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    const result = await resolveMediaEmbed("https://www.youtube.com/watch?v=" + "a".repeat(3000));
+    expect(result.status).toBe("unsupported");
+    expect(mock).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed or unsupported URLs without issuing any provider request", async () => {
     const mock = vi.fn();
     vi.stubGlobal("fetch", mock);
