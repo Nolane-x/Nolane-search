@@ -18,7 +18,7 @@ Telegram user → Telegram webhook → Cloudflare Worker
 - Deduplicate update_id in D1.
 - Enforce owner allowlist.
 - Parse command and select search mode.
-- `/start` and `/menu` open a compact native inline menu. Its first button launches the new `/telegram` Mini App; callback navigation still edits the same message rather than flooding the chat. The Mini App provides separate Overview, Search Studio, AI Workspace, Tool Center and Personal Index sections.
+- `/start` and `/menu` open a compact native inline menu. Its first button launches `/telegram` with a one-time owner ticket; the Worker also sets a per-user Telegram Menu button pointing at the static `/telegram` route so later launches reuse the active session cookie. Callback navigation still edits the same message rather than flooding the chat. The Mini App provides separate Overview, Search Studio, AI Workspace, Tool Center and Personal Index sections.
 - Mode buttons save a one-shot per-user/per-chat input mode in the existing D1 `search_cache` with a 10-minute TTL. The next plain-text message consumes that state and routes to Web, Tech, News, Research, GitHub, Wiki, Local, AI, Ask or Deep Search. Slash commands clear the pending mode.
 - Search-result action buttons can launch `/ask` or `/deep` from the stored owner/chat-bound 15-minute search session; the callback is validated against the original user and chat.
 
