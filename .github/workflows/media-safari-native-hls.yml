@@ -1,0 +1,56 @@
+name: Safari Native HLS Playback
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/media-ui.ts"
+      - "src/media-embed-resolver.ts"
+      - "scripts/media-safari-native-hls-e2e.mjs"
+      - ".github/workflows/media-safari-native-hls.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: media-safari-native-hls-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  safari-native-hls:
+    name: Real Apple Safari native-HLS decode
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Install repository dependencies
+        run: npm install --no-audit --no-fund
+      - name: Type-check Worker
+        run: npm run typecheck
+      - name: Build Cloudflare Worker
+        run: npm run build
+      - name: Enable Safari WebDriver
+        run: sudo safaridriver --enable
+      - name: Check Safari browser test script
+        run: node --check scripts/media-safari-native-hls-e2e.mjs
+      - name: Run native HLS decode in Apple Safari
+        env:
+          SAFARI_HLS_TIMEOUT_MS: "45000"
+        run: node scripts/media-safari-native-hls-e2e.mjs
+      - name: Upload Safari playback evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: safari-native-hls-report
+          path: |
+            artifacts/safari-native-hls-report.json
+            artifacts/safari-native-hls.png
+          if-no-files-found: warn
+          retention-days: 21

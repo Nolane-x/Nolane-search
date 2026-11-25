@@ -3,12 +3,13 @@ import { readJsonResponse } from "./http";
 export interface ResolvedMediaEmbedItem {
   id: string;
   title: string;
-  provider: "YouTube" | "Vimeo" | "PeerTube" | "Dailymotion" | "Twitch";
+  provider: "YouTube" | "Vimeo" | "PeerTube" | "Dailymotion" | "Twitch" | "HLS" | "DASH";
   mediaType: "video";
   sourceUrl: string;
   previewUrl: string | null;
-  mediaUrl: null;
-  embedUrl: string;
+  mediaUrl: string | null;
+  embedUrl: string | null;
+  streamType?: "hls" | "dash";
   instanceHost?: string;
   description: string | null;
   credit: string | null;
@@ -27,7 +28,7 @@ type SafeUrl = { url: URL; sourceUrl: string };
 
 const UNSUPPORTED: MediaEmbedResolution = {
   status: "unsupported",
-  message: "URL video chưa được hỗ trợ. Hiện hỗ trợ YouTube, Vimeo, PeerTube, Dailymotion và Twitch.",
+  message: "URL video chưa được hỗ trợ. Media Portal hỗ trợ YouTube, Vimeo, PeerTube, Dailymotion, Twitch và manifest HLS/DASH.",
 };
 
 function safePublicHttpsUrl(value: unknown): SafeUrl | null {
@@ -37,7 +38,8 @@ function safePublicHttpsUrl(value: unknown): SafeUrl | null {
     const host = url.hostname.toLowerCase().replace(/\.$/, "");
     if (url.protocol !== "https:" || url.username || url.password || url.port || url.hash) return null;
     if (!host || !host.includes(".") || host === "localhost" || host.endsWith(".localhost") ||
-        host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".test")) return null;
+        host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".test") ||
+        host.endsWith(".example") || host.endsWith(".invalid")) return null;
     if (host === "metadata.google.internal" || host === "instance-data") return null;
     if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(host) || host.includes(":")) return null;
     const labels = host.split(".");
@@ -68,6 +70,33 @@ function baseItem(
     licenseUrl: null,
     dateCreated: null,
     referrerPolicy: values.referrerPolicy ?? "no-referrer",
+  };
+}
+
+function resolveAdaptiveStream(url: URL, sourceUrl: string): MediaEmbedResolution | null {
+  const path = url.pathname.toLowerCase();
+  const streamType = path.endsWith(".m3u8") ? "hls" : path.endsWith(".mpd") ? "dash" : null;
+  if (!streamType) return null;
+
+  return {
+    status: "resolved",
+    item: {
+      id: streamType + ":" + url.hostname + url.pathname,
+      title: streamType === "hls" ? "HLS adaptive stream" : "MPEG-DASH adaptive stream",
+      provider: streamType === "hls" ? "HLS" : "DASH",
+      mediaType: "video",
+      sourceUrl,
+      previewUrl: null,
+      mediaUrl: sourceUrl,
+      embedUrl: null,
+      streamType,
+      description: "Phát manifest trực tiếp từ máy chủ nguồn. Máy chủ phải cho phép CORS; Nolane không tải hoặc lưu video.",
+      credit: null,
+      license: null,
+      licenseUrl: null,
+      dateCreated: null,
+      referrerPolicy: "no-referrer",
+    },
   };
 }
 
@@ -327,6 +356,9 @@ export async function resolveMediaEmbed(
   const safe = safePublicHttpsUrl(input);
   if (!safe) return UNSUPPORTED;
   const { url, sourceUrl } = safe;
+
+  const adaptiveStream = resolveAdaptiveStream(url, sourceUrl);
+  if (adaptiveStream) return adaptiveStream;
 
   const youtube = resolveYouTube(url, sourceUrl);
   if (youtube) return youtube;
