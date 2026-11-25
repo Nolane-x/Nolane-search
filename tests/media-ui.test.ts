@@ -62,6 +62,11 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("retry.hidden=!retryable");
     expect(html).toContain("stopCurrent();video.pause();video.removeAttribute('src');video.load();");
     expect(html).toContain("Thử phát lại");
+    expect(html).toContain("function makePlaybackRateControl(video)");
+    expect(html).toContain("Tốc độ phát");
+    expect(html).toContain("[0.5,'0.5×'],[0.75,'0.75×'],[1,'1×'],[1.25,'1.25×'],[1.5,'1.5×'],[2,'2×']");
+    expect(html).toContain("video.playbackRate=rate");
+    expect(html).toContain("stream-rate");
     expect(html).toContain("function makeQualityControl()");
     expect(html).toContain("function populateQualityControl(control,representations)");
     expect(html).toContain("hls.currentLevel=selected");
