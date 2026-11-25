@@ -160,6 +160,7 @@ function showStreamPlayer(preview,item,streamUrl){
   cancelled=true;generation++;stopCurrent();video.pause();video.removeAttribute('src');video.load();
  }
  function fail(message,retryable){
+  stopCurrent();video.pause();video.removeAttribute('src');video.load();
   status.textContent=message;retry.hidden=!retryable;
  }
  retry.addEventListener('click',function(){startPlayer()});
@@ -202,7 +203,7 @@ function showStreamPlayer(preview,item,streamUrl){
      var levels=Array.isArray(hls.levels)?hls.levels:[];
      populateQualityControl(quality,levels);
     }
-    quality.select.addEventListener('change',function(){
+    quality.select.onchange=function(){
      if(cancelled||attempt!==generation)return;
      var selected=Number(quality.select.value);
      if(!Number.isInteger(selected)||selected < -1 || selected >= hls.levels.length)return;
@@ -254,7 +255,7 @@ function showStreamPlayer(preview,item,streamUrl){
      player.setRepresentationForTypeByIndex('video',selected,true);
      status.textContent='Đã yêu cầu chất lượng '+qualityLabel(dashRepresentations[selected])+'.';
     }
-   });
+   };
    player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED,refreshDashQualities);
    player.on(dashjs.MediaPlayer.events.QUALITY_CHANGE_RENDERED,function(event){
     if(cancelled||attempt!==generation||quality.select.value!=='-1')return;
