@@ -71,24 +71,45 @@ Sources for the dash.js 5.3.0 event namespace:
 - https://github.com/Dash-Industry-Forum/dash.js/blob/v5.3.0/index.js
 - https://github.com/Dash-Industry-Forum/dash.js/blob/v5.3.0/index.d.ts
 
-## Confirmed Chromium matrix — run #27
+## Confirmed browser matrix — run #34
 
-**Result: 5/5 samples passed** on 2026-11-25 with Playwright 1.65.1 Chromium, HLS.js 1.7.4 and dash.js 5.3.0. The workflow ran the full repository checks before playback: TypeScript, 38 Vitest files / 399 tests, and Cloudflare Worker build.
+**Result: 6/6 checks passed** on 2026-11-25 with Playwright 1.65.1 Chromium, HLS.js 1.7.4 and dash.js 5.3.0. Five checks fetched and played real public media; one additional check exercised the Safari/WebKit native-HLS routing branch with a browser identity/capability shim. The workflow ran the full repository checks before playback: TypeScript, 38 Vitest files / 399 tests, and Cloudflare Worker build.
 
-Run: https://github.com/Nolane-x/Nolane-search/actions/runs/45629518437  
-Machine-readable report artifact: `media-playback-browser-report` (artifact ID `15030516369`, retained through 2026-12-16).
+Run: https://github.com/Nolane-x/Nolane-search/actions/runs/45632257870  
+Machine-readable report artifact: `media-playback-browser-report` (artifact ID `15032140947`, retained through 2026-12-16).
 
-| Sample | Quality choices | Audio choices | Subtitle choices | Observed playback |
-|---|---:|---:|---:|---:|
-| Mux HLS ABR | 6 (Auto + 5 levels) | 0 | 1 (Off only) | 2.1 s |
-| Shaka Angel One HLS | 6 | 6 | 5 (Off + 4 tracks) | 2.1 s |
-| HLS Test Streams WebVTT | 2 (Auto + 1 level) | 0 | 2 (Off + 1 track) | 2.1 s |
-| Shaka Angel One DASH | 6 | 10 | 5 (Off + 4 tracks) | 2.1 s |
-| Shaka Sintel DASH | 10 | 2 | 11 (Off + 10 tracks) | 2.1 s |
+| Check | Quality choices | Audio choices | Subtitle choices | Observed playback | Result |
+|---|---:|---:|---:|---:|---|
+| Safari/WebKit native-HLS route smoke | — | — | — | Routing only; no decode claim | PASS |
+| Mux HLS ABR | 6 (Auto + 5 levels) | 0 | 1 (Off only) | 2.1 s | PASS |
+| Shaka Angel One HLS | 6 | 6 | 5 (Off + 4 tracks) | 2.1 s | PASS |
+| HLS Test Streams WebVTT | 2 (Auto + 1 level) | 0 | 2 (Off + 1 track) | 2.1 s | PASS |
+| Shaka Angel One DASH | 6 | 10 | 5 (Off + 4 tracks) | 2.1 s | PASS |
+| Shaka Sintel DASH | 10 | 2 | 11 (Off + 10 tracks) | 2.1 s | PASS |
 
-The Chromium run observed HTTP 200 manifests/playlists and HTTP 206 media range responses with `Access-Control-Allow-Origin: *` for representative source and segment responses. It exercised manual quality selection, alternate audio selection (including Sintel's two audio tracks), subtitle selection/Off and 1.25× playback-rate control. All five videos advanced beyond two seconds with no fatal browser media or network error. The test separately records expected `net::ERR_ABORTED` cancellations during representation changes instead of treating those in-flight cancellations as network failures.
+The five real media runs observed HTTP 200 manifests/playlists and HTTP 206 media range responses with `Access-Control-Allow-Origin: *` for representative source and segment responses. The tests exercised manual quality selection, alternate audio selection (including Sintel's two audio tracks), subtitle selection/Off and 1.25× playback. All five videos advanced beyond two seconds with no fatal browser media or network error. The test separately records expected `net::ERR_ABORTED` cancellations during representation changes instead of treating those in-flight cancellations as network failures.
 
-The run is time-bound evidence for these exact public test sources and this Chromium environment, not a guarantee that the third-party hosts will remain online. This run does not exercise Safari's native-HLS fallback or DRM playback.
+The native-HLS smoke uses Chromium with a Safari user-agent/vendor and `canPlayType` capability shim. It asserts the native branch is selected and HLS.js is not loaded. It **does not** test native HLS decoding, CORS or actual media playback on Safari. This is a routing regression test only. A real Safari/iOS device remains required for that release check.
+
+The run is time-bound evidence for these exact public test sources and this Chromium environment, not a guarantee that the third-party hosts will remain online. This run does not exercise DRM playback.
+
+## Native-HLS routing correction
+
+The earlier native fallback used `video.canPlayType('application/vnd.apple.mpegurl')` as the only signal. The CI Chromium build returned `maybe` even though it did not behave as the intended native-HLS path; all three HLS fixtures consequently skipped HLS.js. The player now:
+- prefers native HLS only when the browser identifies as Apple WebKit and reports native HLS support;
+- keeps HLS.js as the normal path for Chromium/Firefox and other browsers;
+- uses native HLS as a fallback if HLS.js is unsupported or its CDN cannot be loaded on the detected Apple WebKit route;
+- keeps the video element anonymous and no-referrer on the native path.
+
+This fixes the CDN dependency for Safari/WebKit without sending Chromium into a false-positive native route. The smoke check validates routing only; manual Safari/iOS decode validation is still a separate gate.
+
+## Wave 67 — next reliability work (planned, not shipped)
+
+1. Record a manual matrix on current Safari macOS and Safari iOS: manifest/segment CORS, playback start, seeking, audio selection where exposed, subtitles, orientation/fullscreen and native error behavior.
+2. Add structured error classification without guessing: distinguish known HTTP status, network/CORS, MSE/codec, DRM/license and script-CDN failures only when the player exposes evidence; otherwise show an unknown upstream/player error with a retry action.
+3. Add a bounded playback diagnostic snapshot (player engine, manifest type, browser capability booleans, selected quality/audio/subtitle IDs, readyState/networkState, media error code and recent safe request failures) with no signed query strings, cookies or authorization data.
+4. Add recovery tests for retry, clear-results cleanup, repeated retries, and multiple simultaneous cards.
+5. Keep managed downloads and R2 sharing separate until runner egress protections, DNS/redirect controls and private R2 storage are available.
 
 ## Boundaries that remain
 
