@@ -67,6 +67,8 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("[0.5,'0.5×'],[0.75,'0.75×'],[1,'1×'],[1.25,'1.25×'],[1.5,'1.5×'],[2,'2×']");
     expect(html).toContain("video.playbackRate=rate");
     expect(html).toContain("stream-rate");
+    expect(html).toContain(".stream-card .preview{display:flex;flex-direction:column;align-items:stretch;aspect-ratio:auto}");
+    expect(html).toContain(".stream-card .preview .stream-video{height:auto;max-height:70vh;min-height:230px}");
     expect(html).toContain("function makeQualityControl()");
     expect(html).toContain("function populateQualityControl(control,representations)");
     expect(html).toContain("hls.currentLevel=selected");
