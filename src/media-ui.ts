@@ -33,8 +33,8 @@ const HTML = String.raw`<!doctype html>
   <button type="button" class="lab-sample" data-stream-url="https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8">
    <span class="lab-type">HLS · MULTI-AUDIO</span><strong>Shaka · Angel One</strong><span>Nhiều ngôn ngữ audio, kiểm tra khả năng tải và chuyển track</span><span class="lab-action">Dùng mẫu <b>→</b></span>
   </button>
-  <button type="button" class="lab-sample" data-stream-url="https://playertest.longtailvideo.com/adaptive/captions/playlist.m3u8">
-   <span class="lab-type">HLS · WEBVTT</span><strong>JW Player · Captions</strong><span>Nguồn HLS thử phụ đề WebVTT, kiểm tra chọn track và tắt phụ đề</span><span class="lab-action">Dùng mẫu <b>→</b></span>
+  <button type="button" class="lab-sample" data-stream-url="https://mtoczko.github.io/hls-test-streams/test-vtt-ts-segments/playlist.m3u8">
+   <span class="lab-type">HLS · WEBVTT</span><strong>HLS Test Streams · WebVTT</strong><span>Nguồn HLS công khai có WebVTT, kiểm tra chọn track và tắt phụ đề</span><span class="lab-action">Dùng mẫu <b>→</b></span>
   </button>
   <button type="button" class="lab-sample" data-stream-url="https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd">
    <span class="lab-type">DASH · MULTI-TRACK</span><strong>Shaka · Angel One</strong><span>DASH đa codec, nhiều ngôn ngữ và subtitle; bản clear, không dùng DRM</span><span class="lab-action">Dùng mẫu <b>→</b></span>
