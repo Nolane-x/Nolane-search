@@ -95,6 +95,57 @@ describe("Wave 59 PeerTube federated video discovery", () => {
     expect(mock).toHaveBeenCalledTimes(1);
   });
 
+
+  it("includes source-flagged NSFW results only when explicitly requested", async () => {
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      expect(url.searchParams.get("nsfw")).toBe("true");
+      return json({
+        total: 2,
+        data: [
+          {
+            uuid: "a65bc12e-9383-462e-81ae-8207e8b434ee",
+            name: "Public standard result",
+            url: "https://videos.example.org/videos/watch/standard",
+            account: { name: "author", host: "videos.example.org" },
+            channel: { name: "channel", host: "videos.example.org" },
+            nsfw: false,
+            nsfwFlags: 0
+          },
+          {
+            uuid: "b65bc12e-9383-462e-81ae-8207e8b434ef",
+            name: "Age-gated result",
+            url: "https://videos.example.org/videos/watch/adult",
+            account: { name: "author", host: "videos.example.org" },
+            channel: { name: "channel", host: "videos.example.org" },
+            nsfw: true,
+            nsfwFlags: 2
+          }
+        ]
+      });
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const result = await searchPeerTubeVideos("adult catalog", 4, true);
+    expect(result.result_count).toBe(2);
+    expect(result.items[1]).toMatchObject({
+      title: "Age-gated result",
+      nsfw: true,
+      nsfwFlags: 2,
+      previewUrl: null,
+      mediaUrl: null
+    });
+    expect(result.note).toContain("18+ mode");
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects non-boolean NSFW controls before network access", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    await expect(searchPeerTubeVideos("video query", 4, "true")).rejects.toThrow("include_nsfw must be a boolean");
+    expect(mock).not.toHaveBeenCalled();
+  });
+
   it("rejects unsafe domains, IP hosts and invalid URL schemes before returning links", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({
       data: [
@@ -137,6 +188,45 @@ describe("Wave 59 PeerTube federated video discovery", () => {
     await expect(searchPeerTubeVideos("open source")).rejects.toThrow("temporarily rate-limiting");
     vi.stubGlobal("fetch", vi.fn(async () => json({}, 503)));
     await expect(searchPeerTubeVideos("open source")).rejects.toThrow("temporarily rate-limiting");
+  });
+
+  it("requires the adult-media feature gate before AI tools can request NSFW records", async () => {
+    const definition = AGENT_TOOL_DEFINITIONS.find(tool => tool.function.name === "search_peertube_videos");
+    expect(definition?.function.parameters).toMatchObject({
+      properties: { include_nsfw: { type: "boolean" } },
+      required: ["query"],
+      additionalProperties: false
+    });
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    await expect(executeAgentTool(env, "search_peertube_videos", {
+      query: "adult catalog", include_nsfw: true
+    })).rejects.toThrow("NSFW search is disabled");
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("passes the explicit NSFW choice to SepiaSearch when the deployment gate is enabled", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      expect(url.searchParams.get("nsfw")).toBe("true");
+      return json({
+        total: 1,
+        data: [{
+          uuid: "b65bc12e-9383-462e-81ae-8207e8b434ef",
+          name: "Age-gated result",
+          url: "https://videos.example.org/videos/watch/adult",
+          account: { name: "author", host: "videos.example.org" },
+          channel: { name: "channel", host: "videos.example.org" },
+          nsfw: true,
+          nsfwFlags: 2
+        }]
+      });
+    }));
+    const enabledEnv = { ...env, MEDIA_ALLOW_NSFW: "true" } as Env;
+    const result = JSON.parse(await executeAgentTool(enabledEnv, "search_peertube_videos", {
+      query: "adult catalog", include_nsfw: true
+    }));
+    expect(result.items[0]).toMatchObject({ title: "Age-gated result", nsfw: true, nsfwFlags: 2 });
   });
 
   it("registers and invokes PeerTube search through the AI tool interface", async () => {
