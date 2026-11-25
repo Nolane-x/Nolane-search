@@ -39,7 +39,11 @@ function safeUrl(value,hosts){
 function safePeerTubeEmbedUrl(value,instanceHost){
  if(typeof instanceHost!=='string'||!instanceHost)return null;
  var safe=safeUrl(value,[instanceHost]);if(!safe)return null;
- try{var u=new URL(safe);if(!/^\\/videos\\/embed\\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u.pathname)||u.search||u.hash)return null;return u.href}catch(e){return null}
+ try{
+  var u=new URL(safe);var parts=u.pathname.split('/');
+  if(u.origin===location.origin||parts.length!==4||parts[0]!==''||parts[1]!=='videos'||parts[2]!=='embed'||!/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(parts[3])||u.search||u.hash)return null;
+  return u.href;
+ }catch(e){return null}
 }
 async function api(path,options){
  var response=await fetch(path,Object.assign({credentials:'same-origin',cache:'no-store'},options||{}));
