@@ -1,7 +1,19 @@
 # Verified Project Status
 
-Last verified: 2026-11-24. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
+Last verified: 2026-11-25. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+
+## Latest production release — Wave 59 (2026-11-25)
+
+- [PR #128](https://github.com/Nolane-x/Nolane-search/pull/128) merged into main as 2cc7f546828ea0818da68f5b15da9fe2903762c0. Production adds search_peertube_videos to the AI tool catalog and the authenticated Media Portal, using the public SepiaSearch federated index.
+- Search uses relevance ordering and nsfw=false, with bounded 1–8 results. Records are normalized for title, originating host, author/channel, duration, views, language, license label and publication date where available. A video page is accepted only over HTTPS and only when its host exactly matches the account or channel host from that same result; explicit NSFW records, IP/local hosts, HTTP, credentials, nonstandard ports and cross-host links are rejected.
+- Media Portal provides a PeerTube-only video filter and opens the source instance. This integration never embeds, fetches, downloads or rehosts a video. License labels come from the source instance; check the original page and license before reuse.
+- PR CI #530 [45551369316](https://github.com/Nolane-x/Nolane-search/actions/runs/45551369316) passed. Main CI #531 [45551570106](https://github.com/Nolane-x/Nolane-search/actions/runs/45551570106) passed TypeScript, **36 Vitest files / 372 tests**, deployment-script checks, **449 Python runner tests** and Worker build.
+- Cloudflare deployment #163 [45551570024](https://github.com/Nolane-x/Nolane-search/actions/runs/45551570024) succeeded. Worker Version ID: e1dc5532-d34e-4b9d-bcbd-906a15211576. Telegram webhook validation and bot command registration succeeded.
+- Worker export #156 [45551570134](https://github.com/Nolane-x/Nolane-search/actions/runs/45551570134) and /health smoke passed. Health returned ok=true, database reachable, and archiveEnabled=true. No D1 migration was needed.
+- Research: [TOOL-RESEARCH-2026-11-25-WAVE59.md](TOOL-RESEARCH-2026-11-25-WAVE59.md). Handoff: [HANDOFF-WAVE-FIFTY-NINE-2026-11-25.md](HANDOFF-WAVE-FIFTY-NINE-2026-11-25.md).
+- **Provider verification boundary:** CI tests mock SepiaSearch responses. The live SepiaSearch endpoint could not be queried from the development environment because DNS resolution failed; Worker health and deployment checks do not prove live PeerTube search availability. The index is not exhaustive and may not include every PeerTube instance/video.
+- **Downloader status:** this wave is discovery-only, not a multi-site downloader. Arbitrary yt-dlp/gallery-dl downloads and private R2 signed share links remain unavailable until Cloudflare R2 is activated on the account (API error 10042).
 
 ## Latest production release — Wave 58 (2026-11-24)
 
