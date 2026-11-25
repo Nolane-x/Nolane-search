@@ -406,6 +406,32 @@ async function runSample(browser, origin, sample) {
     result.passed = result.errors.length === 0;
   } catch (error) {
     result.errors.push(error instanceof Error ? error.message : String(error));
+    result.failureDiagnostics = await page.evaluate(() => {
+      const preview = document.querySelector(".stream-card .preview");
+      const videoElement = document.querySelector("video.stream-video");
+      const dash = window.dashjs;
+      return {
+        playerStatus: document.querySelector(".stream-status")?.textContent || "",
+        previewChildren: Array.from(preview?.children || []).map((child) => ({
+          tag: child.tagName,
+          className: typeof child.className === "string" ? child.className : "",
+          hidden: Boolean(child.hidden),
+          display: getComputedStyle(child).display,
+          text: (child.textContent || "").trim().slice(0, 120),
+        })),
+        video: videoElement ? {
+          currentTime: videoElement.currentTime,
+          readyState: videoElement.readyState,
+          networkState: videoElement.networkState,
+          paused: videoElement.paused,
+          error: videoElement.error ? { code: videoElement.error.code, message: videoElement.error.message } : null,
+        } : null,
+        dashGlobalType: typeof dash,
+        dashMediaPlayerType: typeof dash?.MediaPlayer,
+        dashFactoryType: typeof dash?.MediaPlayer?.(),
+        dashEventNames: Object.keys(dash?.MediaPlayer?.events || {}),
+      };
+    }).catch((diagnosticError) => ({ diagnosticError: diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError) }));
     result.requestFailures = failures.slice(0, 20);
     result.consoleErrors = consoleErrors.slice(0, 20);
     result.corsEvidence = mediaResponses.slice(0, 12);
@@ -441,6 +467,7 @@ async function main() {
       for (const error of result.errors) console.error("  - " + error);
       if (result.corsEvidence.length) console.log("  CORS evidence:", JSON.stringify(result.corsEvidence.slice(0, 3)));
       if (result.uiDiagnostics) console.log("  PLAYER DOM:", JSON.stringify(result.uiDiagnostics));
+      if (result.failureDiagnostics) console.log("  FAILURE DIAGNOSTICS:", JSON.stringify(result.failureDiagnostics));
       if (result.videoDiagnostics) console.log("  VIDEO:", JSON.stringify(result.videoDiagnostics));
       if (result.consoleErrors.length) console.log("  BROWSER CONSOLE:", JSON.stringify(result.consoleErrors.slice(0, 15)));
       if (result.requestFailures.length) console.log("  FAILED REQUESTS:", JSON.stringify(result.requestFailures.slice(0, 15)));
