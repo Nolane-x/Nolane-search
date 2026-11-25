@@ -18,6 +18,8 @@ This work starts from PR #136 head and is intended to stack on top of PR #136, w
 10. Verify DASH manual selection disables ABR, Auto restores it, and representation state remains available to quality-change events.
 11. Add shared playback-rate controls on the media element for HLS, DASH and native HLS.
 12. Verify retry tears down the old player, stale callbacks are ignored, and failed CDN script promises are evicted so a retry reloads the library.
+13. Add manifest-backed HLS audio/subtitle track controls and DASH audio/text track controls using documented player APIs.
+14. Refresh DASH track controls after stream initialization and text-track events; test audio switching, subtitle switching and subtitle-off behavior.
 
 ## Verification gates
 
