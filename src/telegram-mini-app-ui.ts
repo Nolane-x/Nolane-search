@@ -368,6 +368,18 @@ function renderResults(results){
   var url=safeUrl(item.url);var anchor=addText(heading,'a','',String(index+1)+'. '+(item.title||item.url));
   anchor.href=url||'#';anchor.target='_blank';anchor.rel='noopener noreferrer';
   addText(card,'p','',item.snippet||'Không có mô tả từ nguồn.');
+  var actions=addText(card,'div','result-actions','');
+  var helpful=addText(actions,'button','mini-action','👍 Hữu ích');helpful.type='button';
+  var notHelpful=addText(actions,'button','mini-action','👎 Chưa phù hợp');notHelpful.type='button';
+  function vote(rating,button){
+   if(!state.eventId||!url){showToast('Phiên kết quả đã hết hạn. Hãy tìm lại.');return}
+   helpful.disabled=true;notHelpful.disabled=true;
+   api('/api/feedback',{method:'POST',headers:authHeaders(),body:JSON.stringify({eventId:state.eventId,url:item.url,rating:rating})})
+    .then(function(){button.textContent='Đã ghi nhận';haptic('success');showToast('Cảm ơn bạn đã đánh giá kết quả.')})
+    .catch(function(error){helpful.disabled=false;notHelpful.disabled=false;showToast(error.message);haptic('error')});
+  }
+  helpful.addEventListener('click',function(){vote(1,helpful)});
+  notHelpful.addEventListener('click',function(){vote(-1,notHelpful)});
  });
 }
 async function runSearch(explicitQuery){
