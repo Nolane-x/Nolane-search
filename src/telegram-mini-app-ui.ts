@@ -108,7 +108,7 @@ a{color:inherit}
 .chat-log{display:flex;flex-direction:column;gap:9px;max-height:min(48dvh,460px);overflow:auto;padding:3px 1px 12px}
 .bubble{max-width:92%;padding:11px 12px;border-radius:15px;font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
 .bubble.user{align-self:flex-end;background:var(--accent);color:var(--accent-text);border-bottom-right-radius:5px}
-.bubble.assistant{align-self:flex-start;background:var(--panel);border:1px solid var(--line);color:var(--ink);border-bottom-left-radius:5px}
+.bubble.assistant{align-self:flex-start;background:var(--panel);border:1px solid var(--line);color:var(--ink);border-bottom-left-radius:5px}.bubble.pending{color:var(--muted)}.bubble.pending:after{content:' ···';display:inline-block;animation:pulse 1.1s ease-in-out infinite}@keyframes pulse{50%{opacity:.28}}
 .chat-composer{border:1px solid var(--line);border-radius:17px;background:var(--panel);padding:10px;margin-top:9px}
 .chat-composer textarea{display:block;width:100%;min-height:64px;max-height:140px;resize:vertical;border:0;outline:0;background:transparent;color:var(--ink);font-size:12px}
 .chat-composer textarea::placeholder{color:var(--muted)}
@@ -188,7 +188,7 @@ a{color:inherit}
      <button class="quick-card" type="button" data-open="tools"><span class="quick-icon">▦</span><span><span class="quick-title">Tool Center</span><span class="quick-desc">Tra cứu processor và theo dõi job.</span></span><span class="quick-arrow">↗</span></button>
      <a class="quick-card" href="/media"><span class="quick-icon">▶</span><span><span class="quick-title">Media Studio</span><span class="quick-desc">Khám phá hình ảnh, video và audio.</span></span><span class="quick-arrow">↗</span></a>
      <button class="quick-card" type="button" data-open="library"><span class="quick-icon">⌑</span><span><span class="quick-title">Personal Index</span><span class="quick-desc">Website đã lập chỉ mục và tác vụ crawl.</span></span><span class="quick-arrow">↗</span></button>
-     <button class="quick-card" type="button" data-open="library"><span class="quick-icon">◷</span><span><span class="quick-title">Activity</span><span class="quick-desc">Lịch sử xử lý và trạng thái gần đây.</span></span><span class="quick-arrow">↗</span></button>
+     <button class="quick-card" type="button" data-open="library"><span class="quick-icon">◷</span><span><span class="quick-title">Crawl Jobs</span><span class="quick-desc">Theo dõi trạng thái thu thập website.</span></span><span class="quick-arrow">↗</span></button>
     </div>
    </section>
    <section class="section">
@@ -398,19 +398,25 @@ async function sendChat(){
  state.history.push({role:'user',content:prompt+(file?' · '+file.name:'')});state.history=state.history.slice(-10);
  renderChat();input.value='';$('fileName').textContent=file?file.name:'Tối đa 20 MB';
  var button=$('chatForm').querySelector('button[type=submit]');button.disabled=true;
- var pending={role:'assistant',content:file?'Đang tải tệp lên và lập kế hoạch xử lý…':'Đang suy nghĩ…'};
+ var pendingText='';
+ var pendingBubble=addText($('chatLog'),'div','bubble assistant pending',file?'Đang tải tệp lên và lập kế hoạch xử lý…':'Đang suy nghĩ…');
+ $('chatLog').scrollTop=$('chatLog').scrollHeight;
  try{
   if(file){
    var form=new FormData();form.set('prompt',prompt);form.set('file',file,file.name);
    var uploaded=await api('/api/ai/upload',{method:'POST',headers:{'x-nolane-request':'1'},body:form});
-   pending.content='Đã nhận tệp '+uploaded.fileName+'.\\nPipeline: '+(uploaded.pipeline||[]).join(' → ')+'\\nJob: '+uploaded.jobId+'\\nKết quả sẽ được gửi về Telegram và xuất hiện trong Tool Center.';
+   pendingText='Đã nhận tệp '+uploaded.fileName+'.\\nPipeline: '+(uploaded.pipeline||[]).join(' → ')+'\\nJob: '+uploaded.jobId+'\\nKết quả sẽ được gửi về Telegram và xuất hiện trong Tool Center.';
    $('chatFile').value='';$('fileName').textContent='Tối đa 20 MB';
   }else{
    var reply=await api('/api/chat',{method:'POST',headers:authHeaders(),body:JSON.stringify({message:message,history:state.history.slice(0,-1),task:'chat'})});
-   pending.content=reply.answer||'AI chưa trả về nội dung.';
+   pendingText=reply.answer||'AI chưa trả về nội dung.';
   }
-  state.history.push(pending);state.history=state.history.slice(-10);saveChat();renderChat();haptic('success');
- }catch(error){pending.content='Không thể hoàn tất: '+error.message;state.history.push(pending);saveChat();renderChat();haptic('error')}
+  pendingBubble.classList.remove('pending');pendingBubble.textContent=pendingText;
+  state.history.push({role:'assistant',content:pendingText});state.history=state.history.slice(-10);saveChat();renderChat();haptic('success');
+ }catch(error){
+  pendingBubble.classList.remove('pending');pendingBubble.textContent='Không thể hoàn tất: '+error.message;
+  state.history.push({role:'assistant',content:pendingBubble.textContent});state.history=state.history.slice(-10);saveChat();renderChat();haptic('error')
+ }
  finally{button.disabled=false;$('chatInput').focus()}
 }
 function normalizeSearch(value){return String(value||'').toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
@@ -483,7 +489,7 @@ async function loadMetrics(){
   textNode($('systemStatusText'),health.ok?'SYSTEM ONLINE':'LIMITED');
   textNode($('metricSearch'),health.database==='reachable'?'LIVE':'—');
  }catch(e){textNode($('systemStatusText'),'OFFLINE');$('systemStatus').classList.remove('ready')}
- textNode($('metricTools'),state.tools.length||'—');
+ textNode($('metricTools'),state.tools.length?state.tools.filter(function(tool){return tool.ready}).length:'—');
  try{var jobs=await api('/api/tools/jobs');textNode($('metricJobs'),(jobs.jobs||[]).length)}catch(e){textNode($('metricJobs'),'—')}
 }
 function popHistory(){
