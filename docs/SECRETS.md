@@ -31,6 +31,14 @@ Cloudflare account ID is already recorded in cloudflare.config.ts and the workfl
 
 The deploy workflow only uses this secret when changed files under `database/migrations/` require a migration. It will fail with a direct setup message when the secret is missing; ordinary Worker deployments do not need this token.
 
+## Optional media provider configuration
+
+| GitHub Actions secret | Purpose | Required |
+|---|---|---|
+| `MEDIA_DAILYMOTION_PLAYER_ID` | Enables the official Dailymotion player for supported Dailymotion URLs in Media Studio | No; only for Dailymotion |
+
+Create or copy the Player ID from the Dailymotion account's player configuration. Add it as a repository Actions secret named `MEDIA_DAILYMOTION_PLAYER_ID`. The deploy workflow forwards it to the Worker only when set. Without it, other media providers continue to work and Dailymotion URLs return a configuration-needed response; Nolane does not use a demo or guessed Player ID.
+
 ## Recommended
 
 | Secret | Purpose | Notes |
