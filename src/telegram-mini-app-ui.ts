@@ -263,7 +263,13 @@ var tg=window.Telegram&&window.Telegram.WebApp?window.Telegram.WebApp:null;
 var $=function(id){return document.getElementById(id)};
 var state={tab:'home',mode:'web',results:[],eventId:null,tools:[],category:'all',history:[],busy:false,toastTimer:null};
 function haptic(kind){
- try{if(tg&&tg.HapticFeedback){if(kind==='success'||kind==='error')tg.HapticFeedback.notificationOccurred(kind);else tg.HapticFeedback.impactOccurred(kind||'light')}}catch(e){}
+ try{
+  if(!tg||!tg.HapticFeedback)return;
+  if(kind==='success'||kind==='error'){tg.HapticFeedback.notificationOccurred(kind);return}
+  if(kind==='selection'&&typeof tg.HapticFeedback.selectionChanged==='function'){tg.HapticFeedback.selectionChanged();return}
+  var impact=['light','medium','heavy','rigid','soft'].indexOf(kind)>=0?kind:'light';
+  tg.HapticFeedback.impactOccurred(impact);
+ }catch(e){}
 }
 function showToast(message){
  var el=$('toast');el.textContent=String(message||'');el.classList.add('show');
