@@ -129,3 +129,15 @@ This fixes the CDN dependency for Safari/WebKit without sending Chromium into a 
 - HLS.js API and track/event reference: https://hlsjs.video-dev.org/api-docs/hls.js.hls
 - dash.js official API/event reference: https://dashif.org/dash.js/api/
 - Playwright 1.65.1 and the current Chromium/Firefox/WebKit versions: https://www.npmjs.com/package/playwright
+
+
+## Real Safari native-HLS decode gate
+
+The Chromium matrix does not prove Safari native decoding. A separate macOS GitHub Actions workflow now runs the real Apple Safari browser through the operating-system `safaridriver` WebDriver, using the exact Media Portal HTML and a public HLS source. It asserts Safari's native-HLS capability, that the UI selects its native path without loading HLS.js, that `video.play()` succeeds, and that the video advances beyond one second with `readyState >= 2` and no media error. It uploads a machine-readable report and screenshot.
+
+- Workflow: `.github/workflows/media-safari-native-hls.yml`
+- Script: `scripts/media-safari-native-hls-e2e.mjs`
+- Runner: `macos-15-intel` (Apple Safari + built-in `safaridriver`)
+- Source: `https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`
+
+The workflow uses Apple's documented Safari WebDriver enablement command (`safaridriver --enable`) and W3C WebDriver session. A successful run is direct Safari/macOS evidence for that Safari version and source at that time; it is not iOS Safari certification, and it does not guarantee all HLS sources/codecs. The Chromium matrix remains responsible for HLS.js and DASH behavior.
