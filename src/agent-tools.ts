@@ -18,6 +18,7 @@ import { runMediaDiscoveryTool } from "./media-discovery-tools";
 import { runConsumerDiscoveryTool } from "./consumer-discovery-tools";
 import { runOpenKnowledgeTool } from "./open-knowledge-tools";
 import { runAnimeCatalogTool } from "./anime-catalog-tools";
+import { runSteamGamesTool } from "./steam-games-tools";
 import { translateText } from "./translation";
 import type { Env, SearchMode } from "./types";
 
@@ -294,6 +295,31 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
         location: { type: "string", minLength: 2, maxLength: 100, description: "City or town name, not a street address." },
         country_code: { type: "string", pattern: "^[A-Za-z]{2}$", description: "Optional two-letter ISO country code." }
       }, required: ["location"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_steam_games",
+      description: "Search the Steam Store for PC games. Returns localized prices for a selected country, result type, Metacritic score when listed and official Steam store links. Store search can include DLC or soundtracks; check each item's type. Prices and availability vary by region and time.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 100, description: "Game title, genre or search keywords." },
+        country_code: { type: "string", pattern: "^[A-Za-z]{2}$", description: "Two-letter Steam storefront country code; defaults to VN." },
+        language: { type: "string", description: "Supported Steam storefront language, e.g. vietnamese or english; defaults to vietnamese." },
+        limit: { type: "integer", minimum: 1, maximum: 10, description: "Number of results, defaults to 8." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_steam_game_details",
+      description: "Get public Steam Store details for a numeric app ID returned by search_steam_games: short description, developers, publishers, genres, release date, platforms, regional price, Metacritic score, recommendations and official screenshots. This is catalog information, not a download, streaming or DRM-unlock tool.",
+      parameters: { type: "object", properties: {
+        app_id: { type: "integer", minimum: 1, maximum: 2147483647, description: "Steam app ID from a search result or Steam store URL." },
+        country_code: { type: "string", pattern: "^[A-Za-z]{2}$", description: "Two-letter Steam storefront country code; defaults to VN." },
+        language: { type: "string", description: "Supported Steam storefront language, e.g. vietnamese or english; defaults to vietnamese." }
+      }, required: ["app_id"], additionalProperties: false }
     }
   },
   {
@@ -2180,6 +2206,9 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
     if (!safe || safe.protocol !== "https:") throw new Error("Only valid public HTTPS URLs are allowed.");
     const page = await fetchTinyFishPage(env, safe.toString());
     return JSON.stringify({ title: page.title, url: page.finalUrl, text: page.text.slice(0, 12_000) });
+  }
+  if (["search_steam_games","get_steam_game_details"].includes(name)) {
+    return (await runSteamGamesTool(name, args)).slice(0, 12_000);
   }
   if (["search_anime_titles","get_anime_details","search_manga_titles","get_manga_details"].includes(name)) {
     return (await runAnimeCatalogTool(name, args)).slice(0, 12_000);
