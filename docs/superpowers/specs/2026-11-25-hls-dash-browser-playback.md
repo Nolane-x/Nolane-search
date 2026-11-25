@@ -20,6 +20,10 @@ Allow an authenticated Media Portal user to paste a direct HLS or MPEG-DASH mani
 - HLS: lazily load the pinned HLS.js 1.7.4 UMD build after an explicit click. Use native HLS only where HLS.js/MSE is unavailable and the browser advertises native HLS support.
 - DASH: lazily load the pinned dash.js 5.3.0 legacy UMD build after an explicit click.
 - No autoplay. Use the browser's native video controls.
+- Expose Auto plus manifest-derived manual video quality options when two or more representations exist.
+- HLS manual selection uses `hls.currentLevel`; setting `-1` returns to ABR.
+- DASH manual selection uses the relative index from `getRepresentationsByType('video')` and disables `autoSwitchBitrate.video`; Auto re-enables ABR.
+- Display height and bitrate where the manifest provides them; do not invent labels for missing metadata.
 - Show source-page and manifest links; do not label a manifest as a downloaded video file.
 
 ## Network policy
@@ -40,7 +44,7 @@ Permit the pinned jsDelivr origin in `script-src`, HTTPS sources in `connect-src
 ## Tests
 
 - Resolver: HLS and DASH recognition, query preservation, no Worker-side fetch, rejection of HTTP/local/IP/credentials/ports/fragments and unrelated file extensions.
-- UI: lazy version-pinned script loading, per-resource URL guards, no-credential request mode, player cleanup, CSP and inline-script parsing.
+- UI: lazy version-pinned script loading, per-resource URL guards, no-credential request mode, player cleanup, CSP and inline-script parsing, including quality selector wiring and DASH representation state.
 - Full CI: typecheck, Vitest, Python runner, deployment-script checks and Worker build.
 
 ## Non-goals
