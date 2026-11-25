@@ -41,3 +41,11 @@ Date: 2026-11-25
 - Main CI #624, deployment #172 and export #165 succeeded. Deploy #172 again passed the production `/telegram` smoke test.
 - Draft PR #141 contains browser-side HLS/DASH support; its Chromium real-source matrix passed 6/6 in run #36. It is not deployed. A separate real Safari/macOS native-HLS WebDriver check is being added.
 - R2 remains disabled at the Cloudflare account level (API error 10042); no private bucket, signed media URLs, or large-file downloader is available. A Telegram `/start` message is still required for first Mini App launch.
+
+
+## Subsequent production releases — Waves 66 and 68
+
+- Wave 66 HLS/DASH was merged in PR #141 and deployed in Worker release #173. Chromium live-source E2E #39 passed 6/6 and real macOS Safari native-HLS #3 played 1.2 seconds with readyState=4. This is not iOS Safari certification.
+- Wave 68 PR #142 merged as `60dd337d762420eec9c71984c1d4435277622ff0`. Added `/nearby`, `POST /api/nearby/search`, a Telegram Workspace entry and AI `search_nearby_places`. CI #631, deploy #174 and export #167 passed.
+- Deploy smoke was extended in commit `c03c44f51261b32930ea316bfc5301b6333e0791`; deploy #175 and export #168 passed. Smoke checks Workspace HTML/CSP/auth/tabs, Media Studio/Nearby links, anonymous `/nearby` redirect and nearby API HTTP 401.
+- OpenStreetMap Overpass is public/shared infrastructure; this feature is bounded for low-volume personal use. Use self-hosted or suitable hosted infrastructure before public-scale use.
