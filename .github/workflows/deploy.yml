@@ -142,3 +142,8 @@ jobs:
         run: |
           npm run set:webhook
           npm run set:commands
+
+      - name: Smoke test Telegram Mini App route
+        env:
+          TELEGRAM_MINI_APP_URL: "https://nolane-search.nolane-file.workers.dev/telegram"
+        run: node scripts/check-telegram-mini-app.mjs
