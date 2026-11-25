@@ -14,12 +14,15 @@ This work starts from PR #136 head and is intended to stack on top of PR #136, w
 6. Update CSP for the player CDN, HTTPS media requests, MSE blobs and HLS.js worker.
 7. Ensure results replacement destroys active players.
 8. Add resolver/UI regression tests and documentation.
+9. Add Auto/manual quality selection from actual HLS levels and DASH representations.
+10. Verify DASH manual selection disables ABR, Auto restores it, and representation state remains available to quality-change events.
 
 ## Verification gates
 
 - TypeScript typecheck.
 - All Vitest suites, including generated inline-script parsing.
 - Python tool-runner suite, deployment-script checks and Cloudflare Worker build.
+- Manual browser testing must also verify switching Auto/manual quality on manifests containing multiple representations.
 - Manual browser testing against public, CORS-enabled clear HLS and DASH examples is still required; CI cannot prove upstream stream availability or codec compatibility.
 
 ## Out of scope
