@@ -302,7 +302,7 @@ function applyTelegramTheme(){
   if(tg.setBackgroundColor)tg.setBackgroundColor(p.bg_color||'#0b1220');
  }catch(e){}
 }
-function setTab(tab,record){
+function setTab(tab,record,refreshData){
  if(!['home','search','ai','tools','library'].includes(tab))tab='home';
  if(record!==false&&state.tab!==tab){
   try{history.pushState({tab:tab},'',location.pathname+'#'+tab)}catch(e){}
@@ -311,9 +311,11 @@ function setTab(tab,record){
  document.querySelectorAll('.view').forEach(function(v){v.classList.toggle('active',v.dataset.view===tab)});
  document.querySelectorAll('.nav-item').forEach(function(v){v.classList.toggle('active',v.dataset.tab===tab)});
  if(tg&&tg.BackButton){if(tab==='home')tg.BackButton.hide();else tg.BackButton.show()}
- if(tab==='tools'){if(!state.tools.length)loadTools();loadJobs()}
- if(tab==='library')loadLibrary();
- if(tab==='home')loadMetrics();
+ if(refreshData!==false){
+  if(tab==='tools'){if(!state.tools.length)loadTools();loadJobs()}
+  if(tab==='library')loadLibrary();
+  if(tab==='home')loadMetrics();
+ }
  haptic('selection');
  window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -495,7 +497,7 @@ async function start(){
   if(ticket){
    try{
     await api('/api/auth/exchange',{method:'POST',headers:authHeaders(),body:JSON.stringify({ticket:ticket})});
-    history.replaceState({},'',location.pathname);
+    history.replaceState({},'',location.pathname+location.hash);
    }catch(ticketError){
     // A persistent Telegram Menu shortcut has no one-time ticket; reuse an existing valid owner session.
     await api('/api/auth/me');
@@ -506,6 +508,8 @@ async function start(){
   if(state.history.length===0){try{state.history=JSON.parse(localStorage.getItem('nolane.tg.chat')||'[]').filter(function(m){return m&&['user','assistant'].includes(m.role)&&typeof m.content==='string'}).slice(-10)}catch(e){state.history=[]}}
   renderChat();renderRecent();
   await Promise.all([loadTools(),loadLibrary(),loadMetrics()]);
+  var initialTab=(location.hash||'').slice(1);
+  if(['home','search','ai','tools','library'].indexOf(initialTab)>=0)setTab(initialTab,false,false);
  }catch(error){$('auth').classList.remove('hidden');textNode($('authMessage'),error.message||'Đăng nhập thất bại. Hãy gửi /start trong Telegram để tạo liên kết mới.')}
 }
 document.querySelectorAll('[data-tab]').forEach(function(button){button.addEventListener('click',function(){setTab(button.dataset.tab)})});
