@@ -27,7 +27,7 @@ type SafeUrl = { url: URL; sourceUrl: string };
 
 const UNSUPPORTED: MediaEmbedResolution = {
   status: "unsupported",
-  message: "URL video chưa được hỗ trợ. Hiện hỗ trợ YouTube, Vimeo, PeerTube và Dailymotion.",
+  message: "URL video chưa được hỗ trợ. Hiện hỗ trợ YouTube, Vimeo, PeerTube, Dailymotion và Twitch.",
 };
 
 function safePublicHttpsUrl(value: unknown): SafeUrl | null {
