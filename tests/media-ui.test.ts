@@ -55,6 +55,8 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("xhr.withCredentials=false");
     expect(html).toContain("initParams.credentials='omit'");
     expect(html).toContain("player.addRequestInterceptor");
+    expect(html).toContain("dashjs.MediaPlayer.events.LICENSE_REQUEST_SENDING");
+    expect(html).toContain("player.destroy()");
     expect(html).toContain("request.credentials='omit'");
     expect(html).toContain("item.streamType?null:anchor");
     expect(html).toContain("clearStreamPlayers()");
