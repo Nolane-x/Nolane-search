@@ -48,7 +48,8 @@ describe("Telegram Mini App workspace", () => {
     const html = await (await telegramMiniAppResponse()).text();
     expect(html).toContain('src="https://telegram.org/js/telegram-web-app.js"');
     expect(html).toContain("credentials:'same-origin'");
-    expect(html).toContain("history.replaceState({},'',location.pathname)");
+    expect(html).toContain("history.replaceState({},'',location.pathname+location.hash)");
+    expect(html).toContain("var initialTab=(location.hash||'').slice(1)");
     expect(html).toContain("localStorage");
     expect(html).not.toContain("api.openai.com");
     expect(html).not.toContain("api.telegram.org/bot");
