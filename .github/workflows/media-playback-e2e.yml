@@ -8,14 +8,8 @@ on:
     paths:
       - "src/media-ui.ts"
       - "src/media-embed-resolver.ts"
-      - "scripts/media-playback-e2e.mjs"
-      - ".github/workflows/media-playback-e2e.yml"
-  push:
-    branches:
-      - feat/wave-66-hls-dash-browser-playback
-    paths:
-      - "src/media-ui.ts"
-      - "src/media-embed-resolver.ts"
+      - "tests/media-ui.test.ts"
+      - "tests/media-embed-resolver.test.ts"
       - "scripts/media-playback-e2e.mjs"
       - ".github/workflows/media-playback-e2e.yml"
 
@@ -40,6 +34,12 @@ jobs:
           node-version: "22"
       - name: Install repository dependencies
         run: npm install --no-audit --no-fund
+      - name: Type-check Worker
+        run: npm run typecheck
+      - name: Run full Vitest suite
+        run: npm test
+      - name: Build Cloudflare Worker
+        run: npm run build
       - name: Install pinned Playwright browser harness
         run: |
           npm install --no-save --package-lock=false playwright@1.65.1
