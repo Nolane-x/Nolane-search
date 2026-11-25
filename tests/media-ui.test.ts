@@ -56,6 +56,9 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("Hls.Events.LEVELS_UPDATED");
     expect(html).toContain("Hls.Events.LEVEL_SWITCHED");
     expect(html).toContain("player.getRepresentationsByType('video')");
+    expect(html).toContain("var dashRepresentations=[]");
+    expect(html).toContain("dashRepresentations[event.newQuality]");
+    expect(html).toContain("bitrateInKbit");
     expect(html).toContain("autoSwitchBitrate:{video:false}");
     expect(html).toContain("autoSwitchBitrate:{video:true}");
     expect(html).toContain("player.setRepresentationForTypeByIndex('video',selected,true)");
