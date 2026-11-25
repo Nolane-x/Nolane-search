@@ -29,6 +29,33 @@ describe("private browser search portal", () => {
     expect(html).toContain("Tối đa 20 MB");
   });
 
+  it("serves the Telegram Mini App shell without exposing private data before authentication", async () => {
+    const response = await worker.fetch(new Request("https://nolane-search.example/telegram"), env, context);
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+    expect(html).toContain("NOLANE");
+    expect(html).toContain('data-tab="tools"');
+    expect(html).toContain("/api/auth/me");
+  });
+
+  it("keeps Mini App job retry owner-session protected and rejects cross-origin requests", async () => {
+    const anonymous = await worker.fetch(new Request("https://nolane-search.example/api/tools/jobs/retry", {
+      method: "POST",
+      headers: { origin: "https://nolane-search.example", "content-type": "application/json" },
+      body: JSON.stringify({ jobId: "12345678-1234-1234-1234-123456789abc" }),
+    }), env, context);
+    expect(anonymous.status).toBe(401);
+
+    const crossOrigin = await worker.fetch(new Request("https://nolane-search.example/api/tools/jobs/retry", {
+      method: "POST",
+      headers: { origin: "https://attacker.example", "content-type": "application/json" },
+      body: JSON.stringify({ jobId: "12345678-1234-1234-1234-123456789abc" }),
+    }), env, context);
+    expect(crossOrigin.status).toBe(403);
+  });
+
   it("does not expose search results to anonymous browser requests", async () => {
     const response = await worker.fetch(new Request("https://nolane-search.example/api/search?q=hello"), env, context);
     expect(response.status).toBe(401);

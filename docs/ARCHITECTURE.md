@@ -18,7 +18,7 @@ Telegram user → Telegram webhook → Cloudflare Worker
 - Deduplicate update_id in D1.
 - Enforce owner allowlist.
 - Parse command and select search mode.
-- `/start` and `/menu` open an inline dashboard; callbacks edit the same menu message instead of sending a new menu for every navigation step.
+- `/start` and `/menu` open a compact native inline menu. Its first button launches `/telegram` with a one-time owner ticket; the Worker also sets a per-user Telegram Menu button pointing at the static `/telegram` route so later launches reuse the active session cookie. Callback navigation still edits the same message rather than flooding the chat. The Mini App provides separate Overview, Search Studio, AI Workspace, Tool Center and Personal Index sections.
 - Mode buttons save a one-shot per-user/per-chat input mode in the existing D1 `search_cache` with a 10-minute TTL. The next plain-text message consumes that state and routes to Web, Tech, News, Research, GitHub, Wiki, Local, AI, Ask or Deep Search. Slash commands clear the pending mode.
 - Search-result action buttons can launch `/ask` or `/deep` from the stored owner/chat-bound 15-minute search session; the callback is validated against the original user and chat.
 
@@ -40,7 +40,7 @@ Website monitoring → D1 watch metadata → 30-minute Cron → robots.txt polic
 
 ## Private browser portal
 
-- `/web` can be used only by an allowlisted owner in a private Telegram chat. It creates a cryptographically random, one-time ticket, stores only the SHA-256 hash in D1, expires it after five minutes, and sends the owner a private link.
+- `/web` and the `/start` Mini App button use the same owner-only ticket flow. It creates a cryptographically random, one-time ticket, stores only the SHA-256 hash in D1, expires it after five minutes, and binds it to the allowlisted owner and private chat. The Mini App ticket is passed as a `web_app` inline keyboard URL and removed from browser history after exchange.
 - `POST /api/auth/exchange` consumes the ticket with a conditional D1 update and creates a seven-day server-side session. The browser receives only a Secure, HttpOnly, SameSite=Strict cookie; only its hash is stored in D1.
 - `GET /api/auth/me` checks session state. `POST /api/auth/logout` revokes the current session. Expired tickets and sessions are removed by scheduled maintenance.
 - `GET /api/search`, `POST /api/ask`, `POST /api/chat`, `POST /api/crawl`, `GET /api/crawls` and `POST /api/feedback` require an authenticated session whose Telegram user remains on the allowlist. The private single-owner service has no application-level per-minute usage caps. Unsafe or oversized inputs are rejected.
@@ -199,3 +199,11 @@ The file is held in the runner's temporary filesystem for the lifetime of that j
 - Worker checks each stored definition against current tool IDs/transitions when reading it, then revalidates the first processor against the actual uploaded file before dispatch. The runner still independently validates each pipeline.
 - Each run creates an ordinary tool job, with workflow ID/name retained in job metadata for history. The file ID remains private to D1/Worker and is not sent in the GitHub Actions dispatch input.
 - This is intentionally a reusable linear pipeline library. It does not accept user-defined branches, loops, expressions, shell commands or arbitrary parallel graphs.
+
+
+## Telegram Mini App surface
+
+- `GET /telegram` serves a mobile-first Telegram Web App on the same Worker origin. It reuses `/api/search`, `/api/ask`, `/api/chat`, `/api/ai/upload`, `/api/tools/catalog`, `/api/tools/jobs`, `/api/index`, `/api/crawl` and `/api/crawls`.
+- The Mini App is a presentation/navigation layer only; access control remains the existing one-time ticket exchange and seven-day server-side session cookie. API write requests still require same-origin headers and session ownership.
+- Telegram SDK integration is progressive: theme, haptic feedback and the native BackButton are used when opened in Telegram; fallback colors preserve a previewable page in a normal browser. The Worker serves the inline page without a separate JS bundle or new build system.
+- Search feedback reuses the existing event-bound `/api/feedback` endpoint. Tool Center exposes read-only trace details from owner-filtered `/api/tools/jobs` and a new owner/private-chat-scoped `/api/tools/jobs/retry` action which delegates to the existing `retryToolJob` service.

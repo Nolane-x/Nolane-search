@@ -18,7 +18,7 @@ export async function telegramApi<T = Record<string, unknown>>(env: Env, method:
   return data.result as T;
 }
 
-export interface TelegramInlineButton { text: string; callback_data?: string; url?: string; }
+export interface TelegramInlineButton { text: string; callback_data?: string; url?: string; web_app?: { url: string }; }
 export interface TelegramInlineKeyboardMarkup { inline_keyboard: Array<Array<TelegramInlineButton>>; }
 
 export async function sendSearchPage(
@@ -225,28 +225,27 @@ export function formatHomeMenu(firstName = ""): string {
   const greeting = firstName.trim() ? "Chào " + safeHtmlText(firstName.trim(), 70) + "!" : "Xin chào!";
   return [
     "<b>◈ NOLANE SEARCH</b>",
-    "<i>Personal Search & AI Workspace</i>",
+    "<i>Private Intelligence Workspace</i>",
     "",
     "<b>" + greeting + "</b>",
-    "Tìm kiếm web, nghiên cứu nhiều nguồn, hỏi AI và tra cứu website riêng ngay trong cuộc trò chuyện này.",
+    "Tất cả công cụ tìm kiếm, AI, xử lý tệp và thư viện riêng đã được gom vào một không gian duy nhất.",
     "",
-    "<b>Chọn một công cụ bên dưới</b>",
-    "<i>Chạm vào chế độ → gửi câu hỏi. Không cần nhớ cú pháp lệnh.</i>",
+    "<b>✦ Mở Nolane Workspace</b>",
+    "<i>Giao diện tối ưu cho Telegram · điều hướng rõ ràng · thao tác nhanh.</i>",
+    "",
+    "Bạn vẫn có thể dùng các nút nhanh bên dưới mà không cần mở Workspace.",
   ].join("\n");
 }
 
-export function buildHomeKeyboard(webAppUrl = "https://nolane-search.nolane-file.workers.dev/"): TelegramInlineKeyboardMarkup {
-  const mediaAppUrl = new URL("/media", webAppUrl).toString();
+export function buildHomeKeyboard(miniAppUrl = "https://nolane-search.nolane-file.workers.dev/telegram"): TelegramInlineKeyboardMarkup {
   return { inline_keyboard: [
-    [{ text: "🔎 Web Search", callback_data: "ui:mode:web" }, { text: "🧠 AI có nguồn", callback_data: "ui:mode:ask" }],
+    [{ text: "✦ Mở Nolane Workspace", web_app: { url: miniAppUrl } }],
+    [{ text: "🔎 Tìm kiếm", callback_data: "ui:mode:web" }, { text: "🧠 AI có nguồn", callback_data: "ui:mode:ask" }],
     [{ text: "⚡ AI Chat", callback_data: "ui:mode:ai" }, { text: "📚 Deep Research", callback_data: "ui:mode:deep" }],
     [{ text: "💻 Công nghệ", callback_data: "ui:mode:tech" }, { text: "📰 Tin tức", callback_data: "ui:mode:news" }],
-    [{ text: "🐙 GitHub", callback_data: "ui:mode:github" }, { text: "📖 Wikipedia", callback_data: "ui:mode:wiki" }],
-    [{ text: "🔬 Nghiên cứu", callback_data: "ui:mode:research" }, { text: "🗂 Website riêng", callback_data: "ui:mode:local" }],
-    [{ text: "🌐 Mở Web Workspace", url: webAppUrl }],
-    [{ text: "🎞 Media Portal · Ảnh, video & audio", url: mediaAppUrl }],
-    [{ text: "🧰 Tool Center", callback_data: "tc:home" }],
-    [{ text: "📊 Trạng thái", callback_data: "ui:status" }, { text: "❔ Hướng dẫn", callback_data: "ui:help" }],
+    [{ text: "🐙 GitHub", callback_data: "ui:mode:github" }, { text: "🗂 Website riêng", callback_data: "ui:mode:local" }],
+    [{ text: "🧰 Tool Center", callback_data: "tc:home" }, { text: "📊 Trạng thái", callback_data: "ui:status" }],
+    [{ text: "❔ Hướng dẫn", callback_data: "ui:help" }],
   ] };
 }
 
@@ -391,40 +390,35 @@ function toolCategoryItems(tools: ToolDefinition[], category: ToolCategory): Too
 
 export function formatToolCenterHome(tools: ToolDefinition[], configured: boolean): string {
   const ready = tools.filter(tool => tool.ready);
-  const categories = TOOL_CENTER_CATEGORIES
-    .map(category => ({ category, count: toolCategoryItems(ready, category).length }))
-    .filter(item => item.count > 0);
+  const categories = TOOL_CENTER_CATEGORIES.filter(category => toolCategoryItems(ready, category).length > 0);
   return [
     "<b>◈ NOLANE TOOL CENTER</b>",
-    "<i>" + ready.length + " processor đang có trong catalog · " + categories.length + " danh mục</i>",
+    "<i>" + ready.length + " processor sẵn sàng · " + categories.length + " danh mục</i>",
     "",
-    ...categories.map(item => "<b>" + htmlEscape(toolCategoryLabel(item.category)) + "</b> · " + item.count + " tool"),
+    "Danh mục, bộ lọc và thông tin từng công cụ đã được gom vào <b>Workspace</b> để chat Telegram không bị kéo dài bởi danh sách.",
     "",
     configured
-      ? "Runner đã được cấu hình. Chọn danh mục để duyệt, mở chi tiết rồi bấm <b>Dùng tool</b> và gửi tệp."
+      ? "Runner đã sẵn sàng. Mở Workspace để tìm công cụ, đính kèm tệp và theo dõi job."
       : "⚠️ Runner chưa sẵn sàng: cần cấu hình GitHub Actions token trước khi chạy tệp.",
     "",
-    "<code>/tool_search từ khóa</code> · tìm theo tên, mô tả, định dạng",
-    "<code>/tool_jobs</code> · lịch sử và trạng thái",
-    "<code>/workflows</code> · workflow đã lưu · <code>/workflow_plan</code> · AI lập quy trình",
+    "<code>/tool_search từ khóa</code> · tìm nhanh trong chat",
+    "<code>/tool_jobs</code> · xem lịch sử và trạng thái",
+    "<code>/workflows</code> · workflow đã lưu",
   ].join("\n");
 }
 
-export function buildToolCenterKeyboard(tools: ToolDefinition[]): TelegramInlineKeyboardMarkup {
-  const rows: TelegramInlineButton[][] = [];
-  const populated = TOOL_CENTER_CATEGORIES.filter(category => toolCategoryItems(tools, category).length > 0);
-  for (let index = 0; index < populated.length; index += 2) {
-    rows.push(populated.slice(index, index + 2).map(category => ({
-      text: toolCategoryLabel(category) + " · " + toolCategoryItems(tools, category).length,
-      callback_data: "tc:" + category,
-    })));
-  }
-  rows.push([
-    { text: "🧾 Tác vụ gần đây", callback_data: "tc:jobs" },
-    { text: "🧩 Workflow", callback_data: "tc:workflows" },
-  ]);
-  rows.push([{ text: "⌂ Menu chính", callback_data: "ui:home" }]);
-  return { inline_keyboard: rows };
+export function buildToolCenterKeyboard(
+  tools: ToolDefinition[],
+  miniAppUrl = "https://nolane-search.nolane-file.workers.dev/telegram#tools",
+): TelegramInlineKeyboardMarkup {
+  return { inline_keyboard: [
+    [{ text: "▦ Mở Tool Center · " + tools.filter(tool => tool.ready).length, web_app: { url: miniAppUrl } }],
+    [
+      { text: "🧾 Job Center", callback_data: "tc:jobs" },
+      { text: "🧩 Workflow", callback_data: "tc:workflows" },
+    ],
+    [{ text: "⌂ Menu chính", callback_data: "ui:home" }],
+  ] };
 }
 
 export function formatToolCategoryPage(tools: ToolDefinition[], category: ToolCategory, page = 0): string {

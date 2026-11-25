@@ -13,6 +13,7 @@ import type { ToolCategory, ToolPipelineStep } from "./tools";
 import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, validateToolDagTrace, validateToolJobProgress, validateToolStepTrace } from "./tool-jobs";
 import { clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWorkflow, getPendingToolWorkflow, getPendingToolWorkflowPlan, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow, storeToolWorkflowPlan } from "./workflows";
 import { webAppResponse } from "./web-ui";
+import { telegramMiniAppResponse } from "./telegram-mini-app-ui";
 import { mediaAppResponse } from "./media-ui";
 import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos, searchInternetArchiveAudio, searchPeerTubeVideos } from "./media-discovery-tools";
 import { completeAi, getAiRouterStatus } from "./ai-router";
@@ -83,8 +84,16 @@ async function consumePendingTelegramMode(env: Env, userId: number, chatId: numb
   } catch { return null; }
 }
 
-async function sendHomeDashboard(env: Env, chatId: number): Promise<void> {
-  await telegramApi(env, "sendMessage", { chat_id: chatId, text: formatHomeMenu(), parse_mode: "HTML", disable_web_page_preview: true, reply_markup: buildHomeKeyboard() });
+async function sendHomeDashboard(env: Env, chatId: number, userId: number): Promise<void> {
+  const miniAppUrl = await createWebLoginUrl(env, userId, chatId, "/telegram");
+  await telegramApi(env, "sendMessage", {
+    chat_id: chatId,
+    text: formatHomeMenu(),
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    reply_markup: buildHomeKeyboard(miniAppUrl),
+  });
+  await setTelegramWorkspaceMenuButton(env, chatId, userId);
 }
 
 async function editTelegramDashboard(env: Env, chatId: number, messageId: number, text: string, replyMarkup: TelegramInlineKeyboardMarkup): Promise<void> {
@@ -114,6 +123,44 @@ function randomHex(bytes = 32): string {
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, "0")).join("");
+}
+
+const WEB_APP_ORIGIN = "https://nolane-search.nolane-file.workers.dev";
+
+/** Create a single-use Telegram-owner ticket for an existing private browser surface. */
+async function createWebLoginUrl(env: Env, userId: number, chatId: number, path = "/"): Promise<string> {
+  if (!Number.isSafeInteger(userId) || !Number.isSafeInteger(chatId) || userId !== chatId || !allowedUser(env, userId)) {
+    throw new Error("Chỉ tài khoản được cấp quyền trong chat riêng mới mở được Nolane Workspace.");
+  }
+  const token = randomHex();
+  const tokenHash = await sha256Hex(token);
+  const now = Date.now();
+  await env.DB.prepare("DELETE FROM web_login_tickets WHERE user_id = ? AND used_at IS NULL")
+    .bind(String(userId)).run();
+  await env.DB.prepare(
+    "INSERT INTO web_login_tickets (token_hash, user_id, chat_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
+  ).bind(tokenHash, String(userId), String(chatId), now + WEB_TICKET_TTL_MS, now).run();
+  const url = new URL(path, WEB_APP_ORIGIN);
+  url.searchParams.set("ticket", token);
+  return url.toString();
+}
+
+/** Configure a persistent per-chat launcher; the inline /start button still performs the one-time login. */
+async function setTelegramWorkspaceMenuButton(env: Env, chatId: number, userId: number): Promise<void> {
+  if (chatId !== userId || !allowedUser(env, userId)) return;
+  try {
+    await telegramApi(env, "setChatMenuButton", {
+      chat_id: chatId,
+      menu_button: {
+        type: "web_app",
+        text: "Workspace",
+        web_app: { url: new URL("/telegram", WEB_APP_ORIGIN).toString() },
+      },
+    });
+  } catch (error) {
+    // The inline keyboard remains a working fallback if the per-chat menu shortcut cannot be set.
+    console.warn("Telegram Mini App menu button setup failed:", error instanceof Error ? error.message : "unknown");
+  }
 }
 interface AiSynthesisCache {
   answer: string;
@@ -465,6 +512,27 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
       resultSummary: job.resultSummary || null, error: job.error || null,
       progress: job.progress || null, trace: job.trace || [], pipeline: job.pipeline || [],
     })) });
+  }
+
+  if (url.pathname === "/api/tools/jobs/retry" && request.method === "POST") {
+    if (session.chatId !== session.userId || !allowedUser(env, session.userId)) {
+      return jsonResponse({ error: "Retry chỉ hoạt động trong Workspace gắn với chat riêng Telegram được cấp quyền." }, 403);
+    }
+    const body = await parseJsonBody(request);
+    const jobId = typeof body?.jobId === "string" ? body.jobId.trim() : "";
+    if (!/^[a-f0-9-]{36}$/i.test(jobId)) {
+      return jsonResponse({ error: "Job ID không hợp lệ." }, 400);
+    }
+    try {
+      const job = await retryToolJob(env, session.userId, session.chatId, jobId);
+      return jsonResponse({
+        ok: true, sourceJobId: jobId, jobId: job.id, toolId: job.toolId,
+        fileName: job.fileName, status: job.status, attempt: job.attempt || 1,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không thể retry job lúc này.";
+      return jsonResponse({ error: message.slice(0, 300) }, 422);
+    }
   }
 
   if (url.pathname === "/api/search" && request.method === "GET") {
@@ -870,7 +938,9 @@ async function handleUiCallback(env: Env, callback: TelegramCallbackQuery): Prom
   const data = callback.data || "";
   if (data === "ui:home" || data === "ui:cancel") {
     await clearPendingTelegramMode(env, callback.from.id, message.chat.id);
-    await editTelegramDashboard(env, message.chat.id, message.message_id, formatHomeMenu(), buildHomeKeyboard());
+    const miniAppUrl = await createWebLoginUrl(env, callback.from.id, message.chat.id, "/telegram");
+    await editTelegramDashboard(env, message.chat.id, message.message_id, formatHomeMenu(), buildHomeKeyboard(miniAppUrl));
+    await setTelegramWorkspaceMenuButton(env, message.chat.id, callback.from.id);
     return;
   }
   if (data.startsWith("ui:mode:")) {
@@ -983,8 +1053,10 @@ async function handleToolCenterCallback(env: Env, callback: TelegramCallbackQuer
   }
   const data = callback.data || "";
   if (data === "tc:home") {
+    const miniAppUrl = await createWebLoginUrl(env, callback.from.id, message.chat.id, "/telegram#tools");
     await editTelegramDashboard(env, message.chat.id, message.message_id,
-      formatToolCenterHome(TOOL_CATALOG, Boolean(env.NOLANE_GH_ACTIONS_TOKEN)), buildToolCenterKeyboard(TOOL_CATALOG));
+      formatToolCenterHome(TOOL_CATALOG, Boolean(env.NOLANE_GH_ACTIONS_TOKEN)), buildToolCenterKeyboard(TOOL_CATALOG, miniAppUrl));
+    await setTelegramWorkspaceMenuButton(env, message.chat.id, callback.from.id);
     return;
   }
   if (data === "tc:jobs") {
@@ -1062,7 +1134,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       return;
     }
     await clearPendingTelegramMode(env, userId, chatId);
-    await sendHomeDashboard(env, chatId);
+    await sendHomeDashboard(env, chatId, userId);
     return;
   }
 
@@ -1077,7 +1149,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "tool-pending:" + userId + ":" + chatId,
       "tool-workflow-pending:" + userId + ":" + chatId,
     ).run();
-    await sendHomeDashboard(env, chatId);
+    await sendHomeDashboard(env, chatId, userId);
     return;
   }
 
@@ -1296,15 +1368,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       return;
     }
     try {
-      const token = randomHex();
-      const tokenHash = await sha256Hex(token);
-      const now = Date.now();
-      await env.DB.prepare("DELETE FROM web_login_tickets WHERE user_id = ? AND used_at IS NULL")
-        .bind(String(userId)).run();
-      await env.DB.prepare(
-        "INSERT INTO web_login_tickets (token_hash, user_id, chat_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
-      ).bind(tokenHash, String(userId), String(chatId), now + WEB_TICKET_TTL_MS, now).run();
-      const link = "https://nolane-search.nolane-file.workers.dev/?ticket=" + token;
+      const link = await createWebLoginUrl(env, userId, chatId, "/");
       await reply(env, chatId,
         "<b>Nolane Search Web</b>\nMở không gian tìm kiếm riêng tư tại liên kết dưới đây. Liên kết chỉ dùng được một lần và hết hạn sau 5 phút.\n\n<a href=\"" +
         htmlEscape(link) + "\">Mở Nolane Search</a>\n\n<i>Không chia sẻ liên kết này với người khác.</i>");
@@ -1378,13 +1442,19 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
   }
 
   if (command === "tools") {
+    if (chatId !== userId) {
+      await reply(env, chatId, "Tool Center chỉ khả dụng trong chat riêng được cấp quyền. Hãy mở bot riêng và gửi /tools.");
+      return;
+    }
+    const miniAppUrl = await createWebLoginUrl(env, userId, chatId, "/telegram#tools");
     await telegramApi(env, "sendMessage", {
       chat_id: chatId,
       text: formatToolCenterHome(TOOL_CATALOG, Boolean(env.NOLANE_GH_ACTIONS_TOKEN)),
       parse_mode: "HTML",
       disable_web_page_preview: true,
-      reply_markup: buildToolCenterKeyboard(TOOL_CATALOG),
+      reply_markup: buildToolCenterKeyboard(TOOL_CATALOG, miniAppUrl),
     });
+    await setTelegramWorkspaceMenuButton(env, chatId, userId);
     return;
   }
 
@@ -3181,6 +3251,7 @@ async function recoverStaleDeepJobs(env: Env): Promise<number> {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/telegram") return telegramMiniAppResponse();
     if (request.method === "GET" && url.pathname === "/") return webAppResponse();
     if (request.method === "GET" && url.pathname === "/media") {
       const session = await getWebSession(request, env);
