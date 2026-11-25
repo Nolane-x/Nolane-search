@@ -867,7 +867,7 @@ export async function runMediaDiscoveryTool(name: string, rawArgs: unknown): Pro
     return JSON.stringify(await searchInternetArchiveVideos(args.query, args.limit));
   }
   if (name === "search_peertube_videos") {
-    return JSON.stringify(await searchPeerTubeVideos(args.query, args.limit));
+    return JSON.stringify(await searchPeerTubeVideos(args.query, args.limit, args.include_nsfw));
   }
   if (name === "lookup_food_product") return lookupFoodProduct(args.barcode);
   if (name === "lookup_consumer_product") return lookupConsumerProduct(args.barcode, args.product_type);
