@@ -71,7 +71,7 @@ function languageCode(value: unknown): string {
 function positiveAppId(value: unknown): number {
   const appId = typeof value === "string" && /^\d{1,10}$/.test(value) ? Number(value) : value;
   if (!Number.isSafeInteger(appId) || Number(appId) < 1 || Number(appId) > 2_147_483_647) {
-    throw new Error("app_id must be a valid positive Steam application ID.");
+    throw new Error("app ID must be a valid positive Steam application ID.");
   }
   return Number(appId);
 }
