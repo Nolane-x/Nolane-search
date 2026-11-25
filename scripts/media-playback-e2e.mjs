@@ -40,7 +40,7 @@ const samples = [
     id: "dash-shaka-sintel",
     label: "DASH · Shaka Sintel · subtitle and representation test",
     url: "https://storage.googleapis.com/shaka-demo-assets/sintel/dash.mpd",
-    expected: { quality: 2, subtitles: 1 },
+    expected: { quality: 2, audio: 2, subtitles: 1 },
   },
 ];
 
