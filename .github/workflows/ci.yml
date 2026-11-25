@@ -48,6 +48,7 @@ jobs:
           node --check scripts/check-telegram-webhook.mjs
           node scripts/check-telegram-webhook.mjs
           node --check scripts/set-commands.mjs
+          node --check scripts/check-telegram-mini-app.mjs
           bash -n scripts/install-siegfried.sh
           bash -n scripts/install-wave33-binaries.sh
       - name: Install pinned PRONOM engine for format identification tests
