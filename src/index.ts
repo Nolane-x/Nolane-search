@@ -13,6 +13,7 @@ import type { ToolCategory, ToolPipelineStep } from "./tools";
 import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, validateToolDagTrace, validateToolJobProgress, validateToolStepTrace } from "./tool-jobs";
 import { clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWorkflow, getPendingToolWorkflow, getPendingToolWorkflowPlan, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow, storeToolWorkflowPlan } from "./workflows";
 import { webAppResponse } from "./web-ui";
+import { telegramMiniAppResponse } from "./telegram-mini-app-ui";
 import { mediaAppResponse } from "./media-ui";
 import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos, searchInternetArchiveAudio, searchPeerTubeVideos } from "./media-discovery-tools";
 import { completeAi, getAiRouterStatus } from "./ai-router";
@@ -83,8 +84,15 @@ async function consumePendingTelegramMode(env: Env, userId: number, chatId: numb
   } catch { return null; }
 }
 
-async function sendHomeDashboard(env: Env, chatId: number): Promise<void> {
-  await telegramApi(env, "sendMessage", { chat_id: chatId, text: formatHomeMenu(), parse_mode: "HTML", disable_web_page_preview: true, reply_markup: buildHomeKeyboard() });
+async function sendHomeDashboard(env: Env, chatId: number, userId: number): Promise<void> {
+  const miniAppUrl = await createWebLoginUrl(env, userId, chatId, "/telegram");
+  await telegramApi(env, "sendMessage", {
+    chat_id: chatId,
+    text: formatHomeMenu(),
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    reply_markup: buildHomeKeyboard(miniAppUrl),
+  });
 }
 
 async function editTelegramDashboard(env: Env, chatId: number, messageId: number, text: string, replyMarkup: TelegramInlineKeyboardMarkup): Promise<void> {
@@ -114,6 +122,26 @@ function randomHex(bytes = 32): string {
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, "0")).join("");
+}
+
+const WEB_APP_ORIGIN = "https://nolane-search.nolane-file.workers.dev";
+
+/** Create a single-use Telegram-owner ticket for an existing private browser surface. */
+async function createWebLoginUrl(env: Env, userId: number, chatId: number, path = "/"): Promise<string> {
+  if (!Number.isSafeInteger(userId) || !Number.isSafeInteger(chatId) || userId !== chatId || !allowedUser(env, userId)) {
+    throw new Error("Chỉ tài khoản được cấp quyền trong chat riêng mới mở được Nolane Workspace.");
+  }
+  const token = randomHex();
+  const tokenHash = await sha256Hex(token);
+  const now = Date.now();
+  await env.DB.prepare("DELETE FROM web_login_tickets WHERE user_id = ? AND used_at IS NULL")
+    .bind(String(userId)).run();
+  await env.DB.prepare(
+    "INSERT INTO web_login_tickets (token_hash, user_id, chat_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
+  ).bind(tokenHash, String(userId), String(chatId), now + WEB_TICKET_TTL_MS, now).run();
+  const url = new URL(path, WEB_APP_ORIGIN);
+  url.searchParams.set("ticket", token);
+  return url.toString();
 }
 interface AiSynthesisCache {
   answer: string;
@@ -870,7 +898,8 @@ async function handleUiCallback(env: Env, callback: TelegramCallbackQuery): Prom
   const data = callback.data || "";
   if (data === "ui:home" || data === "ui:cancel") {
     await clearPendingTelegramMode(env, callback.from.id, message.chat.id);
-    await editTelegramDashboard(env, message.chat.id, message.message_id, formatHomeMenu(), buildHomeKeyboard());
+    const miniAppUrl = await createWebLoginUrl(env, callback.from.id, message.chat.id, "/telegram");
+    await editTelegramDashboard(env, message.chat.id, message.message_id, formatHomeMenu(), buildHomeKeyboard(miniAppUrl));
     return;
   }
   if (data.startsWith("ui:mode:")) {
@@ -1062,7 +1091,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       return;
     }
     await clearPendingTelegramMode(env, userId, chatId);
-    await sendHomeDashboard(env, chatId);
+    await sendHomeDashboard(env, chatId, userId);
     return;
   }
 
@@ -1296,18 +1325,10 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       return;
     }
     try {
-      const token = randomHex();
-      const tokenHash = await sha256Hex(token);
-      const now = Date.now();
-      await env.DB.prepare("DELETE FROM web_login_tickets WHERE user_id = ? AND used_at IS NULL")
-        .bind(String(userId)).run();
-      await env.DB.prepare(
-        "INSERT INTO web_login_tickets (token_hash, user_id, chat_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
-      ).bind(tokenHash, String(userId), String(chatId), now + WEB_TICKET_TTL_MS, now).run();
-      const link = "https://nolane-search.nolane-file.workers.dev/?ticket=" + token;
+      const link = await createWebLoginUrl(env, userId, chatId, "/");
       await reply(env, chatId,
-        "<b>Nolane Search Web</b>\nMở không gian tìm kiếm riêng tư tại liên kết dưới đây. Liên kết chỉ dùng được một lần và hết hạn sau 5 phút.\n\n<a href=\"" +
-        htmlEscape(link) + "\">Mở Nolane Search</a>\n\n<i>Không chia sẻ liên kết này với người khác.</i>");
+        "<b>Nolane Search Web</b>\\nMở không gian tìm kiếm riêng tư tại liên kết dưới đây. Liên kết chỉ dùng được một lần và hết hạn sau 5 phút.\\n\\n<a href=\\"" +
+        htmlEscape(link) + "\\">Mở Nolane Search</a>\\n\\n<i>Không chia sẻ liên kết này với người khác.</i>");
     } catch (error) {
       console.error("Web login ticket creation failed:", error instanceof Error ? error.message : "unknown");
       await reply(env, chatId, "Không thể tạo liên kết đăng nhập. Hãy thử lại sau.");
@@ -3181,6 +3202,7 @@ async function recoverStaleDeepJobs(env: Env): Promise<number> {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/telegram") return telegramMiniAppResponse();
     if (request.method === "GET" && url.pathname === "/") return webAppResponse();
     if (request.method === "GET" && url.pathname === "/media") {
       const session = await getWebSession(request, env);
