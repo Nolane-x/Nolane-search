@@ -53,6 +53,8 @@ export interface Env {
   NOLANE_GH_ACTIONS_TOKEN?: string;
   /** Explicit deployment gate for optional adult-only media discovery; absent means disabled. */
   MEDIA_ALLOW_NSFW?: string;
+  /** Optional Dailymotion Player ID supplied by the Worker deployment owner. */
+  MEDIA_DAILYMOTION_PLAYER_ID?: string;
 }
 
 export interface D1Result<T = Record<string, unknown>> {
