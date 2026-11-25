@@ -47,6 +47,7 @@ describe("Nearby Places · OpenStreetMap", () => {
         { type: "node", id: 3, lat: 20.8449, lon: 106.6881, tags: { amenity: "pharmacy" } },
         { type: "node", id: 1, lat: 20.8450, lon: 106.6882, tags: {
           name: "Nhà thuốc gần", amenity: "pharmacy", website: "https://pharmacy.example",
+        "contact:website": "https://192.168.1.10/admin",
         } },
       ],
       osm3s: { timestamp_osm_base: "2026-11-25T12:00:00Z" },
@@ -69,6 +70,32 @@ describe("Nearby Places · OpenStreetMap", () => {
     expect(result.dataUpdatedAt).toBe("2026-11-25T12:00:00Z");
     expect(result.note).toContain("đường chim bay");
     expect(result.note).toContain("không xác nhận địa điểm đang mở");
+  });
+
+  it("searches multiple essential categories in one bounded Overpass query and labels each result", async () => {
+    const mock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const query = new URLSearchParams(String(init?.body || "")).get("data") || "";
+      expect(query).toContain('nwr["amenity"~"^(restaurant|cafe|fast_food|pharmacy|hospital|clinic|doctors|dentist|atm|bank|fuel|charging_station)$"]');
+      expect(query).toContain('nwr["shop"~"^(supermarket|convenience)$"]');
+      return new Response(JSON.stringify({ elements: [
+        { type: "node", id: 21, lat: 20.8450, lon: 106.6882, tags: { name: "Cà phê", amenity: "cafe" } },
+        { type: "node", id: 22, lat: 20.8451, lon: 106.6883, tags: { name: "Siêu thị", shop: "supermarket" } },
+        { type: "node", id: 23, lat: 20.8452, lon: 106.6884, tags: { name: "Nhà thuốc", amenity: "pharmacy" } },
+        { type: "node", id: 24, lat: 20.8453, lon: 106.6885, tags: { name: "ATM", amenity: "atm" } },
+        { type: "node", id: 25, lat: 20.8454, lon: 106.6886, tags: { name: "Trạm sạc", amenity: "charging_station" } },
+      ] }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", mock);
+    const result = await searchNearbyPlaces({ ...coordinates, category: "essentials" });
+    expect(mock).toHaveBeenCalledTimes(1);
+    expect(result.category).toBe("essentials");
+    expect(result.categoryLabel).toBe("Tiện ích thiết yếu");
+    expect(result.places.map((place: { category: string }) => place.category)).toEqual([
+      "food", "shopping", "pharmacy", "atm", "charging",
+    ]);
+    expect(result.places.map((place: { categoryLabel: string }) => place.categoryLabel)).toEqual([
+      "Ăn uống", "Mua sắm", "Nhà thuốc", "ATM / Ngân hàng", "Trạm sạc",
+    ]);
   });
 
   it("rejects malformed coordinates, categories and out-of-policy limits before fetch", async () => {
