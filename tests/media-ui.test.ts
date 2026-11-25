@@ -12,7 +12,10 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain('<option value="audio">Chỉ audio</option>');
     expect(html).toContain('data-kind="audio"');
     expect(html).toContain("document.createElement('audio')");
-    expect(html).toContain("Mở audio gốc");
+    expect(html).toContain("Mở / tải audio gốc");
+    expect(html).toContain("Mở / tải video gốc");
+    expect(html).toContain("Hiện chưa có downloader đa website hoặc kho chia sẻ file riêng tư.");
+    expect(html).toContain("R2 được kích hoạt trước");
   });
 
   it("keeps the adult-only search control hidden unless the deployment explicitly enables it", async () => {
