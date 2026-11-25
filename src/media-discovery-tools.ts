@@ -414,6 +414,7 @@ export interface PeerTubeVideoResult extends MediaSearchItem {
   provider: "PeerTube";
   mediaType: "video";
   instanceHost: string;
+  embedUrl: string | null;
   author: string | null;
   channel: string | null;
   durationSeconds: number | null;
@@ -521,6 +522,9 @@ export async function searchPeerTubeVideos(queryInput: unknown, limitInput?: unk
     const description = htmlText(row.truncatedDescription ?? row.description, 700);
     const language = nestedLabel(row.language, ["label", "id"], 32);
     const publishedAt = normalizedIsoDate(row.publishedAt);
+    const videoUuid = typeof row.uuid === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.uuid)
+      ? row.uuid.toLowerCase() : null;
     const credit = [author, channel, safePage.host].filter(Boolean).join(" · ").slice(0, 320) || safePage.host;
     items.push({
       id: typeof row.uuid === "string" && row.uuid.length <= 80 ? row.uuid : safePage.url,
@@ -530,6 +534,7 @@ export async function searchPeerTubeVideos(queryInput: unknown, limitInput?: unk
       sourceUrl: safePage.url,
       previewUrl: null,
       mediaUrl: null,
+      embedUrl: videoUuid ? "https://" + safePage.host + "/videos/embed/" + videoUuid : null,
       description,
       credit,
       license: peerTubeLicense(row.licence),
