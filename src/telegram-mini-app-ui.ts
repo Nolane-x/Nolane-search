@@ -282,6 +282,13 @@ async function api(path,options){
  if(!response.ok)throw new Error(data.error||('HTTP '+response.status));
  return data;
 }
+async function copyText(value){
+ if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(value);return}
+ var area=document.createElement('textarea');area.value=value;area.setAttribute('readonly','');
+ area.style.position='fixed';area.style.left='-9999px';document.body.appendChild(area);area.select();
+ var copied=false;try{copied=Boolean(document.execCommand&&document.execCommand('copy'))}catch(e){}
+ area.remove();if(!copied)throw new Error('Clipboard is blocked');
+}
 function safeUrl(value){
  try{var u=new URL(value);return u.protocol==='https:'?u.href:null}catch(e){return null}
 }
@@ -345,6 +352,7 @@ function rememberQuery(query){
 }
 function setSearchBusy(busy){
  state.busy=busy;$('searchForm').querySelector('button[type=submit]').disabled=busy;
+ $('answerOutput').classList.add('hidden');$('synthesizeBtn').classList.add('hidden');
  $('resultSummary').textContent=busy?'Đang tìm kiếm qua nhiều nguồn…':'Đang tải kết quả';
  $('results').replaceChildren();if(busy)addText($('results'),'div','empty-state','Đang truy vấn và xếp hạng kết quả…');
 }
@@ -445,7 +453,7 @@ function renderTools(){
   addText(card,'div','tool-meta','Nhận: '+(tool.accepts||[]).slice(0,4).join(', ')+' · Trả về: '+tool.output);
   var actions=addText(card,'div','tool-actions','');
   var copy=addText(actions,'button','','Sao chép lệnh');
-  copy.type='button';copy.addEventListener('click',async function(){var command='/tool '+tool.id;try{await navigator.clipboard.writeText(command);showToast('Đã sao chép '+command)}catch(e){showToast(command)}haptic('success')});
+  copy.type='button';copy.addEventListener('click',async function(){var command='/tool '+tool.id;try{await copyText(command);showToast('Đã sao chép '+command);haptic('success')}catch(e){if(typeof window.prompt==='function')window.prompt('Clipboard bị chặn. Hãy sao chép lệnh này:',command);else showToast('Không thể sao chép trong Telegram hiện tại.')}});
   var use=addText(actions,'button','primary','Dùng với AI');
   use.type='button';use.addEventListener('click',function(){setTab('ai');$('chatInput').value='Tôi muốn dùng tool '+tool.name+' ('+tool.id+'). Hãy hướng dẫn tôi chọn và xử lý tệp phù hợp.';$('chatInput').focus()});
  });
@@ -525,8 +533,6 @@ async function start(){
 document.querySelectorAll('[data-tab]').forEach(function(button){button.addEventListener('click',function(){setTab(button.dataset.tab)})});
 document.querySelectorAll('[data-open]').forEach(function(button){button.addEventListener('click',function(){setTab(button.dataset.open)})});
 document.querySelectorAll('[data-mode]').forEach(function(button){button.addEventListener('click',function(){modeSelect(button.dataset.mode)})});
-$('homeModes').addEventListener('click',function(event){var b=event.target.closest('[data-mode]');if(b)modeSelect(b.dataset.mode)});
-$('searchModes').addEventListener('click',function(event){var b=event.target.closest('[data-mode]');if(b)modeSelect(b.dataset.mode)});
 $('homeSearchForm').addEventListener('submit',function(event){event.preventDefault();var q=$('homeQuery').value.trim();if(q.length<2){showToast('Nhập ít nhất 2 ký tự.');return}$('query').value=q;setTab('search');runSearch(q)});
 $('searchForm').addEventListener('submit',function(event){event.preventDefault();runSearch()});
 $('synthesizeBtn').addEventListener('click',synthesize);
