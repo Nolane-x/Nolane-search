@@ -512,10 +512,11 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
     type: "function",
     function: {
       name: "search_peertube_videos",
-      description: "Search public videos across the federated PeerTube network using the public SepiaSearch index. Returns bounded SFW video metadata and a link to the originating PeerTube instance. The index does not cover every PeerTube server; source metadata and license labels may be incomplete or outdated. This tool does not download or rehost video files.",
+      description: "Search public videos across the federated PeerTube network using the public SepiaSearch index. Returns bounded public-video metadata and links to the originating instances. NSFW-tagged records are excluded by default; include_nsfw can request them only when the deployment's adult-media feature gate is enabled. This returns metadata and origin links, not downloads or hosted copies.",
       parameters: { type: "object", properties: {
         query: { type: "string", minLength: 2, maxLength: 140, description: "Video topic, title, creator or subject." },
-        limit: { type: "integer", minimum: 1, maximum: 8, description: "Number of results, defaults to 6." }
+        limit: { type: "integer", minimum: 1, maximum: 8, description: "Number of results, defaults to 6." },
+        include_nsfw: { type: "boolean", description: "Request public PeerTube records marked NSFW. Defaults to false and is rejected unless MEDIA_ALLOW_NSFW is explicitly enabled in the deployment." }
       }, required: ["query"], additionalProperties: false }
     }
   },
@@ -2218,6 +2219,9 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
   }
   if (["search_meal_recipes","filter_meal_recipes","get_meal_recipe_details","search_wikidata_entities","get_wikidata_entity"].includes(name)) {
     return (await runConsumerDiscoveryTool(name, args)).slice(0, 12_000);
+  }
+  if (name === "search_peertube_videos" && args.include_nsfw === true && env.MEDIA_ALLOW_NSFW !== "true") {
+    throw new Error("NSFW search is disabled for this deployment. It requires the separately enabled adult-media feature gate.");
   }
   if (["search_wikimedia_images","search_nasa_media","lookup_food_product","lookup_consumer_product","compare_food_products","search_openverse_images","search_internet_archive_videos","search_internet_archive_audio","search_peertube_videos"].includes(name)) {
     return (await runMediaDiscoveryTool(name, args)).slice(0, 12_000);
