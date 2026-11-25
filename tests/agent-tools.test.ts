@@ -23,7 +23,7 @@ describe("Nolane AI callable tools", () => {
       const body = new URLSearchParams(String(init?.body || ""));
       const query = body.get("data") || "";
       expect(query).toContain('["amenity"~"^(pharmacy)$"]');
-      expect(query).toContain("around:1500,20.8449,106.6881");
+      expect(query).toContain("around:1500,20.84490,106.68810");
       return new Response(JSON.stringify({
         elements: [
           { type: "node", id: 10, lat: 20.8450, lon: 106.6882, tags: { name: "Nhà thuốc gần", amenity: "pharmacy", website: "https://pharmacy.example" } },
