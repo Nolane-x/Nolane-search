@@ -97,6 +97,26 @@ describe("Wave 59 PeerTube federated video discovery", () => {
   });
 
 
+  it("does not generate a PeerTube embed URL from a malformed UUID", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({
+      total: 1,
+      data: [{
+        uuid: "not-a-canonical-uuid",
+        name: "Malformed identifier",
+        url: "https://videos.example.org/videos/watch/not-a-canonical-uuid",
+        account: { name: "author", host: "videos.example.org" },
+        channel: { name: "channel", host: "videos.example.org" },
+        nsfw: false
+      }]
+    })));
+
+    const result = await searchPeerTubeVideos("malformed identifier");
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].embedUrl).toBeNull();
+    expect(result.items[0].sourceUrl).toBe("https://videos.example.org/videos/watch/not-a-canonical-uuid");
+  });
+
+
   it("includes source-flagged NSFW results only when explicitly requested", async () => {
     const mock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
