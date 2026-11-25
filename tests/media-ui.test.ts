@@ -36,6 +36,9 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("data-stream-url=\"https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd\"");
     expect(html).toContain("data-stream-url=\"https://storage.googleapis.com/shaka-demo-assets/sintel/dash.mpd\"");
     expect(html).toContain("document.querySelectorAll('[data-stream-url]')");
+    expect(html).toContain("row.append(caption,select);");
+    expect(html).toContain("select.className='stream-rate'");
+    expect(html).toContain("video.playbackRate=rate");
     expect(html).toContain("Nguồn thử do bên thứ ba lưu trữ");
   });
 
