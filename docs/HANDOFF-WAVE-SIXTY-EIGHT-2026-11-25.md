@@ -27,3 +27,12 @@ Add an ordinary-user local discovery tool and a first-class entry from Telegram 
 ## Release boundary
 
 This is a low-volume personal-use integration with the public Overpass endpoint. Public Overpass instances are shared and are not a high-traffic backend guarantee. Before public-scale use, use a self-hosted instance or a provider with matching terms/capacity. No route directions, live availability, address geocoding or background tracking are implemented.
+
+
+## Production rollout — 2026-11-25
+
+- PR #142 merged into `main` as `60dd337d762420eec9c71984c1d4435277622ff0`.
+- PR CI #631 (`45645127552`) passed TypeScript, 41 Vitest files / 416 tests, deployment checks, 449 Python runner tests and Worker build.
+- Cloudflare deploy #174 (`45645500161`) and Worker export #167 (`45645500117`) succeeded. No D1 migration was required.
+- Post-deploy smoke was strengthened in commit `c03c44f51261b32930ea316bfc5301b6333e0791`; deploy #175 (`45645810136`) and export #168 (`45645810184`) succeeded. The log confirms Workspace HTML/CSP/auth/tabs, Nearby and Media Studio links, anonymous `/nearby` redirect, and nearby API HTTP 401.
+- Main CI #633 (`45645810213`) was completing the final Worker build when this handoff was last updated.
