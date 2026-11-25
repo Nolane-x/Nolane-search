@@ -510,7 +510,8 @@ async function start(){
   $('auth').classList.add('hidden');$('app').classList.remove('hidden');
   if(state.history.length===0){try{state.history=JSON.parse(localStorage.getItem('nolane.tg.chat')||'[]').filter(function(m){return m&&['user','assistant'].includes(m.role)&&typeof m.content==='string'}).slice(-10)}catch(e){state.history=[]}}
   renderChat();renderRecent();
-  await Promise.all([loadTools(),loadLibrary(),loadMetrics()]);
+  await Promise.all([loadTools(),loadLibrary()]);
+  await loadMetrics();
   var initialTab=(location.hash||'').slice(1);
   if(['home','search','ai','tools','library'].indexOf(initialTab)>=0)setTab(initialTab,false,false);
  }catch(error){$('auth').classList.remove('hidden');textNode($('authMessage'),error.message||'Đăng nhập thất bại. Hãy gửi /start trong Telegram để tạo liên kết mới.')}
