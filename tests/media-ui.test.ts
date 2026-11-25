@@ -50,6 +50,16 @@ describe("Media Portal media discovery experience", () => {
     expect(csp).toContain("worker-src 'self' blob:");
     expect(html).toContain("hls.js@1.7.4/dist/hls.min.js");
     expect(html).toContain("dashjs@5.3.0/dist/legacy/umd/dash.all.min.js");
+    expect(html).toContain("function makeQualityControl()");
+    expect(html).toContain("function populateQualityControl(control,representations)");
+    expect(html).toContain("hls.currentLevel=selected");
+    expect(html).toContain("Hls.Events.LEVELS_UPDATED");
+    expect(html).toContain("Hls.Events.LEVEL_SWITCHED");
+    expect(html).toContain("player.getRepresentationsByType('video')");
+    expect(html).toContain("autoSwitchBitrate:{video:false}");
+    expect(html).toContain("autoSwitchBitrate:{video:true}");
+    expect(html).toContain("player.setRepresentationForTypeByIndex('video',selected,true)");
+    expect(html).toContain("Chất lượng");
     expect(html).toContain("function safeMediaStreamUrl(item)");
     expect(html).toContain("function isSafePublicMediaRequest(value)");
     expect(html).toContain("xhr.withCredentials=false");
