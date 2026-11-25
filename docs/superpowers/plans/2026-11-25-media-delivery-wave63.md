@@ -28,9 +28,9 @@ Ship only the first independently useful slice: official PeerTube embeds in the 
 
 - Add a button to PeerTube cards. Do not auto-load third-party iframes during search.
 - On click, create an iframe using only `embedUrl` after rechecking HTTPS, no credentials/port and exact equality with `instanceHost`.
-- Set a descriptive title, `loading=lazy`, `referrerPolicy=no-referrer`, `allowFullscreen`, limited media permissions, and sandbox tokens needed for the cross-origin player.
+- Set a descriptive title, `loading=lazy`, `referrerPolicy=no-referrer`, `allowFullscreen`, limited media permissions, and the PeerTube-compatible sandbox tokens (`allow-scripts`, `allow-same-origin`, `allow-popups`, `allow-forms`, `allow-presentation`). Reject embeds whose origin equals the Nolane page origin.
 - Keep the original PeerTube page link in every card.
-- Add a `frame-src https:` CSP directive because each federation instance has its own host; restrict creation in code to the validated PeerTube URL shape and sandbox the frame.
+- Add a `frame-src https:` CSP directive because each federation instance has its own host; restrict creation in code to the validated PeerTube URL shape and only load after a click. Set `p2p=0` on the player URL to avoid opting visitors into PeerTube's P2P peer sharing by default.
 
 ### Task 3 — verification and handoff
 
