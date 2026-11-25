@@ -16,6 +16,9 @@ describe("Telegram Mini App workspace", () => {
     expect(html).toContain("themeParams");
     expect(html).toContain("tg-content-safe-area-inset-bottom");
     expect(html).toContain("BackButton");
+    expect(html).toContain("tg.HapticFeedback.selectionChanged()");
+    expect(html).toContain("tg.HapticFeedback.notificationOccurred(kind)");
+
     expect(html).toContain('data-tab="home"');
     expect(html).toContain('data-tab="search"');
     expect(html).toContain('data-tab="ai"');
