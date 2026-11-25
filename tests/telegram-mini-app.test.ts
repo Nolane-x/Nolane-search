@@ -53,6 +53,8 @@ describe("Telegram Mini App workspace", () => {
     expect(html).toContain("setTab(initialTab,false,false)");
     expect(html).not.toContain("catch(ticketError)");
     expect(html).toContain('href="/media"');
+    expect(html).toContain('href="/nearby"');
+    expect(html).toContain("Địa điểm quanh đây");
     expect(html).toContain("Media Studio");
   });
 
