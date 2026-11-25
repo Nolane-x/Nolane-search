@@ -281,6 +281,9 @@ export async function searchNearbyPlaces(rawArgs: unknown): Promise<NearbyPlaces
   }
   const category = args.category as NearbyCategory;
   const radiusMeters = boundedInteger(args.radius_m, "radius_m", 1500, 200, 5000);
+  if (category === "essentials" && radiusMeters > 3000) {
+    throw new NearbyPlacesInputError("Danh mục tiện ích thiết yếu giới hạn bán kính tối đa 3000 m để giảm tải nguồn dữ liệu công cộng.");
+  }
   const limit = boundedInteger(args.limit, "limit", 12, 1, 25);
   const query = buildQuery(category, latitude, longitude, radiusMeters);
 
