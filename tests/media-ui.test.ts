@@ -40,6 +40,27 @@ describe("Media Portal media discovery experience", () => {
     expect(() => new Function(script)).not.toThrow();
   });
 
+  it("serves HLS and DASH players lazily with request and CSP restrictions", async () => {
+    const response = mediaAppResponse();
+    const html = await response.text();
+    const csp = response.headers.get("content-security-policy") || "";
+    expect(csp).toContain("https://cdn.jsdelivr.net");
+    expect(csp).toContain("connect-src 'self' https:");
+    expect(csp).toContain("media-src 'self' blob:");
+    expect(csp).toContain("worker-src 'self' blob:");
+    expect(html).toContain("hls.js@1.7.4/dist/hls.min.js");
+    expect(html).toContain("dashjs@5.3.0/dist/legacy/umd/dash.all.min.js");
+    expect(html).toContain("function safeMediaStreamUrl(item)");
+    expect(html).toContain("function isSafePublicMediaRequest(value)");
+    expect(html).toContain("xhr.withCredentials=false");
+    expect(html).toContain("initParams.credentials='omit'");
+    expect(html).toContain("player.addRequestInterceptor");
+    expect(html).toContain("request.credentials='omit'");
+    expect(html).toContain("item.streamType?null:anchor");
+    expect(html).toContain("clearStreamPlayers()");
+    expect(html).toContain("Phát '+(item.streamType==='hls'?'HLS':'DASH')");
+  });
+
   it("renders Twitch VOD and Clip embeds only with the official host and current-page parent", async () => {
     const html = await (await mediaAppResponse()).text();
     expect(html).toContain("item.provider==='Twitch'?['player.twitch.tv','clips.twitch.tv']:[]");
