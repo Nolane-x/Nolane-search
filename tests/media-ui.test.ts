@@ -57,6 +57,10 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("destroyCurrent=function(){hls.destroy()}");
     expect(html).toContain("destroyCurrent=function(){player.destroy()}");
     expect(html).toContain("retry.addEventListener('click',function(){startPlayer()})");
+    expect(html).toContain("quality.select.onchange=function()");
+    expect(html).not.toContain("quality.select.addEventListener('change'");
+    expect(html).toContain("retry.hidden=!retryable");
+    expect(html).toContain("stopCurrent();video.pause();video.removeAttribute('src');video.load();");
     expect(html).toContain("Thử phát lại");
     expect(html).toContain("function makeQualityControl()");
     expect(html).toContain("function populateQualityControl(control,representations)");
