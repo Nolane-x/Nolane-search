@@ -51,6 +51,8 @@ export interface Env {
   GITHUB_TOKEN?: string;
   /** Fine-grained repository token with Actions: write, used to dispatch tool jobs. */
   NOLANE_GH_ACTIONS_TOKEN?: string;
+  /** Explicit deployment gate for optional adult-only media discovery; absent means disabled. */
+  MEDIA_ALLOW_NSFW?: string;
 }
 
 export interface D1Result<T = Record<string, unknown>> {
