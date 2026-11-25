@@ -135,6 +135,7 @@ function makeQualityControl(){
  return {row:row,select:select};
 }
 function populateQualityControl(control,representations){
+ var previous=control.select.value||'-1';
  var list=Array.isArray(representations)?representations:[];
  control.select.replaceChildren();
  var automatic=document.createElement('option');automatic.value='-1';automatic.textContent='Tự động';control.select.appendChild(automatic);
@@ -142,7 +143,7 @@ function populateQualityControl(control,representations){
   var option=document.createElement('option');option.value=String(index);option.textContent=qualityLabel(level);control.select.appendChild(option);
  });
  control.row.hidden=list.length<2;
- control.select.value='-1';
+ control.select.value=list.length>1&&Array.from(control.select.options).some(function(option){return option.value===previous})?previous:'-1';
 }
 function showStreamPlayer(preview,item,streamUrl){
  var video=document.createElement('video');video.className='stream-video';video.controls=true;video.playsInline=true;video.preload='none';video.crossOrigin='anonymous';video.referrerPolicy='no-referrer';
