@@ -6,8 +6,8 @@ const HTML = String.raw`<!doctype html>
 <title>Nolane Search · Media</title>
 <style>
 :root{color-scheme:dark;--bg:#0b1220;--panel:#121d2f;--panel2:#18253a;--line:#26354d;--ink:#edf3ff;--muted:#9aabc4;--accent:#84a8ff;--blue:#456ff0;--radius:17px}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#172641 0,#0b1220 48rem);color:var(--ink);font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}button,input,select{font:inherit}button,a{cursor:pointer}a{color:inherit}.shell{max-width:1280px;margin:0 auto;padding:0 24px}.top{height:72px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);background:#0b1220cc;backdrop-filter:blur(15px);position:sticky;top:0;z-index:4}.brand{text-decoration:none;font-size:19px;font-weight:800;letter-spacing:-.04em;display:flex;align-items:center;gap:10px}.mark{width:34px;height:34px;display:grid;place-items:center;background:linear-gradient(140deg,#416df0,#789cff);border-radius:12px;box-shadow:0 6px 20px #406df044}.toplinks{display:flex;gap:9px;align-items:center}.toplinks a,.toplinks button{border:1px solid var(--line);background:#172339;color:#cfdbf1;text-decoration:none;padding:8px 13px;border-radius:999px;font-size:13px}.toplinks a:hover,.toplinks button:hover{border-color:#688ce8}.hero{text-align:center;padding:58px 0 30px}.eyebrow{display:inline-block;color:#a8c0ff;border:1px solid #334a77;background:#172846;border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700}.hero h1{font-size:clamp(32px,4.7vw,53px);letter-spacing:-.055em;line-height:1.1;margin:15px 0 12px}.hero p{max-width:680px;margin:0 auto;color:var(--muted);font-size:15px}.search{max-width:860px;margin:25px auto 0;display:grid;grid-template-columns:1fr auto auto;gap:9px}.search input,.search select{min-width:0;border:1px solid #2d3d58;background:#111e31;color:var(--ink);padding:13px 15px;border-radius:13px;outline:none}.search input:focus,.search select:focus{border-color:#789cff;box-shadow:0 0 0 3px #638aff22}.btn{border:0;background:#557df5;color:white;font-weight:700;padding:0 19px;border-radius:13px}.btn:disabled{opacity:.6;cursor:wait}.tabs{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin:21px auto 0}.tab{border:1px solid var(--line);background:#111e31;color:#aebed7;padding:8px 17px;border-radius:999px}.tab.active{background:#263f70;color:white;border-color:#527ddc}.meta{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:26px 0 14px;color:var(--muted);font-size:13px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px;padding-bottom:70px}.card{background:linear-gradient(160deg,#152239,#111a2a);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;min-width:0;box-shadow:0 12px 32px #0002}.preview{aspect-ratio:16/10;background:#080e18;display:grid;place-items:center;overflow:hidden}.preview img,.preview video{width:100%;height:100%;object-fit:contain}.preview iframe{width:100%;height:100%;min-height:220px;border:0;background:#080e18}.card.twitch-card{grid-column:span 2}.preview audio{width:min(100%,560px);max-width:100%}.embed-load{border:1px solid #536c9a;background:#172a49;color:#e5edff;padding:10px 14px;border-radius:10px;font-weight:700}.embed-load:hover{border-color:#86a9ff;background:#203b66}.no-preview{color:#8da2c4;font-size:13px;padding:25px;text-align:center}.body{padding:14px 15px 15px}.body h2{font-size:15px;line-height:1.35;margin:0 0 7px}.description{color:#9fb0c9;font-size:12px;line-height:1.55;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;min-height:55px}.badges{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.badge{font-size:10px;border-radius:999px;background:#203453;color:#aec6ff;padding:3px 8px}.credit{font-size:11px;color:#8195b3;overflow-wrap:anywhere}.actions{display:flex;gap:8px;margin-top:12px}.actions a{display:inline-flex;align-items:center;justify-content:center;min-height:34px;text-decoration:none;padding:6px 11px;border-radius:9px;background:#20375c;color:#d8e5ff;font-size:12px;font-weight:650}.actions a.primary{background:#416cdd;color:white}.notice,.empty{margin:16px 0;background:#142238;border:1px solid #2b3e5c;color:#aebed5;padding:18px;border-radius:14px}.notice strong,.empty strong{color:#e8f0ff}.adult-toggle{display:flex;align-items:center;justify-content:center;gap:8px;max-width:860px;margin:12px auto 0;padding:11px 14px;border:1px solid #785c36;background:#33281b;color:#ffe0ad;border-radius:12px;font-size:12px}.adult-toggle input{accent-color:#e5a54c;width:17px;height:17px}.small{font-size:11px;color:#7186a4;margin-top:6px}.footer{padding:16px 0 34px;color:#7285a2;font-size:11px;border-top:1px solid var(--line)}.hidden{display:none!important}
-@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:620px){.card.twitch-card{grid-column:auto}.shell{padding:0 15px}.hero{padding:38px 0 24px}.search{grid-template-columns:1fr 1fr}.search input{grid-column:1/-1}.search .btn{min-height:44px}.grid{grid-template-columns:1fr}.toplinks a,.toplinks button{padding:7px 10px}.meta{align-items:flex-start;flex-direction:column}}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#172641 0,#0b1220 48rem);color:var(--ink);font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}button,input,select{font:inherit}button,a{cursor:pointer}a{color:inherit}.shell{max-width:1280px;margin:0 auto;padding:0 24px}.top{height:72px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);background:#0b1220cc;backdrop-filter:blur(15px);position:sticky;top:0;z-index:4}.brand{text-decoration:none;font-size:19px;font-weight:800;letter-spacing:-.04em;display:flex;align-items:center;gap:10px}.mark{width:34px;height:34px;display:grid;place-items:center;background:linear-gradient(140deg,#416df0,#789cff);border-radius:12px;box-shadow:0 6px 20px #406df044}.toplinks{display:flex;gap:9px;align-items:center}.toplinks a,.toplinks button{border:1px solid var(--line);background:#172339;color:#cfdbf1;text-decoration:none;padding:8px 13px;border-radius:999px;font-size:13px}.toplinks a:hover,.toplinks button:hover{border-color:#688ce8}.hero{text-align:center;padding:58px 0 30px}.eyebrow{display:inline-block;color:#a8c0ff;border:1px solid #334a77;background:#172846;border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700}.hero h1{font-size:clamp(32px,4.7vw,53px);letter-spacing:-.055em;line-height:1.1;margin:15px 0 12px}.hero p{max-width:680px;margin:0 auto;color:var(--muted);font-size:15px}.search{max-width:860px;margin:25px auto 0;display:grid;grid-template-columns:1fr auto auto;gap:9px}.search input,.search select{min-width:0;border:1px solid #2d3d58;background:#111e31;color:var(--ink);padding:13px 15px;border-radius:13px;outline:none}.search input:focus,.search select:focus{border-color:#789cff;box-shadow:0 0 0 3px #638aff22}.btn{border:0;background:#557df5;color:white;font-weight:700;padding:0 19px;border-radius:13px}.btn:disabled{opacity:.6;cursor:wait}.tabs{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin:21px auto 0}.tab{border:1px solid var(--line);background:#111e31;color:#aebed7;padding:8px 17px;border-radius:999px}.tab.active{background:#263f70;color:white;border-color:#527ddc}.meta{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:26px 0 14px;color:var(--muted);font-size:13px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px;padding-bottom:70px}.card{background:linear-gradient(160deg,#152239,#111a2a);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;min-width:0;box-shadow:0 12px 32px #0002}.preview{aspect-ratio:16/10;background:#080e18;display:grid;place-items:center;overflow:hidden}.preview img,.preview video{width:100%;height:100%;object-fit:contain}.preview iframe{width:100%;height:100%;min-height:220px;border:0;background:#080e18}.stream-video{display:block;width:100%;max-height:70vh;min-height:230px;background:#000}.stream-status{padding:10px 12px;color:#aebed5;font-size:12px;overflow-wrap:anywhere}.stream-card{grid-column:span 2}.card.twitch-card{grid-column:span 2}.preview audio{width:min(100%,560px);max-width:100%}.embed-load{border:1px solid #536c9a;background:#172a49;color:#e5edff;padding:10px 14px;border-radius:10px;font-weight:700}.embed-load:hover{border-color:#86a9ff;background:#203b66}.no-preview{color:#8da2c4;font-size:13px;padding:25px;text-align:center}.body{padding:14px 15px 15px}.body h2{font-size:15px;line-height:1.35;margin:0 0 7px}.description{color:#9fb0c9;font-size:12px;line-height:1.55;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;min-height:55px}.badges{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.badge{font-size:10px;border-radius:999px;background:#203453;color:#aec6ff;padding:3px 8px}.credit{font-size:11px;color:#8195b3;overflow-wrap:anywhere}.actions{display:flex;gap:8px;margin-top:12px}.actions a{display:inline-flex;align-items:center;justify-content:center;min-height:34px;text-decoration:none;padding:6px 11px;border-radius:9px;background:#20375c;color:#d8e5ff;font-size:12px;font-weight:650}.actions a.primary{background:#416cdd;color:white}.notice,.empty{margin:16px 0;background:#142238;border:1px solid #2b3e5c;color:#aebed5;padding:18px;border-radius:14px}.notice strong,.empty strong{color:#e8f0ff}.adult-toggle{display:flex;align-items:center;justify-content:center;gap:8px;max-width:860px;margin:12px auto 0;padding:11px 14px;border:1px solid #785c36;background:#33281b;color:#ffe0ad;border-radius:12px;font-size:12px}.adult-toggle input{accent-color:#e5a54c;width:17px;height:17px}.small{font-size:11px;color:#7186a4;margin-top:6px}.footer{padding:16px 0 34px;color:#7285a2;font-size:11px;border-top:1px solid var(--line)}.hidden{display:none!important}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:620px){.card.twitch-card,.card.stream-card{grid-column:auto}.shell{padding:0 15px}.hero{padding:38px 0 24px}.search{grid-template-columns:1fr 1fr}.search input{grid-column:1/-1}.search .btn{min-height:44px}.grid{grid-template-columns:1fr}.toplinks a,.toplinks button{padding:7px 10px}.meta{align-items:flex-start;flex-direction:column}}
 </style>
 </head>
 <body data-nsfw-enabled="__NSFW_ENABLED__">
@@ -33,6 +33,8 @@ var $=function(id){return document.getElementById(id)};
 var nsfwEnabled=document.body.dataset.nsfwEnabled==='true';
 if(nsfwEnabled)$('nsfw-control').classList.remove('hidden');
 var last=[];
+var streamPlayerCleanups=[];
+var streamScriptPromises={};
 function safeUrl(value,hosts){
  try{var u=new URL(value);if(u.protocol!=='https:'||u.username||u.password||u.port||(hosts&&hosts.indexOf(u.hostname)<0))return null;return u.href}catch(e){return null}
 }
@@ -78,6 +80,96 @@ function safeMediaEmbedUrl(item){
   return u.href;
  }catch(e){return null}
 }
+function isSafePublicMediaRequest(value){
+ try{
+  var u=new URL(value);
+  var host=u.hostname.toLowerCase().replace(/\.$/,'');
+  if(u.protocol!=='https:'||u.username||u.password||u.port||u.hash)return false;
+  if(!host||!host.includes('.')||host==='localhost'||host.endsWith('.localhost')||host.endsWith('.local')||host.endsWith('.internal')||host.endsWith('.test')||host.endsWith('.example')||host.endsWith('.invalid'))return false;
+  if(/^(?:\d{1,3}\.){3}\d{1,3}$/.test(host)||host.indexOf(':')>=0)return false;
+  var labels=host.split('.');
+  if(labels.some(function(label){return !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)}))return false;
+  return true;
+ }catch(e){return false}
+}
+function safeMediaStreamUrl(item){
+ if(!item||!item.streamType||(item.provider!=='HLS'&&item.provider!=='DASH')||typeof item.mediaUrl!=='string')return null;
+ if((item.streamType==='hls'&&item.provider!=='HLS')||(item.streamType==='dash'&&item.provider!=='DASH'))return null;
+ var safe=safeUrl(item.mediaUrl,null);if(!safe||!isSafePublicMediaRequest(safe))return null;
+ try{
+  var u=new URL(safe);
+  if(item.streamType==='hls'&&!u.pathname.toLowerCase().endsWith('.m3u8'))return null;
+  if(item.streamType==='dash'&&!u.pathname.toLowerCase().endsWith('.mpd'))return null;
+  return u.href;
+ }catch(e){return null}
+}
+function loadPinnedMediaScript(key,url,globalName){
+ if(window[globalName])return Promise.resolve(window[globalName]);
+ if(streamScriptPromises[key])return streamScriptPromises[key];
+ streamScriptPromises[key]=new Promise(function(resolve,reject){
+  var script=document.createElement('script');
+  script.async=true;script.crossOrigin='anonymous';script.referrerPolicy='no-referrer';script.src=url;
+  script.onload=function(){window[globalName]?resolve(window[globalName]):reject(new Error('Thư viện player không khởi tạo đúng.'))};
+  script.onerror=function(){delete streamScriptPromises[key];reject(new Error('Không tải được thư viện phát video. Kiểm tra kết nối tới CDN rồi thử lại.'))};
+  document.head.appendChild(script);
+ });
+ return streamScriptPromises[key];
+}
+function clearStreamPlayers(){
+ streamPlayerCleanups.splice(0).forEach(function(cleanup){try{cleanup()}catch(e){}});
+}
+function showStreamPlayer(preview,item,streamUrl){
+ var video=document.createElement('video');video.className='stream-video';video.controls=true;video.playsInline=true;video.preload='none';video.crossOrigin='anonymous';video.referrerPolicy='no-referrer';
+ var status=document.createElement('div');status.className='stream-status';status.setAttribute('role','status');status.textContent='Đang khởi tạo player…';
+ preview.replaceChildren(video,status);
+ if(item.streamType==='hls'){
+  loadPinnedMediaScript('hls','https://cdn.jsdelivr.net/npm/hls.js@1.7.4/dist/hls.min.js','Hls').then(function(Hls){
+   if(!Hls.isSupported()){
+    if(video.canPlayType('application/vnd.apple.mpegurl')){
+     video.src=streamUrl;status.textContent='Đang dùng HLS native của trình duyệt. Máy chủ nguồn vẫn cần CORS.';
+     video.addEventListener('error',function(){status.textContent='Không phát được HLS. Kiểm tra CORS, định dạng playlist và codec của nguồn.'},{once:true});
+     return;
+    }
+    status.textContent='Trình duyệt này không hỗ trợ Media Source Extensions hoặc HLS native.';
+    return;
+   }
+   var hls=new Hls({
+    enableWorker:true,
+    lowLatencyMode:false,
+    xhrSetup:function(xhr,url){
+     if(!isSafePublicMediaRequest(url))throw new Error('HLS chứa URL segment không an toàn.');
+     xhr.withCredentials=false;
+    },
+    fetchSetup:function(context,initParams){
+     if(!isSafePublicMediaRequest(context.url))throw new Error('HLS chứa URL resource không an toàn.');
+     initParams.credentials='omit';initParams.mode='cors';
+     return new Request(context.url,initParams);
+    }
+   });
+   streamPlayerCleanups.push(function(){hls.destroy()});
+   hls.on(Hls.Events.ERROR,function(_event,data){
+    if(data&&data.fatal)status.textContent='HLS lỗi khi tải manifest/segment. Cần HTTPS, CORS GET và codec tương thích; nội dung DRM không được hỗ trợ.';
+   });
+   status.textContent='Đang tải HLS manifest…';
+   hls.loadSource(streamUrl);hls.attachMedia(video);
+  }).catch(function(error){status.textContent=error.message||'Không thể tải HLS player.'});
+  return;
+ }
+ loadPinnedMediaScript('dash','https://cdn.jsdelivr.net/npm/dashjs@5.3.0/dist/legacy/umd/dash.all.min.js','dashjs').then(function(dashjs){
+  var player=dashjs.MediaPlayer().create();
+  player.addRequestInterceptor(function(request){
+   if(!request||!isSafePublicMediaRequest(request.url))return Promise.reject(new Error('DASH chứa URL manifest/segment không an toàn.'));
+   var method=String(request.method||'GET').toUpperCase();
+   if(method!=='GET'&&method!=='HEAD')return Promise.reject(new Error('DASH chỉ được phép gửi GET/HEAD; yêu cầu license hoặc POST bị chặn.'));
+   request.credentials='omit';request.mode='cors';
+   return Promise.resolve(request);
+  });
+  streamPlayerCleanups.push(function(){player.reset()});
+  player.on(dashjs.MediaPlayer.events.ERROR,function(){status.textContent='DASH lỗi khi tải MPD/segment. Cần HTTPS, CORS GET và codec tương thích; DRM không được hỗ trợ.'});
+  status.textContent='Đang tải DASH manifest…';
+  player.initialize(video,streamUrl,false);
+ }).catch(function(error){status.textContent=error.message||'Không thể tải DASH player.'});
+}
 async function api(path,options){
  var response=await fetch(path,Object.assign({credentials:'same-origin',cache:'no-store'},options||{}));
  var data;try{data=await response.json()}catch(e){throw new Error('Máy chủ trả về phản hồi không hợp lệ.')}
@@ -94,7 +186,15 @@ function card(item){
  var imageUrl=item.provider==='Openverse'?safeUrl(item.previewUrl,['api.openverse.org']):item.provider==='Internet Archive'?safeUrl(item.previewUrl,['archive.org']):safeUrl(item.previewUrl,imageHosts);
  var mediaUrl=item.provider==='Openverse'?safeUrl(item.mediaUrl,null):item.provider==='Internet Archive'?safeUrl(item.mediaUrl,['archive.org']):safeUrl(item.mediaUrl,imageHosts);
  var embedUrl=item.mediaType==='video'?safeMediaEmbedUrl(item):null;
- if(item.mediaType==='video'&&mediaUrl){
+ var streamUrl=item.streamType?safeMediaStreamUrl(item):null;
+ if(item.mediaType==='video'&&streamUrl){
+  card.className+=' stream-card';
+  var loadStream=document.createElement('button');loadStream.type='button';loadStream.className='embed-load';loadStream.textContent='Phát '+(item.streamType==='hls'?'HLS':'DASH');
+  loadStream.addEventListener('click',function(){loadStream.disabled=true;loadStream.textContent='Đang khởi tạo…';showStreamPlayer(preview,item,streamUrl)});
+  preview.appendChild(loadStream);
+ }else if(item.mediaType==='video'&&item.streamType){
+  var blocked=document.createElement('div');blocked.className='no-preview';blocked.textContent='Manifest không hợp lệ hoặc URL nguồn không an toàn; chỉ có thể mở trang nguồn.';preview.appendChild(blocked);
+ }else if(item.mediaType==='video'&&mediaUrl){
   var video=document.createElement('video');video.controls=true;video.preload='metadata';video.playsInline=true;video.src=mediaUrl;preview.appendChild(video);
  }else if(item.mediaType==='audio'&&mediaUrl){
   var audio=document.createElement('audio');audio.controls=true;audio.preload='metadata';audio.src=mediaUrl;preview.appendChild(audio);
@@ -129,15 +229,15 @@ function card(item){
  body.appendChild(badges);
  if(item.credit){var credit=document.createElement('div');credit.className='credit';credit.textContent='Ghi công: '+item.credit;body.appendChild(credit)}
  var actions=document.createElement('div');actions.className='actions';
- var source=item.provider==='PeerTube'?safeUrl(item.sourceUrl,[item.instanceHost]):item.provider==='YouTube'?safeUrl(item.sourceUrl,['youtube.com','www.youtube.com','m.youtube.com','youtu.be']):item.provider==='Vimeo'?safeUrl(item.sourceUrl,['vimeo.com','www.vimeo.com']):item.provider==='Dailymotion'?safeUrl(item.sourceUrl,['dailymotion.com','www.dailymotion.com','dai.ly']):item.provider==='Twitch'?safeUrl(item.sourceUrl,['twitch.tv','www.twitch.tv','m.twitch.tv','clips.twitch.tv']):item.provider==='Openverse'?safeUrl(item.sourceUrl,null):item.provider==='Internet Archive'?safeUrl(item.sourceUrl,['archive.org']):safeUrl(item.sourceUrl,['commons.wikimedia.org','images.nasa.gov','www.nasa.gov']);
- var sourceLabel=item.provider==='PeerTube'?'Xem trên PeerTube':item.provider==='YouTube'?'Mở trên YouTube':item.provider==='Vimeo'?'Mở trên Vimeo':item.provider==='Dailymotion'?'Mở trên Dailymotion':item.provider==='Twitch'?'Mở trên Twitch':'Trang nguồn';
+ var source=item.provider==='PeerTube'?safeUrl(item.sourceUrl,[item.instanceHost]):item.provider==='YouTube'?safeUrl(item.sourceUrl,['youtube.com','www.youtube.com','m.youtube.com','youtu.be']):item.provider==='Vimeo'?safeUrl(item.sourceUrl,['vimeo.com','www.vimeo.com']):item.provider==='Dailymotion'?safeUrl(item.sourceUrl,['dailymotion.com','www.dailymotion.com','dai.ly']):item.provider==='Twitch'?safeUrl(item.sourceUrl,['twitch.tv','www.twitch.tv','m.twitch.tv','clips.twitch.tv']):(item.provider==='HLS'||item.provider==='DASH')?safeUrl(item.sourceUrl,null):item.provider==='Openverse'?safeUrl(item.sourceUrl,null):item.provider==='Internet Archive'?safeUrl(item.sourceUrl,['archive.org']):safeUrl(item.sourceUrl,['commons.wikimedia.org','images.nasa.gov','www.nasa.gov']);
+ var sourceLabel=item.provider==='PeerTube'?'Xem trên PeerTube':item.provider==='YouTube'?'Mở trên YouTube':item.provider==='Vimeo'?'Mở trên Vimeo':item.provider==='Dailymotion'?'Mở trên Dailymotion':item.provider==='Twitch'?'Mở trên Twitch':item.provider==='HLS'?'Mở manifest HLS':item.provider==='DASH'?'Mở manifest DASH':'Trang nguồn';
  var sourceLink=anchor(sourceLabel,source,item.mediaType==='video');if(sourceLink)actions.appendChild(sourceLink);
- var file=anchor(item.mediaType==='video'?'Mở / tải video gốc':item.mediaType==='audio'?'Mở / tải audio gốc':'Mở / tải ảnh gốc',mediaUrl,true);if(file)actions.appendChild(file);
+ var file=item.streamType?null:anchor(item.mediaType==='video'?'Mở / tải video gốc':item.mediaType==='audio'?'Mở / tải audio gốc':'Mở / tải ảnh gốc',mediaUrl,true);if(file)actions.appendChild(file);
  if(item.licenseUrl){var license=safeUrl(item.licenseUrl,['creativecommons.org','rightsstatements.org','www.nasa.gov']);var licenseLink=anchor('Giấy phép',license,false);if(licenseLink)actions.appendChild(licenseLink)}
  body.appendChild(actions);card.appendChild(body);return card;
 }
 function render(items){
- $('results').replaceChildren();last=items||[];
+ clearStreamPlayers();$('results').replaceChildren();last=items||[];
  $('count').textContent=last.length?last.length+' kết quả':'';
  if(!last.length){var empty=document.createElement('div');empty.className='empty';var h=document.createElement('strong');h.textContent='Chưa tìm thấy media';empty.appendChild(h);empty.appendChild(document.createTextNode(' Thử từ khóa khác hoặc đổi nguồn tìm kiếm.'));$('results').appendChild(empty);return}
  last.forEach(function(item){$('results').appendChild(card(item))});
@@ -147,7 +247,7 @@ async function search(){
  var isUrl=q.indexOf('https://')===0||q.indexOf('http://')===0;
  if(q.length>(isUrl?2048:160)){ $('notice').classList.remove('hidden');$('notice').textContent=isUrl?'URL video không được vượt quá 2048 ký tự.':'Từ khóa tìm kiếm không được vượt quá 160 ký tự.';return; }
  $('go').disabled=true;$('status').textContent=isUrl?'Đang nhận diện URL video…':'Đang tìm kiếm trên các nguồn media…';$('notice').classList.add('hidden');
- $('results').replaceChildren();
+ clearStreamPlayers();$('results').replaceChildren();
  try{
   if(isUrl){
    var resolved=await api('/api/media/resolve?url='+encodeURIComponent(q));
@@ -186,7 +286,7 @@ export function mediaAppResponse(nsfwFeatureEnabled = false): Response {
       "cache-control": "no-store, max-age=0",
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
-      "content-security-policy": "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data: https://upload.wikimedia.org https://images-assets.nasa.gov https://api.openverse.org https://archive.org; media-src 'self' https://images-assets.nasa.gov https://archive.org https://*.archive.org; frame-src https:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+      "content-security-policy": "default-src 'self'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; connect-src 'self' https:; img-src 'self' data: https://upload.wikimedia.org https://images-assets.nasa.gov https://api.openverse.org https://archive.org; media-src 'self' blob: https://images-assets.nasa.gov https://archive.org https://*.archive.org https:; worker-src 'self' blob:; frame-src https:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
     },
   });
 }
