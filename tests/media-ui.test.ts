@@ -75,6 +75,8 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("autoSwitchBitrate:{video:true}");
     expect(html).toContain("player.setRepresentationForTypeByIndex('video',selected,true)");
     expect(html).toContain("Chất lượng");
+    expect(html).toContain("else{delete streamScriptPromises[key];reject(new Error('Thư viện player không khởi tạo đúng.'))}");
+    expect(html).toContain("script.onerror=function(){delete streamScriptPromises[key]");
     expect(html).toContain("function safeMediaStreamUrl(item)");
     expect(html).toContain("function isSafePublicMediaRequest(value)");
     expect(html).toContain("xhr.withCredentials=false");
