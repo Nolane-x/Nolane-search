@@ -32,7 +32,7 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("Playback Lab");
     expect(html).toContain("data-stream-url=\"https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8\"");
     expect(html).toContain("data-stream-url=\"https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8\"");
-    expect(html).toContain("data-stream-url=\"https://playertest.longtailvideo.com/adaptive/captions/playlist.m3u8\"");
+    expect(html).toContain("data-stream-url=\"https://mtoczko.github.io/hls-test-streams/test-vtt-ts-segments/playlist.m3u8\"");
     expect(html).toContain("data-stream-url=\"https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd\"");
     expect(html).toContain("data-stream-url=\"https://storage.googleapis.com/shaka-demo-assets/sintel/dash.mpd\"");
     expect(html).toContain("document.querySelectorAll('[data-stream-url]')");
