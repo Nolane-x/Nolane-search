@@ -18,10 +18,16 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("Hiện chưa có downloader đa website hoặc kho chia sẻ file riêng tư.");
     expect(html).toContain("R2 được kích hoạt trước");
     expect(html).toContain("document.createElement('iframe')");
-    expect(html).toContain("Nhúng player PeerTube");
+    expect(html).toContain("safeMediaEmbedUrl(item)");
+    expect(html).toContain("Nhúng player '+item.provider");
     expect(html).toContain("u.origin===location.origin");
     expect(html).toContain("frameUrl.searchParams.set('p2p','0')");
+    expect(html).toContain("frameUrl.searchParams.set('dnt','1')");
+    expect(html).toContain("strict-origin-when-cross-origin");
     expect(html).toContain("frame.sandbox.add('allow-scripts','allow-same-origin','allow-popups','allow-forms','allow-presentation')");
+    expect(html).toContain("/api/media/resolve?url='+encodeURIComponent(q)");
+    expect(html).toContain("var isUrl=/^https?:\\/\\//i.test(q)");
+    expect(html).toContain('maxlength="2048"');
   });
 
   it("keeps the adult-only search control hidden unless the deployment explicitly enables it", async () => {
