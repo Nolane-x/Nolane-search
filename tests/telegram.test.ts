@@ -85,14 +85,17 @@ describe("Telegram interactive workspace UI", () => {
 
 
 describe("Telegram Tool Center UI", () => {
-  it("shows every active category and navigates into paginated tool listings", () => {
+  it("keeps the native Tool Center compact and opens the catalog inside Telegram", () => {
     const home = formatToolCenterHome(TOOL_CATALOG, true);
     expect(home).toContain("534 processor");
-    expect(home).toContain("Lập trình &amp; văn bản");
-    const keyboard = buildToolCenterKeyboard(TOOL_CATALOG);
-    const callbacks = keyboard.inline_keyboard.flat().map(button => button.callback_data).filter(Boolean) as string[];
-    expect(callbacks).toContain("tc:developer");
-    expect(callbacks).toContain("tc:repository");
+    expect(home).toContain("được gom vào <b>Workspace</b>");
+    expect(home).not.toContain("Lập trình &amp; văn bản");
+    const miniAppUrl = "https://search.example.test/telegram#tools?ticket=" + "a".repeat(64);
+    const keyboard = buildToolCenterKeyboard(TOOL_CATALOG, miniAppUrl);
+    const buttons = keyboard.inline_keyboard.flat();
+    expect(keyboard.inline_keyboard.length).toBeLessThanOrEqual(3);
+    expect(buttons.some(button => button.web_app?.url === miniAppUrl)).toBe(true);
+    const callbacks = buttons.map(button => button.callback_data).filter(Boolean) as string[];
     expect(callbacks).toContain("tc:jobs");
     expect(callbacks).toContain("tc:workflows");
     const page = formatToolCategoryPage(TOOL_CATALOG, "developer", 0);
