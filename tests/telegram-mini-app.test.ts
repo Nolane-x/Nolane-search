@@ -32,6 +32,12 @@ describe("Telegram Mini App workspace", () => {
     expect(html).toContain("/api/index?");
     expect(html).toContain("/api/crawl");
     expect(html).toContain("/api/crawls");
+    expect(html).toContain("Crawl Jobs");
+    expect(html).toContain("state.tools.filter(function(tool){return tool.ready}).length");
+    expect(html).toContain("bubble assistant pending");
+    expect(html).toContain("pendingBubble.classList.remove('pending')");
+    expect(html).toContain("setTab(initialTab,false,false)");
+    expect(html).not.toContain("catch(ticketError)");
   });
 
   it("serves syntactically valid inline Mini App JavaScript", async () => {
