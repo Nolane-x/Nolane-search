@@ -48,7 +48,16 @@ The native Safari HLS path is controlled by the browser's media stack and does n
 
 ## Verification
 
-The resolver tests cover valid HLS/DASH paths, signed query retention, HTTPS and unsafe-host rejection, and prove that the Worker does not fetch the supplied manifest URL. UI tests cover lazy library loading, request filtering, no-credential mode, cleanup, CSP and generated inline-script syntax. Automated CI does not establish that a third-party live stream is currently online or playable.
+GitHub Actions CI run [#576](https://github.com/Nolane-x/Nolane-search/actions/runs/45596035908) completed successfully on code commit `f48dd670dce07754f4eba08b2a2bd958f9d62c3f`.
+
+- TypeScript type-check: passed.
+- Vitest: 38 files, 399 tests passed.
+- Deployment-script checks: passed.
+- Pinned PRONOM installation: passed.
+- Python tool-runner: 449 tests passed.
+- Cloudflare Worker build: completed.
+
+The resolver tests cover valid HLS/DASH paths, signed query retention, HTTPS and unsafe-host rejection, and prove that the Worker does not fetch the supplied manifest URL. UI tests cover lazy library loading, request filtering, no-credential mode, cleanup, DRM license request handling, CSP and generated inline-script syntax. Automated CI does not establish that a third-party live stream is currently online or playable.
 
 ## External references
 
