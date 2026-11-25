@@ -85,7 +85,7 @@ function extValue(metadata: Obj, key: string): string | null {
 export interface MediaSearchItem {
   id: string;
   title: string;
-  provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive";
+  provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive" | "PeerTube";
   mediaType: "image" | "video" | "audio";
   sourceUrl: string;
   previewUrl: string | null;
@@ -409,6 +409,149 @@ export async function searchInternetArchiveAudio(queryInput: unknown, limitInput
   };
 }
 
+
+export interface PeerTubeVideoResult extends MediaSearchItem {
+  provider: "PeerTube";
+  mediaType: "video";
+  instanceHost: string;
+  author: string | null;
+  channel: string | null;
+  durationSeconds: number | null;
+  views: number | null;
+  language: string | null;
+  isLive: boolean;
+}
+
+function safePeerTubeHost(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 253) return null;
+  const host = value.toLowerCase().replace(/\.$/, "");
+  if (!host || !host.includes(".") || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return null;
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.includes(":")) return null;
+  const labels = host.split(".");
+  if (labels.some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return null;
+  return host;
+}
+
+function safePeerTubeVideoUrl(value: unknown, expectedHosts: string[]): { url: string; host: string } | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    const host = safePeerTubeHost(url.hostname);
+    if (url.protocol !== "https:" || !host || url.port || url.username || url.password || url.pathname === "/") return null;
+    if (!expectedHosts.includes(host)) return null;
+    return { url: url.toString(), host };
+  } catch {
+    return null;
+  }
+}
+
+function nestedObject(value: unknown): Obj {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Obj : {};
+}
+
+function nestedLabel(value: unknown, keys: string[], max = 180): string | null {
+  const row = nestedObject(value);
+  for (const key of keys) {
+    const item = row[key];
+    if (typeof item === "string" && item.trim()) return item.trim().slice(0, max);
+  }
+  return null;
+}
+
+function nonNegativeInteger(value: unknown, max: number): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= max ? value : null;
+}
+
+function normalizedIsoDate(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 50) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+}
+
+function peerTubeLicense(value: unknown): string | null {
+  if (typeof value === "string") return value.trim().slice(0, 120) || null;
+  return nestedLabel(value, ["label", "name"], 120);
+}
+
+/**
+ * Search the federated PeerTube network through the public SepiaSearch index.
+ * Results link to their origin instance; no video files are downloaded or proxied.
+ */
+export async function searchPeerTubeVideos(queryInput: unknown, limitInput?: unknown): Promise<{
+  status: string;
+  source: string;
+  query: string;
+  total: number | null;
+  result_count: number;
+  items: PeerTubeVideoResult[];
+  note: string;
+}> {
+  const query = cleanText(queryInput, "query", 2, 140);
+  const limit = boundedInt(limitInput, "limit", 6, 1, 8);
+  const url = new URL("https://sepiasearch.org/api/v1/search/videos");
+  url.searchParams.set("search", query);
+  url.searchParams.set("start", "0");
+  url.searchParams.set("count", String(limit));
+  url.searchParams.set("sort", "-match");
+  url.searchParams.set("nsfw", "false");
+
+  const payload = object(await fetchJson<unknown>(url, "PeerTube SepiaSearch", 400_000), "PeerTube SepiaSearch");
+  const rows = Array.isArray(payload.data) ? payload.data : [];
+  const items: PeerTubeVideoResult[] = [];
+  for (const raw of rows.slice(0, limit)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const row = raw as Obj;
+    if (row.nsfw === true) continue;
+    const account = nestedObject(row.account);
+    const channelRow = nestedObject(row.channel);
+    const expectedHosts = [safePeerTubeHost(channelRow.host), safePeerTubeHost(account.host)]
+      .filter((host): host is string => host !== null);
+    if (!expectedHosts.length) continue;
+    const safePage = safePeerTubeVideoUrl(row.url, expectedHosts);
+    const title = typeof row.name === "string" ? htmlText(row.name, 220) : null;
+    if (!safePage || !title) continue;
+    const author = nestedLabel(account, ["displayName", "name"]);
+    const channel = nestedLabel(channelRow, ["displayName", "name"]);
+    const duration = nonNegativeInteger(row.duration, 604_800);
+    const views = nonNegativeInteger(row.views, Number.MAX_SAFE_INTEGER);
+    const description = htmlText(row.truncatedDescription ?? row.description, 700);
+    const language = nestedLabel(row.language, ["label", "id"], 32);
+    const publishedAt = normalizedIsoDate(row.publishedAt);
+    const credit = [author, channel, safePage.host].filter(Boolean).join(" · ").slice(0, 320) || safePage.host;
+    items.push({
+      id: typeof row.uuid === "string" && row.uuid.length <= 80 ? row.uuid : safePage.url,
+      title,
+      provider: "PeerTube",
+      mediaType: "video",
+      sourceUrl: safePage.url,
+      previewUrl: null,
+      mediaUrl: null,
+      description,
+      credit,
+      license: peerTubeLicense(row.licence),
+      licenseUrl: null,
+      dateCreated: publishedAt,
+      instanceHost: safePage.host,
+      author,
+      channel,
+      durationSeconds: duration,
+      views,
+      language,
+      isLive: row.isLive === true,
+    });
+  }
+  const total = nonNegativeInteger(payload.total, Number.MAX_SAFE_INTEGER);
+  return {
+    status: items.length ? "ok" : "not_found",
+    source: "PeerTube · SepiaSearch global federation index",
+    query,
+    total,
+    result_count: items.length,
+    items,
+    note: "Search covers videos available in SepiaSearch's federated index, not every PeerTube server or every public video. Links open on the originating instance. NSFW results are excluded. Duration, views, license and publication metadata depend on the source instance and may be absent or outdated; verify license terms on the original video page. This search does not download or rehost video files.",
+  };
+}
+
 type OffProductType = "all" | "food" | "beauty" | "petfood" | "product";
 type OffReadResult = { status: "ok"; host: string; row: Obj } | { status: "not_found"; host: string };
 const OFF_HOSTS: Record<Exclude<OffProductType, "all">, string> = {
@@ -716,6 +859,9 @@ export async function runMediaDiscoveryTool(name: string, rawArgs: unknown): Pro
   }
   if (name === "search_internet_archive_videos") {
     return JSON.stringify(await searchInternetArchiveVideos(args.query, args.limit));
+  }
+  if (name === "search_peertube_videos") {
+    return JSON.stringify(await searchPeerTubeVideos(args.query, args.limit));
   }
   if (name === "lookup_food_product") return lookupFoodProduct(args.barcode);
   if (name === "lookup_consumer_product") return lookupConsumerProduct(args.barcode, args.product_type);
