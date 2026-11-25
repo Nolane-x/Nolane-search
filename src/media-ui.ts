@@ -41,7 +41,7 @@ function safePeerTubeEmbedUrl(value,instanceHost){
  var safe=safeUrl(value,[instanceHost]);if(!safe)return null;
  try{
   var u=new URL(safe);var parts=u.pathname.split('/');
-  if(u.origin===location.origin||parts.length!==4||parts[0]!==''||parts[1]!=='videos'||parts[2]!=='embed'||!/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(parts[3])||u.search||u.hash)return null;
+  if(u.origin===location.origin||parts.length!==4||parts[0]!==''||parts[1]!=='videos'||parts[2]!=='embed'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parts[3])||u.search||u.hash)return null;
   return u.href;
  }catch(e){return null}
 }
