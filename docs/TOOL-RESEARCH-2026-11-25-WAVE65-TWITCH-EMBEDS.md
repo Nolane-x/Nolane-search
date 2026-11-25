@@ -46,6 +46,15 @@ The Twitch card spans two grid columns on wide layouts to reach the provider's d
 - Autoplay is explicitly set to false.
 - No login-cookie extraction, chat embedding, downloads, DRM bypass or content rehosting is implemented.
 
-## Verification target
+## Verification
 
-CI must run the complete TypeScript, Vitest, Python tool-runner, deployment-script and Worker-build checks. A new UI regression test compiles the generated inline browser script so regex/syntax defects cannot pass as string-only assertions. CI does not prove that every Twitch VOD or Clip is still public or playable; production end-to-end playback should be checked with public examples after the PR is merged and deployed.
+GitHub Actions CI run [#572](https://github.com/Nolane-x/Nolane-search/actions/runs/45592974117) completed successfully on commit `40dab51acd69010da07e436f209f66ddc8a75406`.
+
+- TypeScript type-check: passed.
+- Vitest: 38 files, 396 tests passed.
+- Deployment-script checks: passed.
+- Pinned PRONOM installation: passed.
+- Python tool-runner: 449 tests passed.
+- Cloudflare Worker build: completed.
+
+The UI regression test compiles the generated inline browser script so regex/syntax defects cannot pass as string-only assertions. CI does not prove that every Twitch VOD or Clip is still public or playable; production end-to-end playback should be checked with public examples after the PR is merged and deployed.
