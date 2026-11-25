@@ -32,6 +32,10 @@ describe("Telegram Mini App workspace", () => {
     expect(html).toContain("/api/ai/upload");
     expect(html).toContain("/api/tools/catalog");
     expect(html).toContain("/api/tools/jobs");
+    expect(html).toContain("/api/tools/jobs/retry");
+    expect(html).toContain("job.status==='failed'");
+    expect(html).toContain("Xem trace và pipeline");
+    expect(html).toContain("Thử lại");
     expect(html).toContain("/api/index?");
     expect(html).toContain("/api/crawl");
     expect(html).toContain("/api/crawls");
