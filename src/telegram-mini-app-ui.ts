@@ -1,4 +1,4 @@
-const HTML = String.raw\`<!doctype html>
+const HTML = String.raw`<!doctype html>
 <html lang="vi">
 <head>
 <meta charset="utf-8">
@@ -311,7 +311,7 @@ function setTab(tab,record){
  document.querySelectorAll('.view').forEach(function(v){v.classList.toggle('active',v.dataset.view===tab)});
  document.querySelectorAll('.nav-item').forEach(function(v){v.classList.toggle('active',v.dataset.tab===tab)});
  if(tg&&tg.BackButton){if(tab==='home')tg.BackButton.hide();else tg.BackButton.show()}
- if(tab==='tools'&&!state.tools.length)loadTools();
+ if(tab==='tools'){if(!state.tools.length)loadTools();loadJobs()}
  if(tab==='library')loadLibrary();
  if(tab==='home')loadMetrics();
  haptic('selection');
@@ -394,7 +394,7 @@ async function sendChat(){
  var prompt=message||('Hãy phân tích tệp '+file.name);
  if(file&&prompt.length<6)prompt='Hãy phân tích và tóm tắt tệp '+file.name;
  state.history.push({role:'user',content:prompt+(file?' · '+file.name:'')});state.history=state.history.slice(-10);
- renderChat();input.value='';$('fileName').textContent=file?file.name:'Tối đa 20 MB';$('chatForm')&&null;
+ renderChat();input.value='';$('fileName').textContent=file?file.name:'Tối đa 20 MB';
  var button=$('chatForm').querySelector('button[type=submit]');button.disabled=true;
  var pending={role:'assistant',content:file?'Đang tải tệp lên và lập kế hoạch xử lý…':'Đang suy nghĩ…'};
  try{
@@ -527,7 +527,7 @@ start();
 })();
 </script>
 </body>
-</html>\`;
+</html>`;
 export function telegramMiniAppResponse(): Response {
  return new Response(HTML,{
   headers:{
