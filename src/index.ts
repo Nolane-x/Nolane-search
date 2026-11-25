@@ -15,6 +15,7 @@ import { clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWork
 import { webAppResponse } from "./web-ui";
 import { mediaAppResponse } from "./media-ui";
 import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos, searchInternetArchiveAudio, searchPeerTubeVideos } from "./media-discovery-tools";
+import { resolveMediaEmbed } from "./media-embed-resolver";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import { planToolWorkflow } from "./workflow-planner";
 import type { AiFunctionTool, AiTask } from "./ai-router";
@@ -289,6 +290,33 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
 
   const session = await getWebSession(request, env);
   if (!session) return jsonResponse({ error: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn." }, 401);
+
+  if (url.pathname === "/api/media/resolve" && request.method === "GET") {
+    const mediaUrl = url.searchParams.get("url");
+    if (!mediaUrl || mediaUrl.length > 2048) {
+      return jsonResponse({ error: "Hãy nhập một URL video HTTPS tối đa 2048 ký tự." }, 400);
+    }
+    try {
+      const resolution = await resolveMediaEmbed(mediaUrl, env.MEDIA_DAILYMOTION_PLAYER_ID);
+      if (resolution.status === "resolved") {
+        return jsonResponse({ status: "resolved", item: resolution.item });
+      }
+      if (resolution.status === "needs_configuration") {
+        return jsonResponse({
+          status: "needs_configuration",
+          provider: resolution.provider,
+          error: resolution.message,
+        }, 409);
+      }
+      return jsonResponse({ status: "unsupported", error: resolution.message }, 422);
+    } catch (error) {
+      console.warn("Media URL resolution failed:", error instanceof Error ? error.message : "unknown");
+      return jsonResponse({
+        status: "upstream_error",
+        error: error instanceof Error ? error.message.slice(0, 240) : "Không thể phân giải URL video lúc này.",
+      }, 502);
+    }
+  }
 
   if (url.pathname === "/api/media/search" && request.method === "GET") {
     const query = (url.searchParams.get("q") || "").trim();
