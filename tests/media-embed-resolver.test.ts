@@ -164,6 +164,7 @@ describe("Wave 64 user-provided media URL resolver", () => {
     for (const input of [
       "https://www.twitch.tv/videos/not-a-number",
       "https://clips.twitch.tv/x",
+      "https://clips.twitch.tv/embed",
       "https://www.twitch.tv.evil.example/videos/123456789",
       "https://evil.example/twitch.tv/videos/123456789",
       "https://player.twitch.tv/?video=v123456789",
