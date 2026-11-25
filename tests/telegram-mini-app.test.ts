@@ -27,6 +27,9 @@ describe("Telegram Mini App workspace", () => {
     expect(html).toContain("/api/auth/exchange");
     expect(html).toContain("/api/auth/me");
     expect(html).toContain("/api/search?");
+    expect(html).toContain("👍 Hữu ích");
+    expect(html).toContain("👎 Chưa phù hợp");
+    expect(html).toContain("api('/api/feedback'");
     expect(html).toContain("/api/ask");
     expect(html).toContain("/api/chat");
     expect(html).toContain("/api/ai/upload");
