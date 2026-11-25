@@ -72,6 +72,7 @@ const CATEGORIES: Record<NearbyCategory, CategoryDefinition> = {
 
 const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 const USER_AGENT = "NolaneSearch/0.1 (+https://github.com/Nolane-x/Nolane-search)";
+// Essentials keeps its combined public Overpass scan bounded to one request and a 3 km radius.
 const MAX_RESPONSE_BYTES = 2_000_000;
 
 export class NearbyPlacesInputError extends Error {
