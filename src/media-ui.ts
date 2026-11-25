@@ -533,7 +533,7 @@ export function mediaAppResponse(nsfwFeatureEnabled = false): Response {
       "cache-control": "no-store, max-age=0",
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
-      "content-security-policy": "default-src 'self'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; connect-src 'self' https:; img-src 'self' data: https://upload.wikimedia.org https://images-assets.nasa.gov https://api.openverse.org https://archive.org; media-src 'self' blob: https://images-assets.nasa.gov https://archive.org https://*.archive.org https:; worker-src 'self' blob:; frame-src https:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+      "content-security-policy": "default-src 'self'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; connect-src 'self' https:; img-src 'self' data: https://upload.wikimedia.org https://images-assets.nasa.gov https://api.openverse.org https://archive.org; media-src 'self' blob: data: https://images-assets.nasa.gov https://archive.org https://*.archive.org https:; worker-src 'self' blob:; frame-src https:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
     },
   });
 }
