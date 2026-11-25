@@ -185,7 +185,7 @@ Crawling remains bounded per job (up to 20 pages), rejects unsafe/private destin
 ## Telegram Mini App
 
 - Route: `GET /telegram` serves the Telegram-first workspace. It is intentionally not indexed and returns `Cache-Control: no-store`.
-- Entry: `/start` or `/menu` creates a one-time owner ticket and includes it as a `web_app` inline keyboard URL. This launch button is intended for private owner chats; group chats are rejected by the bot menu flow.
+- Entry: `/start` or `/menu` creates a one-time owner ticket and includes it as a `web_app` inline keyboard URL. The bot also configures a per-user Telegram Menu button via `setChatMenuButton`, pointing to the static `/telegram` route. The inline ticket bootstraps the first session; later Menu launches reuse the existing session cookie. If that session expires, return to the chat and send `/start` to obtain a fresh ticket. Both launch paths are restricted to the allowlisted private owner chat; group chats are rejected.
 - Login: `POST /api/auth/exchange` consumes the same existing `web_login_tickets` row used by `/web`. The URL ticket is removed from browser history immediately after exchange. D1 stores only its hash; the session cookie stays HttpOnly, Secure and SameSite=Strict.
 - Navigation: the bottom tabs separate Overview, Search, AI, Tools and Personal Index. Media Studio remains a same-origin link to `/media`.
 - Telegram integration: the page loads the official Telegram WebApp SDK, reads Telegram theme parameters, adapts header/background colors, expands the viewport, uses the native BackButton and optional haptics, and respects Telegram safe-area insets. It has a browser fallback for development, but private APIs still require the owner session.
