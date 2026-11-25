@@ -209,7 +209,7 @@ function showStreamPlayer(preview,item,streamUrl){
      if(!Number.isInteger(selected)||selected < -1 || selected >= hls.levels.length)return;
      hls.currentLevel=selected;
      status.textContent=selected===-1?'Đang để HLS tự chọn chất lượng.':'Đã yêu cầu chất lượng '+qualityLabel(hls.levels[selected])+'.';
-    });
+    };
     hls.on(Hls.Events.MANIFEST_PARSED,refreshHlsQualities);
     hls.on(Hls.Events.LEVELS_UPDATED,refreshHlsQualities);
     hls.on(Hls.Events.LEVEL_SWITCHED,function(_event,data){
@@ -242,7 +242,7 @@ function showStreamPlayer(preview,item,streamUrl){
     try{dashRepresentations=player.getRepresentationsByType('video')||[]}catch(e){dashRepresentations=[]}
     populateQualityControl(quality,dashRepresentations);
    }
-   quality.select.addEventListener('change',function(){
+   quality.select.onchange=function(){
     if(cancelled||attempt!==generation)return;
     var selected=Number(quality.select.value);
     try{dashRepresentations=player.getRepresentationsByType('video')||[]}catch(e){dashRepresentations=[]}
