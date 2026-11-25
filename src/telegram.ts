@@ -390,40 +390,36 @@ function toolCategoryItems(tools: ToolDefinition[], category: ToolCategory): Too
 
 export function formatToolCenterHome(tools: ToolDefinition[], configured: boolean): string {
   const ready = tools.filter(tool => tool.ready);
-  const categories = TOOL_CENTER_CATEGORIES
-    .map(category => ({ category, count: toolCategoryItems(ready, category).length }))
-    .filter(item => item.count > 0);
+  const categories = TOOL_CENTER_CATEGORIES.filter(category => toolCategoryItems(ready, category).length > 0);
   return [
     "<b>◈ NOLANE TOOL CENTER</b>",
-    "<i>" + ready.length + " processor đang có trong catalog · " + categories.length + " danh mục</i>",
+    "<i>" + ready.length + " processor sẵn sàng · " + categories.length + " danh mục</i>",
     "",
-    ...categories.map(item => "<b>" + htmlEscape(toolCategoryLabel(item.category)) + "</b> · " + item.count + " tool"),
+    "Danh mục, bộ lọc và thông tin từng công cụ đã được gom vào <b>Workspace</b> để chat Telegram không bị kéo dài bởi danh sách.",
     "",
     configured
-      ? "Runner đã được cấu hình. Chọn danh mục để duyệt, mở chi tiết rồi bấm <b>Dùng tool</b> và gửi tệp."
+      ? "Runner đã sẵn sàng. Mở Workspace để tìm công cụ, đính kèm tệp và theo dõi job."
       : "⚠️ Runner chưa sẵn sàng: cần cấu hình GitHub Actions token trước khi chạy tệp.",
     "",
-    "<code>/tool_search từ khóa</code> · tìm theo tên, mô tả, định dạng",
-    "<code>/tool_jobs</code> · lịch sử và trạng thái",
-    "<code>/workflows</code> · workflow đã lưu · <code>/workflow_plan</code> · AI lập quy trình",
+    "<code>/tool_search từ khóa</code> · tìm nhanh trong chat",
+    "<code>/tool_jobs</code> · xem lịch sử và trạng thái",
+    "<code>/workflows</code> · workflow đã lưu",
   ].join("\n");
 }
 
-export function buildToolCenterKeyboard(tools: ToolDefinition[]): TelegramInlineKeyboardMarkup {
-  const rows: TelegramInlineButton[][] = [];
-  const populated = TOOL_CENTER_CATEGORIES.filter(category => toolCategoryItems(tools, category).length > 0);
-  for (let index = 0; index < populated.length; index += 2) {
-    rows.push(populated.slice(index, index + 2).map(category => ({
-      text: toolCategoryLabel(category) + " · " + toolCategoryItems(tools, category).length,
-      callback_data: "tc:" + category,
-    })));
-  }
-  rows.push([
-    { text: "🧾 Tác vụ gần đây", callback_data: "tc:jobs" },
-    { text: "🧩 Workflow", callback_data: "tc:workflows" },
-  ]);
-  rows.push([{ text: "⌂ Menu chính", callback_data: "ui:home" }]);
-  return { inline_keyboard: rows };
+export function buildToolCenterKeyboard(
+  tools: ToolDefinition[],
+  miniAppUrl = "https://nolane-search.nolane-file.workers.dev/telegram#tools",
+): TelegramInlineKeyboardMarkup {
+  return { inline_keyboard: [
+    [{ text: "▦ Mở Tool Center", web_app: { url: miniAppUrl } }],
+    [
+      { text: "🧾 Job Center", callback_data: "tc:jobs" },
+      { text: "🧩 Workflow", callback_data: "tc:workflows" },
+    ],
+    [{ text: "⌕ Tìm tool · /tool_search", callback_data: "tc:jobs" }],
+    [{ text: "⌂ Menu chính", callback_data: "ui:home" }],
+  ] };
 }
 
 export function formatToolCategoryPage(tools: ToolDefinition[], category: ToolCategory, page = 0): string {
