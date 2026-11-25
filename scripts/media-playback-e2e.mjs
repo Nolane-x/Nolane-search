@@ -307,7 +307,7 @@ async function runSample(browser, origin, sample) {
       result.errors.push("Playback did not advance to 2 seconds: " + JSON.stringify(details));
     }
 
-    const minimumQualityOptions = (sample.expected.quality || 0) + 1;
+    const minimumQualityOptions = sample.expected.quality ? sample.expected.quality + 1 : 0;
     const minimumAudioOptions = sample.expected.audio || 0;
     const minimumSubtitleOptions = sample.expected.subtitles ? sample.expected.subtitles + 1 : 0;
 
