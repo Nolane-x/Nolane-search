@@ -39,6 +39,10 @@ describe("Telegram Mini App workspace", () => {
     expect(html).toContain("state.tools.filter(function(tool){return tool.ready}).length");
     expect(html).toContain("bubble assistant pending");
     expect(html).toContain("pendingBubble.classList.remove('pending')");
+    expect(html).toContain("async function copyText(value)");
+    expect(html).toContain("document.execCommand('copy')");
+    expect(html).toContain("Clipboard bị chặn");
+    expect(html).toContain("$('answerOutput').classList.add('hidden');$('synthesizeBtn').classList.add('hidden');");
     expect(html).toContain("setTab(initialTab,false,false)");
     expect(html).not.toContain("catch(ticketError)");
   });
