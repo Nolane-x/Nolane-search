@@ -51,7 +51,7 @@ function safeMediaEmbedUrl(item){
  var hosts=item.provider==='YouTube'?['www.youtube-nocookie.com']:item.provider==='Vimeo'?['player.vimeo.com']:item.provider==='Dailymotion'?['geo.dailymotion.com']:[];
  var safe=safeUrl(item.embedUrl,hosts);if(!safe)return null;
  try{
-  var u=new URL(safe);if(u.origin===location.origin)return null;
+  var u=new URL(safe);if(u.origin===location.origin||u.hash)return null;
   if(item.provider==='YouTube'){
    if(!/^\\/embed\\/[A-Za-z0-9_-]{11}$/.test(u.pathname))return null;
    var ytKeys=Array.from(u.searchParams.keys());
