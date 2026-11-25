@@ -420,6 +420,8 @@ export interface PeerTubeVideoResult extends MediaSearchItem {
   views: number | null;
   language: string | null;
   isLive: boolean;
+  nsfw: boolean;
+  nsfwFlags: number | null;
 }
 
 function safePeerTubeHost(value: unknown): string | null {
@@ -477,7 +479,7 @@ function peerTubeLicense(value: unknown): string | null {
  * Search the federated PeerTube network through the public SepiaSearch index.
  * Results link to their origin instance; no video files are downloaded or proxied.
  */
-export async function searchPeerTubeVideos(queryInput: unknown, limitInput?: unknown): Promise<{
+export async function searchPeerTubeVideos(queryInput: unknown, limitInput?: unknown, includeNsfwInput?: unknown): Promise<{
   status: string;
   source: string;
   query: string;
@@ -488,12 +490,14 @@ export async function searchPeerTubeVideos(queryInput: unknown, limitInput?: unk
 }> {
   const query = cleanText(queryInput, "query", 2, 140);
   const limit = boundedInt(limitInput, "limit", 6, 1, 8);
+  const includeNsfw = includeNsfwInput === undefined ? false : includeNsfwInput;
+  if (typeof includeNsfw !== "boolean") throw new Error("include_nsfw must be a boolean.");
   const url = new URL("https://sepiasearch.org/api/v1/search/videos");
   url.searchParams.set("search", query);
   url.searchParams.set("start", "0");
   url.searchParams.set("count", String(limit));
   url.searchParams.set("sort", "-match");
-  url.searchParams.set("nsfw", "false");
+  url.searchParams.set("nsfw", includeNsfw ? "true" : "false");
 
   const payload = object(await fetchJson<unknown>(url, "PeerTube SepiaSearch", 400_000), "PeerTube SepiaSearch");
   const rows = Array.isArray(payload.data) ? payload.data : [];
@@ -501,7 +505,7 @@ export async function searchPeerTubeVideos(queryInput: unknown, limitInput?: unk
   for (const raw of rows.slice(0, limit)) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const row = raw as Obj;
-    if (row.nsfw === true) continue;
+    if (row.nsfw === true && !includeNsfw) continue;
     const account = nestedObject(row.account);
     const channelRow = nestedObject(row.channel);
     const expectedHosts = [safePeerTubeHost(channelRow.host), safePeerTubeHost(account.host)]
@@ -538,6 +542,8 @@ export async function searchPeerTubeVideos(queryInput: unknown, limitInput?: unk
       views,
       language,
       isLive: row.isLive === true,
+      nsfw: row.nsfw === true,
+      nsfwFlags: nonNegativeInteger(row.nsfwFlags, 7),
     });
   }
   const total = nonNegativeInteger(payload.total, Number.MAX_SAFE_INTEGER);
@@ -548,7 +554,7 @@ export async function searchPeerTubeVideos(queryInput: unknown, limitInput?: unk
     total,
     result_count: items.length,
     items,
-    note: "Search covers videos available in SepiaSearch's federated index, not every PeerTube server or every public video. Links open on the originating instance. NSFW results are excluded. Duration, views, license and publication metadata depend on the source instance and may be absent or outdated; verify license terms on the original video page. This search does not download or rehost video files.",
+    note: "Search covers videos available in SepiaSearch's federated index, not every PeerTube server or every public video. Links open on the originating instance. " + (includeNsfw ? "Public videos marked NSFW are included only in the separately enabled 18+ mode; source flags can be missing or inaccurate. " : "Videos marked NSFW are excluded by default. ") + "Duration, views, license and publication metadata depend on the source instance and may be absent or outdated; verify license terms on the original video page. This search does not download or rehost video files.",
   };
 }
 
@@ -861,7 +867,7 @@ export async function runMediaDiscoveryTool(name: string, rawArgs: unknown): Pro
     return JSON.stringify(await searchInternetArchiveVideos(args.query, args.limit));
   }
   if (name === "search_peertube_videos") {
-    return JSON.stringify(await searchPeerTubeVideos(args.query, args.limit));
+    return JSON.stringify(await searchPeerTubeVideos(args.query, args.limit, args.include_nsfw));
   }
   if (name === "lookup_food_product") return lookupFoodProduct(args.barcode);
   if (name === "lookup_consumer_product") return lookupConsumerProduct(args.barcode, args.product_type);

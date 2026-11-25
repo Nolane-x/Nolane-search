@@ -15,6 +15,16 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("Mở audio gốc");
   });
 
+  it("keeps the adult-only search control hidden unless the deployment explicitly enables it", async () => {
+    const disabledHtml = await (await mediaAppResponse()).text();
+    expect(disabledHtml).toContain('data-nsfw-enabled="false"');
+    expect(disabledHtml).toContain('id="nsfw-control" class="adult-toggle hidden"');
+    const enabledHtml = await (await mediaAppResponse(true)).text();
+    expect(enabledHtml).toContain('data-nsfw-enabled="true"');
+    expect(enabledHtml).toContain("Tôi xác nhận mình đã đủ 18 tuổi");
+    expect(enabledHtml).toContain("query.set('include_nsfw','true')");
+  });
+
   it("disables incompatible providers for image, video and audio filters", async () => {
     const html = await (await mediaAppResponse()).text();
     expect(html).toContain("kind==='audio'?['commons','nasa','openverse','peertube']");

@@ -294,6 +294,14 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     const query = (url.searchParams.get("q") || "").trim();
     const kind = url.searchParams.get("kind") || "all";
     const provider = url.searchParams.get("provider") || "all";
+    const includeNsfwParameter = url.searchParams.get("include_nsfw");
+    if (includeNsfwParameter !== null && includeNsfwParameter !== "true" && includeNsfwParameter !== "false") {
+      return jsonResponse({ error: "include_nsfw chỉ nhận true hoặc false." }, 400);
+    }
+    const includeNsfw = includeNsfwParameter === "true";
+    if (includeNsfw && env.MEDIA_ALLOW_NSFW !== "true") {
+      return jsonResponse({ error: "Chế độ media 18+ chưa được bật cho deployment này." }, 403);
+    }
     if (query.length < 2 || query.length > 160) {
       return jsonResponse({ error: "Từ khóa media phải có từ 2 đến 160 ký tự." }, 400);
     }
@@ -346,7 +354,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
       }
       if ((provider === "all" || provider === "peertube") && (kind === "all" || kind === "video")) {
         tasks.push({ name: "PeerTube federation", run: async () => {
-          const result = await searchPeerTubeVideos(query, 6);
+          const result = await searchPeerTubeVideos(query, 6, includeNsfw);
           return { items: result.items, source: result.source };
         }});
       }
@@ -3176,7 +3184,7 @@ export default {
     if (request.method === "GET" && url.pathname === "/") return webAppResponse();
     if (request.method === "GET" && url.pathname === "/media") {
       const session = await getWebSession(request, env);
-      return session ? mediaAppResponse() : Response.redirect(new URL("/", request.url), 302);
+      return session ? mediaAppResponse(env.MEDIA_ALLOW_NSFW === "true") : Response.redirect(new URL("/", request.url), 302);
     }
     if (url.pathname === "/internal/tools/translate") return handleToolTranslationApi(request, env);
     if (url.pathname === "/internal/tools/runner") return handleToolRunnerApi(request, env);
