@@ -156,7 +156,7 @@ async function main() {
   let sessionId;
 
   try {
-    execFileSync("/usr/bin/safaridriver", ["--enable"], { stdio: "inherit", timeout: 15_000 });
+    // The workflow enables Remote Automation with sudo before this script starts.
     driverProcess = spawn("/usr/bin/safaridriver", ["-p", "4444"], {
       stdio: "ignore",
       env: process.env,
