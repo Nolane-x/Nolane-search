@@ -65,6 +65,6 @@ The Mini App route itself returns HTML but exposes no private data until an auth
 
 ## Known operational boundary
 
-The inline `web_app` button is sent only after the bot has verified that the chat is private and the Telegram user is allowlisted. It should be tested in that private chat; it is not a group-chat interface. A permanent BotFather menu-button shortcut is not enabled by this change because it uses a fixed URL and the current launch flow intentionally issues a fresh per-user, single-use ticket. A permanent shortcut should be added only with an independently validated Telegram launch/authentication flow.
+The inline `web_app` button is sent only after the bot has verified that the chat is private and the Telegram user is allowlisted. It should be tested in that private chat; it is not a group-chat interface. After `/start`, the bot also attempts to configure a per-chat Menu button through Bot API `setChatMenuButton`. That persistent launcher uses the static same-origin `/telegram` URL and depends on the current session cookie; the inline button remains the one-time bootstrap path. If the per-chat Menu-button API call fails, the chat keyboard continues to work and the failure is logged.
 
 No production deployment or BotFather configuration is performed by this branch. Live verification still requires opening the new Workspace button in the actual Telegram app on Android/iOS/Desktop and checking the viewport, theme switching, navigation, and authentication in that client.
