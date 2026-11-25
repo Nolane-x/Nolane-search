@@ -127,7 +127,7 @@ function render(items){
 }
 async function search(){
  var q=$('q').value.trim();if(q.length<2)return;
- var isUrl=/^https?:\\/\\//i.test(q);
+ var isUrl=q.indexOf('https://')===0||q.indexOf('http://')===0;
  if(q.length>(isUrl?2048:160)){ $('notice').classList.remove('hidden');$('notice').textContent=isUrl?'URL video không được vượt quá 2048 ký tự.':'Từ khóa tìm kiếm không được vượt quá 160 ký tự.';return; }
  $('go').disabled=true;$('status').textContent=isUrl?'Đang nhận diện URL video…':'Đang tìm kiếm trên các nguồn media…';$('notice').classList.add('hidden');
  $('results').replaceChildren();
