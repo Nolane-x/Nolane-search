@@ -241,7 +241,7 @@ function resolveTwitch(url: URL, sourceUrl: string): MediaEmbedResolution | null
   let embedUrl: string;
   let id: string;
   let title: string;
-  if (host === "clips.twitch.tv" && parts.length === 1) {
+  if (host === "clips.twitch.tv" && parts.length === 1 && parts[0] !== "embed") {
     id = parts[0];
     if (!/^[A-Za-z0-9_-]{4,80}$/.test(id)) return UNSUPPORTED;
     const embed = new URL("https://clips.twitch.tv/embed");
