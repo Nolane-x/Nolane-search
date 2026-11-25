@@ -15,8 +15,8 @@ describe("Nearby Places UI", () => {
     expect(html).toContain("OpenStreetMap contributors");
     expect(html).toContain("ODbL");
     expect(html).toContain("/api/nearby/search");
-    expect(html).toContain("Tọa độ chỉ được gửi");
-    expect(html).toContain("Khoảng cách");
+    expect(html).toContain("tọa độ chỉ được gửi");
+    expect(html).toContain("Dùng vị trí hiện tại");
     expect(html).toContain("Địa điểm quanh đây");
     expect(html).not.toContain("localStorage");
   });
@@ -39,6 +39,6 @@ describe("Nearby Places UI", () => {
     const html = await (await nearbyAppResponse()).text();
     expect(html).toContain("url.protocol==='https:'");
     expect(html).toContain("noopener noreferrer");
-    expect(html).toContain("not verified");
+    expect(html).toContain("Chưa xác nhận đang mở");
   });
 });
