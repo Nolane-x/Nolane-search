@@ -18,10 +18,37 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("Hiện chưa có downloader đa website hoặc kho chia sẻ file riêng tư.");
     expect(html).toContain("R2 được kích hoạt trước");
     expect(html).toContain("document.createElement('iframe')");
-    expect(html).toContain("Nhúng player PeerTube");
+    expect(html).toContain("safeMediaEmbedUrl(item)");
+    expect(html).toContain("Nhúng player '+item.provider");
     expect(html).toContain("u.origin===location.origin");
     expect(html).toContain("frameUrl.searchParams.set('p2p','0')");
+    expect(html).toContain("frameUrl.searchParams.set('dnt','1')");
+    expect(html).toContain("strict-origin-when-cross-origin");
     expect(html).toContain("frame.sandbox.add('allow-scripts','allow-same-origin','allow-popups','allow-forms','allow-presentation')");
+    expect(html).toContain("/api/media/resolve?url='+encodeURIComponent(q)");
+    expect(html).toContain("var isUrl=q.indexOf('https://')===0||q.indexOf('http://')===0");
+    expect(html).toContain('maxlength="2048"');
+  });
+
+  it("serves syntactically valid inline browser JavaScript", async () => {
+    const html = await (await mediaAppResponse()).text();
+    const start = html.indexOf("<script>");
+    const end = html.indexOf("</script>", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const script = html.slice(start + "<script>".length, end);
+    expect(() => new Function(script)).not.toThrow();
+  });
+
+  it("renders Twitch VOD and Clip embeds only with the official host and current-page parent", async () => {
+    const html = await (await mediaAppResponse()).text();
+    expect(html).toContain("item.provider==='Twitch'?['player.twitch.tv','clips.twitch.tv']:[]");
+    expect(html).toContain("u.hostname==='player.twitch.tv'");
+    expect(html).toContain("u.hostname==='clips.twitch.tv'");
+    expect(html).toContain("frameUrl.searchParams.set('parent',parent)");
+    expect(html).toContain("var parent=location.hostname.toLowerCase()");
+    expect(html).toContain("item.provider==='Twitch'?'Mở trên Twitch'");
+    expect(html).toContain("strict-origin-when-cross-origin");
   });
 
   it("keeps the adult-only search control hidden unless the deployment explicitly enables it", async () => {
@@ -45,7 +72,7 @@ describe("Media Portal media discovery experience", () => {
     const html = await (await mediaAppResponse()).text();
     expect(html).toContain('<option value="peertube">PeerTube · video liên mạng</option>');
     expect(html).toContain("item.provider==='PeerTube'?safeUrl(item.sourceUrl,[item.instanceHost])");
-    expect(html).toContain("item.provider==='PeerTube'?'Xem trên PeerTube':'Trang nguồn'");
+    expect(html).toContain("item.provider==='PeerTube'?'Xem trên PeerTube':item.provider==='YouTube'?'Mở trên YouTube'");
     expect(html).toContain("Mở trang PeerTube gốc để xem video");
     expect(html).toContain("PeerTube dùng chỉ mục liên mạng SepiaSearch");
   });
