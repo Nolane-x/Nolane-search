@@ -109,7 +109,7 @@ function loadPinnedMediaScript(key,url,globalName){
  streamScriptPromises[key]=new Promise(function(resolve,reject){
   var script=document.createElement('script');
   script.async=true;script.crossOrigin='anonymous';script.referrerPolicy='no-referrer';script.src=url;
-  script.onload=function(){window[globalName]?resolve(window[globalName]):reject(new Error('Thư viện player không khởi tạo đúng.'))};
+  script.onload=function(){if(window[globalName])resolve(window[globalName]);else{delete streamScriptPromises[key];reject(new Error('Thư viện player không khởi tạo đúng.'))}};
   script.onerror=function(){delete streamScriptPromises[key];reject(new Error('Không tải được thư viện phát video. Kiểm tra kết nối tới CDN rồi thử lại.'))};
   document.head.appendChild(script);
  });
