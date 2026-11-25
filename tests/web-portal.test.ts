@@ -131,5 +131,9 @@ describe("private browser search portal", () => {
     const mediaResolve = await worker.fetch(new Request("https://nolane-search.example/api/media/resolve?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DM7lc1UVf-VE"), env, context);
     expect(mediaResolve.status).toBe(401);
     expect(await mediaResolve.json()).toMatchObject({ error: expect.stringContaining("Phiên đăng nhập") });
+
+    const mediaResolve = await worker.fetch(new Request("https://nolane-search.example/api/media/resolve?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DM7lc1UVf-VE"), env, context);
+    expect(mediaResolve.status).toBe(401);
+    expect(await mediaResolve.json()).toMatchObject({ error: expect.stringContaining("Phiên đăng nhập") });
   });
 });
