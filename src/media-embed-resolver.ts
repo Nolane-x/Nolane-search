@@ -3,7 +3,7 @@ import { readJsonResponse } from "./http";
 export interface ResolvedMediaEmbedItem {
   id: string;
   title: string;
-  provider: "YouTube" | "Vimeo" | "PeerTube" | "Dailymotion";
+  provider: "YouTube" | "Vimeo" | "PeerTube" | "Dailymotion" | "Twitch";
   mediaType: "video";
   sourceUrl: string;
   previewUrl: string | null;
@@ -27,7 +27,7 @@ type SafeUrl = { url: URL; sourceUrl: string };
 
 const UNSUPPORTED: MediaEmbedResolution = {
   status: "unsupported",
-  message: "URL video chưa được hỗ trợ. Hiện hỗ trợ YouTube, Vimeo, PeerTube và Dailymotion.",
+  message: "URL video chưa được hỗ trợ. Hiện hỗ trợ YouTube, Vimeo, PeerTube, Dailymotion và Twitch.",
 };
 
 function safePublicHttpsUrl(value: unknown): SafeUrl | null {
@@ -232,6 +232,64 @@ async function resolveVimeo(url: URL, sourceUrl: string): Promise<MediaEmbedReso
   };
 }
 
+function resolveTwitch(url: URL, sourceUrl: string): MediaEmbedResolution | null {
+  const host = url.hostname.toLowerCase();
+  const allowedHosts = ["twitch.tv", "www.twitch.tv", "m.twitch.tv", "clips.twitch.tv"];
+  if (!allowedHosts.includes(host)) return null;
+
+  const parts = url.pathname.split("/").filter(Boolean);
+  let embedUrl: string;
+  let id: string;
+  let title: string;
+  if (host === "clips.twitch.tv" && parts.length === 1) {
+    id = parts[0];
+    if (!/^[A-Za-z0-9_-]{4,80}$/.test(id)) return UNSUPPORTED;
+    const embed = new URL("https://clips.twitch.tv/embed");
+    embed.searchParams.set("clip", id);
+    embed.searchParams.set("autoplay", "false");
+    embedUrl = embed.toString();
+    title = "Twitch clip " + id;
+  } else if (
+    parts.length === 3 &&
+    parts[1] === "clip" &&
+    ["twitch.tv", "www.twitch.tv", "m.twitch.tv"].includes(host)
+  ) {
+    id = parts[2];
+    if (!/^[A-Za-z0-9_-]{4,80}$/.test(id)) return UNSUPPORTED;
+    const embed = new URL("https://clips.twitch.tv/embed");
+    embed.searchParams.set("clip", id);
+    embed.searchParams.set("autoplay", "false");
+    embedUrl = embed.toString();
+    title = "Twitch clip " + id;
+  } else if (
+    parts.length === 2 &&
+    parts[0] === "videos" &&
+    ["twitch.tv", "www.twitch.tv", "m.twitch.tv"].includes(host)
+  ) {
+    id = parts[1];
+    if (!/^[0-9]{5,15}$/.test(id)) return UNSUPPORTED;
+    const embed = new URL("https://player.twitch.tv/");
+    embed.searchParams.set("video", "v" + id);
+    embed.searchParams.set("autoplay", "false");
+    embedUrl = embed.toString();
+    title = "Twitch VOD " + id;
+  } else {
+    return null;
+  }
+
+  return {
+    status: "resolved",
+    item: baseItem({
+      id,
+      title,
+      provider: "Twitch",
+      sourceUrl,
+      embedUrl,
+      referrerPolicy: "strict-origin-when-cross-origin",
+    }),
+  };
+}
+
 function resolveDailymotion(url: URL, sourceUrl: string, playerIdInput?: unknown): MediaEmbedResolution | null {
   const host = url.hostname.toLowerCase();
   if (!["dailymotion.com", "www.dailymotion.com", "dai.ly"].includes(host)) return null;
@@ -275,6 +333,9 @@ export async function resolveMediaEmbed(
 
   const peerTube = resolvePeerTube(url, sourceUrl);
   if (peerTube) return peerTube;
+
+  const twitch = resolveTwitch(url, sourceUrl);
+  if (twitch) return twitch;
 
   const dailymotion = resolveDailymotion(url, sourceUrl, dailymotionPlayerId);
   if (dailymotion) return dailymotion;
