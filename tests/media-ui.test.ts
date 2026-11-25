@@ -30,6 +30,27 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain('maxlength="2048"');
   });
 
+  it("serves syntactically valid inline browser JavaScript", async () => {
+    const html = await (await mediaAppResponse()).text();
+    const start = html.indexOf("<script>");
+    const end = html.indexOf("</script>", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const script = html.slice(start + "<script>".length, end);
+    expect(() => new Function(script)).not.toThrow();
+  });
+
+  it("renders Twitch VOD and Clip embeds only with the official host and current-page parent", async () => {
+    const html = await (await mediaAppResponse()).text();
+    expect(html).toContain("item.provider==='Twitch'?['player.twitch.tv','clips.twitch.tv']:[]");
+    expect(html).toContain("u.hostname==='player.twitch.tv'");
+    expect(html).toContain("u.hostname==='clips.twitch.tv'");
+    expect(html).toContain("frameUrl.searchParams.set('parent',parent)");
+    expect(html).toContain("var parent=location.hostname.toLowerCase()");
+    expect(html).toContain("item.provider==='Twitch'?'Mở trên Twitch'");
+    expect(html).toContain("strict-origin-when-cross-origin");
+  });
+
   it("keeps the adult-only search control hidden unless the deployment explicitly enables it", async () => {
     const disabledHtml = await (await mediaAppResponse()).text();
     expect(disabledHtml).toContain('data-nsfw-enabled="false"');
