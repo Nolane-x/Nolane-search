@@ -16,6 +16,8 @@ This work starts from PR #136 head and is intended to stack on top of PR #136, w
 8. Add resolver/UI regression tests and documentation.
 9. Add Auto/manual quality selection from actual HLS levels and DASH representations.
 10. Verify DASH manual selection disables ABR, Auto restores it, and representation state remains available to quality-change events.
+11. Add shared playback-rate controls on the media element for HLS, DASH and native HLS.
+12. Verify retry tears down the old player, stale callbacks are ignored, and failed CDN script promises are evicted so a retry reloads the library.
 
 ## Verification gates
 
