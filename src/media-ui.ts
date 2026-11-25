@@ -358,6 +358,8 @@ function showStreamPlayer(preview,item,streamUrl){
     if(Number.isInteger(selected)&&selected>=-1)player.setTextTrack(selected);
    };
    player.on(dashjs.MediaPlayer.events.TEXT_TRACKS_ADDED,addDashTextTracks);
+   player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED,refreshDashTracks);
+   player.on(dashjs.MediaPlayer.events.TRACK_CHANGE_RENDERED,refreshDashTracks);
    player.on(dashjs.MediaPlayer.events.TEXT_TRACK_ADDED,addDashTextTracks);
 
    player.on(dashjs.MediaPlayer.events.QUALITY_CHANGE_RENDERED,function(event){
