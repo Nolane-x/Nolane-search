@@ -1106,7 +1106,7 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
       "tool-pending:" + userId + ":" + chatId,
       "tool-workflow-pending:" + userId + ":" + chatId,
     ).run();
-    await sendHomeDashboard(env, chatId);
+    await sendHomeDashboard(env, chatId, userId);
     return;
   }
 
@@ -1327,8 +1327,8 @@ async function handleCommand(env: Env, chatId: number, userId: number, text: str
     try {
       const link = await createWebLoginUrl(env, userId, chatId, "/");
       await reply(env, chatId,
-        "<b>Nolane Search Web</b>\\nMở không gian tìm kiếm riêng tư tại liên kết dưới đây. Liên kết chỉ dùng được một lần và hết hạn sau 5 phút.\\n\\n<a href=\\"" +
-        htmlEscape(link) + "\\">Mở Nolane Search</a>\\n\\n<i>Không chia sẻ liên kết này với người khác.</i>");
+        "<b>Nolane Search Web</b>\nMở không gian tìm kiếm riêng tư tại liên kết dưới đây. Liên kết chỉ dùng được một lần và hết hạn sau 5 phút.\n\n<a href=\"" +
+        htmlEscape(link) + "\">Mở Nolane Search</a>\n\n<i>Không chia sẻ liên kết này với người khác.</i>");
     } catch (error) {
       console.error("Web login ticket creation failed:", error instanceof Error ? error.message : "unknown");
       await reply(env, chatId, "Không thể tạo liên kết đăng nhập. Hãy thử lại sau.");
