@@ -13,6 +13,13 @@ const timeoutMs = Number(process.env.MEDIA_E2E_TIMEOUT_MS || 55_000);
 
 const samples = [
   {
+    id: "hls-native-fallback-routing",
+    label: "HLS · native fallback routing smoke (not a Safari decode test)",
+    url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    expected: {},
+    nativeFallbackOnly: true,
+  },
+  {
     id: "hls-mux-abr",
     label: "HLS · Mux Big Buck Bunny · ABR ladder",
     url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
@@ -189,6 +196,15 @@ async function runSample(browser, origin, sample) {
   });
   const failures = [];
   const consoleErrors = [];
+  if (sample.nativeFallbackOnly) {
+    await page.addInitScript(() => {
+      const original = HTMLMediaElement.prototype.canPlayType;
+      HTMLMediaElement.prototype.canPlayType = function (type) {
+        if (type === "application/vnd.apple.mpegurl") return "maybe";
+        return original.call(this, type);
+      };
+    });
+  }
   const mediaResponses = [];
   page.on("requestfailed", (request) => {
     if (request.url().startsWith("https://")) {
@@ -224,7 +240,8 @@ async function runSample(browser, origin, sample) {
     url: sample.url,
     expected: sample.expected,
     browser: "Playwright Chromium",
-    player: sample.url.toLowerCase().endsWith(".m3u8") ? "HLS.js 1.7.4" : "dash.js 5.3.0",
+    player: sample.nativeFallbackOnly ? "Native HLS route selection" : (sample.url.toLowerCase().endsWith(".m3u8") ? "HLS.js 1.7.4" : "dash.js 5.3.0"),
+    nativeFallback: null,
     passed: false,
     quality: null,
     audio: null,
@@ -252,6 +269,29 @@ async function runSample(browser, origin, sample) {
 
     await page.locator(".stream-card .embed-load").click();
     await page.locator("video.stream-video").waitFor({ state: "attached", timeout: 10_000 });
+
+    if (sample.nativeFallbackOnly) {
+      await page.waitForFunction(
+        () => {
+          const videoElement = document.querySelector("video.stream-video");
+          const status = document.querySelector(".stream-status")?.textContent || "";
+          return Boolean(videoElement && videoElement.src.endsWith(".m3u8") && status.includes("HLS native"));
+        },
+        undefined,
+        { timeout: 8_000 },
+      );
+      result.nativeFallback = await page.evaluate(() => ({
+        sourceAssigned: document.querySelector("video.stream-video")?.src || "",
+        playerStatus: document.querySelector(".stream-status")?.textContent || "",
+        hlsJsLoaded: performance.getEntriesByType("resource").some((entry) => entry.name.includes("/hls.js@")),
+      }));
+      if (!result.nativeFallback.sourceAssigned) result.errors.push("Native HLS fallback did not assign the manifest to the media element.");
+      if (!result.nativeFallback.playerStatus.includes("HLS native")) result.errors.push("Native HLS fallback status was not shown.");
+      if (result.nativeFallback.hlsJsLoaded) result.errors.push("Native HLS fallback unnecessarily downloaded HLS.js.");
+      result.passed = result.errors.length === 0;
+      result.corsEvidence = mediaResponses.slice(0, 12);
+      return result;
+    }
 
     const manifestHost = new URL(sample.url).host;
     try {
