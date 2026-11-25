@@ -23,3 +23,12 @@ Date: 2026-11-25
 - The smoke test validates the production HTTP route and required static UI markers. It does not simulate a real Telegram Android/iOS/Desktop client, authenticate an owner session, or prove each provider API is live.
 - A real Telegram client check is still needed after sending `/start`: tap **Mở Nolane Workspace**, confirm the login exchange succeeds, test bottom navigation and then open Media Studio.
 - This wave does not add a downloader, R2 bucket, signed media links or a bypass for Telegram's 20 MB bot file-download limit.
+
+## Wave 67 production verification
+
+- PR #139 merged into `main` as `9d057c62c478969d0a69d024025a21418e355973`.
+- Main CI #618 (`45638102164`) passed.
+- Cloudflare deploy #170 (`45638101970`) succeeded, including the new post-deploy **Smoke test Telegram Mini App route** step.
+- Export/build and Worker smoke #163 (`45638102400`) succeeded.
+- The smoke test read the production `GET /telegram` route and verified HTML, `no-store`, `nosniff`, CSP, authentication bootstrap markers, five workspace tabs and the Media Studio link.
+- This proves the deployed HTTP route and static page contract, not a Telegram native-client session. Owner-side verification is still: send `/start`, open **Mở Nolane Workspace**, finish first-time ticket exchange, then test navigation and Media Studio.
