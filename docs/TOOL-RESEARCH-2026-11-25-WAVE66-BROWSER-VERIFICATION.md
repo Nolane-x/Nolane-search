@@ -77,6 +77,7 @@ Sources for the dash.js 5.3.0 event namespace:
 - Codec availability varies by OS, browser build and hardware acceleration. A passing Chromium run is not a universal browser/device compatibility claim.
 - This gate does not test DRM playback and is expected to keep protected test assets out of the supported matrix. The product must continue to stop on DASH license requests.
 - A successful run is time-bound evidence for the five tested origins. It is not a guarantee of future upstream uptime.
+- The browser gate distinguishes `net::ERR_ABORTED` request cancellations from actual network failures. When the player manually changes representation, an in-flight request for a now-unselected high-bitrate segment can be aborted normally; the gate still requires playback to advance, the selected quality handler to run, and it continues to fail on CORS, HTTP, DNS, manifest or decoder errors.
 - The browser test does not deploy or merge anything. Production release remains blocked until the current browser gate passes and the Safari/native-HLS manual check is recorded.
 
 ## Research sources
