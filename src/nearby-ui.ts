@@ -88,6 +88,14 @@ button{cursor:pointer}
 var $=function(id){return document.getElementById(id)};
 function setStatus(value,error){$('status').textContent=value||'';$('status').classList.toggle('error',Boolean(error))}
 function validCoordinate(input,min,max){var value=Number(input.value);return input.value.trim()!==''&&Number.isFinite(value)&&value>=min&&value<=max?value:null}
+function syncEssentialsRadius(){
+ var essentials=$('category').value==='essentials';
+ var five=$('radius').querySelector('option[value="5000"]');
+ if(five)five.disabled=essentials;
+ if(essentials&&$('radius').value==='5000')$('radius').value='3000';
+}
+$('category').addEventListener('change',syncEssentialsRadius);
+syncEssentialsRadius();
 $('locate').addEventListener('click',function(){
  if(!navigator.geolocation){setStatus('Trình duyệt hiện tại không hỗ trợ định vị. Hãy nhập tọa độ thủ công.',true);return}
  var button=$('locate');button.disabled=true;setStatus('Đang chờ quyền vị trí từ thiết bị…');
