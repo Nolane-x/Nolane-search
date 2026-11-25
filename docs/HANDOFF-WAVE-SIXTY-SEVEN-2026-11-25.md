@@ -32,3 +32,12 @@ Date: 2026-11-25
 - Export/build and Worker smoke #163 (`45638102400`) succeeded.
 - The smoke test read the production `GET /telegram` route and verified HTML, `no-store`, `nosniff`, CSP, authentication bootstrap markers, five workspace tabs and the Media Studio link.
 - This proves the deployed HTTP route and static page contract, not a Telegram native-client session. Owner-side verification is still: send `/start`, open **Mở Nolane Workspace**, finish first-time ticket exchange, then test navigation and Media Studio.
+
+
+## Subsequent production media rollout — Waves 63–65
+
+- PR #135 merged and deployed: official PeerTube player embeds, validated same-instance origin and canonical UUID, click-to-load, P2P disabled by default.
+- PR #140 merged and deployed: URL-based video players for YouTube, Vimeo, PeerTube, Dailymotion and Twitch VOD/Clips. Provider URL validation, click-to-load and source-page links are retained. Dailymotion needs the optional `MEDIA_DAILYMOTION_PLAYER_ID` secret, which is passed to the Worker only if configured.
+- Main CI #624, deployment #172 and export #165 succeeded. Deploy #172 again passed the production `/telegram` smoke test.
+- Draft PR #141 contains browser-side HLS/DASH support; its Chromium real-source matrix passed 6/6 in run #36. It is not deployed. A separate real Safari/macOS native-HLS WebDriver check is being added.
+- R2 remains disabled at the Cloudflare account level (API error 10042); no private bucket, signed media URLs, or large-file downloader is available. A Telegram `/start` message is still required for first Mini App launch.
