@@ -132,7 +132,7 @@ async function fetchSteamJson(url: URL, label: string, maxBytes = MAX_RESPONSE_B
   return asObject(parsed, label);
 }
 
-function objectList(value: unknown, key: string, max = 12): string[] {
+function objectList(value: unknown, max = 12): string[] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, max).flatMap((entry) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
@@ -273,8 +273,8 @@ export async function getSteamGameDetails(
     shortDescription: cleanText(data.short_description, 900),
     developers: stringList(data.developers, 8),
     publishers: stringList(data.publishers, 8),
-    genres: objectList(data.genres, "genres"),
-    categories: objectList(data.categories, "categories", 16),
+    genres: objectList(data.genres),
+    categories: objectList(data.categories, 16),
     releaseDate: cleanText(releaseValue.date, 80),
     comingSoon: typeof releaseValue.coming_soon === "boolean" ? releaseValue.coming_soon : null,
     isFree: typeof data.is_free === "boolean" ? data.is_free : null,
