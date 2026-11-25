@@ -4,7 +4,7 @@
 
 | Command | Description |
 |---|---|
-| /start, /menu | Open the interactive inline dashboard |
+| /start, /menu | Open the compact Telegram menu and Nolane Mini App Workspace |
 | /id | Show numeric Telegram user ID |
 | /cancel | Cancel the selected one-shot input mode and return to the dashboard |
 | /help | Show commands |
@@ -30,7 +30,7 @@
 | /jobs | List the latest eight Deep Search jobs |
 | /retry JOB_ID | Re-enqueue a failed Deep Search query as a new job |
 
-`/start` and `/menu` open the interactive Telegram dashboard. Tap a mode, then send the question as the next plain-text message; the selected mode is consumed once and expires after 10 minutes. `/cancel` returns to the dashboard. Plain text without a selected mode still defaults to `/search`. The Telegram webhook must subscribe to both `message` and `callback_query`; `scripts/set-webhook.mjs` verifies this after `setWebhook` using `getWebhookInfo`. Callback taps are acknowledged before D1 operations. Search results show five items per page and up to 20 candidates; result messages include inline actions for source-grounded AI and Deep Search. Search sessions are user/chat-bound and expire after 15 minutes. Pagination and menu navigation edit existing messages where possible.
+`/start` and `/menu` open a compact native Telegram menu. The first inline button launches the `/telegram` Mini App inside Telegram; use it for the full mobile workspace with Overview, Search Studio, AI Workspace, Tool Center and Personal Index. The small native buttons remain available for quick one-shot search/AI modes. A fresh single-use login ticket is created for the allowlisted user in a private chat, stored in D1 as a SHA-256 hash, expires after five minutes, and is exchanged for the existing seven-day Secure/HttpOnly/SameSite session cookie. The Mini App uses only same-origin Worker APIs and the existing owner session; it does not add a new account system. `/cancel` returns to the compact dashboard. Plain text without a selected mode still defaults to `/search`. The Telegram webhook must subscribe to both `message` and `callback_query`; `scripts/set-webhook.mjs` verifies this after `setWebhook` using `getWebhookInfo`. Callback taps are acknowledged before D1 operations. Search results show five items per page and up to 20 candidates; result messages include inline actions for source-grounded AI and Deep Search. Search sessions are user/chat-bound and expire after 15 minutes. Pagination and menu navigation edit existing messages where possible.
 
 ## Search operators
 
@@ -180,3 +180,14 @@ Crawling remains bounded per job (up to 20 pages), rejects unsafe/private destin
 - The Worker needs the optional GitHub Actions secret `GITHUB_ACTIONS_TOKEN`, a fine-grained PAT scoped only to this repo with repository `Actions: Read and write`. The deploy workflow uploads it as a hidden Worker secret. Without it, Search remains operational but Tools dispatch returns a setup message.
 - No extra D1 migration, Cloudflare R2, KV, object storage or new Queue is needed.
 - The catalog includes OCR (Vietnamese/English), image inspection/EXIF cleanup/compression/image-to-PDF/QR decoding, PDF text and scan OCR/PDF info, DOCX/PPTX/XLSX extraction, CSV profiling, JSON validation/formatting, ZIP/TAR inspection without extraction, Whisper audio transcription/audio metadata, video metadata/thumbnail, file hashes, TXT/Markdown cleanup, SRT/VTT transcript extraction, HTML text extraction, audio loudness normalization, video audio extraction and short video-to-GIF conversion.
+
+
+## Telegram Mini App
+
+- Route: `GET /telegram` serves the Telegram-first workspace. It is intentionally not indexed and returns `Cache-Control: no-store`.
+- Entry: `/start` or `/menu` creates a one-time owner ticket and includes it as a `web_app` inline keyboard URL. This launch button is intended for private owner chats; group chats are rejected by the bot menu flow.
+- Login: `POST /api/auth/exchange` consumes the same existing `web_login_tickets` row used by `/web`. The URL ticket is removed from browser history immediately after exchange. D1 stores only its hash; the session cookie stays HttpOnly, Secure and SameSite=Strict.
+- Navigation: the bottom tabs separate Overview, Search, AI, Tools and Personal Index. Media Studio remains a same-origin link to `/media`.
+- Telegram integration: the page loads the official Telegram WebApp SDK, reads Telegram theme parameters, adapts header/background colors, expands the viewport, uses the native BackButton and optional haptics, and respects Telegram safe-area insets. It has a browser fallback for development, but private APIs still require the owner session.
+- No additional D1 schema, OAuth provider, external API origin, React build pipeline or persistent client secret is introduced.
+- Before first use, ensure the bot is allowed to launch Mini Apps from inline keyboard buttons and test the button in a private chat. Telegram design guidance recommends mobile-first layout, live theme adaptation, accessible labels and safe-area handling; see https://core.telegram.org/bots/webapps.
