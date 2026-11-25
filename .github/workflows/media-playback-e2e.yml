@@ -1,0 +1,60 @@
+name: Media Playback Browser E2E
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/media-ui.ts"
+      - "src/media-embed-resolver.ts"
+      - "tests/media-ui.test.ts"
+      - "tests/media-embed-resolver.test.ts"
+      - "scripts/media-playback-e2e.mjs"
+      - ".github/workflows/media-playback-e2e.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: media-playback-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  chromium-playback:
+    name: Real HLS and DASH playback in Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Install repository dependencies
+        run: npm install --no-audit --no-fund
+      - name: Type-check Worker
+        run: npm run typecheck
+      - name: Run full Vitest suite
+        run: npm test
+      - name: Build Cloudflare Worker
+        run: npm run build
+      - name: Install pinned Playwright browser harness
+        run: |
+          npm install --no-save --package-lock=false playwright@1.65.1
+          npx playwright install --with-deps chromium
+      - name: Check browser test script
+        run: node --check scripts/media-playback-e2e.mjs
+      - name: Run actual browser playback matrix
+        env:
+          MEDIA_E2E_TIMEOUT_MS: "55000"
+        run: node scripts/media-playback-e2e.mjs
+      - name: Upload live playback report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: media-playback-browser-report
+          path: artifacts/media-playback-report.json
+          if-no-files-found: warn
+          retention-days: 21
