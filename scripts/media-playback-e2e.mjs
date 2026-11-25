@@ -193,11 +193,18 @@ async function runSample(browser, origin, sample) {
   const page = await browser.newPage({
     viewport: { width: 1440, height: 1000 },
     reducedMotion: "reduce",
+    ...(sample.nativeFallbackOnly ? {
+      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15",
+    } : {}),
   });
   const failures = [];
   const consoleErrors = [];
   if (sample.nativeFallbackOnly) {
     await page.addInitScript(() => {
+      Object.defineProperty(Navigator.prototype, "vendor", {
+        configurable: true,
+        get: () => "Apple Computer, Inc.",
+      });
       const original = HTMLMediaElement.prototype.canPlayType;
       HTMLMediaElement.prototype.canPlayType = function (type) {
         if (type === "application/vnd.apple.mpegurl") return "maybe";
@@ -239,7 +246,7 @@ async function runSample(browser, origin, sample) {
     label: sample.label,
     url: sample.url,
     expected: sample.expected,
-    browser: "Playwright Chromium",
+    browser: sample.nativeFallbackOnly ? "Playwright Chromium with Safari UA/vendor shim (routing only)" : "Playwright Chromium",
     player: sample.nativeFallbackOnly ? "Native HLS route selection" : (sample.url.toLowerCase().endsWith(".m3u8") ? "HLS.js 1.7.4" : "dash.js 5.3.0"),
     nativeFallback: null,
     passed: false,
