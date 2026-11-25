@@ -10,8 +10,57 @@ const env = { DB: {} as never, SEARCH_JOBS: {} as never } as Env;
 describe("Nolane AI callable tools", () => {
   it("exposes the catalog as a real model-callable function", () => {
     expect(AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name)).toEqual([
-      "list_nolane_tools", "search_web", "read_web_page", "get_weather_forecast", "check_air_quality", "convert_currency", "get_public_holidays", "find_long_weekends", "get_marine_forecast", "get_earthquake_activity", "search_books", "lookup_postal_code", "define_english_word", "search_public_domain_books", "search_museum_artworks", "get_natural_events", "get_local_time", "search_steam_games", "get_steam_game_details", "search_tv_shows", "get_tv_show_episodes", "search_apple_media", "search_music_metadata", "search_scholarly_works", "search_country_profiles", "get_world_bank_indicators", "search_gbif_species", "search_gbif_observations", "search_wikimedia_images", "search_nasa_media", "lookup_food_product", "lookup_consumer_product", "compare_food_products", "search_openverse_images", "search_internet_archive_videos", "search_peertube_videos", "search_internet_archive_audio", "search_wikipedia_articles", "get_wikipedia_article", "search_wikivoyage_guides", "get_wikivoyage_guide", "lookup_wiktionary_entry", "search_meal_recipes", "filter_meal_recipes", "get_meal_recipe_details", "search_wikidata_entities", "get_wikidata_entity", "search_anime_titles", "get_anime_details", "search_manga_titles", "get_manga_details", "process_text_content", "hash_text",
+      "list_nolane_tools", "search_web", "read_web_page", "get_weather_forecast", "check_air_quality", "convert_currency", "get_public_holidays", "find_long_weekends", "get_marine_forecast", "get_earthquake_activity", "search_books", "lookup_postal_code", "define_english_word", "search_public_domain_books", "search_museum_artworks", "get_natural_events", "get_local_time", "search_nearby_places", "search_steam_games", "get_steam_game_details", "search_tv_shows", "get_tv_show_episodes", "search_apple_media", "search_music_metadata", "search_scholarly_works", "search_country_profiles", "get_world_bank_indicators", "search_gbif_species", "search_gbif_observations", "search_wikimedia_images", "search_nasa_media", "lookup_food_product", "lookup_consumer_product", "compare_food_products", "search_openverse_images", "search_internet_archive_videos", "search_peertube_videos", "search_internet_archive_audio", "search_wikipedia_articles", "get_wikipedia_article", "search_wikivoyage_guides", "get_wikivoyage_guide", "lookup_wiktionary_entry", "search_meal_recipes", "filter_meal_recipes", "get_meal_recipe_details", "search_wikidata_entities", "get_wikidata_entity", "search_anime_titles", "get_anime_details", "search_manga_titles", "get_manga_details", "process_text_content", "hash_text",
     ]);
+  });
+
+  it("searches nearby places only around coordinates explicitly supplied by the user", async () => {
+    const mock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("overpass-api.de");
+      expect(url.pathname).toBe("/api/interpreter");
+      expect(init?.method).toBe("POST");
+      const body = new URLSearchParams(String(init?.body || ""));
+      const query = body.get("data") || "";
+      expect(query).toContain('["amenity"~"^(pharmacy)$"]');
+      expect(query).toContain("around:1500,20.8449,106.6881");
+      return new Response(JSON.stringify({
+        elements: [
+          { type: "node", id: 10, lat: 20.8450, lon: 106.6882, tags: { name: "Nhà thuốc gần", amenity: "pharmacy", website: "https://pharmacy.example" } },
+          { type: "way", id: 11, center: { lat: 20.8460, lon: 106.6890 }, tags: { name: "Nhà thuốc xa", amenity: "pharmacy", website: "http://insecure.example" } },
+          { type: "node", id: 12, lat: 20.8449, lon: 106.6881, tags: { amenity: "pharmacy" } }
+        ],
+        osm3s: { timestamp_osm_base: "2026-11-25T12:00:00Z" }
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const result = JSON.parse(await executeAgentTool(env, "search_nearby_places", {
+      latitude: 20.8449, longitude: 106.6881, category: "pharmacy", radius_m: 1500, limit: 10,
+    }));
+    expect(result.status).toBe("ok");
+    expect(result.source).toBe("OpenStreetMap Overpass API");
+    expect(result.attribution).toContain("OpenStreetMap contributors");
+    expect(result.places.map((place: { name: string }) => place.name)).toEqual(["Nhà thuốc gần", "Nhà thuốc xa"]);
+    expect(result.places[0].website).toBe("https://pharmacy.example/");
+    expect(result.places[1].website).toBeNull();
+    expect(result.places[0].mapUrl).toContain("openstreetmap.org");
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects guessed, malformed or excessive nearby-place inputs before network access", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    await expect(executeAgentTool(env, "search_nearby_places", {
+      location: "Hải Phòng", category: "pharmacy",
+    })).rejects.toThrow("latitude");
+    await expect(executeAgentTool(env, "search_nearby_places", {
+      latitude: 20, longitude: 106, category: "all",
+    })).rejects.toThrow("category");
+    await expect(executeAgentTool(env, "search_nearby_places", {
+      latitude: 20, longitude: 106, category: "food", radius_m: 100000,
+    })).rejects.toThrow("radius_m");
+    expect(mock).not.toHaveBeenCalled();
   });
 
   it("dispatches cross-catalog lookup and nutrition comparison through the normal AI interface", async () => {
