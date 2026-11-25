@@ -495,15 +495,12 @@ async function start(){
  try{
   var ticket=new URLSearchParams(location.search).get('ticket');
   if(ticket){
-   try{
-    await api('/api/auth/exchange',{method:'POST',headers:authHeaders(),body:JSON.stringify({ticket:ticket})});
-    history.replaceState({},'',location.pathname+location.hash);
-   }catch(ticketError){
-    // A persistent Telegram Menu shortcut has no one-time ticket; reuse an existing valid owner session.
-    await api('/api/auth/me');
-    history.replaceState({},'',location.pathname);
-   }
-  }else{await api('/api/auth/me')}
+   await api('/api/auth/exchange',{method:'POST',headers:authHeaders(),body:JSON.stringify({ticket:ticket})});
+   history.replaceState({},'',location.pathname+location.hash);
+  }else{
+   // The persistent Telegram Menu shortcut is static and can only reuse the current same-origin session.
+   await api('/api/auth/me');
+  }
   $('auth').classList.add('hidden');$('app').classList.remove('hidden');
   if(state.history.length===0){try{state.history=JSON.parse(localStorage.getItem('nolane.tg.chat')||'[]').filter(function(m){return m&&['user','assistant'].includes(m.role)&&typeof m.content==='string'}).slice(-10)}catch(e){state.history=[]}}
   renderChat();renderRecent();
