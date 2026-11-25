@@ -129,7 +129,7 @@ function coordinate(value: unknown, key: string, min: number, max: number): numb
   if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
     throw new NearbyPlacesInputError(key + " phải là số từ " + min + " đến " + max + ".");
   }
-  return Math.round(value * 10_000) / 10_000;
+  return Math.round(value * 100_000) / 100_000;
 }
 
 function boundedInteger(value: unknown, key: string, fallback: number, min: number, max: number): number {
@@ -200,7 +200,7 @@ function buildQuery(category: NearbyCategory, latitude: number, longitude: numbe
   const definition = CATEGORIES[category];
   const filters = definition.filters.map(filter => {
     const values = filter.values.join("|");
-    return `nwr["${filter.key}"~"^(${values})$"](around:${radiusMeters},${latitude.toFixed(4)},${longitude.toFixed(4)});`;
+    return `nwr["${filter.key}"~"^(${values})$"](around:${radiusMeters},${latitude.toFixed(5)},${longitude.toFixed(5)});`;
   });
   return [
     "[out:json][timeout:15][maxsize:10485760];",
