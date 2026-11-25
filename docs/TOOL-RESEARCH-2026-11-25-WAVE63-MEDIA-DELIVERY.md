@@ -10,7 +10,7 @@ Pull request: https://github.com/Nolane-x/Nolane-search/pull/135
 - PeerTube results retain the existing validated source page URL and now expose an `embedUrl` only when SepiaSearch supplies a canonical RFC-4122-shaped UUID.
 - The URL is generated from the already validated PeerTube instance host, not by rewriting arbitrary source-page paths.
 - The Media Portal does not load third-party frames during search. A user clicks **Nhúng player PeerTube** to create the iframe.
-- The iframe is titled, lazy-loaded, sends no referrer, permits only media-related features, and uses a sandbox. The original PeerTube page link remains available.
+- The iframe is titled, lazy-loaded, sends no referrer, permits only media-related features, and uses PeerTube-compatible sandbox tokens. Its instance origin must differ from Nolane's own page origin; it is loaded only after a click. The original PeerTube page link remains available. The embed URL receives `p2p=0` by default so visitors are not opted into PeerTube's P2P peer-sharing network.
 - The CSP now allows HTTPS frames because PeerTube instances are federated and can use different hosts. The application code separately enforces the exact instance host and canonical `/videos/embed/{uuid}` path before creating a frame.
 
 Official PeerTube API reference for video embeds:
