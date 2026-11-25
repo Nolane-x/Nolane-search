@@ -16,13 +16,13 @@ function asObject(value: unknown, label: string): Obj {
 function cleanText(value: unknown, max = 500): string | null {
   if (typeof value !== "string") return null;
   const cleaned = value
-    .replace(/<br\\s*\\/?\\s*>/gi, " ")
+    .replace(/<br\s*\/?\s*>/gi, " ")
     .replace(/<[^>]*>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/g, "'")
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim()
     .slice(0, max);
   return cleaned || null;
@@ -30,8 +30,8 @@ function cleanText(value: unknown, max = 500): string | null {
 
 function requiredQuery(value: unknown): string {
   if (typeof value !== "string") throw new Error("query must be a string.");
-  const query = value.normalize("NFKC").trim().replace(/\\s+/g, " ");
-  if (query.length < 2 || query.length > MAX_QUERY_LENGTH || /[\\u0000-\\u001f\\u007f]/.test(query)) {
+  const query = value.normalize("NFKC").trim().replace(/\s+/g, " ");
+  if (query.length < 2 || query.length > MAX_QUERY_LENGTH || /[\u0000-\u001f\u007f]/.test(query)) {
     throw new Error("query must contain 2–100 printable characters.");
   }
   return query;
@@ -69,7 +69,7 @@ function languageCode(value: unknown): string {
 }
 
 function positiveAppId(value: unknown): number {
-  const appId = typeof value === "string" && /^\\d{1,10}$/.test(value) ? Number(value) : value;
+  const appId = typeof value === "string" && /^\d{1,10}$/.test(value) ? Number(value) : value;
   if (!Number.isSafeInteger(appId) || Number(appId) < 1 || Number(appId) > 2_147_483_647) {
     throw new Error("app_id must be a valid positive Steam application ID.");
   }
@@ -226,7 +226,7 @@ export async function searchSteamGames(
 }
 
 function positiveSearchId(value: unknown): number | null {
-  const number = typeof value === "string" && /^\\d{1,10}$/.test(value) ? Number(value) : value;
+  const number = typeof value === "string" && /^\d{1,10}$/.test(value) ? Number(value) : value;
   return Number.isSafeInteger(number) && Number(number) > 0 && Number(number) <= 2_147_483_647 ? Number(number) : null;
 }
 
