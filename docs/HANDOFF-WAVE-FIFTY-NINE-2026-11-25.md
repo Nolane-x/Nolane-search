@@ -3,7 +3,7 @@
 Date: 2026-11-25
 Branch: `feat/wave-59-peertube-federated-video-search`
 Base: `e56763479f51ef9a8474241fa881b52fcc8ea2e2`
-Release status: implementation branch; CI and production deployment verification pending. PeerTube is exposed both through the AI tool catalog and the authenticated Media Portal.
+Release status: merged and deployed via [PR #128](https://github.com/Nolane-x/Nolane-search/pull/128), merge commit 2cc7f546828ea0818da68f5b15da9fe2903762c0. PeerTube is exposed through both the AI tool catalog and authenticated Media Portal.
 
 ## New AI-callable tool
 
@@ -31,11 +31,12 @@ Release status: implementation branch; CI and production deployment verification
 - `docs/TOOL-RESEARCH-2026-11-25-WAVE59.md`
 - `docs/HANDOFF-WAVE-FIFTY-NINE-2026-11-25.md`
 
-## Release verification
+## Release verification — 2026-11-25
 
-- Unit tests are mocked contract tests, not a live provider check.
-- CI result: pending.
-- Merge commit: pending.
-- Cloudflare Worker deployment and version: pending.
-- Worker export and public `/health` smoke: pending.
-- Live SepiaSearch response: not verified in the development environment because outbound DNS resolution was unavailable; never describe the provider as live-verified based only on mocked tests.
+- PR CI #530: https://github.com/Nolane-x/Nolane-search/actions/runs/45551369316 — passed.
+- Main CI #531: https://github.com/Nolane-x/Nolane-search/actions/runs/45551570106 — passed TypeScript, 36 Vitest files / 372 tests, deployment-script checks, 449 Python tool-runner tests and Worker build.
+- Merge commit: 2cc7f546828ea0818da68f5b15da9fe2903762c0.
+- Cloudflare deployment #163: https://github.com/Nolane-x/Nolane-search/actions/runs/45551570024 — succeeded. Worker Version ID: e1dc5532-d34e-4b9d-bcbd-906a15211576.
+- Telegram webhook was verified and bot commands were registered. No D1 migration was needed.
+- Worker export #156: https://github.com/Nolane-x/Nolane-search/actions/runs/45551570134 — succeeded; health smoke returned ok=true, database reachable and archiveEnabled=true.
+- Provider verification remains limited: unit tests mock SepiaSearch; an actual search request could not be executed from the development environment because DNS resolution failed. Do not infer live provider availability from Worker health checks.
