@@ -147,104 +147,132 @@ function populateQualityControl(control,representations){
 }
 function showStreamPlayer(preview,item,streamUrl){
  var video=document.createElement('video');video.className='stream-video';video.controls=true;video.playsInline=true;video.preload='none';video.crossOrigin='anonymous';video.referrerPolicy='no-referrer';
- var status=document.createElement('div');status.className='stream-status';status.setAttribute('role','status');status.textContent='Đang khởi tạo player…';
+ var status=document.createElement('div');status.className='stream-status';status.setAttribute('role','status');
  var quality=makeQualityControl();
- var cancelled=false;
- streamPlayerCleanups.push(function(){cancelled=true;video.pause();video.removeAttribute('src');video.load()});
- preview.replaceChildren(video,status,quality.row);
- if(item.streamType==='hls'){
-  loadPinnedMediaScript('hls','https://cdn.jsdelivr.net/npm/hls.js@1.7.4/dist/hls.min.js','Hls').then(function(Hls){
-   if(cancelled)return;
-   if(!Hls.isSupported()){
-    if(video.canPlayType('application/vnd.apple.mpegurl')){
-     video.src=streamUrl;status.textContent='Đang dùng HLS native của trình duyệt. Máy chủ nguồn vẫn cần CORS.';
-     video.addEventListener('error',function(){status.textContent='Không phát được HLS. Kiểm tra CORS, định dạng playlist và codec của nguồn.'},{once:true});
+ var retry=document.createElement('button');retry.type='button';retry.className='embed-load';retry.textContent='Thử phát lại';retry.hidden=true;
+ var cancelled=false;var generation=0;var destroyCurrent=function(){};
+ function stopCurrent(){
+  var stop=destroyCurrent;destroyCurrent=function(){};
+  try{stop()}catch(e){}
+ }
+ function cleanUp(){
+  if(cancelled)return;
+  cancelled=true;generation++;stopCurrent();video.pause();video.removeAttribute('src');video.load();
+ }
+ function fail(message,retryable){
+  status.textContent=message;retry.hidden=!retryable;
+ }
+ retry.addEventListener('click',function(){startPlayer()});
+ streamPlayerCleanups.push(cleanUp);
+ preview.replaceChildren(video,status,quality.row,retry);
+ function startPlayer(){
+  if(cancelled)return;
+  var attempt=++generation;
+  stopCurrent();video.pause();video.removeAttribute('src');video.load();
+  quality.row.hidden=true;quality.select.replaceChildren();retry.hidden=true;
+  status.textContent='Đang khởi tạo player…';
+  if(item.streamType==='hls'){
+   loadPinnedMediaScript('hls','https://cdn.jsdelivr.net/npm/hls.js@1.7.4/dist/hls.min.js','Hls').then(function(Hls){
+    if(cancelled||attempt!==generation)return;
+    if(!Hls.isSupported()){
+     if(video.canPlayType('application/vnd.apple.mpegurl')){
+      video.src=streamUrl;status.textContent='Đang dùng HLS native của trình duyệt. Máy chủ nguồn vẫn cần CORS.';
+      video.addEventListener('error',function(){if(!cancelled&&attempt===generation)fail('Không phát được HLS native. Kiểm tra CORS, playlist và codec của nguồn.',true)},{once:true});
+      return;
+     }
+     fail('Trình duyệt này không hỗ trợ Media Source Extensions hoặc HLS native.',false);
      return;
     }
-    status.textContent='Trình duyệt này không hỗ trợ Media Source Extensions hoặc HLS native.';
-    return;
-   }
-   var hls=new Hls({
-    enableWorker:true,
-    lowLatencyMode:false,
-    xhrSetup:function(xhr,url){
-     if(!isSafePublicMediaRequest(url))throw new Error('HLS chứa URL segment không an toàn.');
-     xhr.withCredentials=false;
-    },
-    fetchSetup:function(context,initParams){
-     if(!isSafePublicMediaRequest(context.url))throw new Error('HLS chứa URL resource không an toàn.');
-     initParams.credentials='omit';initParams.mode='cors';
-     return new Request(context.url,initParams);
+    var hls=new Hls({
+     enableWorker:true,
+     lowLatencyMode:false,
+     xhrSetup:function(xhr,url){
+      if(!isSafePublicMediaRequest(url))throw new Error('HLS chứa URL segment không an toàn.');
+      xhr.withCredentials=false;
+     },
+     fetchSetup:function(context,initParams){
+      if(!isSafePublicMediaRequest(context.url))throw new Error('HLS chứa URL resource không an toàn.');
+      initParams.credentials='omit';initParams.mode='cors';
+      return new Request(context.url,initParams);
+     }
+    });
+    destroyCurrent=function(){hls.destroy()};
+    function refreshHlsQualities(){
+     if(cancelled||attempt!==generation)return;
+     var levels=Array.isArray(hls.levels)?hls.levels:[];
+     populateQualityControl(quality,levels);
     }
+    quality.select.addEventListener('change',function(){
+     if(cancelled||attempt!==generation)return;
+     var selected=Number(quality.select.value);
+     if(!Number.isInteger(selected)||selected < -1 || selected >= hls.levels.length)return;
+     hls.currentLevel=selected;
+     status.textContent=selected===-1?'Đang để HLS tự chọn chất lượng.':'Đã yêu cầu chất lượng '+qualityLabel(hls.levels[selected])+'.';
+    });
+    hls.on(Hls.Events.MANIFEST_PARSED,refreshHlsQualities);
+    hls.on(Hls.Events.LEVELS_UPDATED,refreshHlsQualities);
+    hls.on(Hls.Events.LEVEL_SWITCHED,function(_event,data){
+     if(cancelled||attempt!==generation||quality.select.value!=='-1')return;
+     var current=hls.levels[data.level];
+     if(current)status.textContent='HLS tự động · '+qualityLabel(current);
+    });
+    hls.on(Hls.Events.ERROR,function(_event,data){
+     if(data&&data.fatal&&!cancelled&&attempt===generation)fail('HLS lỗi khi tải manifest/segment. Cần HTTPS, CORS GET và codec tương thích; nội dung DRM không được hỗ trợ.',true);
+    });
+    status.textContent='Đang tải HLS manifest…';
+    hls.loadSource(streamUrl);hls.attachMedia(video);
+   }).catch(function(error){if(!cancelled&&attempt===generation)fail(error.message||'Không thể tải HLS player.',true)});
+   return;
+  }
+  loadPinnedMediaScript('dash','https://cdn.jsdelivr.net/npm/dashjs@5.3.0/dist/legacy/umd/dash.all.min.js','dashjs').then(function(dashjs){
+   if(cancelled||attempt!==generation)return;
+   var player=dashjs.MediaPlayer().create();
+   destroyCurrent=function(){player.destroy()};
+   player.addRequestInterceptor(function(request){
+    if(!request||!isSafePublicMediaRequest(request.url))return Promise.reject(new Error('DASH chứa URL manifest/segment không an toàn.'));
+    var method=String(request.method||'GET').toUpperCase();
+    if(method!=='GET'&&method!=='HEAD')return Promise.reject(new Error('DASH chỉ được phép gửi GET/HEAD; yêu cầu license hoặc POST bị chặn.'));
+    request.credentials='omit';request.mode='cors';
+    return Promise.resolve(request);
    });
-   streamPlayerCleanups.push(function(){hls.destroy()});
-   function refreshHlsQualities(){
-    if(cancelled)return;
-    var levels=Array.isArray(hls.levels)?hls.levels:[];
-    populateQualityControl(quality,levels);
+   var dashRepresentations=[];
+   function refreshDashQualities(){
+    if(cancelled||attempt!==generation)return;
+    try{dashRepresentations=player.getRepresentationsByType('video')||[]}catch(e){dashRepresentations=[]}
+    populateQualityControl(quality,dashRepresentations);
    }
    quality.select.addEventListener('change',function(){
+    if(cancelled||attempt!==generation)return;
     var selected=Number(quality.select.value);
-    if(!Number.isInteger(selected)||selected < -1 || selected >= hls.levels.length)return;
-    hls.currentLevel=selected;
-    status.textContent=selected===-1?'Đang để HLS tự chọn chất lượng.':'Đã yêu cầu chất lượng '+qualityLabel(hls.levels[selected])+'.';
+    try{dashRepresentations=player.getRepresentationsByType('video')||[]}catch(e){dashRepresentations=[]}
+    if(!Number.isInteger(selected)||selected < -1 || selected >= dashRepresentations.length)return;
+    if(selected===-1){
+     player.updateSettings({streaming:{abr:{autoSwitchBitrate:{video:true}}}});
+     status.textContent='Đang để DASH tự chọn chất lượng.';
+    }else{
+     player.updateSettings({streaming:{abr:{autoSwitchBitrate:{video:false}}}});
+     player.setRepresentationForTypeByIndex('video',selected,true);
+     status.textContent='Đã yêu cầu chất lượng '+qualityLabel(dashRepresentations[selected])+'.';
+    }
    });
-   hls.on(Hls.Events.MANIFEST_PARSED,refreshHlsQualities);
-   hls.on(Hls.Events.LEVELS_UPDATED,refreshHlsQualities);
-   hls.on(Hls.Events.LEVEL_SWITCHED,function(_event,data){
-    if(cancelled||quality.select.value!=='-1')return;
-    var current=hls.levels[data.level];
-    if(current)status.textContent='HLS tự động · '+qualityLabel(current);
+   player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED,refreshDashQualities);
+   player.on(dashjs.MediaPlayer.events.QUALITY_CHANGE_RENDERED,function(event){
+    if(cancelled||attempt!==generation||quality.select.value!=='-1')return;
+    var active=event&&Number.isFinite(event.newQuality)?dashRepresentations[event.newQuality]:null;
+    status.textContent=active?'DASH tự động · '+qualityLabel(active):'DASH tự động · chất lượng vừa đổi.';
    });
-   hls.on(Hls.Events.ERROR,function(_event,data){
-    if(data&&data.fatal)status.textContent='HLS lỗi khi tải manifest/segment. Cần HTTPS, CORS GET và codec tương thích; nội dung DRM không được hỗ trợ.';
+   player.on(dashjs.MediaPlayer.events.ERROR,function(){
+    if(!cancelled&&attempt===generation)fail('DASH lỗi khi tải MPD/segment. Cần HTTPS, CORS GET và codec tương thích; DRM không được hỗ trợ.',true);
    });
-   status.textContent='Đang tải HLS manifest…';
-   hls.loadSource(streamUrl);hls.attachMedia(video);
-  }).catch(function(error){if(!cancelled)status.textContent=error.message||'Không thể tải HLS player.'});
-  return;
+   player.on(dashjs.MediaPlayer.events.LICENSE_REQUEST_SENDING,function(){
+    if(cancelled||attempt!==generation)return;
+    stopCurrent();fail('Nguồn DASH yêu cầu DRM/license server; Media Portal chỉ hỗ trợ stream không DRM.',false);
+   });
+   status.textContent='Đang tải DASH manifest…';
+   player.initialize(video,streamUrl,false);
+  }).catch(function(error){if(!cancelled&&attempt===generation)fail(error.message||'Không thể tải DASH player.',true)});
  }
- loadPinnedMediaScript('dash','https://cdn.jsdelivr.net/npm/dashjs@5.3.0/dist/legacy/umd/dash.all.min.js','dashjs').then(function(dashjs){
-  if(cancelled)return;
-  var player=dashjs.MediaPlayer().create();
-  player.addRequestInterceptor(function(request){
-   if(!request||!isSafePublicMediaRequest(request.url))return Promise.reject(new Error('DASH chứa URL manifest/segment không an toàn.'));
-   var method=String(request.method||'GET').toUpperCase();
-   if(method!=='GET'&&method!=='HEAD')return Promise.reject(new Error('DASH chỉ được phép gửi GET/HEAD; yêu cầu license hoặc POST bị chặn.'));
-   request.credentials='omit';request.mode='cors';
-   return Promise.resolve(request);
-  });
-  streamPlayerCleanups.push(function(){player.destroy()});
-  var dashRepresentations=[];
-  function refreshDashQualities(){
-   if(cancelled)return;
-   try{dashRepresentations=player.getRepresentationsByType('video')||[]}catch(e){dashRepresentations=[]}
-   populateQualityControl(quality,dashRepresentations);
-  }
-  quality.select.addEventListener('change',function(){
-   var selected=Number(quality.select.value);
-   try{dashRepresentations=player.getRepresentationsByType('video')||[]}catch(e){dashRepresentations=[]}
-   if(!Number.isInteger(selected)||selected < -1 || selected >= dashRepresentations.length)return;
-   if(selected===-1){
-    player.updateSettings({streaming:{abr:{autoSwitchBitrate:{video:true}}}});
-    status.textContent='Đang để DASH tự chọn chất lượng.';
-   }else{
-    player.updateSettings({streaming:{abr:{autoSwitchBitrate:{video:false}}}});
-    player.setRepresentationForTypeByIndex('video',selected,true);
-    status.textContent='Đã yêu cầu chất lượng '+qualityLabel(dashRepresentations[selected])+'.';
-   }
-  });
-  player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED,refreshDashQualities);
-  player.on(dashjs.MediaPlayer.events.QUALITY_CHANGE_RENDERED,function(event){
-   if(cancelled||quality.select.value!=='-1')return;
-   var active=event&&Number.isFinite(event.newQuality)?dashRepresentations[event.newQuality]:null;
-   status.textContent=active?'DASH tự động · '+qualityLabel(active):'DASH tự động · chất lượng vừa đổi.';
-  });
-  player.on(dashjs.MediaPlayer.events.ERROR,function(){status.textContent='DASH lỗi khi tải MPD/segment. Cần HTTPS, CORS GET và codec tương thích; DRM không được hỗ trợ.'});
-  player.on(dashjs.MediaPlayer.events.LICENSE_REQUEST_SENDING,function(){status.textContent='Nguồn DASH yêu cầu DRM/license server; Media Portal chỉ hỗ trợ stream không DRM.';player.destroy()});
-  status.textContent='Đang tải DASH manifest…';
-  player.initialize(video,streamUrl,false);
- }).catch(function(error){if(!cancelled)status.textContent=error.message||'Không thể tải DASH player.'});
+ startPlayer();
 }
 async function api(path,options){
  var response=await fetch(path,Object.assign({credentials:'same-origin',cache:'no-store'},options||{}));
