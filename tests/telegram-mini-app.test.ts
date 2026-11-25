@@ -52,6 +52,8 @@ describe("Telegram Mini App workspace", () => {
     expect(html).toContain("$('answerOutput').classList.add('hidden');$('synthesizeBtn').classList.add('hidden');");
     expect(html).toContain("setTab(initialTab,false,false)");
     expect(html).not.toContain("catch(ticketError)");
+    expect(html).toContain('href="/media"');
+    expect(html).toContain("Media Studio");
   });
 
   it("serves syntactically valid inline Mini App JavaScript", async () => {
