@@ -127,6 +127,52 @@ describe("Wave 64 user-provided media URL resolver", () => {
     });
   });
 
+  it("resolves Twitch VOD and Clip pages to the official players without upstream requests", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+
+    const vod = await resolveMediaEmbed("https://www.twitch.tv/videos/123456789");
+    const clip = await resolveMediaEmbed("https://clips.twitch.tv/IncredulousAbstemiousFennelImGlitch");
+    const channelClip = await resolveMediaEmbed("https://www.twitch.tv/twitchdev/clip/IncredulousAbstemiousFennelImGlitch");
+
+    expect(vod).toMatchObject({
+      status: "resolved",
+      item: {
+        provider: "Twitch",
+        title: "Twitch VOD 123456789",
+        embedUrl: "https://player.twitch.tv/?video=v123456789&autoplay=false",
+        referrerPolicy: "strict-origin-when-cross-origin",
+      },
+    });
+    expect(clip).toMatchObject({
+      status: "resolved",
+      item: {
+        provider: "Twitch",
+        embedUrl: "https://clips.twitch.tv/embed?clip=IncredulousAbstemiousFennelImGlitch&autoplay=false",
+      },
+    });
+    expect(channelClip).toMatchObject({
+      status: "resolved",
+      item: { provider: "Twitch", id: "IncredulousAbstemiousFennelImGlitch" },
+    });
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed Twitch IDs and lookalike or unsupported Twitch hosts", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    for (const input of [
+      "https://www.twitch.tv/videos/not-a-number",
+      "https://clips.twitch.tv/x",
+      "https://www.twitch.tv.evil.example/videos/123456789",
+      "https://evil.example/twitch.tv/videos/123456789",
+      "https://player.twitch.tv/?video=v123456789",
+    ]) {
+      expect((await resolveMediaEmbed(input)).status).toBe("unsupported");
+    }
+    expect(mock).not.toHaveBeenCalled();
+  });
+
   it("rejects inputs longer than the URL parsing limit before provider access", async () => {
     const mock = vi.fn();
     vi.stubGlobal("fetch", mock);
