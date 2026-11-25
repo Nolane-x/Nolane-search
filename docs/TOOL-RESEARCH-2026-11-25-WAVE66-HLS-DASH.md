@@ -31,6 +31,7 @@ The Worker does not fetch the manifest, playlist, keys or segments. It only vali
 - dash.js 5 uses its official request-interceptor API. Every request URL is validated; only GET/HEAD requests are allowed; request credentials are set to `omit` and mode to `cors`.
 - The Content Security Policy adds the pinned player CDN to `script-src`, HTTPS to `connect-src` and `media-src`, and `blob:` to `worker-src`/ `media-src` for MSE and the HLS.js UMD worker.
 - Active players are destroyed when search results are replaced to stop background network activity.
+- A retry button appears on recoverable CDN/native-HLS/player errors. Retry destroys the previous engine, clears the video source, and starts a new attempt. A generation token prevents late script loads or events from an old attempt from updating the current player. Quality selection uses a single replaceable `onchange` handler so retries do not accumulate stale listeners.
 - HLS quality selection uses `hls.levels` and `hls.currentLevel`; `-1` restores automatic ABR. The displayed option uses the actual height and bitrate metadata published by the manifest.
 - DASH quality selection uses `getRepresentationsByType('video')` and `setRepresentationForTypeByIndex('video', index, true)`. Manual selection disables `streaming.abr.autoSwitchBitrate.video`; Auto re-enables it. Labels account for `bitrateInKbit` as used by the dash.js v5 representation API.
 
