@@ -18,7 +18,7 @@ describe("Nearby Places · OpenStreetMap", () => {
       const body = new URLSearchParams(String(init?.body || ""));
       const query = body.get("data") || "";
       expect(query).toContain('[out:json][timeout:15][maxsize:10485760]');
-      expect(query).toContain('nwr["amenity"~"^(pharmacy)$"](around:1500,20.8449,106.6881);');
+      expect(query).toContain('nwr["amenity"~"^(pharmacy)$"](around:1500,20.84490,106.68810);');
       expect(query).toContain("out center tags 100 qt;");
       expect(query).not.toContain("https://");
       return new Response(JSON.stringify({ elements: [] }), {
