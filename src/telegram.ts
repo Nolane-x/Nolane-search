@@ -18,7 +18,7 @@ export async function telegramApi<T = Record<string, unknown>>(env: Env, method:
   return data.result as T;
 }
 
-export interface TelegramInlineButton { text: string; callback_data?: string; url?: string; }
+export interface TelegramInlineButton { text: string; callback_data?: string; url?: string; web_app?: { url: string }; }
 export interface TelegramInlineKeyboardMarkup { inline_keyboard: Array<Array<TelegramInlineButton>>; }
 
 export async function sendSearchPage(
@@ -225,28 +225,27 @@ export function formatHomeMenu(firstName = ""): string {
   const greeting = firstName.trim() ? "Chào " + safeHtmlText(firstName.trim(), 70) + "!" : "Xin chào!";
   return [
     "<b>◈ NOLANE SEARCH</b>",
-    "<i>Personal Search & AI Workspace</i>",
+    "<i>Private Intelligence Workspace</i>",
     "",
     "<b>" + greeting + "</b>",
-    "Tìm kiếm web, nghiên cứu nhiều nguồn, hỏi AI và tra cứu website riêng ngay trong cuộc trò chuyện này.",
+    "Tất cả công cụ tìm kiếm, AI, xử lý tệp và thư viện riêng đã được gom vào một không gian duy nhất.",
     "",
-    "<b>Chọn một công cụ bên dưới</b>",
-    "<i>Chạm vào chế độ → gửi câu hỏi. Không cần nhớ cú pháp lệnh.</i>",
+    "<b>✦ Mở Nolane Workspace</b>",
+    "<i>Giao diện tối ưu cho Telegram · điều hướng rõ ràng · thao tác nhanh.</i>",
+    "",
+    "Bạn vẫn có thể dùng các nút nhanh bên dưới mà không cần mở Workspace.",
   ].join("\n");
 }
 
-export function buildHomeKeyboard(webAppUrl = "https://nolane-search.nolane-file.workers.dev/"): TelegramInlineKeyboardMarkup {
-  const mediaAppUrl = new URL("/media", webAppUrl).toString();
+export function buildHomeKeyboard(miniAppUrl = "https://nolane-search.nolane-file.workers.dev/telegram"): TelegramInlineKeyboardMarkup {
   return { inline_keyboard: [
-    [{ text: "🔎 Web Search", callback_data: "ui:mode:web" }, { text: "🧠 AI có nguồn", callback_data: "ui:mode:ask" }],
+    [{ text: "✦ Mở Nolane Workspace", web_app: { url: miniAppUrl } }],
+    [{ text: "🔎 Tìm kiếm", callback_data: "ui:mode:web" }, { text: "🧠 AI có nguồn", callback_data: "ui:mode:ask" }],
     [{ text: "⚡ AI Chat", callback_data: "ui:mode:ai" }, { text: "📚 Deep Research", callback_data: "ui:mode:deep" }],
     [{ text: "💻 Công nghệ", callback_data: "ui:mode:tech" }, { text: "📰 Tin tức", callback_data: "ui:mode:news" }],
-    [{ text: "🐙 GitHub", callback_data: "ui:mode:github" }, { text: "📖 Wikipedia", callback_data: "ui:mode:wiki" }],
-    [{ text: "🔬 Nghiên cứu", callback_data: "ui:mode:research" }, { text: "🗂 Website riêng", callback_data: "ui:mode:local" }],
-    [{ text: "🌐 Mở Web Workspace", url: webAppUrl }],
-    [{ text: "🎞 Media Portal · Ảnh, video & audio", url: mediaAppUrl }],
-    [{ text: "🧰 Tool Center", callback_data: "tc:home" }],
-    [{ text: "📊 Trạng thái", callback_data: "ui:status" }, { text: "❔ Hướng dẫn", callback_data: "ui:help" }],
+    [{ text: "🐙 GitHub", callback_data: "ui:mode:github" }, { text: "🗂 Website riêng", callback_data: "ui:mode:local" }],
+    [{ text: "🧰 Tool Center", callback_data: "tc:home" }, { text: "📊 Trạng thái", callback_data: "ui:status" }],
+    [{ text: "❔ Hướng dẫn", callback_data: "ui:help" }],
   ] };
 }
 
