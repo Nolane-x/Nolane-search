@@ -62,6 +62,17 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("retry.hidden=!retryable");
     expect(html).toContain("stopCurrent();video.pause();video.removeAttribute('src');video.load();");
     expect(html).toContain("Thử phát lại");
+    expect(html).toContain("function makeTrackControl(label,ariaLabel)");
+    expect(html).toContain("hls.audioTracks");
+    expect(html).toContain("hls.audioTrack=selected");
+    expect(html).toContain("hls.subtitleTracks");
+    expect(html).toContain("hls.subtitleDisplay=true");
+    expect(html).toContain("player.getTracksFor('audio')");
+    expect(html).toContain("player.setCurrentTrack(track)");
+    expect(html).toContain("dashjs.MediaPlayer.events.TEXT_TRACKS_ADDED");
+    expect(html).toContain("dashjs.MediaPlayer.events.TEXT_TRACK_ADDED");
+    expect(html).toContain("player.setTextTrack(selected)");
+    expect(html).toContain("stream-track");
     expect(html).toContain("function makePlaybackRateControl(video)");
     expect(html).toContain("Tốc độ phát");
     expect(html).toContain("[0.5,'0.5×'],[0.75,'0.75×'],[1,'1×'],[1.25,'1.25×'],[1.5,'1.5×'],[2,'2×']");
