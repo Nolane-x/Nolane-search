@@ -3,7 +3,19 @@
 Last verified: 2026-11-25. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
-## Latest production release — Wave 68 (2026-11-25)
+## Latest production release — Wave 69 (2026-11-25)
+
+- [PR #143](https://github.com/Nolane-x/Nolane-search/pull/143) merged into `main` as `2c32d99ca66114a07e24288cbb4625c7cd3ba0e2`. Adds **Tiện ích thiết yếu** to Nearby Places: one Overpass query returns food/drink, small supermarkets/convenience stores, pharmacies/healthcare, ATMs/banks, fuel and EV charging. Each result is labelled by its inferred category.
+- The combined mode makes one fixed Overpass POST with two static allowlists; it does not fan out into parallel category requests. Essentials is capped at 3 km and 25 items; individual categories retain their 5 km cap. Both UI and API enforce the Essentials radius limit.
+- OSM website links now use the shared `isSafePublicUrl` policy. Non-HTTPS URLs, credentials, IP literals, local/private hosts and non-standard ports are omitted; the Worker never fetches those website URLs.
+- Existing safeguards remain: explicit user location permission/manual coordinates, owner-session-only routes, same-origin API, no D1 location history, visible ODbL attribution. Public Overpass remains shared infrastructure for low-volume personal use, not a high-traffic guarantee.
+- PR CI #636 [45647984799](https://github.com/Nolane-x/Nolane-search/actions/runs/45647984799) passed TypeScript, **41 Vitest files / 419 tests**, deployment checks, **449 Python runner tests** and Worker build. Main CI #637 [45648607173](https://github.com/Nolane-x/Nolane-search/actions/runs/45648607173) also passed the same full checks on the release tree.
+- Cloudflare deploy #176 [45648607094](https://github.com/Nolane-x/Nolane-search/actions/runs/45648607094) succeeded: Worker upload/runtime secrets, Telegram webhook and command registration, and production Mini App smoke. Export #169 [45648607096](https://github.com/Nolane-x/Nolane-search/actions/runs/45648607096) passed. The deploy commit `194161c96e59705a92539605c4ec32949c0bfefa` and merge commit `2c32d99ca66114a07e24288cbb4625c7cd3ba0e2` have the same Git tree. No D1 migration was required.
+- Production smoke log confirms the Telegram Workspace HTML/CSP/auth/tabs, Media Studio and Nearby links, anonymous `/nearby` redirect, and anonymous `/api/nearby/search` HTTP 401. It does not perform a live Overpass query; upstream responses remain community data and may be rate-limited or stale.
+- The merged feature is live in the latest bot Workspace. Existing bot messages are not rewritten; send `/start` in the private bot chat and tap **Mở Nolane Workspace** to load the latest UI.
+
+## Previous production release — Wave 68 (2026-11-25)
+
 
 - [PR #142](https://github.com/Nolane-x/Nolane-search/pull/142) merged as `60dd337d762420eec9c71984c1d4435277622ff0`. Adds an authenticated Nearby Places page at `/nearby`, a private `POST /api/nearby/search` endpoint, a Telegram Workspace quick link and the AI-callable `search_nearby_places` tool.
 - Nearby search supports food/cafes, shopping, pharmacies, healthcare, ATMs/banks, fuel, EV charging, parks/playgrounds, attractions/museums and accommodation. Coordinates must be entered manually or requested only after the user taps the geolocation button and grants browser permission. It does not infer location from IP or geocode a city/street, and does not save location history to D1.
