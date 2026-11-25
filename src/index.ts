@@ -14,7 +14,7 @@ import { createToolJob, getToolJob, listToolJobs, retryToolJob, updateToolJob, v
 import { clearPendingToolWorkflow, deletePendingToolWorkflowPlan, deleteToolWorkflow, getPendingToolWorkflow, getPendingToolWorkflowPlan, listToolWorkflows, saveToolWorkflow, setPendingToolWorkflow, storeToolWorkflowPlan } from "./workflows";
 import { webAppResponse } from "./web-ui";
 import { mediaAppResponse } from "./media-ui";
-import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos, searchInternetArchiveAudio } from "./media-discovery-tools";
+import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos, searchInternetArchiveAudio, searchPeerTubeVideos } from "./media-discovery-tools";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import { planToolWorkflow } from "./workflow-planner";
 import type { AiFunctionTool, AiTask } from "./ai-router";
@@ -297,7 +297,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     if (query.length < 2 || query.length > 160) {
       return jsonResponse({ error: "Từ khóa media phải có từ 2 đến 160 ký tự." }, 400);
     }
-    if (!["all","image","video","audio"].includes(kind) || !["all","commons","nasa","openverse","archive"].includes(provider)) {
+    if (!["all","image","video","audio"].includes(kind) || !["all","commons","nasa","openverse","archive","peertube"].includes(provider)) {
       return jsonResponse({ error: "Bộ lọc media không hợp lệ." }, 400);
     }
     if (kind === "video" && ["commons","openverse"].includes(provider)) {
@@ -308,6 +308,9 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     }
     if (kind === "image" && provider === "archive") {
       return jsonResponse({ error: "Internet Archive được tích hợp ở đây cho video và audio; hãy chọn Ảnh và video hoặc nguồn ảnh khác." }, 400);
+    }
+    if (kind === "image" && provider === "peertube") {
+      return jsonResponse({ error: "PeerTube chỉ hỗ trợ khám phá video; hãy chọn Video hoặc Tất cả." }, 400);
     }
     try {
       const tasks: Array<{name:string;run:()=>Promise<{items:unknown[];source:string}>}> = [];
@@ -338,6 +341,12 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
       if ((provider === "all" || provider === "archive") && (kind === "all" || kind === "audio")) {
         tasks.push({ name: "Internet Archive audio", run: async () => {
           const result = await searchInternetArchiveAudio(query, 4);
+          return { items: result.items, source: result.source };
+        }});
+      }
+      if ((provider === "all" || provider === "peertube") && (kind === "all" || kind === "video")) {
+        tasks.push({ name: "PeerTube federation", run: async () => {
+          const result = await searchPeerTubeVideos(query, 6);
           return { items: result.items, source: result.source };
         }});
       }
