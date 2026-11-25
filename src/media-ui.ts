@@ -121,7 +121,7 @@ function clearStreamPlayers(){
 function qualityLabel(level){
  var height=Number(level&&level.height);
  var width=Number(level&&level.width);
- var bitrate=Number(level&&(level.bitrate||level.bandwidth));
+ var bitrate=Number(level&&(level.bitrate||level.bandwidth||(Number(level.bitrateInKbit)>0?Number(level.bitrateInKbit)*1000:0)));
  var name=height>0?Math.round(height)+'p':(width>0?Math.round(width)+'w':'');
  var kbps=bitrate>0?Math.round(bitrate/1000)+' kbps':'';
  return [name,kbps].filter(Boolean).join(' · ')||'Chất lượng '+String(level&&level.id||'');
@@ -238,7 +238,8 @@ function showStreamPlayer(preview,item,streamUrl){
   player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED,refreshDashQualities);
   player.on(dashjs.MediaPlayer.events.QUALITY_CHANGE_RENDERED,function(event){
    if(cancelled||quality.select.value!=='-1')return;
-   if(event&&Number.isFinite(event.newQuality))status.textContent='DASH tự động · chất lượng vừa đổi.';
+   var active=event&&Number.isFinite(event.newQuality)?reps[event.newQuality]:null;
+   status.textContent=active?'DASH tự động · '+qualityLabel(active):'DASH tự động · chất lượng vừa đổi.';
   });
   player.on(dashjs.MediaPlayer.events.ERROR,function(){status.textContent='DASH lỗi khi tải MPD/segment. Cần HTTPS, CORS GET và codec tương thích; DRM không được hỗ trợ.'});
   player.on(dashjs.MediaPlayer.events.LICENSE_REQUEST_SENDING,function(){status.textContent='Nguồn DASH yêu cầu DRM/license server; Media Portal chỉ hỗ trợ stream không DRM.';player.destroy()});
