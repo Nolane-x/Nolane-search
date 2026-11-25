@@ -142,8 +142,9 @@ function vimeoVideoId(url: URL): string | null {
   let id: string | undefined;
   if (parts.length === 1) id = parts[0];
   else if (parts.length === 2 && /^[0-9]+$/.test(parts[0])) id = parts[0];
-  else if (parts.length === 3 && ["channels", "groups"].includes(parts[0]) && /^[0-9]+$/.test(parts[2])) id = parts[2];
-  else if (parts.length === 3 && parts[0] === "album" && parts[2] && /^[0-9]+$/.test(parts[2])) id = parts[2];
+  else if (parts.length === 3 && parts[0] === "channels" && /^[0-9]+$/.test(parts[2])) id = parts[2];
+  else if (parts.length === 4 && parts[0] === "groups" && parts[2] === "videos" && /^[0-9]+$/.test(parts[3])) id = parts[3];
+  else if (parts.length === 4 && parts[0] === "album" && parts[2] === "video" && /^[0-9]+$/.test(parts[3])) id = parts[3];
   else if (parts.length === 2 && parts[0] === "video") id = parts[1];
   return id && /^[0-9]{5,15}$/.test(id) ? id : null;
 }
