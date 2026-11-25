@@ -69,7 +69,7 @@ button{cursor:pointer}
 </div>
 <div class="filters">
  <div class="field"><label for="category">Bạn muốn tìm gì?</label><select id="category">
-  <option value="food">Quán ăn, cà phê</option><option value="shopping">Siêu thị, cửa hàng</option><option value="pharmacy">Nhà thuốc</option><option value="medical">Bệnh viện, phòng khám</option><option value="atm">ATM, ngân hàng</option><option value="fuel">Trạm xăng</option><option value="charging">Trạm sạc xe điện</option><option value="parks">Công viên, sân chơi</option><option value="sightseeing">Điểm tham quan, bảo tàng</option><option value="stay">Khách sạn, nơi lưu trú</option>
+  <option value="food">Quán ăn, cà phê</option><option value="shopping">Siêu thị, cửa hàng</option><option value="pharmacy">Nhà thuốc</option><option value="medical">Bệnh viện, phòng khám</option><option value="atm">ATM, ngân hàng</option><option value="fuel">Trạm xăng</option><option value="charging">Trạm sạc xe điện</option><option value="parks">Công viên, sân chơi</option><option value="sightseeing">Điểm tham quan, bảo tàng</option><option value="stay">Khách sạn, nơi lưu trú</option><option value="essentials">Tiện ích thiết yếu (nhiều nhóm)</option>
  </select></div>
  <div class="field"><label for="radius">Bán kính tìm kiếm</label><select id="radius"><option value="500">500 m</option><option value="1000">1 km</option><option value="1500" selected>1,5 km</option><option value="3000">3 km</option><option value="5000">5 km</option></select></div>
 </div>
