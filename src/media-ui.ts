@@ -397,7 +397,7 @@ function showStreamPlayer(preview,item,streamUrl){
    player.on(dashjs.MediaPlayer.events.ERROR,function(){
     if(!cancelled&&attempt===generation)fail('DASH lỗi khi tải MPD/segment. Cần HTTPS, CORS GET và codec tương thích; DRM không được hỗ trợ.',true);
    });
-   player.on(dashjs.MediaPlayer.events.LICENSE_REQUEST_SENDING,function(){
+   player.on(dashjs.Protection.events.LICENSE_REQUEST_SENDING,function(){
     if(cancelled||attempt!==generation)return;
     stopCurrent();fail('Nguồn DASH yêu cầu DRM/license server; Media Portal chỉ hỗ trợ stream không DRM.',false);
    });
