@@ -236,6 +236,7 @@ export function formatHomeMenu(firstName = ""): string {
 }
 
 export function buildHomeKeyboard(webAppUrl = "https://nolane-search.nolane-file.workers.dev/"): TelegramInlineKeyboardMarkup {
+  const mediaAppUrl = new URL("/media", webAppUrl).toString();
   return { inline_keyboard: [
     [{ text: "🔎 Web Search", callback_data: "ui:mode:web" }, { text: "🧠 AI có nguồn", callback_data: "ui:mode:ask" }],
     [{ text: "⚡ AI Chat", callback_data: "ui:mode:ai" }, { text: "📚 Deep Research", callback_data: "ui:mode:deep" }],
@@ -243,6 +244,7 @@ export function buildHomeKeyboard(webAppUrl = "https://nolane-search.nolane-file
     [{ text: "🐙 GitHub", callback_data: "ui:mode:github" }, { text: "📖 Wikipedia", callback_data: "ui:mode:wiki" }],
     [{ text: "🔬 Nghiên cứu", callback_data: "ui:mode:research" }, { text: "🗂 Website riêng", callback_data: "ui:mode:local" }],
     [{ text: "🌐 Mở Web Workspace", url: webAppUrl }],
+    [{ text: "🎞 Media Portal · Ảnh, video & audio", url: mediaAppUrl }],
     [{ text: "🧰 Tool Center", callback_data: "tc:home" }],
     [{ text: "📊 Trạng thái", callback_data: "ui:status" }, { text: "❔ Hướng dẫn", callback_data: "ui:help" }],
   ] };
