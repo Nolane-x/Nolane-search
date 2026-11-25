@@ -341,11 +341,59 @@ async function runSample(browser, origin, sample) {
       }
     }
 
-    await page.locator("select.stream-rate").selectOption("1.25");
-    result.playbackRate = await video.evaluate((element) => element.playbackRate);
-    if (result.playbackRate !== 1.25) result.errors.push("Playback-rate control did not set 1.25x.");
+    result.uiDiagnostics = await page.evaluate(() => {
+      const preview = document.querySelector(".stream-card .preview");
+      const element = document.querySelector("video.stream-video");
+      return {
+        playerStatus: document.querySelector(".stream-status")?.textContent || "",
+        previewChildren: Array.from(preview?.children || []).map((child) => ({
+          tag: child.tagName,
+          className: typeof child.className === "string" ? child.className : "",
+          hidden: Boolean(child.hidden),
+          display: getComputedStyle(child).display,
+          text: (child.textContent || "").trim().slice(0, 100),
+        })),
+        selects: Array.from(preview?.querySelectorAll("select") || []).map((select) => ({
+          className: select.className,
+          value: select.value,
+          disabled: select.disabled,
+          hidden: Boolean(select.closest("label")?.hidden),
+          display: getComputedStyle(select).display,
+          options: Array.from(select.options).map((option) => ({ value: option.value, label: option.textContent?.trim() || "" })),
+        })),
+        video: element ? {
+          currentTime: element.currentTime,
+          readyState: element.readyState,
+          networkState: element.networkState,
+          paused: element.paused,
+          ended: element.ended,
+          error: element.error ? { code: element.error.code, message: element.error.message } : null,
+          playbackRate: element.playbackRate,
+        } : null,
+      };
+    });
 
-    result.playbackSeconds = await video.evaluate((element) => element.currentTime);
+    const rateControl = result.uiDiagnostics.selects.find((select) => select.className.split(/\\s+/).includes("stream-rate"));
+    if (!rateControl) {
+      result.errors.push("Playback-rate selector is missing from the rendered player DOM.");
+    } else if (rateControl.hidden || rateControl.disabled || !rateControl.options.some((option) => option.value === "1.25")) {
+      result.errors.push("Playback-rate selector exists but is not usable: " + JSON.stringify(rateControl));
+    } else {
+      await page.locator("select.stream-rate").selectOption("1.25");
+      result.playbackRate = await video.evaluate((element) => element.playbackRate);
+      if (result.playbackRate !== 1.25) result.errors.push("Playback-rate control did not set 1.25x.");
+    }
+
+    result.videoDiagnostics = await video.evaluate((element) => ({
+      currentTime: element.currentTime,
+      readyState: element.readyState,
+      networkState: element.networkState,
+      paused: element.paused,
+      ended: element.ended,
+      error: element.error ? { code: element.error.code, message: element.error.message } : null,
+      playbackRate: element.playbackRate,
+    }));
+    result.playbackSeconds = result.videoDiagnostics.currentTime;
     result.manifestResponse = mediaResponses.find((entry) => entry.url.startsWith(new URL(sample.url).origin)) || null;
     result.corsEvidence = mediaResponses.slice(0, 12);
     result.requestFailures = failures.slice(0, 20);
