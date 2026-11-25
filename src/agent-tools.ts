@@ -485,6 +485,17 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
   {
     type: "function",
     function: {
+      name: "search_peertube_videos",
+      description: "Search public videos across the federated PeerTube network using the public SepiaSearch index. Returns bounded SFW video metadata and a link to the originating PeerTube instance. The index does not cover every PeerTube server; source metadata and license labels may be incomplete or outdated. This tool does not download or rehost video files.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 140, description: "Video topic, title, creator or subject." },
+        limit: { type: "integer", minimum: 1, maximum: 8, description: "Number of results, defaults to 6." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "search_internet_archive_audio",
       description: "Search public Internet Archive audio items and return a playable/downloadable original audio link only when a public, non-private MP3, M4A, Ogg, Opus, FLAC, WAV, AAC or AIFF file is listed in the item's metadata. Rights vary by item; inspect the original item page before reuse. This does not download arbitrary third-party websites.",
       parameters: { type: "object", properties: {
@@ -2179,7 +2190,7 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
   if (["search_meal_recipes","filter_meal_recipes","get_meal_recipe_details","search_wikidata_entities","get_wikidata_entity"].includes(name)) {
     return (await runConsumerDiscoveryTool(name, args)).slice(0, 12_000);
   }
-  if (["search_wikimedia_images","search_nasa_media","lookup_food_product","lookup_consumer_product","compare_food_products","search_openverse_images","search_internet_archive_videos","search_internet_archive_audio"].includes(name)) {
+  if (["search_wikimedia_images","search_nasa_media","lookup_food_product","lookup_consumer_product","compare_food_products","search_openverse_images","search_internet_archive_videos","search_internet_archive_audio","search_peertube_videos"].includes(name)) {
     return (await runMediaDiscoveryTool(name, args)).slice(0, 12_000);
   }
   if (["search_country_profiles","get_world_bank_indicators","search_gbif_species","search_gbif_observations"].includes(name)) {
