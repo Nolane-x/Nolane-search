@@ -215,30 +215,29 @@ function showStreamPlayer(preview,item,streamUrl){
    return Promise.resolve(request);
   });
   streamPlayerCleanups.push(function(){player.destroy()});
+  var dashRepresentations=[];
   function refreshDashQualities(){
    if(cancelled)return;
-   var reps=[];
-   try{reps=player.getRepresentationsByType('video')||[]}catch(e){}
-   populateQualityControl(quality,reps);
+   try{dashRepresentations=player.getRepresentationsByType('video')||[]}catch(e){dashRepresentations=[]}
+   populateQualityControl(quality,dashRepresentations);
   }
   quality.select.addEventListener('change',function(){
    var selected=Number(quality.select.value);
-   var reps=[];
-   try{reps=player.getRepresentationsByType('video')||[]}catch(e){}
-   if(!Number.isInteger(selected)||selected < -1 || selected >= reps.length)return;
+   try{dashRepresentations=player.getRepresentationsByType('video')||[]}catch(e){dashRepresentations=[]}
+   if(!Number.isInteger(selected)||selected < -1 || selected >= dashRepresentations.length)return;
    if(selected===-1){
     player.updateSettings({streaming:{abr:{autoSwitchBitrate:{video:true}}}});
     status.textContent='Đang để DASH tự chọn chất lượng.';
    }else{
     player.updateSettings({streaming:{abr:{autoSwitchBitrate:{video:false}}}});
     player.setRepresentationForTypeByIndex('video',selected,true);
-    status.textContent='Đã yêu cầu chất lượng '+qualityLabel(reps[selected])+'.';
+    status.textContent='Đã yêu cầu chất lượng '+qualityLabel(dashRepresentations[selected])+'.';
    }
   });
   player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED,refreshDashQualities);
   player.on(dashjs.MediaPlayer.events.QUALITY_CHANGE_RENDERED,function(event){
    if(cancelled||quality.select.value!=='-1')return;
-   var active=event&&Number.isFinite(event.newQuality)?reps[event.newQuality]:null;
+   var active=event&&Number.isFinite(event.newQuality)?dashRepresentations[event.newQuality]:null;
    status.textContent=active?'DASH tự động · '+qualityLabel(active):'DASH tự động · chất lượng vừa đổi.';
   });
   player.on(dashjs.MediaPlayer.events.ERROR,function(){status.textContent='DASH lỗi khi tải MPD/segment. Cần HTTPS, CORS GET và codec tương thích; DRM không được hỗ trợ.'});
