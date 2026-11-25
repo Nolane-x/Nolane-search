@@ -169,6 +169,7 @@ function makePlaybackRateControl(video){
  });
  select.value='1';
  select.addEventListener('change',function(){var rate=Number(select.value);if([0.5,0.75,1,1.25,1.5,2].indexOf(rate)>=0)video.playbackRate=rate});
+ row.append(caption,select);
  return {row:row,select:select};
 }
 function makeTrackControl(label,ariaLabel){
