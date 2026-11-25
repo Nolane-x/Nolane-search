@@ -17,6 +17,10 @@ describe("Nearby Places UI", () => {
     expect(html).toContain("/api/nearby/search");
     expect(html).toContain("tọa độ chỉ được gửi");
     expect(html).toContain("Dùng vị trí hiện tại");
+    expect(html).toContain('<option value="essentials">Tiện ích thiết yếu (nhiều nhóm)</option>');
+    expect(html).toContain("function syncEssentialsRadius()");
+    expect(html).toContain("if(five)five.disabled=essentials;");
+    expect(html).toContain("if(essentials&&$('radius').value==='5000')$('radius').value='3000';");
     expect(html).toContain("Địa điểm quanh đây");
     expect(html).not.toContain("localStorage");
   });

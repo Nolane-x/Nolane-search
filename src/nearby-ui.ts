@@ -69,7 +69,7 @@ button{cursor:pointer}
 </div>
 <div class="filters">
  <div class="field"><label for="category">Bạn muốn tìm gì?</label><select id="category">
-  <option value="food">Quán ăn, cà phê</option><option value="shopping">Siêu thị, cửa hàng</option><option value="pharmacy">Nhà thuốc</option><option value="medical">Bệnh viện, phòng khám</option><option value="atm">ATM, ngân hàng</option><option value="fuel">Trạm xăng</option><option value="charging">Trạm sạc xe điện</option><option value="parks">Công viên, sân chơi</option><option value="sightseeing">Điểm tham quan, bảo tàng</option><option value="stay">Khách sạn, nơi lưu trú</option>
+  <option value="food">Quán ăn, cà phê</option><option value="shopping">Siêu thị, cửa hàng</option><option value="pharmacy">Nhà thuốc</option><option value="medical">Bệnh viện, phòng khám</option><option value="atm">ATM, ngân hàng</option><option value="fuel">Trạm xăng</option><option value="charging">Trạm sạc xe điện</option><option value="parks">Công viên, sân chơi</option><option value="sightseeing">Điểm tham quan, bảo tàng</option><option value="stay">Khách sạn, nơi lưu trú</option><option value="essentials">Tiện ích thiết yếu (nhiều nhóm)</option>
  </select></div>
  <div class="field"><label for="radius">Bán kính tìm kiếm</label><select id="radius"><option value="500">500 m</option><option value="1000">1 km</option><option value="1500" selected>1,5 km</option><option value="3000">3 km</option><option value="5000">5 km</option></select></div>
 </div>
@@ -88,6 +88,14 @@ button{cursor:pointer}
 var $=function(id){return document.getElementById(id)};
 function setStatus(value,error){$('status').textContent=value||'';$('status').classList.toggle('error',Boolean(error))}
 function validCoordinate(input,min,max){var value=Number(input.value);return input.value.trim()!==''&&Number.isFinite(value)&&value>=min&&value<=max?value:null}
+function syncEssentialsRadius(){
+ var essentials=$('category').value==='essentials';
+ var five=$('radius').querySelector('option[value="5000"]');
+ if(five)five.disabled=essentials;
+ if(essentials&&$('radius').value==='5000')$('radius').value='3000';
+}
+$('category').addEventListener('change',syncEssentialsRadius);
+syncEssentialsRadius();
 $('locate').addEventListener('click',function(){
  if(!navigator.geolocation){setStatus('Trình duyệt hiện tại không hỗ trợ định vị. Hãy nhập tọa độ thủ công.',true);return}
  var button=$('locate');button.disabled=true;setStatus('Đang chờ quyền vị trí từ thiết bị…');

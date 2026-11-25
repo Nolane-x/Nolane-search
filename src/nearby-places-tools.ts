@@ -1,4 +1,5 @@
 import { readJsonResponse } from "./http";
+import { isSafePublicUrl } from "./security";
 
 export const NEARBY_CATEGORIES = [
   "food",
@@ -11,6 +12,7 @@ export const NEARBY_CATEGORIES = [
   "parks",
   "sightseeing",
   "stay",
+  "essentials",
 ] as const;
 
 export type NearbyCategory = typeof NEARBY_CATEGORIES[number];
@@ -58,6 +60,13 @@ const CATEGORIES: Record<NearbyCategory, CategoryDefinition> = {
   stay: {
     label: "Lưu trú",
     filters: [{ key: "tourism", values: ["hotel", "hostel", "guest_house"] }],
+  },
+  essentials: {
+    label: "Tiện ích thiết yếu",
+    filters: [
+      { key: "amenity", values: ["restaurant", "cafe", "fast_food", "pharmacy", "hospital", "clinic", "doctors", "dentist", "atm", "bank", "fuel", "charging_station"] },
+      { key: "shop", values: ["supermarket", "convenience"] },
+    ],
   },
 };
 
@@ -149,14 +158,9 @@ function cleanTag(value: unknown, max = 180): string | null {
 function safeWebsite(value: unknown): string | null {
   const raw = cleanTag(value, 2048);
   if (!raw) return null;
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== "https:" || url.username || url.password || url.port || url.hash) return null;
-    if (!url.hostname.includes(".") || url.hostname.endsWith(".local")) return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
+  const url = isSafePublicUrl(raw);
+  if (!url) return null;
+  return url.toString();
 }
 
 function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -182,6 +186,23 @@ function detailType(tags: Record<string, unknown>): string {
     hostel: "Nhà nghỉ / Hostel", guest_house: "Nhà khách",
   };
   return labels[raw] || raw.replace(/_/g, " ");
+}
+
+function resultCategory(
+  tags: Record<string, unknown>,
+  requested: NearbyCategory,
+): NearbyCategory {
+  if (requested !== "essentials") return requested;
+  const amenity = cleanTag(tags.amenity);
+  const shop = cleanTag(tags.shop);
+  if (["restaurant", "cafe", "fast_food", "food_court"].includes(amenity || "")) return "food";
+  if (["supermarket", "convenience", "mall", "department_store"].includes(shop || "")) return "shopping";
+  if (amenity === "pharmacy") return "pharmacy";
+  if (["hospital", "clinic", "doctors", "dentist"].includes(amenity || "")) return "medical";
+  if (["atm", "bank"].includes(amenity || "")) return "atm";
+  if (amenity === "fuel") return "fuel";
+  if (amenity === "charging_station") return "charging";
+  return "essentials";
 }
 
 function addressFromTags(tags: Record<string, unknown>): string | null {
@@ -233,11 +254,12 @@ function normalizeElement(
   const latText = latitude.toFixed(5);
   const lonText = longitude.toFixed(5);
   const osmUrl = "https://www.openstreetmap.org/" + id;
+  const itemCategory = resultCategory(tags, category);
   return {
     id,
     name,
-    category,
-    categoryLabel: CATEGORIES[category].label,
+    category: itemCategory,
+    categoryLabel: CATEGORIES[itemCategory].label,
     detailType: detailType(tags),
     latitude,
     longitude,
@@ -259,6 +281,9 @@ export async function searchNearbyPlaces(rawArgs: unknown): Promise<NearbyPlaces
   }
   const category = args.category as NearbyCategory;
   const radiusMeters = boundedInteger(args.radius_m, "radius_m", 1500, 200, 5000);
+  if (category === "essentials" && radiusMeters > 3000) {
+    throw new NearbyPlacesInputError("Danh mục tiện ích thiết yếu giới hạn bán kính tối đa 3000 m để giảm tải nguồn dữ liệu công cộng.");
+  }
   const limit = boundedInteger(args.limit, "limit", 12, 1, 25);
   const query = buildQuery(category, latitude, longitude, radiusMeters);
 

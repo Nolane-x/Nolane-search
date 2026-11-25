@@ -63,6 +63,14 @@ describe("Nolane AI callable tools", () => {
     expect(mock).not.toHaveBeenCalled();
   });
 
+  it("advertises the combined Nearby Essentials category to AI", () => {
+    const nearby = AGENT_TOOL_DEFINITIONS.find(tool => tool.function.name === "search_nearby_places");
+    const parameters = nearby?.function.parameters as {
+      properties?: { category?: { enum?: string[] } };
+    } | undefined;
+    expect(parameters?.properties?.category?.enum).toContain("essentials");
+  });
+
   it("dispatches cross-catalog lookup and nutrition comparison through the normal AI interface", async () => {
     const mock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
