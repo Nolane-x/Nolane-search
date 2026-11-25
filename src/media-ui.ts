@@ -68,7 +68,7 @@ function card(item){
  }else if(item.provider==='PeerTube'&&embedUrl){
   var loadEmbed=document.createElement('button');loadEmbed.type='button';loadEmbed.className='embed-load';loadEmbed.textContent='Nhúng player PeerTube';
   loadEmbed.addEventListener('click',function(){
-   var frame=document.createElement('iframe');frame.src=embedUrl;frame.title='Trình phát PeerTube: '+(item.title||'video');frame.loading='lazy';frame.referrerPolicy='no-referrer';frame.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';frame.allowFullscreen=true;frame.sandbox.add('allow-scripts','allow-presentation');preview.replaceChildren(frame);
+   var frame=document.createElement('iframe');var frameUrl=new URL(embedUrl);frameUrl.searchParams.set('p2p','0');frame.src=frameUrl.href;frame.title='Trình phát PeerTube: '+(item.title||'video');frame.loading='lazy';frame.referrerPolicy='no-referrer';frame.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';frame.allowFullscreen=true;frame.sandbox.add('allow-scripts','allow-same-origin','allow-popups','allow-forms','allow-presentation');preview.replaceChildren(frame);
   });
   preview.appendChild(loadEmbed);
  }else if(imageUrl){
