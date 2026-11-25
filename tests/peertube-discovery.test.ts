@@ -80,6 +80,7 @@ describe("Wave 59 PeerTube federated video discovery", () => {
       mediaType: "video",
       title: "Open Science Video",
       sourceUrl: "https://videos.example.org/videos/watch/a65bc12e-9383-462e-81ae-8207e8b434ee",
+      embedUrl: "https://videos.example.org/videos/embed/a65bc12e-9383-462e-81ae-8207e8b434ee",
       instanceHost: "videos.example.org",
       author: "Science Creator",
       channel: "Science Channel",
