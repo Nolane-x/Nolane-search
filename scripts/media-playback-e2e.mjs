@@ -26,8 +26,8 @@ const samples = [
   },
   {
     id: "hls-jw-captions",
-    label: "HLS · JW Player · WebVTT captions",
-    url: "https://playertest.longtailvideo.com/adaptive/captions/playlist.m3u8",
+    label: "HLS · HLS Test Streams · WebVTT subtitles",
+    url: "https://mtoczko.github.io/hls-test-streams/test-vtt-ts-segments/playlist.m3u8",
     expected: { subtitles: 1 },
   },
   {
