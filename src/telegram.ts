@@ -412,12 +412,11 @@ export function buildToolCenterKeyboard(
   miniAppUrl = "https://nolane-search.nolane-file.workers.dev/telegram#tools",
 ): TelegramInlineKeyboardMarkup {
   return { inline_keyboard: [
-    [{ text: "▦ Mở Tool Center", web_app: { url: miniAppUrl } }],
+    [{ text: "▦ Mở Tool Center · " + tools.filter(tool => tool.ready).length, web_app: { url: miniAppUrl } }],
     [
       { text: "🧾 Job Center", callback_data: "tc:jobs" },
       { text: "🧩 Workflow", callback_data: "tc:workflows" },
     ],
-    [{ text: "⌕ Tìm tool · /tool_search", callback_data: "tc:jobs" }],
     [{ text: "⌂ Menu chính", callback_data: "ui:home" }],
   ] };
 }
