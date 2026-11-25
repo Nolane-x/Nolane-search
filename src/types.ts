@@ -55,8 +55,6 @@ export interface Env {
   MEDIA_ALLOW_NSFW?: string;
   /** Optional Dailymotion Player ID supplied by the Worker deployment owner. */
   MEDIA_DAILYMOTION_PLAYER_ID?: string;
-  /** Optional Dailymotion Player ID supplied by the Worker deployment owner. */
-  MEDIA_DAILYMOTION_PLAYER_ID?: string;
 }
 
 export interface D1Result<T = Record<string, unknown>> {
