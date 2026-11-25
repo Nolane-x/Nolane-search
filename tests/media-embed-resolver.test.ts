@@ -182,6 +182,52 @@ describe("Wave 64 user-provided media URL resolver", () => {
     expect(mock).not.toHaveBeenCalled();
   });
 
+  it("resolves direct HLS and DASH manifests without fetching the user URL", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+
+    const hls = await resolveMediaEmbed("https://stream.example.com/live/master.m3u8?token=secret");
+    const dash = await resolveMediaEmbed("https://cdn.example.net/vod/manifest.mpd?sig=abc");
+
+    expect(hls).toMatchObject({
+      status: "resolved",
+      item: {
+        provider: "HLS",
+        streamType: "hls",
+        mediaType: "video",
+        mediaUrl: "https://stream.example.com/live/master.m3u8?token=secret",
+        sourceUrl: "https://stream.example.com/live/master.m3u8?token=secret",
+        embedUrl: null,
+      },
+    });
+    expect(dash).toMatchObject({
+      status: "resolved",
+      item: {
+        provider: "DASH",
+        streamType: "dash",
+        mediaType: "video",
+        mediaUrl: "https://cdn.example.net/vod/manifest.mpd?sig=abc",
+        embedUrl: null,
+      },
+    });
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("rejects insecure, local, IP-literal and mismatched adaptive-stream manifest URLs", async () => {
+    for (const input of [
+      "http://stream.example.com/master.m3u8",
+      "https://127.0.0.1/private.m3u8",
+      "https://localhost/live.m3u8",
+      "https://router.local/manifest.mpd",
+      "https://stream.example.com/master.m3u8#fragment",
+      "https://user:pass@stream.example.com/master.m3u8",
+      "https://stream.example.com:8443/master.m3u8",
+      "https://stream.example.com/video.mp4",
+    ]) {
+      expect((await resolveMediaEmbed(input)).status).toBe("unsupported");
+    }
+  });
+
   it("rejects malformed or unsupported URLs without issuing any provider request", async () => {
     const mock = vi.fn();
     vi.stubGlobal("fetch", mock);
