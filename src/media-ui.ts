@@ -48,7 +48,7 @@ function safePeerTubeEmbedUrl(value,instanceHost){
 function safeMediaEmbedUrl(item){
  if(!item||typeof item!=='object'||typeof item.embedUrl!=='string')return null;
  if(item.provider==='PeerTube')return safePeerTubeEmbedUrl(item.embedUrl,item.instanceHost);
- var hosts=item.provider==='YouTube'?['www.youtube-nocookie.com']:item.provider==='Vimeo'?['player.vimeo.com']:item.provider==='Dailymotion'?['geo.dailymotion.com']:[];
+ var hosts=item.provider==='YouTube'?['www.youtube-nocookie.com']:item.provider==='Vimeo'?['player.vimeo.com']:item.provider==='Dailymotion'?['geo.dailymotion.com']:item.provider==='Twitch'?['player.twitch.tv','clips.twitch.tv']:[];
  var safe=safeUrl(item.embedUrl,hosts);if(!safe)return null;
  try{
   var u=new URL(safe);if(u.origin===location.origin||u.hash)return null;
@@ -67,6 +67,13 @@ function safeMediaEmbedUrl(item){
    if(!/^\\/player\\/[A-Za-z0-9_-]{3,32}\\.html$/.test(u.pathname))return null;
    var dmKeys=Array.from(u.searchParams.keys());
    if(dmKeys.length!==1||dmKeys[0]!=='video'||!/^[A-Za-z0-9]{4,20}$/.test(u.searchParams.get('video')||''))return null;
+  }else if(item.provider==='Twitch'){
+   var twitchKeys=Array.from(u.searchParams.keys());
+   if(u.hostname==='player.twitch.tv'){
+    if(u.pathname!=='/'||twitchKeys.length!==2||twitchKeys.indexOf('video')<0||twitchKeys.indexOf('autoplay')<0||!/^v[0-9]{5,15}$/.test(u.searchParams.get('video')||'')||u.searchParams.get('autoplay')!=='false')return null;
+   }else if(u.hostname==='clips.twitch.tv'){
+    if(u.pathname!=='/embed'||twitchKeys.length!==2||twitchKeys.indexOf('clip')<0||twitchKeys.indexOf('autoplay')<0||!/^[A-Za-z0-9_-]{4,80}$/.test(u.searchParams.get('clip')||'')||u.searchParams.get('autoplay')!=='false')return null;
+   }else return null;
   }else return null;
   return u.href;
  }catch(e){return null}
@@ -95,6 +102,14 @@ function card(item){
   var loadEmbed=document.createElement('button');loadEmbed.type='button';loadEmbed.className='embed-load';loadEmbed.textContent='Nhúng player '+item.provider;
   loadEmbed.addEventListener('click',function(){
    var frameUrl=new URL(embedUrl);
+   if(item.provider==='Twitch'){
+    var parent=location.hostname.toLowerCase().replace(/\\.$/,'');
+    if(location.protocol!=='https:'||!parent.includes('.')||parent==='localhost'||parent.endsWith('.localhost')||parent.endsWith('.local')||parent.endsWith('.test')||/^(?:\\d{1,3}\\.){3}\\d{1,3}$/.test(parent)){
+     preview.textContent='Twitch player cần một tên miền HTTPS công khai để xác định tham số parent.';
+     return;
+    }
+    frameUrl.searchParams.set('parent',parent);
+   }
    if(item.provider==='PeerTube')frameUrl.searchParams.set('p2p','0');
    if(item.provider==='Vimeo')frameUrl.searchParams.set('dnt','1');
    var frame=document.createElement('iframe');frame.src=frameUrl.href;frame.title='Trình phát '+item.provider+': '+(item.title||'video');frame.loading='lazy';frame.referrerPolicy=item.referrerPolicy==='strict-origin-when-cross-origin'?'strict-origin-when-cross-origin':'no-referrer';frame.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';frame.allowFullscreen=true;frame.sandbox.add('allow-scripts','allow-same-origin','allow-popups','allow-forms','allow-presentation');preview.replaceChildren(frame);
@@ -112,8 +127,8 @@ function card(item){
  body.appendChild(badges);
  if(item.credit){var credit=document.createElement('div');credit.className='credit';credit.textContent='Ghi công: '+item.credit;body.appendChild(credit)}
  var actions=document.createElement('div');actions.className='actions';
- var source=item.provider==='PeerTube'?safeUrl(item.sourceUrl,[item.instanceHost]):item.provider==='YouTube'?safeUrl(item.sourceUrl,['youtube.com','www.youtube.com','m.youtube.com','youtu.be']):item.provider==='Vimeo'?safeUrl(item.sourceUrl,['vimeo.com','www.vimeo.com']):item.provider==='Dailymotion'?safeUrl(item.sourceUrl,['dailymotion.com','www.dailymotion.com','dai.ly']):item.provider==='Openverse'?safeUrl(item.sourceUrl,null):item.provider==='Internet Archive'?safeUrl(item.sourceUrl,['archive.org']):safeUrl(item.sourceUrl,['commons.wikimedia.org','images.nasa.gov','www.nasa.gov']);
- var sourceLabel=item.provider==='PeerTube'?'Xem trên PeerTube':item.provider==='YouTube'?'Mở trên YouTube':item.provider==='Vimeo'?'Mở trên Vimeo':item.provider==='Dailymotion'?'Mở trên Dailymotion':'Trang nguồn';
+ var source=item.provider==='PeerTube'?safeUrl(item.sourceUrl,[item.instanceHost]):item.provider==='YouTube'?safeUrl(item.sourceUrl,['youtube.com','www.youtube.com','m.youtube.com','youtu.be']):item.provider==='Vimeo'?safeUrl(item.sourceUrl,['vimeo.com','www.vimeo.com']):item.provider==='Dailymotion'?safeUrl(item.sourceUrl,['dailymotion.com','www.dailymotion.com','dai.ly']):item.provider==='Twitch'?safeUrl(item.sourceUrl,['twitch.tv','www.twitch.tv','m.twitch.tv','clips.twitch.tv']):item.provider==='Openverse'?safeUrl(item.sourceUrl,null):item.provider==='Internet Archive'?safeUrl(item.sourceUrl,['archive.org']):safeUrl(item.sourceUrl,['commons.wikimedia.org','images.nasa.gov','www.nasa.gov']);
+ var sourceLabel=item.provider==='PeerTube'?'Xem trên PeerTube':item.provider==='YouTube'?'Mở trên YouTube':item.provider==='Vimeo'?'Mở trên Vimeo':item.provider==='Dailymotion'?'Mở trên Dailymotion':item.provider==='Twitch'?'Mở trên Twitch':'Trang nguồn';
  var sourceLink=anchor(sourceLabel,source,item.mediaType==='video');if(sourceLink)actions.appendChild(sourceLink);
  var file=anchor(item.mediaType==='video'?'Mở / tải video gốc':item.mediaType==='audio'?'Mở / tải audio gốc':'Mở / tải ảnh gốc',mediaUrl,true);if(file)actions.appendChild(file);
  if(item.licenseUrl){var license=safeUrl(item.licenseUrl,['creativecommons.org','rightsstatements.org','www.nasa.gov']);var licenseLink=anchor('Giấy phép',license,false);if(licenseLink)actions.appendChild(licenseLink)}
