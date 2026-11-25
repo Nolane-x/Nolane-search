@@ -134,7 +134,7 @@ a{color:inherit}
 .tool-actions button.primary{background:var(--accent);color:var(--accent-text);border-color:transparent}
 .job-list,.index-list{display:grid;gap:8px}
 .job-card,.index-card{border:1px solid var(--line);border-radius:14px;padding:11px 12px;background:var(--panel)}
-.job-card strong,.index-card strong{display:block;font-size:11px;line-height:1.4}
+.job-card strong,.index-card strong{display:block;font-size:11px;line-height:1.4}.job-detail{margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}.job-detail summary{cursor:pointer;color:var(--link);font-size:10px;font-weight:800}.job-detail .tool-meta{display:block;white-space:pre-wrap;margin-top:6px}
 .job-card span,.index-card span{display:block;color:var(--muted);font-size:10px;margin-top:4px;overflow-wrap:anywhere}
 .job-status{display:inline-block!important;width:max-content;max-width:100%;border-radius:999px;padding:3px 7px;background:var(--panel-strong);color:var(--muted)!important;font-weight:850;font-size:9px!important}
 .library-form{display:grid;grid-template-columns:minmax(0,1fr) 86px;gap:8px}
@@ -472,6 +472,30 @@ function renderJobs(jobs){
   if(job.progress)addText(card,'span','','Tiến trình '+job.progress.completed+'/'+job.progress.total+' bước');
   if(job.resultSummary)addText(card,'span','',job.resultSummary);
   if(job.error)addText(card,'span','',job.error);
+  var actions=addText(card,'div','tool-actions','');
+  var detail=document.createElement('details');detail.className='job-detail';
+  var summary=addText(detail,'summary','','Xem trace và pipeline');
+  var steps=Array.isArray(job.trace)?job.trace:[];
+  var pipeline=Array.isArray(job.pipeline)?job.pipeline:[];
+  if(pipeline.length)addText(detail,'div','tool-meta','Pipeline: '+pipeline.map(function(step){return step.toolId||''}).join(' → '));
+  if(steps.length){
+   steps.forEach(function(step){
+    var line=(step.step||'?')+'. '+(step.toolId||'Processor')+' · '+(step.status==='completed'?'Hoàn thành':'Thất bại')+' · '+(step.durationMs||0)+' ms';
+    addText(detail,'div','tool-meta',line+(step.summary?'\n'+step.summary:'')+(step.error?'\n'+step.error:''));
+   });
+  }else addText(detail,'div','tool-meta','Job chưa có trace chi tiết.');
+  card.appendChild(detail);
+  var refresh=addText(actions,'button','','Làm mới');refresh.type='button';refresh.addEventListener('click',loadJobs);
+  if(job.status==='failed'){
+   var retry=addText(actions,'button','primary','Thử lại');retry.type='button';
+   retry.addEventListener('click',async function(){
+    retry.disabled=true;retry.textContent='Đang tạo lại…';
+    try{
+     var result=await api('/api/tools/jobs/retry',{method:'POST',headers:authHeaders(),body:JSON.stringify({jobId:job.id})});
+     showToast('Đã tạo job mới · '+result.jobId.slice(0,8));haptic('success');await loadJobs();
+    }catch(error){showToast(error.message);retry.disabled=false;retry.textContent='Thử lại';haptic('error')}
+   });
+  }
  });
 }
 async function loadJobs(){
