@@ -153,9 +153,19 @@ describe("Media Portal media discovery experience", () => {
 
   it("disables incompatible providers for image, video and audio filters", async () => {
     const html = await (await mediaAppResponse()).text();
-    expect(html).toContain("kind==='audio'?['commons','nasa','openverse','peertube','inaturalist']");
-    expect(html).toContain("kind==='video'?['commons','openverse','inaturalist']");
+    expect(html).toContain("kind==='audio'?['commons','nasa','openverse','peertube','inaturalist','met']");
+    expect(html).toContain("kind==='video'?['commons','openverse','inaturalist','met']");
     expect(html).toContain("kind==='image'?['archive','peertube']");
+  });
+
+  it("offers The Met Open Access as a trusted image-only source", async () => {
+    const response = mediaAppResponse();
+    const html = await response.text();
+    expect(html).toContain('<option value="met">The Met · ảnh bảo tàng CC0</option>');
+    expect(html).toContain("images.metmuseum.org");
+    expect(html).toContain("item.provider==='The Met'?safeUrl(item.sourceUrl,['www.metmuseum.org'])");
+    expect(html).toContain("The Met Open Access");
+    expect(html).toContain("CC0");
   });
 
   it("offers PeerTube as a video-only provider and links to the exact origin host", async () => {

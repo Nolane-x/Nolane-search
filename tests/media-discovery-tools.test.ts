@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, lookupFoodProduct, lookupConsumerProduct, compareFoodProducts } from "../src/media-discovery-tools";
+import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, lookupFoodProduct, lookupConsumerProduct, compareFoodProducts, searchMetMuseumArtworks } from "../src/media-discovery-tools";
 import { executeAgentTool, AGENT_TOOL_DEFINITIONS } from "../src/agent-tools";
 import type { Env } from "../src/types";
 
@@ -649,4 +649,78 @@ describe("Wave 52 media and product discovery", () => {
     const result = JSON.parse(await executeAgentTool(env, "search_wikimedia_images", { query: "sample image" }));
     expect(result.items[0].title).toBe("Dispatch.jpg");
   });
+
+  it("searches The Met's current paginated API and keeps only trusted public-domain images", async () => {
+    const paths: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      paths.push(url.pathname);
+      if (url.pathname === "/public/collection/v1.1/search") {
+        expect(url.searchParams.get("q")).toBe("water lilies");
+        expect(url.searchParams.get("hasImages")).toBe("true");
+        expect(url.searchParams.get("offset")).toBe("0");
+        expect(url.searchParams.get("limit")).toBe("4");
+        return json({ total: 4, objectIDs: [101, 102, 103, 104] });
+      }
+      const id = Number(url.pathname.split("/").pop());
+      const common = {
+        objectID: id, title: "Artwork " + id, artistDisplayName: "Example Artist",
+        objectDate: "1890", medium: "Oil on canvas", department: "European Paintings",
+        country: "France", creditLine: "Example Collection",
+        objectURL: "https://www.metmuseum.org/art/collection/search/" + id,
+      };
+      if (id === 101) return json({ ...common, isPublicDomain: true,
+        primaryImage: "https://images.metmuseum.org/CRDImages/ep/original/101.jpg",
+        primaryImageSmall: "https://images.metmuseum.org/CRDImages/ep/web-large/101.jpg" });
+      if (id === 102) return json({ ...common, isPublicDomain: false,
+        primaryImageSmall: "https://images.metmuseum.org/CRDImages/ep/web-large/102.jpg" });
+      if (id === 103) return json({ ...common, isPublicDomain: true,
+        primaryImageSmall: "https://evil.example/103.jpg" });
+      return json({ ...common, isPublicDomain: true, primaryImageSmall: "" });
+    }));
+
+    const result = await searchMetMuseumArtworks("water lilies", 4);
+    expect(result.status).toBe("ok");
+    expect(result.source).toContain("Metropolitan Museum");
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: "met-101", provider: "The Met", mediaType: "image", title: "Artwork 101",
+      sourceUrl: "https://www.metmuseum.org/art/collection/search/101",
+      previewUrl: "https://images.metmuseum.org/CRDImages/ep/web-large/101.jpg",
+      mediaUrl: "https://images.metmuseum.org/CRDImages/ep/original/101.jpg",
+      credit: "Example Artist · Example Collection", license: "CC0",
+      licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+    });
+    expect(result.items[0].description).toContain("Oil on canvas");
+    expect(paths).toHaveLength(5);
+    expect(paths).toContain("/public/collection/v1.1/search");
+    expect(paths).not.toContain("/public/collection/v1/search");
+  });
+
+  it("validates The Met query and result bounds before network access", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    await expect(searchMetMuseumArtworks("x")).rejects.toThrow("2 to 140 characters");
+    await expect(searchMetMuseumArtworks("portrait", 9)).rejects.toThrow("1 to 8");
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("exposes The Met public-domain image search through the AI tool interface", async () => {
+    expect(AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name)).toContain("search_met_open_access_artworks");
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/search")) return json({ total: 1, objectIDs: [501] });
+      return json({
+        objectID: 501, isPublicDomain: true, title: "Test Artwork",
+        artistDisplayName: "Test Artist", objectDate: "1900", medium: "Etching",
+        department: "Drawings", creditLine: "Test Collection",
+        primaryImage: "https://images.metmuseum.org/CRDImages/dp/original/501.jpg",
+        primaryImageSmall: "https://images.metmuseum.org/CRDImages/dp/web-large/501.jpg",
+        objectURL: "https://www.metmuseum.org/art/collection/search/501",
+      });
+    }));
+    const result = JSON.parse(await executeAgentTool(env, "search_met_open_access_artworks", { query: "test artwork" }));
+    expect(result.items[0]).toMatchObject({ provider: "The Met", title: "Test Artwork", license: "CC0" });
+  });
+
 });
