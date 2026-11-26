@@ -355,5 +355,122 @@ class MediaNodePolicyTests(unittest.TestCase):
         finally:
             proxy.server_close()
 
+
+    def test_local_egress_proxy_forwards_http_to_the_pinned_ip_only(self):
+        class FakeUpstream:
+            def __init__(self):
+                self.sent = []
+                self.responses = [
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok",
+                    b"",
+                ]
+            def settimeout(self, value):
+                pass
+            def sendall(self, data):
+                self.sent.append(data)
+            def recv(self, size):
+                return self.responses.pop(0)
+            def close(self):
+                pass
+
+        upstream = FakeUpstream()
+        connect_calls = []
+        proxy = server.create_egress_proxy(
+            host="127.0.0.1", port=0,
+            resolver=lambda host: ["93.184.216.34"],
+            normalize_url=server.normalize_source_url,
+            is_public_ip=server.is_public_ip,
+            connector=lambda address, timeout: connect_calls.append((address, timeout)) or upstream,
+        )
+        thread = threading.Thread(target=proxy.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with socket.create_connection(proxy.server_address, timeout=2) as client:
+                client.settimeout(2)
+                client.sendall(
+                    b"GET http://example.org/watch?v=abc HTTP/1.1\r\n"
+                    b"Host: example.org\r\n"
+                    b"Accept: */*\r\n\r\n"
+                )
+                received = b""
+                while True:
+                    chunk = client.recv(4096)
+                    if not chunk:
+                        break
+                    received += chunk
+            self.assertIn(b"HTTP/1.1 200 OK", received)
+            self.assertTrue(received.endswith(b"ok"))
+            self.assertEqual(connect_calls[0][0], ("93.184.216.34", 80))
+            forwarded = b"".join(upstream.sent)
+            self.assertIn(b"GET /watch?v=abc HTTP/1.1", forwarded)
+            self.assertIn(b"Host: example.org", forwarded)
+            self.assertIn(b"Connection: close", forwarded)
+        finally:
+            proxy.shutdown()
+            proxy.server_close()
+            thread.join(timeout=2)
+
+    def test_local_egress_proxy_tunnels_https_without_re_resolving_hostnames(self):
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        upstream_address = listener.getsockname()
+        received_from_client = []
+        def accept_and_echo():
+            accepted, _ = listener.accept()
+            with accepted:
+                accepted.settimeout(2)
+                received_from_client.append(accepted.recv(32))
+                accepted.sendall(b"tls-response")
+                accepted.shutdown(socket.SHUT_WR)
+        upstream_thread = threading.Thread(target=accept_and_echo, daemon=True)
+        upstream_thread.start()
+        connect_calls = []
+        proxy = server.create_egress_proxy(
+            host="127.0.0.1", port=0,
+            resolver=lambda host: ["93.184.216.34"],
+            normalize_url=server.normalize_source_url,
+            is_public_ip=server.is_public_ip,
+            connector=lambda address, timeout: (
+                connect_calls.append((address, timeout))
+                or socket.create_connection(upstream_address, timeout=timeout)
+            ),
+        )
+        proxy_thread = threading.Thread(target=proxy.serve_forever, daemon=True)
+        proxy_thread.start()
+        try:
+            with socket.create_connection(proxy.server_address, timeout=2) as client:
+                client.settimeout(2)
+                client.sendall(
+                    b"CONNECT example.org:443 HTTP/1.1\r\n"
+                    b"Host: example.org:443\r\n\r\n"
+                )
+                handshake = client.recv(1024)
+                self.assertIn(b"200 Connection Established", handshake)
+                client.sendall(b"tls-client-data")
+                self.assertEqual(client.recv(1024), b"tls-response")
+            upstream_thread.join(timeout=2)
+            self.assertEqual(received_from_client, [b"tls-client-data"])
+            self.assertEqual(connect_calls[0][0], ("93.184.216.34", 443))
+        finally:
+            proxy.shutdown()
+            proxy.server_close()
+            proxy_thread.join(timeout=2)
+            listener.close()
+            upstream_thread.join(timeout=2)
+
+    def test_instance_lock_rejects_a_second_node_in_the_same_process(self):
+        with tempfile.TemporaryDirectory() as temp:
+            lock_path = Path(temp) / "media-node.lock"
+            first = server.InstanceLock(lock_path)
+            try:
+                with self.assertRaises(server.InstanceAlreadyRunning):
+                    server.InstanceLock(lock_path)
+            finally:
+                first.close()
+            second = server.InstanceLock(lock_path)
+            second.close()
+
 if __name__ == "__main__":
     unittest.main()
