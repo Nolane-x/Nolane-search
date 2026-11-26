@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchInternetArchiveVideos, searchInternetArchiveAudio, lookupFoodProduct, lookupConsumerProduct, compareFoodProducts } from "../src/media-discovery-tools";
+import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, lookupFoodProduct, lookupConsumerProduct, compareFoodProducts } from "../src/media-discovery-tools";
 import { executeAgentTool, AGENT_TOOL_DEFINITIONS } from "../src/agent-tools";
 import type { Env } from "../src/types";
 
@@ -530,6 +530,100 @@ describe("Wave 52 media and product discovery", () => {
     vi.stubGlobal("fetch", mock);
     await expect(lookupFoodProduct("abc-123")).rejects.toThrow("8 to 14 digits");
     expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("searches iNaturalist research-grade observations and keeps licensed Open Data photos attributable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("api.inaturalist.org");
+      expect(url.pathname).toBe("/v1/observations");
+      expect(url.searchParams.get("q")).toBe("red panda");
+      expect(url.searchParams.get("quality_grade")).toBe("research");
+      expect(url.searchParams.get("photo_license")).toBe("any");
+      expect(url.searchParams.getAll("has[]")).toContain("photos");
+      expect(url.searchParams.getAll("iconic_taxa[]")).toContain("Mammalia");
+      expect(url.searchParams.get("per_page")).toBe("4");
+      expect(new Headers(init?.headers).get("user-agent")).toContain("NolaneSearch");
+      expect(init?.redirect).toBe("error");
+      return json({ total_results: 2, results: [
+        {
+          id: 12345, observed_on: "2026-10-20", quality_grade: "research",
+          species_guess: "Red panda",
+          taxon: { name: "Ailurus fulgens", preferred_common_name: "Red panda", iconic_taxon_name: "Mammalia" },
+          photos: [
+            { id: 55, url: "https://static.inaturalist.org/photos/55/square.jpg", license_code: "cc-by", attribution: "© Static source (CC BY)" },
+            { id: 56, url: "https://inaturalist-open-data.s3.amazonaws.com/photos/56/square.jpg", license_code: "cc-by-sa", attribution: "© Jane Doe, some rights reserved (CC BY-SA)", original_dimensions: { width: 1500, height: 2000 } }
+          ],
+          latitude: 35.123456, longitude: 135.654321, private_place_guess: "Sensitive location"
+        },
+        {
+          id: 12346, observed_on: "2026-10-19", quality_grade: "research",
+          taxon: { name: "Unknown animal", iconic_taxon_name: "Animalia" },
+          photos: [{ id: 57, url: "https://inaturalist-open-data.s3.amazonaws.com/photos/57/square.jpg", license_code: null, attribution: "No license" }]
+        }
+      ] });
+    }));
+    const result = await searchINaturalistObservations("red panda", 4, "Mammalia");
+    expect(result.status).toBe("ok");
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: "inat-12345-56",
+      provider: "iNaturalist",
+      mediaType: "image",
+      title: "Red panda",
+      sourceUrl: "https://www.inaturalist.org/observations/12345",
+      previewUrl: "https://inaturalist-open-data.s3.amazonaws.com/photos/56/medium.jpg",
+      mediaUrl: "https://inaturalist-open-data.s3.amazonaws.com/photos/56/original.jpg",
+      credit: "© Jane Doe, some rights reserved (CC BY-SA)",
+      license: "CC BY-SA",
+      dateCreated: "2026-10-20",
+      width: 1500,
+      height: 2000
+    });
+    expect(JSON.stringify(result.items[0])).not.toContain("135.654321");
+    expect(result.note).toContain("Exact observation coordinates are deliberately omitted");
+  });
+
+  it("omits unlicensed, unrecognized and non-Open-Data iNaturalist photos", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ results: [{
+      id: 900, taxon: { name: "Unknown" }, photos: [
+        { id: 901, url: "https://inaturalist-open-data.s3.amazonaws.com/photos/901/square.jpg", license_code: null, attribution: "No license" },
+        { id: 902, url: "https://inaturalist-open-data.s3.amazonaws.com/photos/902/square.jpg", license_code: "all-rights-reserved", attribution: "All rights reserved" },
+        { id: 903, url: "https://static.inaturalist.org/photos/903/square.jpg", license_code: "cc-by", attribution: "© Photographer (CC BY)" },
+        { id: 904, url: "https://evil.example/photos/904/square.jpg", license_code: "cc-by", attribution: "© Photographer (CC BY)" }
+      ]
+    }] })));
+    const result = await searchINaturalistObservations("wild orchid");
+    expect(result.status).toBe("not_found");
+    expect(result.items).toHaveLength(0);
+  });
+
+  it("validates iNaturalist query, result limit and taxon filters before network access", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    await expect(searchINaturalistObservations("x")).rejects.toThrow("2 to 140 characters");
+    await expect(searchINaturalistObservations("owl", 9)).rejects.toThrow("1 to 8");
+    await expect(searchINaturalistObservations("owl", 5, "UnknownGroup")).rejects.toThrow("iconic_taxon");
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("exposes iNaturalist nature-photo search through the AI tool interface", async () => {
+    expect(AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name)).toContain("search_inaturalist_observations");
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      expect(url.searchParams.get("iconic_taxa[]")).toBe("Plantae");
+      return json({ results: [{
+        id: 88, observed_on: "2026-10-01", quality_grade: "research",
+        taxon: { name: "Nepenthes mirabilis", preferred_common_name: "Tropical pitcher plant", iconic_taxon_name: "Plantae" },
+        photos: [{ id: 89, url: "https://inaturalist-open-data.s3.amazonaws.com/photos/89/square.jpg", license_code: "cc-by", attribution: "© Example (CC BY)" }]
+      }] });
+    }));
+    const result = JSON.parse(await executeAgentTool(env, "search_inaturalist_observations", {
+      query: "pitcher plant", iconic_taxon: "Plantae"
+    }));
+    expect(result.items[0]).toMatchObject({
+      provider: "iNaturalist", title: "Tropical pitcher plant", license: "CC BY"
+    });
   });
 
   it("rejects invalid media types and handles rate limits", async () => {

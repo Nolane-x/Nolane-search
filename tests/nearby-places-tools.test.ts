@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NearbyPlacesInputError, searchNearbyPlaces } from "../src/nearby-places-tools";
+import { NearbyPlacesInputError, searchNearbyPlaces, searchPlacesInCity } from "../src/nearby-places-tools";
+import { executeAgentTool, AGENT_TOOL_DEFINITIONS } from "../src/agent-tools";
+import type { Env } from "../src/types";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -112,6 +114,93 @@ describe("Nearby Places · OpenStreetMap", () => {
     expect(result.places.map((place) => place.website)).toEqual([
       "https://example.com/info", null, null, null, null,
     ]);
+  });
+
+  it("searches places from a city explicitly named by the user", async () => {
+    const mock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.hostname === "geocoding-api.open-meteo.com") {
+        expect(url.pathname).toBe("/v1/search");
+        expect(url.searchParams.get("name")).toBe("Hai Phong");
+        expect(url.searchParams.get("countryCode")).toBe("VN");
+        expect(init?.redirect).toBe("error");
+        return new Response(JSON.stringify({ results: [{
+          name: "Hai Phong", admin1: "Hai Phong", country: "Vietnam", country_code: "VN",
+          latitude: 20.8449, longitude: 106.6881,
+        }] }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      expect(url.hostname).toBe("overpass-api.de");
+      const body = new URLSearchParams(String(init?.body || ""));
+      expect(body.get("data")).toContain("around:2500,20.84490,106.68810");
+      return new Response(JSON.stringify({ elements: [
+        { type: "node", id: 101, lat: 20.8450, lon: 106.6882, tags: { name: "Nhà thuốc trung tâm", amenity: "pharmacy" } }
+      ] }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const result = await searchPlacesInCity({
+      city: "Hai Phong", country_code: "vn", category: "pharmacy", radius_m: 2500,
+    });
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") throw new Error("Expected city resolution");
+    expect(result.requestedCity).toBe("Hai Phong");
+    expect(result.resolvedPlace).toMatchObject({
+      name: "Hai Phong", admin1: "Hai Phong", country: "Vietnam", country_code: "VN",
+    });
+    expect(result.places[0]).toMatchObject({ name: "Nhà thuốc trung tâm", category: "pharmacy" });
+    expect(mock).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks the user to disambiguate city names instead of guessing", async () => {
+    const mock = vi.fn(async () => new Response(JSON.stringify({ results: [
+      { name: "Springfield", admin1: "Illinois", country: "United States", country_code: "US", latitude: 39.78, longitude: -89.64 },
+      { name: "Springfield", admin1: "Massachusetts", country: "United States", country_code: "US", latitude: 42.10, longitude: -72.59 },
+      { name: "Springfield", admin1: "Queensland", country: "Australia", country_code: "AU", latitude: -27.65, longitude: 152.91 },
+    ] }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", mock);
+    const result = await searchPlacesInCity({ city: "Springfield", category: "food" });
+    expect(result.status).toBe("needs_clarification");
+    if (result.status !== "needs_clarification") throw new Error("Expected clarification");
+    expect(result.choices).toHaveLength(3);
+    expect(result.choices.map(choice => choice.country_code)).toEqual(["US", "US", "AU"]);
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  it("registers and dispatches city discovery as an ordinary-user AI tool", async () => {
+    expect(AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name)).toContain("search_places_in_city");
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.hostname === "geocoding-api.open-meteo.com") {
+        return new Response(JSON.stringify({ results: [{
+          name: "Hanoi", admin1: "Ha Noi", country: "Vietnam", country_code: "VN",
+          latitude: 21.0278, longitude: 105.8342,
+        }] }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ elements: [
+        { type: "node", id: 7, lat: 21.0280, lon: 105.8343, tags: { name: "Công viên", leisure: "park" } }
+      ] }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", mock);
+    const env = { DB: {} as never, SEARCH_JOBS: {} as never } as Env;
+    const result = JSON.parse(await executeAgentTool(env, "search_places_in_city", {
+      city: "Hanoi", country_code: "VN", category: "parks",
+    }));
+    expect(result).toMatchObject({
+      status: "ok",
+      requestedCity: "Hanoi",
+      resolvedPlace: { name: "Hanoi", country_code: "VN" },
+      places: [{ name: "Công viên" }],
+    });
+  });
+
+  it("rejects invalid city options before calling external services", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    await expect(searchPlacesInCity({ city: "H", category: "food" })).rejects.toBeInstanceOf(NearbyPlacesInputError);
+    await expect(searchPlacesInCity({ city: "Hanoi", category: "food", country_code: "VNM" })).rejects.toThrow("hai chữ cái");
+    await expect(searchPlacesInCity({ city: "Hanoi", category: "unknown" })).rejects.toThrow("category");
+    await expect(searchPlacesInCity({ city: "Hanoi", category: "essentials", radius_m: 4000 })).rejects.toThrow("3000 m");
+    expect(mock).not.toHaveBeenCalled();
   });
 
   it("rejects malformed coordinates, categories and out-of-policy limits before fetch", async () => {
