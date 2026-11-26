@@ -118,6 +118,8 @@ async function mountNearbyBrowser(routeResponse: unknown, savedPlacesInput?: Arr
     querySelectorAll() { return []; },
     body: new NearbyTestElement("body"),
   };
+  ["routeProfile", "routeButton", "routeStatus", "routeSummary", "routeMap", "routeMapPlaceholder", "routeLegs", "exportGpx", "savedPlaces", "savedCount", "status", "results", "resultCount", "category", "radius", "latitude", "longitude", "locate", "search"].forEach(id => documentMock.getElementById(id));
+  documentMock.getElementById("routeProfile").value = "driving";
   const seed = savedPlacesInput || [
     { id: "node/501", name: "Điểm A", category: "food", categoryLabel: "Ăn uống", latitude: 20.8449, longitude: 106.6881, address: "Hải Phòng" },
     { id: "way/502", name: "Điểm B", category: "shopping", categoryLabel: "Mua sắm", latitude: 20.8460, longitude: 106.6890, address: "Hải Phòng" },
