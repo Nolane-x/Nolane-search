@@ -191,8 +191,22 @@ var ROUTE_PROFILES={
 var ROUTE_MAX_STOPS=10;
 var ROUTE_MAX_RESPONSE_BYTES=1500000;
 var ROUTE_MAX_GEOMETRY_POINTS=20000;
+var ROUTE_COOLDOWN_KEY='nolane.nearby.route-last-request-at.v1';
 var routeMap=null,routeLineLayer=null,routeStopLayer=null,routeMapFailed=false,routeMapRequested=false;
 var routeRequestInFlight=false,lastRouteRequestAt=0,lastRenderedRouteKey=null,routeRevision=0;
+function reserveRouteRequestTime(now){
+ var persisted=0;
+ try{
+  var stored=Number(localStorage.getItem(ROUTE_COOLDOWN_KEY));
+  if(Number.isFinite(stored)&&stored>0)persisted=stored;
+ }catch(error){}
+ var last=Math.max(lastRouteRequestAt,persisted);
+ var wait=last?1100-(now-last):0;
+ if(wait>0)return wait;
+ lastRouteRequestAt=now;
+ try{localStorage.setItem(ROUTE_COOLDOWN_KEY,String(now))}catch(error){}
+ return 0;
+}
 function routeProfileValue(){var value=$('routeProfile').value;return Object.prototype.hasOwnProperty.call(ROUTE_PROFILES,value)?value:'driving'}
 function routeKey(){
  return routeProfileValue()+'|'+savedPlaces.slice(0,ROUTE_MAX_STOPS).map(function(place){return place.id+':'+place.latitude+','+place.longitude}).join(';');
@@ -343,15 +357,15 @@ function renderRouteMetrics(route,places){
 async function requestSavedPlacesRoute(){
  if(routeRequestInFlight)return;
  if(savedPlaces.length<2){$('routeStatus').textContent='Cần ít nhất hai địa điểm đã lưu để tính tuyến đường.';return}
- var now=Date.now(),wait=1100-(now-lastRouteRequestAt);
- if(lastRouteRequestAt&&wait>0){
-  $('routeStatus').textContent='Để bảo vệ dịch vụ bản đồ công cộng, hãy chờ '+(wait/1000).toFixed(1)+' giây trước yêu cầu tiếp theo.';
-  return;
- }
  var profile=routeProfileValue(),places=savedPlaces.slice(0,ROUTE_MAX_STOPS);
  var url;
  try{url=buildRouteUrl(profile,places)}catch(error){$('routeStatus').textContent=error.message;return}
- routeRequestInFlight=true;lastRouteRequestAt=now;$('routeButton').disabled=true;
+ var now=Date.now(),wait=reserveRouteRequestTime(now);
+ if(wait>0){
+  $('routeStatus').textContent='Để bảo vệ dịch vụ bản đồ công cộng, hãy chờ '+(wait/1000).toFixed(1)+' giây trước yêu cầu tiếp theo.';
+  return;
+ }
+ routeRequestInFlight=true;$('routeButton').disabled=true;
  routeMapRequested=true;refreshRouteStops();
  var signature=routeKey(),revision=routeRevision;
  $('routeStatus').classList.remove('error');
