@@ -132,7 +132,7 @@ async function mountNearbyBrowser(routeResponse: unknown, savedPlacesInput?: Arr
   };
   const layers: Array<{ data?: unknown; bounds?: unknown }> = [];
   const tileCalls: string[] = [];
-  const mapCenters: Array<{ center: unknown; zoom: unknown }> = [];
+  const mapCenters: Array<{ center: number[]; zoom: number }> = [];
   const makeLayer = (data?: unknown) => ({
     data,
     addTo() { layers.push({ data }); return this; },
@@ -144,7 +144,7 @@ async function mountNearbyBrowser(routeResponse: unknown, savedPlacesInput?: Arr
   const leaflet = {
     map() {
       return {
-        setView(center: unknown, zoom: unknown) { mapCenters.push({ center, zoom }); return this; },
+        setView(center: number[], zoom: number) { mapCenters.push({ center, zoom }); return this; },
         addLayer() { return this; },
         fitBounds() { return this; },
         invalidateSize() { return this; },
