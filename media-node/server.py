@@ -475,11 +475,21 @@ class MediaNodeStore:
             return changed == 1
 
     def recover_interrupted(self) -> None:
+        now = time.time()
         with self._connection() as db:
-            db.execute("""
-                UPDATE jobs SET status='failed', updated_at=?, error='Media Node restarted while this task was running.'
-                WHERE status='running'
-            """, (time.time(),))
+            db.execute("BEGIN IMMEDIATE")
+            rows = db.execute("SELECT job_id FROM jobs WHERE status='running'").fetchall()
+            interrupted_ids = [row["job_id"] for row in rows]
+            if interrupted_ids:
+                db.executemany("""
+                    UPDATE jobs SET status='failed', updated_at=?,
+                        error='Media Node restarted while this task was running.',
+                        share_token_hash=NULL, share_expires_at=NULL
+                    WHERE job_id=? AND status='running'
+                """, [(now, job_id) for job_id in interrupted_ids])
+            db.execute("COMMIT")
+        for job_id in interrupted_ids:
+            shutil.rmtree(self.root / "jobs" / job_id, ignore_errors=True)
 
     def expire_due(self) -> None:
         now = time.time()
@@ -733,7 +743,8 @@ def create_http_server(
                 length = int(self.headers.get("Content-Length", "0"))
             except ValueError:
                 return None
-            if length < 0 or length > MAX_BODY_BYTES:
+            if length < 0 or length > MAX_BODY_BYTES or self.headers.get("Transfer-Encoding") not in (None, "identity"):
+                self.close_connection = True
                 return None
             try:
                 value = json.loads(self.rfile.read(length) or b"{}")
@@ -960,7 +971,31 @@ def create_http_server(
             except (BrokenPipeError, ConnectionResetError, OSError):
                 return
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    class BoundedThreadingHTTPServer(ThreadingHTTPServer):
+        request_queue_size = 16
+        daemon_threads = True
+
+        def __init__(self, address, handler):
+            self._request_slots = threading.BoundedSemaphore(16)
+            super().__init__(address, handler)
+
+        def process_request(self, request, client_address):
+            if not self._request_slots.acquire(blocking=False):
+                self.shutdown_request(request)
+                return
+            try:
+                super().process_request(request, client_address)
+            except BaseException:
+                self._request_slots.release()
+                raise
+
+        def process_request_thread(self, request, client_address):
+            try:
+                super().process_request_thread(request, client_address)
+            finally:
+                self._request_slots.release()
+
+    server = BoundedThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
     server.media_worker = worker
     if start_worker:

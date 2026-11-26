@@ -86,8 +86,12 @@ class MediaNodePolicyTests(unittest.TestCase):
             claimed = store.claim_next()
             self.assertEqual(claimed["job_id"], job_id)
             self.assertEqual(claimed["status"], "running")
+            partial = Path(temp) / "jobs" / job_id
+            partial.mkdir(parents=True, exist_ok=True)
+            (partial / "clip.mp4.part").write_bytes(b"partial")
             restarted = server.MediaNodeStore(Path(temp))
             self.assertEqual(restarted.get_job(job_id, 123)["status"], "failed")
+            self.assertFalse((Path(temp) / "jobs" / job_id).exists())
             next_job = "7f3dd2d7-4d41-4ef9-9e18-b4f56a510c22"
             restarted.enqueue(next_job, 123, "https://example.org/video", "video", "720", "example.org")
             restarted.claim_next()
