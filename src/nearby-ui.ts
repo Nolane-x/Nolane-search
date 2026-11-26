@@ -231,7 +231,16 @@ function ensureRouteMap(){
  var leaflet=routeMapLibrary();
  if(!leaflet){routeMapFailed=true;$('routeMapPlaceholder').style.display='grid';$('routeMapPlaceholder').textContent='Thư viện Leaflet chưa sẵn sàng. Bạn vẫn có thể tính tổng quãng đường và thời gian; đường vẽ sẽ không hiển thị.';$('routeStatus').textContent='Thư viện bản đồ không tải được. Danh sách địa điểm và GPX vẫn dùng được; hãy thử tải lại trang.';return null}
  try{
-  routeMap=leaflet.map('routeMap',{scrollWheelZoom:false}).setView([20.8449,106.6881],13);
+  var initialPoints=savedPlaces.slice(0,ROUTE_MAX_STOPS);
+  var initialCenter=initialPoints.length
+   ? [initialPoints.reduce(function(sum,place){return sum+place.latitude},0)/initialPoints.length,
+      initialPoints.reduce(function(sum,place){return sum+place.longitude},0)/initialPoints.length]
+   : [0,0];
+  routeMap=leaflet.map('routeMap',{scrollWheelZoom:false}).setView(initialCenter,13);
+  if(initialPoints.length>1){
+   var initialBounds=leaflet.latLngBounds(initialPoints.map(function(place){return [place.latitude,place.longitude]}));
+   routeMap.fitBounds(initialBounds,{padding:[28,28],maxZoom:15});
+  }
   $('routeMapPlaceholder').style.display='none';
   leaflet.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
    maxZoom:19,attribution:'© OpenStreetMap contributors'
