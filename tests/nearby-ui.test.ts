@@ -107,7 +107,7 @@ class NearbyTestElement {
   click() { return this.listeners.click?.(); }
 }
 
-async function mountNearbyBrowser(routeResponse: unknown) {
+async function mountNearbyBrowser(routeResponse: unknown, savedPlacesInput?: Array<Record<string, unknown>>) {
   const elements = new Map<string, NearbyTestElement>();
   const documentMock = {
     getElementById(id: string) {
@@ -118,7 +118,7 @@ async function mountNearbyBrowser(routeResponse: unknown) {
     querySelectorAll() { return []; },
     body: new NearbyTestElement("body"),
   };
-  const seed = [
+  const seed = savedPlacesInput || [
     { id: "node/501", name: "Điểm A", category: "food", categoryLabel: "Ăn uống", latitude: 20.8449, longitude: 106.6881, address: "Hải Phòng" },
     { id: "way/502", name: "Điểm B", category: "shopping", categoryLabel: "Mua sắm", latitude: 20.8460, longitude: 106.6890, address: "Hải Phòng" },
   ];
@@ -219,4 +219,48 @@ describe("Nearby Places routed itinerary", () => {
     await bike.elements.get("routeButton")!.click();
     expect(bike.calls[0].url).toContain("https://routing.openstreetmap.de/routed-bike/route/v1/bike/");
   });
+
+  it("blocks a rapid repeat route request in the same page instance", async () => {
+    const mounted = await mountNearbyBrowser(routeFixture);
+    await mounted.elements.get("routeButton")!.click();
+    await mounted.elements.get("routeButton")!.click();
+    expect(mounted.calls).toHaveLength(1);
+    expect(mounted.elements.get("routeStatus")?.textContent).toContain("chờ");
+  });
+
+  it("shows a safe no-route message instead of drawing an invalid result", async () => {
+    const mounted = await mountNearbyBrowser({ code: "NoRoute", routes: [], waypoints: [] });
+    await mounted.elements.get("routeButton")!.click();
+    expect(mounted.elements.get("routeStatus")?.textContent).toContain("Không tìm được đường");
+    expect(mounted.elements.get("routeSummary")?.textContent).toBe("");
+    expect(mounted.layers).toHaveLength(0);
+  });
+
+  it("routes only the first ten saved places in their original order", async () => {
+    const manyStops = Array.from({ length: 12 }, (_, index) => ({
+      id: "node/" + (700 + index),
+      name: "Điểm " + (index + 1),
+      category: "food",
+      categoryLabel: "Ăn uống",
+      latitude: 20.8000 + index / 10000,
+      longitude: 106.6000 + index / 10000,
+    }));
+    const tenStopResponse = {
+      code: "Ok",
+      waypoints: Array.from({ length: 10 }, () => ({ name: "", location: [106.6, 20.8], distance: 0 })),
+      routes: [{
+        distance: 9000, duration: 3600,
+        geometry: { type: "LineString", coordinates: [[106.6, 20.8], [106.61, 20.81]] },
+        legs: Array.from({ length: 9 }, () => ({ distance: 1000, duration: 400, steps: [] })),
+      }],
+    };
+    const mounted = await mountNearbyBrowser(tenStopResponse, manyStops);
+    await mounted.elements.get("routeButton")!.click();
+    const requestedUrl = mounted.calls[0].url;
+    expect(requestedUrl).toContain("106.60000,20.80000;106.60100,20.80100");
+    expect(requestedUrl).toContain("106.60900,20.80900");
+    expect(requestedUrl).not.toContain("106.61000,20.81000");
+    expect(mounted.elements.get("routeStatus")?.textContent).toContain("Đã dùng 10 điểm đầu");
+  });
+
 });
