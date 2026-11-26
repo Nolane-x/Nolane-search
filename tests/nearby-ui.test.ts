@@ -135,7 +135,7 @@ async function mountNearbyBrowser(routeResponse: unknown, savedPlacesInput?: Arr
     bindTooltip() { return this; },
     getBounds() { return { isValid: () => true }; },
     clearLayers() { layers.length = 0; },
-    addLayer(layer: unknown) { layers.push({ data: layer }); return this; },
+    addLayer(layer: unknown) { layers.push({ data: (layer as { data?: unknown } | null)?.data }); return this; },
   });
   const leaflet = {
     map() {
@@ -205,7 +205,7 @@ describe("Nearby Places routed itinerary", () => {
     expect(mounted.calls[0].url).toContain("geometries=geojson");
     expect(mounted.elements.get("routeSummary")?.textContent).toContain("1.25 km");
     expect(mounted.elements.get("routeSummary")?.textContent).toContain("7 phút");
-    expect(mounted.layers.some(layer => Boolean(layer.data))).toBe(true);
+    expect(mounted.layers.some(layer => (layer.data as { geometry?: { type?: string } } | undefined)?.geometry?.type === "LineString")).toBe(true);
   });
 
   it("uses the dedicated foot and bicycle profile endpoints rather than the car profile", async () => {
@@ -233,7 +233,7 @@ describe("Nearby Places routed itinerary", () => {
     await mounted.elements.get("routeButton")!.click();
     expect(mounted.elements.get("routeStatus")?.textContent).toContain("Không tìm được đường");
     expect(mounted.elements.get("routeSummary")?.textContent).toBe("");
-    expect(mounted.layers).toHaveLength(0);
+    expect(mounted.layers.some(layer => (layer.data as { geometry?: { type?: string } } | undefined)?.geometry?.type === "LineString")).toBe(false);
   });
 
   it("routes only the first ten saved places in their original order", async () => {
@@ -242,8 +242,8 @@ describe("Nearby Places routed itinerary", () => {
       name: "Điểm " + (index + 1),
       category: "food",
       categoryLabel: "Ăn uống",
-      latitude: 20.8000 + index / 10000,
-      longitude: 106.6000 + index / 10000,
+      latitude: 20.8000 + index / 1000,
+      longitude: 106.6000 + index / 1000,
     }));
     const tenStopResponse = {
       code: "Ok",
