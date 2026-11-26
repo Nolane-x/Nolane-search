@@ -27,13 +27,13 @@ describe("Nearby Places UI", () => {
     expect(html).toContain("var MAX_SAVED=50;");
     expect(html).toContain("localStorage.setItem(STORAGE_KEY,JSON.stringify(next))");
     expect(html).toContain("function cleanSavedPlace(raw)");
-    expect(html).toContain("typeof raw.latitude!=='number'");
+    expect(html).toContain("typeof latitude!=='number'");
     expect(html).toContain("slice(0,MAX_SAVED)");
     expect(html).toContain("function moveSavedPlace(index,delta)");
     expect(html).toContain("function exportSavedPlaces()");
     expect(html).toContain("application/gpx+xml;charset=utf-8");
-    expect(html).toContain("<rtept lat=\\\"");
-    expect(html).toContain("không chứa tuyến đường được tối ưu");
+    expect(html).toContain('<rtept lat="');
+    expect(html).toContain("chưa phải tuyến đường được tối ưu");
     expect(html).not.toContain("/api/nearby/saved");
   });
 
