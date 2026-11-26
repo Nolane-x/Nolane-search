@@ -581,13 +581,25 @@ class MediaNodeStore:
                 "SELECT job_id FROM jobs WHERE cleanup_at IS NOT NULL AND cleanup_at<=? AND status='complete'",
                 (now,),
             ).fetchall()
-            old_ids = [row["job_id"] for row in rows]
-            for job_id in old_ids:
-                shutil.rmtree(self.root / "jobs" / job_id, ignore_errors=True)
-            if old_ids:
+            expired_ids: list[str] = []
+            for row in rows:
+                job_id = row["job_id"]
+                folder = self.root / "jobs" / job_id
+                try:
+                    shutil.rmtree(folder)
+                except FileNotFoundError:
+                    expired_ids.append(job_id)
+                except OSError:
+                    # On Windows an active Range stream may hold the file open.
+                    # It is already inaccessible because cleanup_at has passed;
+                    # retry physical deletion on the next sweep.
+                    continue
+                else:
+                    expired_ids.append(job_id)
+            if expired_ids:
                 db.executemany(
-                    "UPDATE jobs SET status='expired', share_token_hash=NULL, share_expires_at=NULL, updated_at=? WHERE job_id=?",
-                    [(now, job_id) for job_id in old_ids],
+                    "UPDATE jobs SET status='expired', share_token_hash=NULL, share_expires_at=NULL, updated_at=? WHERE job_id=? AND status='complete'",
+                    [(now, job_id) for job_id in expired_ids],
                 )
             db.execute("DELETE FROM jobs WHERE updated_at<? AND status IN ('failed','cancelled','expired')", (now - 7 * 86400,))
 
@@ -647,10 +659,13 @@ class MediaWorker:
         self.proxy_url = proxy_url
         self.stop_event = threading.Event()
         self.thread = threading.Thread(target=self._run, name="nolane-media-worker", daemon=True)
+        self.cleanup_thread = threading.Thread(target=self._cleanup_loop, name="nolane-media-cleanup", daemon=True)
         self.process_lock = threading.Lock()
         self.processes: dict[str, subprocess.Popen] = {}
 
     def start(self) -> None:
+        if not self.cleanup_thread.is_alive():
+            self.cleanup_thread.start()
         if not self.thread.is_alive():
             self.thread.start()
 
@@ -662,6 +677,8 @@ class MediaWorker:
             _terminate_process_tree(process)
         if self.thread.is_alive():
             self.thread.join(timeout=5)
+        if self.cleanup_thread.is_alive():
+            self.cleanup_thread.join(timeout=3)
 
     def cancel(self, job_id: str) -> None:
         with self.process_lock:
@@ -669,14 +686,19 @@ class MediaWorker:
         if process is not None:
             _terminate_process_tree(process)
 
+    def _cleanup_loop(self) -> None:
+        while not self.stop_event.is_set():
+            try:
+                self.store.expire_due()
+            except sqlite3.Error:
+                # Transient database locks must not kill the download worker.
+                pass
+            self.stop_event.wait(60)
+
     def _run(self) -> None:
-        next_cleanup = 0.0
         while not self.stop_event.is_set():
             job = self.store.claim_next()
             if job is None:
-                if time.time() >= next_cleanup:
-                    self.store.expire_due()
-                    next_cleanup = time.time() + 60
                 self.stop_event.wait(0.75)
                 continue
             self._process(job)

@@ -4,6 +4,7 @@ import socket
 import sys
 import threading
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -477,6 +478,29 @@ class MediaNodePolicyTests(unittest.TestCase):
                 first.close()
             second = server.InstanceLock(lock_path)
             second.close()
+
+
+    def test_expired_files_are_deleted_and_share_tokens_invalidated(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = server.MediaNodeStore(Path(temp))
+            job_id = "7f3dd2d7-4d41-4ef9-9e18-b4f56a510c28"
+            finished_at = time.time() - server.FILE_RETENTION_SECONDS - 10
+            store.enqueue(job_id, 123, "https://example.org/video", "video", "720", "example.org")
+            store.claim_next()
+            folder = Path(temp) / "jobs" / job_id
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "clip.mp4").write_bytes(b"media")
+            self.assertTrue(store.complete(job_id, "clip.mp4", "video/mp4", 5, now=finished_at))
+            share_token = "e" * 64
+            share_hash = hashlib.sha256(share_token.encode()).hexdigest()
+            self.assertIsNotNone(store.renew_share(job_id, 123, share_hash, now=finished_at + 1))
+            self.assertIsNotNone(store.authorize_share(job_id, 123, share_token, now=finished_at + 2))
+
+            store.expire_due()
+
+            self.assertFalse(folder.exists())
+            self.assertEqual(store.get_job(job_id, 123)["status"], "expired")
+            self.assertIsNone(store.authorize_share(job_id, 123, share_token))
 
 if __name__ == "__main__":
     unittest.main()
