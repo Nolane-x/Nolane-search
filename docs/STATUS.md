@@ -1,7 +1,18 @@
 # Verified Project Status
 
-Last verified: 2026-11-25. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
+Last verified: 2026-11-26. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
+
+## Latest production release — Wave 70 (2026-11-26)
+
+- [PR #144](https://github.com/Nolane-x/Nolane-search/pull/144) merged into `main` as `09a65237d0253316dfdf6dfad2128857bc39ff5d`. Nearby Places adds **Địa điểm đã lưu · Lịch trình**: save a result, remove it, move stops up/down and export the ordered list as a GPX 1.1 route.
+- Local favorites are bounded to 50 entries and deduplicated by OSM object ID. Restored localStorage data is revalidated: OSM type/id, finite numeric coordinates/ranges and bounded text; arbitrary stored URLs are not trusted. OSM links are rebuilt from checked data.
+- Privacy boundary: no favorites API, D1 table, cloud sync, analytics or background location. Search-center coordinates remain transient. A favorite's selected POI name, category, address and coordinates enter this browser profile's versioned localStorage key only after the user clicks **Lưu địa điểm**. Clearing site data removes the list; it is not shared with other devices.
+- GPX is generated on-device only after explicit export. It contains ordered route points and escaped XML labels. It does **not** calculate roads, directions, route distance or travel time; the displayed order is chosen manually by the user. No routing provider was added.
+- PR CI #45749439137 [passed](https://github.com/Nolane-x/Nolane-search/actions/runs/45749439137) and main CI #45749647312 [passed](https://github.com/Nolane-x/Nolane-search/actions/runs/45749647312): TypeScript, **41 Vitest files / 419 tests**, deployment-script checks, **449 Python runner tests** and Worker build.
+- Cloudflare deploy #45749647341 [succeeded](https://github.com/Nolane-x/Nolane-search/actions/runs/45749647341) and uploaded Worker version `bcc51f91-edd2-4cec-b4f3-be339d7a4918`. Telegram webhook verification and bot-command registration passed. Worker export #45749647309 [succeeded](https://github.com/Nolane-x/Nolane-search/actions/runs/45749647309). No D1 migration was needed.
+- Production smoke confirms Telegram Workspace HTML/CSP/auth/tabs, Media Studio and Nearby links, anonymous `/nearby` redirect, and anonymous `/api/nearby/search` HTTP 401. The smoke does not exercise a live Overpass query or import the exported GPX into third-party navigation apps.
+- The feature is available in the latest Nearby page. In Telegram, open the latest Workspace (send `/start` in the private bot chat and tap **Mở Nolane Workspace** if using an older message), then open **Nearby Places**.
 
 ## Latest production release — Wave 69 (2026-11-25)
 
