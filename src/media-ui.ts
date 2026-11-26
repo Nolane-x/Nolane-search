@@ -513,7 +513,7 @@ async function search(){
 }
 function syncProviderOptions(){
  var kind=$('kind').value;
- var unsupported=kind==='audio'?['commons','nasa','openverse','peertube','inaturalist','met','aic']:kind==='video'?['commons','openverse','inaturalist','met']:kind==='image'?['archive','peertube']:[];
+ var unsupported=kind==='audio'?['commons','nasa','openverse','peertube','inaturalist','met','aic']:kind==='video'?['commons','openverse','inaturalist','met','aic']:kind==='image'?['archive','peertube']:[];
  var provider=$('provider');
  for(var i=0;i<provider.options.length;i++){provider.options[i].disabled=unsupported.indexOf(provider.options[i].value)>=0}
  if(provider.options[provider.selectedIndex]&&provider.options[provider.selectedIndex].disabled)provider.value='all';
