@@ -490,12 +490,12 @@ class MediaNodePolicyTests(unittest.TestCase):
                 module_path = str(Path(server.__file__).parent)
                 lock_literal = repr(str(lock_path))
                 code = (
-                    "import sys; from pathlib import Path; "
-                    "sys.path.insert(0, " + repr(module_path) + "); "
-                    "import server; "
-                    "try_lock = None; "
+                    "import sys\n"
+                    "from pathlib import Path\n"
+                    "sys.path.insert(0, " + repr(module_path) + ")\n"
+                    "import server\n"
                     "try:\n"
-                    "    try_lock = server.InstanceLock(Path(" + lock_literal + "))\n"
+                    "    lock = server.InstanceLock(Path(" + lock_literal + "))\n"
                     "except server.InstanceAlreadyRunning:\n"
                     "    raise SystemExit(23)\n"
                     "raise SystemExit(0)\n"
