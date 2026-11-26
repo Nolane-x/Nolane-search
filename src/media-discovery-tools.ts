@@ -9,7 +9,7 @@ const INATURALIST_API = "https://api.inaturalist.org/v1";
 const INATURALIST_PHOTO_HOST = "inaturalist-open-data.s3.amazonaws.com";
 const INATURALIST_LICENSES: Record<string, string> = {
   cc0: "CC0",
-  cc0_1_0: "CC0",
+  "cc0-1-0": "CC0",
   "cc-by": "CC BY",
   "cc-by-sa": "CC BY-SA",
   "cc-by-nc": "CC BY-NC",
@@ -342,7 +342,7 @@ export async function searchINaturalistObservations(
   for (const raw of rows.slice(0, limit)) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const row = raw as Obj;
-    const observationId = nonNegativeInteger(row.id, 2_147_483_647);
+    const observationId = nonNegativeInteger(row.id, Number.MAX_SAFE_INTEGER);
     if (observationId === null || observationId < 1) continue;
 
     const taxon = nestedObject(row.taxon);
@@ -356,7 +356,7 @@ export async function searchINaturalistObservations(
     for (const candidate of photos) {
       if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
       const photo = candidate as Obj;
-      const photoId = nonNegativeInteger(photo.id, 2_147_483_647);
+      const photoId = nonNegativeInteger(photo.id, Number.MAX_SAFE_INTEGER);
       const rawLicense = typeof photo.license_code === "string"
         ? photo.license_code.trim().toLowerCase().replace(/_/g, "-") : "";
       const license = INATURALIST_LICENSES[rawLicense] ?? null;
