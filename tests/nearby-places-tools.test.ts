@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NearbyPlacesInputError, searchNearbyPlaces, searchPlacesInCity } from "../src/nearby-places-tools";
+import { executeAgentTool, AGENT_TOOL_DEFINITIONS } from "../src/agent-tools";
+import type { Env } from "../src/types";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -162,6 +164,33 @@ describe("Nearby Places · OpenStreetMap", () => {
     expect(result.choices).toHaveLength(3);
     expect(result.choices.map(choice => choice.country_code)).toEqual(["US", "US", "AU"]);
     expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  it("registers and dispatches city discovery as an ordinary-user AI tool", async () => {
+    expect(AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name)).toContain("search_places_in_city");
+    const mock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.hostname === "geocoding-api.open-meteo.com") {
+        return new Response(JSON.stringify({ results: [{
+          name: "Hanoi", admin1: "Ha Noi", country: "Vietnam", country_code: "VN",
+          latitude: 21.0278, longitude: 105.8342,
+        }] }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ elements: [
+        { type: "node", id: 7, lat: 21.0280, lon: 105.8343, tags: { name: "Công viên", leisure: "park" } }
+      ] }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", mock);
+    const env = { DB: {} as never, SEARCH_JOBS: {} as never } as Env;
+    const result = JSON.parse(await executeAgentTool(env, "search_places_in_city", {
+      city: "Hanoi", country_code: "VN", category: "parks",
+    }));
+    expect(result).toMatchObject({
+      status: "ok",
+      requestedCity: "Hanoi",
+      resolvedPlace: { name: "Hanoi", country_code: "VN" },
+      places: [{ name: "Công viên" }],
+    });
   });
 
   it("rejects invalid city options before calling external services", async () => {
