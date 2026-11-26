@@ -277,6 +277,17 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
   {
     type: "function",
     function: {
+      name: "search_met_open_access_artworks",
+      description: "Search The Metropolitan Museum of Art's Open Access collection for artwork images. Returns only objects the museum explicitly marks public domain (CC0), using official image URLs and the museum object page. Results are images of artworks and historical objects, not general web image results.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 140, description: "Artist, artwork title, style, period, material or subject." },
+        limit: { type: "integer", minimum: 1, maximum: 8, description: "Number of public-domain artworks, defaults to 6." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "get_natural_events",
       description: "Look up NASA EONET's recent curated global natural-event records such as wildfires, severe storms, volcanoes or landslides. Filter by category, open/closed status and days. This is not an emergency warning service.",
       parameters: { type: "object", properties: {
@@ -2270,7 +2281,7 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
   if (name === "search_peertube_videos" && args.include_nsfw === true && env.MEDIA_ALLOW_NSFW !== "true") {
     throw new Error("NSFW search is disabled for this deployment. It requires the separately enabled adult-media feature gate.");
   }
-  if (["search_wikimedia_images","search_nasa_media","lookup_food_product","lookup_consumer_product","compare_food_products","search_openverse_images","search_inaturalist_observations","search_internet_archive_videos","search_internet_archive_audio","search_peertube_videos"].includes(name)) {
+  if (["search_wikimedia_images","search_met_open_access_artworks","search_nasa_media","lookup_food_product","lookup_consumer_product","compare_food_products","search_openverse_images","search_inaturalist_observations","search_internet_archive_videos","search_internet_archive_audio","search_peertube_videos"].includes(name)) {
     return (await runMediaDiscoveryTool(name, args)).slice(0, 12_000);
   }
   if (["search_country_profiles","get_world_bank_indicators","search_gbif_species","search_gbif_observations"].includes(name)) {
@@ -2320,7 +2331,7 @@ export async function runAgentLoop(
   const instruction = [
     "You are Nolane Agent with access to Nolane's real, allowlisted tools. Use the available tools when they materially improve the result; never invent a tool or claim execution without a returned result.",
     "Use list_nolane_tools to discover the all ready file processors. Results are paginated: inspect total/tools/nextOffset, use targeted query/category filters, and pass nextOffset to continue. The default ordering prioritizes everyday tasks: images, documents, audio/video, utilities and data. Developer and repository tools remain available, but use them only when the user asks for technical or software-repository work.",
-    "Use define_english_word for on-demand English vocabulary lookups; do not invent API definitions or imply that the source covers every language. Use search_public_domain_books for Project Gutenberg titles marked public domain in the US and state the jurisdiction caveat. Use search_museum_artworks for Art Institute of Chicago public-domain collection discovery only. Use get_natural_events for NASA EONET curated events, never as an emergency alert. Use get_local_time for current city time from geocoded IANA time zones.",
+    "Use define_english_word for on-demand English vocabulary lookups; do not invent API definitions or imply that the source covers every language. Use search_public_domain_books for Project Gutenberg titles marked public domain in the US and state the jurisdiction caveat. Use search_museum_artworks for Art Institute of Chicago public-domain collection discovery only. Use search_met_open_access_artworks for artworks and historical objects from The Met; return only results explicitly marked public domain and identify the source as CC0. Use get_natural_events for NASA EONET curated events, never as an emergency alert. Use get_local_time for current city time from geocoded IANA time zones.",
     "Use get_marine_forecast for general wave/swell outlooks only, never for navigation or rescue advice. Use get_earthquake_activity for USGS recorded events, never as an early-warning or safety-clearance service. Use search_books for human reading/catalog requests and lookup_postal_code for postcode reference data, preserving each provider’s coverage and accuracy limits.",
     "Use search_inaturalist_observations when people ask for licensed wildlife, plant, fungi or nature photos; report the photo's exact Creative Commons/CC0 license and attribution, omit exact coordinates, and do not present community observations as guaranteed species identification.",
     "Use search_nearby_places only when the user explicitly provides coordinates or deliberately shares device location; never guess location, infer current coordinates, or geocode a city/street. Ask the user to share a location or enter latitude/longitude. Search one category within its bounded radius; use essentials when the user wants a broad essentials scan; label OpenStreetMap as the source, explain that straight-line distance is not a route and opening_hours is not live open status.",

@@ -7,6 +7,9 @@ const NASA_API = "https://images-api.nasa.gov";
 const NASA_ASSET_HOST = "images-assets.nasa.gov";
 const INATURALIST_API = "https://api.inaturalist.org/v1";
 const INATURALIST_PHOTO_HOST = "inaturalist-open-data.s3.amazonaws.com";
+const MET_COLLECTION_API = "https://collectionapi.metmuseum.org/public/collection";
+const MET_IMAGE_HOST = "images.metmuseum.org";
+const MET_SOURCE_HOST = "www.metmuseum.org";
 const INATURALIST_LICENSES: Record<string, string> = {
   cc0: "CC0",
   "cc0-1-0": "CC0",
@@ -97,7 +100,7 @@ function extValue(metadata: Obj, key: string): string | null {
 export interface MediaSearchItem {
   id: string;
   title: string;
-  provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive" | "PeerTube" | "iNaturalist";
+  provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive" | "PeerTube" | "iNaturalist" | "The Met";
   mediaType: "image" | "video" | "audio";
   sourceUrl: string;
   previewUrl: string | null;
@@ -312,6 +315,77 @@ export async function searchOpenverseImages(queryInput: unknown, limitInput?: un
  * also return non-open static.inaturalist.org photos, which are intentionally
  * excluded. Exact observation coordinates are never returned.
  */
+/**
+ * Search The Met's Open Access collection. Search results are only candidate IDs:
+ * each object is fetched and must explicitly be public-domain with images on the
+ * museum's exact image host before it can be returned.
+ */
+export async function searchMetMuseumArtworks(
+  queryInput: unknown,
+  limitInput?: unknown,
+): Promise<{ status: string; source: string; query: string; items: MediaSearchItem[]; note: string }> {
+  const query = cleanText(queryInput, "query", 2, 140);
+  const limit = boundedInt(limitInput, "limit", 6, 1, 8);
+  const searchUrl = new URL(MET_COLLECTION_API + "/v1.1/search");
+  searchUrl.searchParams.set("q", query);
+  searchUrl.searchParams.set("hasImages", "true");
+  searchUrl.searchParams.set("offset", "0");
+  searchUrl.searchParams.set("limit", String(limit));
+
+  const search = object(await fetchJson<unknown>(searchUrl, "The Met collection search", 300_000), "The Met collection search");
+  const objectIds = Array.isArray(search.objectIDs) ? search.objectIDs.slice(0, limit) : [];
+  const settled = await Promise.allSettled(objectIds.map(async rawId => {
+    const objectId = nonNegativeInteger(rawId, 2_000_000_000);
+    if (objectId === null || objectId < 1) return null;
+    const objectUrl = new URL(MET_COLLECTION_API + "/v1/objects/" + objectId);
+    const record = object(await fetchJson<unknown>(objectUrl, "The Met object record", 250_000), "The Met object record");
+    if (record.isPublicDomain !== true) return null;
+
+    const previewUrl = safeHttpUrl(record.primaryImageSmall, MET_IMAGE_HOST);
+    const mediaUrl = safeHttpUrl(record.primaryImage, MET_IMAGE_HOST);
+    const sourceUrl = safeHttpUrl(record.objectURL, MET_SOURCE_HOST);
+    if (!previewUrl || !mediaUrl || !sourceUrl) return null;
+
+    const title = metadataText(record.title, 220) || "The Met artwork " + objectId;
+    const artist = metadataText(record.artistDisplayName, 180);
+    const creditLine = metadataText(record.creditLine, 240);
+    const credit = [artist, creditLine].filter(Boolean).join(" · ") || null;
+    const description = [
+      metadataText(record.objectDate, 100),
+      metadataText(record.medium, 180),
+      metadataText(record.culture, 100),
+      metadataText(record.department, 120),
+    ].filter(Boolean).join(" · ") || null;
+    return {
+      id: "met-" + objectId,
+      title,
+      provider: "The Met" as const,
+      mediaType: "image" as const,
+      sourceUrl,
+      previewUrl,
+      mediaUrl,
+      description,
+      credit,
+      license: "CC0",
+      licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+      dateCreated: metadataText(record.objectDate, 100),
+    } satisfies MediaSearchItem;
+  }));
+
+  const items = settled.flatMap(result => result.status === "fulfilled" && result.value ? [result.value] : []);
+  const rejectedCount = settled.filter(result => result.status === "rejected").length;
+  if (!items.length && rejectedCount) {
+    throw new Error("The Met object records could not be retrieved right now.");
+  }
+  return {
+    status: items.length ? "ok" : "not_found",
+    source: "The Metropolitan Museum of Art · Open Access API",
+    query,
+    items,
+    note: "Only objects explicitly marked public domain by The Met and served from its official image host are returned. The museum's Open Access collection data and public-domain images are released under CC0. Artist and collection credit metadata are preserved for context; check the original object page for details.",
+  };
+}
+
 export async function searchINaturalistObservations(
   queryInput: unknown,
   limitInput?: unknown,
@@ -999,6 +1073,9 @@ export async function runMediaDiscoveryTool(name: string, rawArgs: unknown): Pro
   }
   if (name === "search_peertube_videos") {
     return JSON.stringify(await searchPeerTubeVideos(args.query, args.limit, args.include_nsfw));
+  }
+  if (name === "search_met_open_access_artworks") {
+    return JSON.stringify(await searchMetMuseumArtworks(args.query, args.limit));
   }
   if (name === "search_inaturalist_observations") {
     return JSON.stringify(await searchINaturalistObservations(args.query, args.limit, args.iconic_taxon));
