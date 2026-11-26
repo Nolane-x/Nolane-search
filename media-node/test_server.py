@@ -312,11 +312,11 @@ class MediaNodePolicyTests(unittest.TestCase):
         try:
             with socket.create_connection(proxy.server_address, timeout=2) as client:
                 client.sendall(
-                    b"CONNECT example.org:443 HTTP/1.1\\r\\n"
-                    b"Host: example.org:443\\r\\n\\r\\n"
+                    b"CONNECT example.org:443 HTTP/1.1\r\n"
+                    b"Host: example.org:443\r\n\r\n"
                 )
                 response = client.recv(2048)
-                self.assertIn(b"403", response.split(b"\\r\\n", 1)[0])
+                self.assertIn(b"403", response.split(b"\r\n", 1)[0])
         finally:
             proxy.shutdown()
             proxy.server_close()
@@ -334,11 +334,11 @@ class MediaNodePolicyTests(unittest.TestCase):
         try:
             with socket.create_connection(proxy.server_address, timeout=2) as client:
                 client.sendall(
-                    b"GET http://example.org/video HTTP/1.1\\r\\n"
-                    b"Host: example.org\\r\\n\\r\\n"
+                    b"GET http://example.org/video HTTP/1.1\r\n"
+                    b"Host: example.org\r\n\r\n"
                 )
                 response = client.recv(2048)
-                self.assertIn(b"403", response.split(b"\\r\\n", 1)[0])
+                self.assertIn(b"403", response.split(b"\r\n", 1)[0])
         finally:
             proxy.shutdown()
             proxy.server_close()
