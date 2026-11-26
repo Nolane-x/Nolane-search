@@ -49,7 +49,7 @@
 - Consumes current nearbyAppResponse(): Response and the rendered HTML template contract.
 - Produces test expectations that pin map markup, Leaflet version/SRI, fixed routing profiles, privacy disclosure, route click-only behavior, rate guard, 10-stop cap, response validation and existing Wave70 behavior.
 
-- [ ] **Step 1: Add failing UI assertions first**
+- [x] **Step 1: Add failing UI assertions first**
   - Assert response referrer-policy equals strict-origin-when-cross-origin.
   - Assert CSP allows https://unpkg.com, https://tile.openstreetmap.org, https://router.project-osrm.org and https://routing.openstreetmap.de only in their respective directives, while preserving frame-ancestors 'none'.
   - Assert markup includes a map container, profile selector values driving, cycling, walking, a manual route button and visible OSM attribution.
@@ -59,10 +59,10 @@
   - Assert code includes an explicit click listener, a 1,100 ms cooldown, one in-flight request guard and a 10-stop route cap.
   - Assert response validation covers code === "Ok", LineString, bounded finite coordinates and consistent legs.
   - Keep existing Wave68/69/70 assertions intact.
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
   - Run: npm test -- tests/nearby-ui.test.ts
   - Expected: failure because the map, route controls, endpoint mappings and headers are not implemented yet (not a parse error).
-- [ ] **Step 3: Commit the failing contract test**
+- [x] **Step 3: Commit the failing contract test**
   - Commit message: test(nearby): define Wave 71 routed itinerary contract
 
 ### Task 2: Implement map and route workflow
@@ -75,33 +75,33 @@
 - Consumes: Wave70 savedPlaces entries with id, name, latitude, longitude, categoryLabel, address; existing renderSavedPlaces(), setStatus(), nearbyAppResponse().
 - Produces: ensureRouteMap(), refreshRouteStops(), requestSavedPlacesRoute(), validateRoutePayload(), buildRouteUrl(), drawComputedRoute() and renderRouteMetrics() inside the page script; static page-level CSP/referrer behavior.
 
-- [ ] **Step 1: Add the Leaflet map surface**
+- [x] **Step 1: Add the Leaflet map surface**
   - Add Leaflet 1.9.4 CSS and JS with pinned SRI/crossorigin. Keep the map panel useful if the script fails to load.
   - Add the OSM tile layer with visible attribution and a link to OSM copyright/fix map. Do not initialize Leaflet or fetch tiles on page load; initialize only after the explicit route click.
-- [ ] **Step 2: Add fixed route profiles and request controls**
+- [x] **Step 2: Add fixed route profiles and request controls**
   - Add profile select (driving default, cycling, walking), manual route button and explicit provider-logging/privacy note.
   - Build URL only from the profile allowlist and validated saved POI numeric coordinates in lon,lat order.
   - Request geometries=geojson&overview=full&steps=false&alternatives=false.
   - Route only the first 10 saved entries; show an explicit notice when entries are omitted.
-- [ ] **Step 3: Add throttling and request-state safeguards**
+- [x] **Step 3: Add throttling and request-state safeguards**
   - Block concurrent route requests and enforce 1,100 ms minimum spacing between provider calls, with a timestamp-only localStorage key shared across page loads/tabs.
   - Initialize/refresh the map first after the user's click, then capture the final itinerary signature and revision immediately before fetch. Ignore stale responses if profile or itinerary changed while the request was pending.
   - No auto-retry, no background call, and no route call from initialization.
-- [ ] **Step 4: Validate and display route**
+- [x] **Step 4: Validate and display route**
   - Validate response code, route metrics, geometry type/coordinates/point cap, route legs and waypoint count.
   - Draw route and numbered markers; fit bounds without assuming Leaflet succeeded.
   - Show total km and estimated minutes plus per-leg km/minute summaries using safe DOM text.
   - Clearly say this is not live traffic and public providers may log routes.
-- [ ] **Step 5: Update page CSP and Referer behavior**
+- [x] **Step 5: Update page CSP and Referer behavior**
   - Add only required external hosts to script/style/img/connect-src.
   - Set referrer-policy: strict-origin-when-cross-origin to provide OSM tiles a valid origin Referer without full page path.
-- [ ] **Step 6: Run focused test and verify GREEN**
+- [x] **Step 6: Run focused test and verify GREEN**
   - Run: npm test -- tests/nearby-ui.test.ts
   - Expected: every route-map and Wave70 UI contract assertion passes; inline script passes new Function parsing.
-- [ ] **Step 7: Run all tests and typecheck**
+- [x] **Step 7: Run all tests and typecheck**
   - Run: npm run typecheck && npm test
   - Expected: TypeScript succeeds; every Vitest test file and test passes.
-- [ ] **Step 8: Commit implementation**
+- [x] **Step 8: Commit implementation**
   - Commit message: feat(nearby): add routed itinerary map
 
 ### Task 3: Document provider policy and release evidence
@@ -114,12 +114,12 @@
 - Consumes: route endpoints, their profile semantics, rate limits, OSM attribution/tile policy and implementation behavior.
 - Produces: a user-facing repo handoff plus a durable provider-policy note; no runtime configuration changes.
 
-- [ ] **Step 1: Document provider terms**
+- [x] **Step 1: Document provider terms**
   - State the one request/second maximum, no-SLA/best-effort boundary, route request logging, attribution and valid Referer requirements, map lazy-load behavior, and no offline/prefetch/bulk tiles.
   - State that route duration is profile estimate, not live traffic.
-- [ ] **Step 2: Document actual implementation and limitations**
+- [x] **Step 2: Document actual implementation and limitations**
   - Record 10-waypoint route cap, first-10 ordering rule, profile endpoint map, no server-side route/favorite persistence, and CDN/tile dependencies.
-- [ ] **Step 3: Commit docs**
+- [x] **Step 3: Commit docs**
   - Commit message: docs: add Wave 71 routing policy and handoff
 
 ## Release verification
