@@ -104,6 +104,20 @@ def parse_range(value: str | None, size: int) -> tuple[int, int] | None:
     return (start, min(end, size - 1))
 
 
+def _extractor_environment(folder: Path) -> dict[str, str]:
+    # Do not let yt-dlp, FFmpeg or EJS inherit the Container control token,
+    # proxy credentials, cloud credentials or unrelated runtime variables.
+    return {
+        "PATH": os.environ.get("PATH", "/opt/venv/bin:/usr/bin:/bin"),
+        "HOME": str(folder),
+        "TMPDIR": str(folder),
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PYTHONNOUSERSITE": "1",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+
+
 def _progress_from_line(line: str) -> int | None:
     match = re.search(r"\[download\]\s+(\d+(?:\.\d+)?)%", line)
     if not match:
@@ -189,6 +203,7 @@ def _run_job(job_id: str, url: str, media_format: str, quality: str) -> None:
             errors="replace",
             bufsize=1,
             cwd=str(folder),
+            env=_extractor_environment(folder),
             close_fds=True,
             start_new_session=True,
         )
