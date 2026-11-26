@@ -12,6 +12,26 @@ describe("Nearby Places UI", () => {
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(csp).toContain("connect-src 'self'");
     expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("https://unpkg.com");
+    expect(csp).toContain("https://tile.openstreetmap.org");
+    expect(csp).toContain("https://router.project-osrm.org");
+    expect(csp).toContain("https://routing.openstreetmap.de");
+    expect(response.headers.get("referrer-policy")).toBe("strict-origin-when-cross-origin");
+    expect(html).toContain("leaflet@1.9.4/dist/leaflet.css");
+    expect(html).toContain("leaflet@1.9.4/dist/leaflet.js");
+    expect(html).toContain("id=\"routeMap\"");
+    expect(html).toContain("id=\"routeProfile\"");
+    expect(html).toContain("id=\"routeButton\"");
+    expect(html).toContain("routeProfileValue()");
+    expect(html).toContain("https://router.project-osrm.org/route/v1/driving/");
+    expect(html).toContain("https://routing.openstreetmap.de/routed-bike/route/v1/bike/");
+    expect(html).toContain("https://routing.openstreetmap.de/routed-foot/route/v1/foot/");
+    expect(html).toContain("nhà cung cấp có thể ghi log yêu cầu");
+    expect(html).toContain("var ROUTE_MAX_STOPS=10;");
+    expect(html).toContain("wait=1100-(now-lastRouteRequestAt)");
+    expect(html).toContain("routeRequestInFlight");
+    expect(html).toContain("data.code!=='Ok'");
+    expect(html).toContain("route.geometry.type!=='LineString'");
     expect(html).toContain("OpenStreetMap contributors");
     expect(html).toContain("ODbL");
     expect(html).toContain("/api/nearby/search");
@@ -126,6 +146,7 @@ async function mountNearbyBrowser(routeResponse: unknown) {
     tileLayer() { return makeLayer(); },
     layerGroup() { return makeLayer(); },
     circleMarker() { return makeLayer(); },
+    marker() { return makeLayer(); },
     geoJSON(data: unknown) { return makeLayer(data); },
     latLngBounds() { return { isValid: () => true }; },
     divIcon(options: unknown) { return options; },
