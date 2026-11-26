@@ -171,8 +171,9 @@ def create_egress_proxy(
                 ]
                 excluded = {
                     "host", "connection", "proxy-connection", "proxy-authorization",
-                    "proxy-authenticate", "keep-alive", "upgrade", "transfer-encoding",
-                    "te", "trailer",
+                    "proxy-authenticate", "authorization", "cookie", "forwarded",
+                    "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "x-real-ip",
+                    "keep-alive", "upgrade", "transfer-encoding", "te", "trailer",
                 }
                 for name, value in self.headers.items():
                     if name.lower() in excluded or name.lower() == "content-length":

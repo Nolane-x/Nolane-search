@@ -5,7 +5,8 @@ type MediaNodeConfig = {
 
 const NODE_TOKEN_RE = /^[a-f0-9]{64}$/i;
 const FUNNEL_HOST_RE = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+ts\.net$/;
-const INTERNAL_PATH_RE = /^\/internal\/(?:[a-z0-9-]+\/)*[a-z0-9-]+$/;
+const JOB_ID_PATTERN = "[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}";
+const INTERNAL_PATH_RE = new RegExp("^/internal/(?:start|(?:status|cancel|renew-share|revoke|share-info|share-file)/" + JOB_ID_PATTERN + ")$", "i");
 
 export function isMediaNodeConfigured(env: MediaNodeConfig): boolean {
   if (typeof env.MEDIA_NODE_URL !== "string" ||

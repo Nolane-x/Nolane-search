@@ -390,7 +390,10 @@ class MediaNodePolicyTests(unittest.TestCase):
                 client.sendall(
                     b"GET http://example.org/watch?v=abc HTTP/1.1\r\n"
                     b"Host: example.org\r\n"
-                    b"Accept: */*\r\n\r\n"
+                    b"Accept: */*\r\n"
+                    b"Cookie: session=secret\r\n"
+                    b"Authorization: Bearer secret\r\n"
+                    b"X-Forwarded-For: 127.0.0.1\r\n\r\n"
                 )
                 received = b""
                 while True:
@@ -405,6 +408,9 @@ class MediaNodePolicyTests(unittest.TestCase):
             self.assertIn(b"GET /watch?v=abc HTTP/1.1", forwarded)
             self.assertIn(b"Host: example.org", forwarded)
             self.assertIn(b"Connection: close", forwarded)
+            self.assertNotIn(b"Cookie:", forwarded)
+            self.assertNotIn(b"Authorization:", forwarded)
+            self.assertNotIn(b"X-Forwarded-For:", forwarded)
         finally:
             proxy.shutdown()
             proxy.server_close()

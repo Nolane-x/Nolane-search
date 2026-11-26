@@ -39,6 +39,8 @@ describe("zero-cost self-hosted Media Node connector", () => {
     );
     expect(request?.headers.get("range")).toBe("bytes=0-99");
     expect(createMediaNodeRequest(ENV, 123456, "/internal/../health")).toBeNull();
+    expect(createMediaNodeRequest(ENV, 123456, "/internal/debug")).toBeNull();
+    expect(createMediaNodeRequest(ENV, 123456, "/internal/export-all")).toBeNull();
     expect(createMediaNodeRequest(ENV, 123456, "https://example.org/internal/start")).toBeNull();
     expect(createMediaNodeRequest(ENV, 0, "/internal/status/id")).toBeNull();
   });
