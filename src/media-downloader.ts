@@ -57,6 +57,7 @@ export function createMediaNodeRequest(
     redirect: "error",
   };
   if (timeoutMs > 0) requestInit.signal = AbortSignal.timeout(timeoutMs);
+  else if (init.signal) requestInit.signal = init.signal;
   else delete requestInit.signal;
 
   return new Request(target, requestInit);

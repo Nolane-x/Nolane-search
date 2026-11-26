@@ -43,3 +43,19 @@ describe("zero-cost self-hosted Media Node connector", () => {
     expect(createMediaNodeRequest(ENV, 0, "/internal/status/id")).toBeNull();
   });
 });
+
+
+describe("Media Node streaming cancellation", () => {
+  it("preserves the caller AbortSignal when the stream has no fixed timeout", () => {
+    const controller = new AbortController();
+    const request = createMediaNodeRequest(
+      ENV, 123456,
+      "/internal/share-file/7f3dd2d7-4d41-4ef9-9e18-b4f56a510c21",
+      { method: "GET", signal: controller.signal },
+      0,
+    );
+    expect(request).not.toBeNull();
+    controller.abort();
+    expect(request!.signal.aborted).toBe(true);
+  });
+});

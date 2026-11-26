@@ -388,6 +388,7 @@ async function handlePublicMediaShare(request: Request, env: Env): Promise<Respo
 
   const fileResponse = await callMediaDownloader(env, ownerId, "/internal/share-file/" + jobId, {
     method: request.method,
+    signal: request.signal,
     headers: {
       "x-nolane-share-token": token,
       ...(request.headers.get("range") ? { range: request.headers.get("range")! } : {}),

@@ -532,7 +532,7 @@ $('download-form').addEventListener('submit',async function(event){
   activeDownloadId=result.jobId;
   sessionStorage.setItem('nolane-media-downloader-job',activeDownloadId);
   activeShareUrl=result.shareUrl||'';
-  showDownloadState('Tác vụ đã được tiếp nhận','Đang chờ container bắt đầu tải…',0);
+  showDownloadState('Tác vụ đã được tiếp nhận','Đang chờ Media Node bắt đầu tải…',0);
   showDownloadActions(result.status||'queued');
   await pollDownload(activeDownloadId);
  }catch(error){
@@ -566,12 +566,12 @@ $('download-cancel').addEventListener('click',async function(){
  finally{$('download-cancel').disabled=false;}
 });
 $('download-revoke').addEventListener('click',async function(){
- if(!activeDownloadId||!confirm('Thu hồi quyền truy cập link chia sẻ? Snapshot vật lý không thể xóa ngay và sẽ tự hết hạn.'))return;
+ if(!activeDownloadId||!confirm('Thu hồi quyền truy cập link chia sẻ? Tệp cục bộ sẽ được xóa theo thời hạn lưu trữ.'))return;
  $('download-revoke').disabled=true;
  try{
   await api('/api/media/downloads/'+encodeURIComponent(activeDownloadId),{method:'DELETE',headers:{'origin':location.origin}});
   activeShareUrl='';
-  showDownloadState('Đã thu hồi link','Link sẽ không còn truy cập được. Snapshot vật lý vẫn tự hết hạn theo chính sách của Cloudflare.',100);
+  showDownloadState('Đã thu hồi link','Link sẽ không còn truy cập được. Tệp cục bộ vẫn được xóa tự động sau thời hạn 12 giờ.',100);
   showDownloadActions('revoked');
   sessionStorage.removeItem('nolane-media-downloader-job');
   activeDownloadId='';
