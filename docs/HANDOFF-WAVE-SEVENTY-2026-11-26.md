@@ -26,11 +26,11 @@ Branch: feat/wave-70-local-saved-places-itinerary
 - No new upstream provider or routing service is introduced. OSM map links continue to open the public OpenStreetMap website.
 - The public Overpass endpoint remains for bounded low-volume personal queries only.
 
-## Validation plan
+## Validation results
 
-- UI tests cover privacy disclosure, versioned browser storage, the 50-place cap, validation of stored records, manual ordering, GPX MIME/type and the explicit no-routing boundary.
-- Existing geolocation permission and HTTPS result-link assertions remain.
-- Full TypeScript, Vitest, Python runner, Worker build, production smoke and deployment checks must pass before merge/deploy.
+- UI logic was exercised with a mocked browser surface: save, duplicate handling, reorder, restore validation, remove, GPX MIME/waypoint content and XML escaping passed. No favorite API call was made.
+- PR CI and main CI passed TypeScript, 41 Vitest files / 419 tests, deployment-script checks, 449 Python runner tests and Worker build.
+- Production deploy, Telegram webhook/command registration, Worker export and the Telegram Workspace/Nearby anonymous-access smoke all passed. See rollout evidence below.
 
 ## Production rollout — Wave 70 (2026-11-26)
 
