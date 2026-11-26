@@ -136,9 +136,9 @@ var STORAGE_KEY='nolane.nearby.saved-places.v1';
 var MAX_SAVED=50;
 function cleanSavedPlace(raw){
  if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
- var id=String(raw.id||'').match(/^(node|way|relation)\/(\d+)$/);
- var latitude=Number(raw.latitude),longitude=Number(raw.longitude);
- if(!id||!Number.isFinite(latitude)||latitude < -90||latitude > 90||!Number.isFinite(longitude)||longitude < -180||longitude > 180)return null;
+ var id=String(raw.id||'').match(/^(node|way|relation)\/([1-9]\d{0,15})$/);
+ var latitude=raw.latitude,longitude=raw.longitude;
+ if(!id||typeof latitude!=='number'||!Number.isFinite(latitude)||latitude < -90||latitude > 90||typeof longitude!=='number'||!Number.isFinite(longitude)||longitude < -180||longitude > 180)return null;
  function cleanText(value,max){return String(value||'').replace(/[\u0000-\u001f\u007f]/g,' ').trim().slice(0,max)}
  var name=cleanText(raw.name,160);if(!name)return null;
  return {id:id[1]+'/'+id[2],name:name,category:cleanText(raw.category,40),categoryLabel:cleanText(raw.categoryLabel,60),detailType:cleanText(raw.detailType,80),latitude:latitude,longitude:longitude,address:cleanText(raw.address,220)};
