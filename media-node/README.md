@@ -67,7 +67,7 @@ No paid Cloudflare plan, R2 bucket or GitHub Actions runtime is used by the down
 - Uninstall service/rules: .\uninstall.ps1 (Administrator)
 - Also delete local job database and media: .\uninstall.ps1 -RemoveData (Administrator)
 
-The local database, exclusive process lock and media are stored under media-node\data. Only one Media Node process may own that directory; a second launch exits without touching queued jobs. Completed media expires after 12 hours; unshared, cancelled and failed job metadata is periodically cleaned. The computer must remain powered on, connected to the Internet and signed in for new downloads and playback. Sleep, shutdown, ISP limits, upload speed and Funnel limits affect availability.
+The local database, exclusive process lock and media are stored under media-node\data. Only one Media Node process may own that directory; a second launch exits without touching queued jobs. Completed media becomes inaccessible after 12 hours and is removed by a separate 60-second cleanup loop. If Windows has an active file handle during playback, physical deletion is retried after the handle closes; the expired share remains unauthorized. Unshared, cancelled and failed job metadata is periodically cleaned. The computer must remain powered on, connected to the Internet and signed in for new downloads and playback. Sleep, shutdown, ISP limits, upload speed and Funnel limits affect availability.
 
 ## Security model
 

@@ -660,14 +660,16 @@ class MediaWorker:
         self.stop_event = threading.Event()
         self.thread = threading.Thread(target=self._run, name="nolane-media-worker", daemon=True)
         self.cleanup_thread = threading.Thread(target=self._cleanup_loop, name="nolane-media-cleanup", daemon=True)
+        self._started = False
         self.process_lock = threading.Lock()
         self.processes: dict[str, subprocess.Popen] = {}
 
     def start(self) -> None:
-        if not self.cleanup_thread.is_alive():
-            self.cleanup_thread.start()
-        if not self.thread.is_alive():
-            self.thread.start()
+        if self._started:
+            return
+        self._started = True
+        self.cleanup_thread.start()
+        self.thread.start()
 
     def stop(self) -> None:
         self.stop_event.set()
