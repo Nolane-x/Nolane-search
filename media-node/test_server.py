@@ -7,6 +7,7 @@ import threading
 import tempfile
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -507,6 +508,39 @@ class MediaNodePolicyTests(unittest.TestCase):
                 self.assertEqual(child.returncode, 23, child.stdout + child.stderr)
             finally:
                 parent_lock.close()
+
+
+    def test_directory_size_counts_nested_fragments(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "job-1").mkdir()
+            (root / "job-1" / "video.part").write_bytes(b"123")
+            (root / "job-1" / "fragments").mkdir()
+            (root / "job-1" / "fragments" / "chunk-1").write_bytes(b"4567")
+            self.assertEqual(server._directory_size(root), 7)
+
+    def test_total_storage_quota_rejects_new_job_before_starting_downloader(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = server.MediaNodeStore(Path(temp))
+            job_id = "7f3dd2d7-4d41-4ef9-9e18-b4f56a510c29"
+            store.enqueue(job_id, 123, "https://example.org/video", "video", "720", "example.org")
+            job = store.claim_next()
+            previous = server.MAX_TOTAL_MEDIA_BYTES
+            try:
+                server.MAX_TOTAL_MEDIA_BYTES = 5
+                old_folder = Path(temp) / "jobs" / "old"
+                old_folder.mkdir()
+                (old_folder / "retained.mp4").write_bytes(b"123456")
+                worker = server.MediaWorker(store)
+                with mock.patch.object(server.subprocess, "Popen") as popen:
+                    worker._process(job)
+                    popen.assert_not_called()
+                state = store.get_job(job_id, 123)
+                self.assertEqual(state["status"], "failed")
+                self.assertIn("storage is full", state["error"])
+            finally:
+                server.MAX_TOTAL_MEDIA_BYTES = previous
+
 
     def test_expired_files_are_deleted_and_share_tokens_invalidated(self):
         with tempfile.TemporaryDirectory() as temp:

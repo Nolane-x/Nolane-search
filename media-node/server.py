@@ -33,6 +33,7 @@ MEDIA_PROXY_PORT = int(os.environ.get("NOLANE_MEDIA_PROXY_PORT", "8766"))
 MEDIA_PROXY_URL = "http://" + MEDIA_PROXY_HOST + ":" + str(MEDIA_PROXY_PORT)
 MAX_BODY_BYTES = 8 * 1024
 MAX_OUTPUT_BYTES = 3 * 1024 * 1024 * 1024
+MAX_TOTAL_MEDIA_BYTES = 6 * 1024 * 1024 * 1024
 MAX_EXTRACTOR_FILE_BYTES = 1400 * 1024 * 1024
 MAX_SOURCE_DURATION_SECONDS = 2 * 60 * 60
 JOB_TIMEOUT_SECONDS = 30 * 60
@@ -620,13 +621,23 @@ def _safe_process_environment(job_dir: Path, ffmpeg_path: str, node_path: str) -
     return result
 
 def _directory_size(path: Path) -> int:
+    """Count regular files recursively without following directory/file symlinks."""
     total = 0
     try:
-        for item in path.iterdir():
-            if item.is_symlink():
-                continue
-            if item.is_file():
-                total += item.stat().st_size
+        for current, directories, files in os.walk(path, topdown=True, followlinks=False):
+            current_path = Path(current)
+            directories[:] = [
+                name for name in directories
+                if not (current_path / name).is_symlink()
+            ]
+            for name in files:
+                candidate = current_path / name
+                try:
+                    if candidate.is_symlink() or not candidate.is_file():
+                        continue
+                    total += candidate.stat().st_size
+                except OSError:
+                    continue
     except OSError:
         pass
     return total
@@ -713,6 +724,10 @@ class MediaWorker:
         if not url:
             self.store.fail(job_id)
             return
+        retained_bytes = _directory_size(self.store.root / "jobs")
+        if retained_bytes >= MAX_TOTAL_MEDIA_BYTES:
+            self.store.fail(job_id, "Temporary media storage is full; wait for older files to expire.")
+            return
         ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
         node = shutil.which("node") or "node"
         command = build_ytdlp_command(
@@ -754,8 +769,10 @@ class MediaWorker:
         reader.start()
         started = time.monotonic()
         row = None
+        next_storage_check = started
         timed_out = False
         too_large = False
+        storage_full = False
         cancelled = False
         while process.poll() is None:
             row = self.store.get_job(job_id, job["owner_id"])
@@ -763,14 +780,23 @@ class MediaWorker:
                 cancelled = True
                 _terminate_process_tree(process)
                 break
-            if time.monotonic() - started > JOB_TIMEOUT_SECONDS:
+            now = time.monotonic()
+            if now - started > JOB_TIMEOUT_SECONDS:
                 timed_out = True
                 _terminate_process_tree(process)
                 break
-            if _directory_size(job_dir) > MAX_OUTPUT_BYTES:
-                too_large = True
-                _terminate_process_tree(process)
-                break
+            if now >= next_storage_check:
+                job_bytes = _directory_size(job_dir)
+                total_bytes = _directory_size(self.store.root / "jobs")
+                if job_bytes > MAX_OUTPUT_BYTES:
+                    too_large = True
+                    _terminate_process_tree(process)
+                    break
+                if total_bytes > MAX_TOTAL_MEDIA_BYTES:
+                    storage_full = True
+                    _terminate_process_tree(process)
+                    break
+                next_storage_check = now + 2
             try:
                 line = lines.get(timeout=0.4)
             except queue.Empty:
@@ -790,11 +816,12 @@ class MediaWorker:
             shutil.rmtree(job_dir, ignore_errors=True)
             self.store.mark_cancelled(job_id)
             return
-        if timed_out or too_large or process.returncode != 0:
+        if timed_out or too_large or storage_full or process.returncode != 0:
             shutil.rmtree(job_dir, ignore_errors=True)
             self.store.fail(job_id,
                 "The media job exceeded its time limit." if timed_out else
-                "The media output exceeded the size limit." if too_large else
+                "The media output exceeded the per-job size limit." if too_large else
+                "The temporary media storage limit was reached." if storage_full else
                 "The source is unavailable or cannot be processed.")
             return
         output = safe_output_file(self.store.root / "jobs", job_id)
