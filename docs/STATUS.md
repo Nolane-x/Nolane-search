@@ -3,7 +3,20 @@
 Last verified: 2026-11-26. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
-## Latest production release — Wave 70 (2026-11-26)
+## Latest production release — Wave 71 (2026-11-26)
+
+- [PR #146](https://github.com/Nolane-x/Nolane-search/pull/146) merged into `main` as `77854cfc7e2b2589743a066c855882ca96402962`. Nearby Places adds an interactive routed itinerary map for driving, cycling and walking. It draws numbered stops in the user's manually saved order, the provider's GeoJSON road/path geometry, total distance/estimated duration and per-leg metrics.
+- Routing uses fixed provider endpoints only: OSRM public demo for driving, FOSSGIS `routed-bike` for cycling and `routed-foot` for walking. At most 10 of the locally saved 50 places are routed, always in their current order; no automatic route optimization is performed.
+- Route calculation starts only after the user clicks the button. Leaflet/OSM map tiles are also lazy-loaded only after that action, and the initial viewport is centered around the selected stops. The UI discloses that the selected route provider receives the stop coordinates and may log them, and that OSM tile requests reveal the displayed map area.
+- A 1,100 ms cooldown and in-flight guard limit requests; a timestamp-only localStorage value shares sequential cooldown across page loads/tabs and contains no route, POI IDs or coordinates. Route geometry/history is not persisted or sent through the Nolane Worker. No D1 migration, favorites API, proxy or account sync was added.
+- Provider response validation checks route code, finite non-negative metrics, LineString geometry, coordinate ranges, waypoint/leg counts and bounded payload/geometry sizes. NoRoute, NoSegment and provider failures show user-safe errors.
+- PR CI #45761827446 [passed](https://github.com/Nolane-x/Nolane-search/actions/runs/45761827446) and main CI #45762026423 [passed](https://github.com/Nolane-x/Nolane-search/actions/runs/45762026423): TypeScript, **41 Vitest files / 426 tests**, deployment checks, **449 Python runner tests** and Worker build.
+- Cloudflare deploy #45762026380 [succeeded](https://github.com/Nolane-x/Nolane-search/actions/runs/45762026380), uploading Worker version `2fcd46ac-9573-4a44-88ea-433cef22d196`. Telegram webhook verification and bot command registration passed. Worker export #45762026504 [succeeded](https://github.com/Nolane-x/Nolane-search/actions/runs/45762026504). No D1 migration was required.
+- Production smoke confirms Workspace HTML/CSP/auth/tabs, Nearby link, anonymous `/nearby` redirect and anonymous `/api/nearby/search` HTTP 401. It does **not** verify public routing-provider uptime, a live OSRM/FOSSGIS response, Leaflet CDN availability or actual OSM tile rendering.
+- Public OSRM/FOSSGIS routing and OpenStreetMap standard tiles remain shared community services with best-effort availability and usage limits. The route duration is a profile-based estimate, not live traffic; spoken turn-by-turn navigation and guaranteed arrival times are not included. See [Wave 71 provider research](TOOL-RESEARCH-2026-11-26-WAVE71-ROUTED-ITINERARY.md) and [Wave 71 handoff](HANDOFF-WAVE-SEVENTY-ONE-2026-11-26.md).
+
+## Previous production release — Wave 70 (2026-11-26)
+
 
 - [PR #144](https://github.com/Nolane-x/Nolane-search/pull/144) merged into `main` as `09a65237d0253316dfdf6dfad2128857bc39ff5d`. Nearby Places adds **Địa điểm đã lưu · Lịch trình**: save a result, remove it, move stops up/down and export the ordered list as a GPX 1.1 route.
 - Local favorites are bounded to 50 entries and deduplicated by OSM object ID. Restored localStorage data is revalidated: OSM type/id, finite numeric coordinates/ranges and bounded text; arbitrary stored URLs are not trusted. OSM links are rebuilt from checked data.
