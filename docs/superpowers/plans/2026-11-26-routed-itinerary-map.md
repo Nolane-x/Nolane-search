@@ -73,7 +73,7 @@
 
 **Interfaces:**
 - Consumes: Wave70 savedPlaces entries with id, name, latitude, longitude, categoryLabel, address; existing renderSavedPlaces(), setStatus(), nearbyAppResponse().
-- Produces: renderRouteMap(), requestSavedPlacesRoute(), safe route normalization/rendering helpers inside the page script; static page-level CSP/referrer behavior.
+- Produces: ensureRouteMap(), refreshRouteStops(), requestSavedPlacesRoute(), validateRoutePayload(), buildRouteUrl(), drawComputedRoute() and renderRouteMetrics() inside the page script; static page-level CSP/referrer behavior.
 
 - [ ] **Step 1: Add the Leaflet map surface**
   - Add Leaflet 1.9.4 CSS and JS with pinned SRI/crossorigin. Keep the map panel useful if the script fails to load.
@@ -85,7 +85,7 @@
   - Route only the first 10 saved entries; show an explicit notice when entries are omitted.
 - [ ] **Step 3: Add throttling and request-state safeguards**
   - Block concurrent route requests and enforce 1,100 ms minimum spacing between provider calls.
-  - Capture a route revision/signature before fetch; ignore stale responses if profile or itinerary changed while the request was pending.
+  - Initialize/refresh the map first after the user's click, then capture the final itinerary signature and revision immediately before fetch. Ignore stale responses if profile or itinerary changed while the request was pending.
   - No auto-retry, no background call, and no route call from initialization.
 - [ ] **Step 4: Validate and display route**
   - Validate response code, route metrics, geometry type/coordinates/point cap, route legs and waypoint count.
