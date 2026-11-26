@@ -25,6 +25,7 @@ export default defineConfig({
     } : undefined,
     entrypoint,
     compatibilityDate: "2026-11-17",
+    compatibilityFlags: ["enable_ctx_exports"],
     workersDev: true,
     observability: {
       enabled: true,
