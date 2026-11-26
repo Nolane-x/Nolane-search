@@ -373,7 +373,7 @@ async function handlePublicMediaShare(request: Request, env: Env): Promise<Respo
       contentType,
       typeof info.fileName === "string" ? info.fileName : "nolane-media",
     );
-    return new Response(html, {
+    return new Response(request.method === "HEAD" ? null : html, {
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "private, no-store, max-age=0",
