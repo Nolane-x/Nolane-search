@@ -3,7 +3,7 @@ FROM node:22-bookworm-slim
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/opt/venv/bin:\${PATH}"
+    PATH="/opt/venv/bin:$PATH"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-venv ffmpeg ca-certificates tini util-linux \
