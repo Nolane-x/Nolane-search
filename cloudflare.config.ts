@@ -2,6 +2,8 @@ import { bindings, defineConfig, defineContainer, exports, triggers } from "cf/c
 import * as entrypoint from "./src/index.ts" with { type: "cf-worker" };
 import type { SearchQueueJob } from "./src/types";
 
+declare const process: { env: Record<string, string | undefined> };
+
 const mediaContainersEnabled = process.env.MEDIA_DOWNLOADER_CONTAINER_ENABLED === "true";
 const mediaDownloaderContainer = mediaContainersEnabled ? defineContainer({
   name: "nolane-media-downloader",
