@@ -50,7 +50,7 @@ Replace the Wave 73 Cloudflare Containers and Durable Object snapshot design wit
 - Node stores only SHA-256 hashes of temporary share tokens.
 - URL policy accepts public HTTP(S) hostnames only, rejects userinfo, unusual ports, IP literals and internal names.
 - yt-dlp is forced through a bounded loopback HTTP/CONNECT egress proxy. Every initial URL and redirect is resolved immediately before connection; all DNS answers must be globally routable; sockets connect to the already-validated numeric address, preventing DNS rebinding between validation and connect. Only ports 80 and 443 are supported.
-- Windows installer adds program-scoped outbound firewall blocks for Python, FFmpeg and Node against private, link-local, CGNAT, reserved IPv4 and special IPv6 ranges. FFmpeg and Node also have loopback blocked; Python loopback is reserved for the local proxy/API. Funnel must not be enabled if firewall and proxy smoke checks cannot be installed and verified.
+- Windows installer adds program-scoped outbound firewall rules: Python is blocked from private, link-local, CGNAT, reserved IPv4 and special IPv6 ranges while retaining loopback for the local API/proxy; FFmpeg and Node are blocked from all outbound destinations because they perform local-only work. The installer verifies the configured remote-address filters and fails closed if firewall and local proxy smoke checks cannot be installed and verified.
 - No generic proxy, filesystem endpoint, cookie support, browser profiles, or credentials.
 - One exclusive Media Node process per data directory, one active download globally, at most three queued or running jobs for the owner.
 - Max source duration 7,200 seconds, output 3 GiB per job, total retained/in-progress media 6 GiB, watchdog 30 minutes.
