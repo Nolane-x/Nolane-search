@@ -22,8 +22,17 @@ Branch: feat/wave-71-routed-itinerary-map
 - OSM tiles are normal viewport-driven requests only: no prefetch, bulk download or offline cache.
 - Durations are routing-profile estimates, not live traffic or turn-by-turn navigation. No auto-optimization of stops.
 
-## Validation
+## Validation results
 
-- Browser-level tests execute the actual inline JavaScript with controlled DOM, localStorage, Leaflet and OSRM responses.
-- Tests cover no route/tile calls on page load, explicit route click, driving/cycling/walking endpoint selection, route geometry/metrics, throttling, NoRoute handling, first-10 stop order and existing Wave70 persistence/GPX behavior.
-- Full CI and deploy checks must pass before release. Production smoke validates the page auth boundary, not third-party OSRM/FOSSGIS availability or tile rendering.
+- Browser-level tests execute the actual inline JavaScript with controlled DOM, localStorage, Leaflet and OSRM responses. Coverage includes no route/tile call on page load, explicit click, all three profile endpoints, route geometry/metrics, first-10 order, NoRoute/malformed geometry, same-page throttling and timestamp-only cooldown across page loads.
+- PR CI #45761827446 and main CI #45762026423 passed TypeScript, 41 Vitest files / 426 tests, deployment scripts, 449 Python runner tests and Worker build.
+- Cloudflare deploy #45762026380 and Worker export #45762026504 passed; the production smoke validates the Nearby authentication boundary, not third-party OSRM/FOSSGIS availability or tile rendering.
+- No D1 migration, route proxy, external API key or server-side route persistence was needed.
+
+## Production rollout — Wave 71 (2026-11-26)
+
+- [PR #146](https://github.com/Nolane-x/Nolane-search/pull/146) merged into `main` as `77854cfc7e2b2589743a066c855882ca96402962`.
+- PR CI #45761827446 and main CI #45762026423 passed TypeScript, 41 Vitest files / 426 tests, deployment checks, 449 Python runner tests and Worker build.
+- Cloudflare deploy #45762026380 succeeded with Worker version `2fcd46ac-9573-4a44-88ea-433cef22d196`. Telegram webhook verification, command registration and Workspace/Nearby smoke passed. Worker export #45762026504 succeeded.
+- Production smoke checks the protected Nearby route and anonymous API boundary; it does not make live OSRM/FOSSGIS calls or validate Leaflet tile rendering.
+- No D1 migration, server route proxy, new secret or server-side route history was needed.
