@@ -160,6 +160,8 @@ class MediaNodePolicyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             store = server.MediaNodeStore(Path(temp))
             httpd = server.create_http_server(store, "c" * 64, port=0, start_worker=False)
+            self.assertTrue(httpd.server_address[0].startswith("127."))
+            self.assertEqual(httpd.request_queue_size, 16)
             import threading
             import urllib.error
             import urllib.request
@@ -198,6 +200,32 @@ class MediaNodePolicyTests(unittest.TestCase):
                     self.assertEqual(response.status, 206)
                     self.assertEqual(response.headers.get("Content-Range"), "bytes 1-3/5")
                     self.assertEqual(response.read(), b"edi")
+                bad_owner = urllib.request.Request(
+                    file_url,
+                    headers={**headers, "x-nolane-owner-id": "456"},
+                )
+                with self.assertRaises(urllib.error.HTTPError) as forbidden:
+                    urllib.request.urlopen(bad_owner, timeout=2)
+                self.assertEqual(forbidden.exception.code, 404)
+
+                invalid_range = urllib.request.Request(
+                    file_url,
+                    headers={**headers, "Range": "bytes=50-60"},
+                )
+                with self.assertRaises(urllib.error.HTTPError) as unsatisfied:
+                    urllib.request.urlopen(invalid_range, timeout=2)
+                self.assertEqual(unsatisfied.exception.code, 416)
+                self.assertEqual(unsatisfied.exception.headers.get("Content-Range"), "bytes */5")
+
+                head = urllib.request.Request(
+                    file_url,
+                    headers={**headers, "Range": "bytes=0-0"},
+                    method="HEAD",
+                )
+                with urllib.request.urlopen(head, timeout=2) as response:
+                    self.assertEqual(response.status, 206)
+                    self.assertEqual(response.headers.get("Content-Length"), "1")
+                    self.assertEqual(response.read(), b"")
             finally:
                 httpd.shutdown()
                 httpd.server_close()
