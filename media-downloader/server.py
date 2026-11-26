@@ -119,6 +119,8 @@ def _command(job_id: str, url: str, media_format: str, quality: str) -> tuple[li
         "yt-dlp",
         "--ignore-config",
         "--no-playlist",
+        "--restrict-filenames",
+        "--no-color",
         "--newline",
         "--no-warnings",
         "--no-call-home",
