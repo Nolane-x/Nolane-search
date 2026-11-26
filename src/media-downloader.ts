@@ -326,14 +326,6 @@ export class MediaDownloader extends DurableObject<Env> {
     });
     if (!parsed.ok) throw new Error("invalid media download options.");
 
-    const current = await this.readState();
-    if (current && ["queued", "running"].includes(current.status)) {
-      throw new Error("A media download is already running.");
-    }
-    if (current?.snapshot && current.shareExpiresAt && current.shareExpiresAt > Date.now()) {
-      throw new Error("A previous share link is still active. Revoke it or wait for it to expire.");
-    }
-
     const now = Date.now();
     const state: DownloadState = {
       jobId: input.jobId,
@@ -346,7 +338,14 @@ export class MediaDownloader extends DurableObject<Env> {
       updatedAt: now,
       shareTokenHash: input.shareTokenHash.toLowerCase(),
     };
-    await this.writeState(state);
+    const claimed = await this.ctx.storage.transaction(async transaction => {
+      const current = await transaction.get<DownloadState>(STATE_KEY);
+      if (current && ["queued", "running"].includes(current.status)) return false;
+      if (current?.snapshot && current.shareExpiresAt && current.shareExpiresAt > Date.now()) return false;
+      await transaction.put(STATE_KEY, state);
+      return true;
+    });
+    if (!claimed) throw new Error("A previous media download or share link is still active.");
 
     try {
       await this.ensureContainer();
