@@ -92,3 +92,46 @@ Wave 72 adds unit coverage for:
 - City geocoding, country/region disambiguation, category/radius validation and AI-agent dispatch.
 
 The actual CI result is tracked by the pull request, not presumed from source edits. `docs/STATUS.md` and production status must remain on the last merged/deployed wave until this branch is merged and deployed.
+
+
+## 5. Additional current candidate review — Cobalt and MeTube
+
+### Cobalt: strongest current candidate for a dedicated self-hosted media API
+
+Repository: https://github.com/imputnet/cobalt
+
+Cobalt is more directly shaped like the backend Nolane would need than OmniGet or a UI-only wrapper. Its self-hosted API accepts a source URL plus bounded media preferences and can return a direct redirect, a temporary media tunnel, a local-processing response or a picker for multi-item posts. The API documentation describes a broad service set spanning YouTube, TikTok, Instagram, Facebook, Reddit, Pinterest, X/Twitter, Vimeo, Dailymotion, Twitch clips, Bilibili, VK and other services.
+
+Important deployment and licensing boundaries:
+
+- The upstream project explicitly says there is no publicly available pre-hosted API for third-party use. Do not call `api.cobalt.tools` from Nolane without explicit permission; the intended integration path is a self-hosted instance or an agreement with an instance owner.
+- The API source is AGPL-3.0. If Nolane modifies and operates a covered API as a network service, review the AGPL source-offer requirements and publish the corresponding source for the covered modified service as required. Treat this as a legal/compliance decision, not as a dependency to copy casually.
+- The Cobalt web frontend is separately licensed CC-BY-NC-SA-4.0, has a non-commercial restriction, and its branding/assets are not available for reuse as a Nolane product identity. Do not copy the frontend or branding; build a distinct Nolane Media Portal interface.
+- API security options include API keys, required authentication, short-lived Bearer tokens issued after Turnstile, rate limits and service allowlists. These are useful controls, but they do not replace network egress filtering.
+- Cobalt's API streams/tunnels media and follows redirects. A self-hosted service still needs an outbound firewall and regression tests that block private/loopback/link-local/metadata destinations after every redirect and DNS resolution. Do not assume the application-level URL parser alone is an SSRF boundary.
+- Use an isolated host/container, non-root account, per-user quotas, concurrency limits, duration/file-size limits, short-lived tunnels, cancellation and cleanup. Keep cookies, browser profiles and login sessions disabled for the public Nolane downloader.
+
+**Assessment:** make a self-hosted Cobalt API the first integration prototype to benchmark against a separately isolated yt-dlp worker. It is not yet deployed, integrated or approved for arbitrary URLs in Nolane. Verify upstream license/version/service support again at implementation time.
+
+Official upstream references:
+- API usage, supported service matrix and no-public-API warning: https://github.com/imputnet/cobalt/tree/main/api
+- API request/response and auth contract: https://github.com/imputnet/cobalt/blob/main/docs/api.md
+- Instance hardening (Turnstile, API keys and access controls): https://github.com/imputnet/cobalt/blob/main/docs/protect-an-instance.md
+- Docker/self-hosting guide: https://github.com/imputnet/cobalt/blob/main/docs/run-an-instance.md
+- API package license: https://github.com/imputnet/cobalt/blob/main/api/LICENSE
+- Separate frontend license/branding restrictions: https://github.com/imputnet/cobalt/blob/main/web/README.md
+
+### MeTube: useful operator interface, not the preferred API boundary
+
+Repository: https://github.com/alexta69/metube
+
+MeTube wraps yt-dlp in a self-hosted web interface and is useful as a reference for download queues, simple user-facing controls, and a server-side download folder. It is not a Cloudflare Worker API and would still need its own authenticated job API, isolated runner, storage integration and network egress controls before Nolane could safely dispatch jobs to it. Avoid exposing a public MeTube instance directly to arbitrary Nolane users.
+
+### Updated decision
+
+1. **First prototype:** self-hosted Cobalt API, isolated behind a private service boundary, only after license review and SSRF/egress tests. Use Nolane's own UI and authentication.
+2. **Alternative / fallback:** yt-dlp + FFmpeg worker for services or output modes Cobalt does not cover; add gallery-dl for supported public image galleries. Keep their binaries and profiles sandboxed.
+3. **UI reference:** OpenGrab and MeTube help inform job queues/progress/history, but neither removes the need for a hardened backend or durable media storage.
+4. **Not a backend:** OmniGet is a desktop/local workflow reference, not a hosted API.
+5. **No public launch yet:** universal URL downloading remains gated until runner-level network policy, rate limits, ownership, quotas, cancellation, legal/rights guidance and storage lifecycle are tested.
+
