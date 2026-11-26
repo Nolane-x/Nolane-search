@@ -324,7 +324,7 @@ export async function searchINaturalistObservations(
     throw new Error("iconic_taxon must be one of: " + allowedTaxa.join(", ") + ".");
   }
 
-  const url = new URL("/observations", INATURALIST_API);
+  const url = new URL(INATURALIST_API + "/observations");
   url.searchParams.set("q", query);
   url.searchParams.set("per_page", String(limit));
   url.searchParams.set("page", "1");
