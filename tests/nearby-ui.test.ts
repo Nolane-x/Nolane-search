@@ -238,6 +238,27 @@ describe("Nearby Places routed itinerary", () => {
     expect(mounted.layers.some(layer => (layer.data as { geometry?: { type?: string } } | undefined)?.geometry?.type === "LineString")).toBe(false);
   });
 
+  it("rejects malformed route geometry without drawing a polyline", async () => {
+    const malformed = {
+      code: "Ok",
+      waypoints: [
+        { name: "Start", location: [106.6881, 20.8449], distance: 0 },
+        { name: "End", location: [106.6890, 20.8460], distance: 0 },
+      ],
+      routes: [{
+        distance: 1000,
+        duration: 300,
+        geometry: { type: "MultiLineString", coordinates: [[[106.6881, 20.8449]]] },
+        legs: [{ distance: 1000, duration: 300, steps: [] }],
+      }],
+    };
+    const mounted = await mountNearbyBrowser(malformed);
+    await mounted.elements.get("routeButton")!.click();
+    expect(mounted.elements.get("routeStatus")?.textContent).toContain("Hình dạng tuyến đường không hợp lệ");
+    expect(mounted.elements.get("routeSummary")?.textContent).toBe("");
+    expect(mounted.layers.some(layer => (layer.data as { geometry?: { type?: string } } | undefined)?.geometry?.type === "MultiLineString")).toBe(false);
+  });
+
   it("routes only the first ten saved places in their original order", async () => {
     const manyStops = Array.from({ length: 12 }, (_, index) => ({
       id: "node/" + (700 + index),
