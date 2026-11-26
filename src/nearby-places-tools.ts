@@ -317,7 +317,11 @@ export async function searchPlacesInCity(rawArgs: unknown): Promise<CityPlacesRe
   if (typeof args.category !== "string" || !Object.hasOwn(CATEGORIES, args.category)) {
     throw new NearbyPlacesInputError("category phải là một trong: " + NEARBY_CATEGORIES.join(", ") + ".");
   }
+  const category = args.category as NearbyCategory;
   const radiusMeters = boundedInteger(args.radius_m, "radius_m", 1500, 200, 5000);
+  if (category === "essentials" && radiusMeters > 3000) {
+    throw new NearbyPlacesInputError("Danh mục tiện ích thiết yếu giới hạn bán kính tối đa 3000 m để giảm tải nguồn dữ liệu công cộng.");
+  }
   const limit = boundedInteger(args.limit, "limit", 12, 1, 25);
 
   const geocodingUrl = new URL("https://geocoding-api.open-meteo.com/v1/search");
@@ -391,7 +395,7 @@ export async function searchPlacesInCity(rawArgs: unknown): Promise<CityPlacesRe
   const result = await searchNearbyPlaces({
     latitude: place.latitude,
     longitude: place.longitude,
-    category: args.category,
+    category,
     radius_m: radiusMeters,
     limit,
   });
