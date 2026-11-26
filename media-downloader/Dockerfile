@@ -17,7 +17,9 @@ WORKDIR /app
 COPY server.py /app/server.py
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod 0755 /app/entrypoint.sh \
+    && useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin media \
     && mkdir -p /data/jobs \
+    && chown -R 10001:10001 /data \
     && chmod 0700 /data /data/jobs
 
 EXPOSE 8080
