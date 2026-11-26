@@ -76,6 +76,15 @@ class MediaNodePolicyTests(unittest.TestCase):
                           "--password", "--proxy", "shell"]:
             self.assertNotIn(forbidden, args)
 
+        with tempfile.TemporaryDirectory() as temp:
+            best_args = server.build_ytdlp_command(
+                job_id="7f3dd2d7-4d41-4ef9-9e18-b4f56a510c26",
+                url=url, media_format="video", quality="best",
+                output_dir=Path(temp), python_executable="python-test",
+                ffmpeg_path="ffmpeg-test", node_path="node-test",
+            )
+        self.assertIn("bv*[height<=1080]+ba/b[height<=1080]", best_args)
+
     def test_store_persists_jobs_and_keeps_owner_boundaries(self):
         with tempfile.TemporaryDirectory() as temp:
             store = server.MediaNodeStore(Path(temp))
@@ -136,6 +145,9 @@ class MediaNodePolicyTests(unittest.TestCase):
             (folder / "track.mp3").write_bytes(b"audio")
             self.assertIsNone(server.safe_output_file(root, job_id))
             (folder / "track.mp3").unlink()
+            (folder / "clip.mp4").rename(folder / "clip.mkv")
+            self.assertIsNone(server.safe_output_file(root, job_id))
+            (folder / "clip.mkv").rename(folder / "clip.mp4")
             outside = root / "outside.mp4"
             outside.write_bytes(b"outside")
             (folder / "linked.mp4").symlink_to(outside)

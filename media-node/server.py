@@ -37,7 +37,7 @@ MAX_OWNER_JOBS = 3
 JOB_ID_RE = re.compile(r"^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$", re.I)
 TOKEN_RE = re.compile(r"^[a-f0-9]{64}$", re.I)
 HOST_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
-ALLOWED_EXTENSIONS = {".mp4", ".webm", ".mkv", ".mov", ".mp3", ".m4a", ".opus", ".ogg", ".wav", ".flac"}
+ALLOWED_EXTENSIONS = {".mp4", ".mp3"}
 RESERVED_SUFFIXES = (
     ".localhost", ".local", ".internal", ".test", ".example", ".invalid",
     ".onion", ".arpa", ".home", ".lan", ".corp",
@@ -208,7 +208,7 @@ def build_ytdlp_command(
         args.extend(["--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K"])
     elif media_format == "video":
         if quality == "best":
-            format_expression = "bv*+ba/b"
+            format_expression = "bv*[height<=1080]+ba/b[height<=1080]"
         else:
             height = int(quality)
             format_expression = "bv*[height<=" + str(height) + "]+ba/b[height<=" + str(height) + "]"
@@ -700,10 +700,8 @@ class MediaWorker:
             return
         extension = output.suffix.lower()
         content_types = {
-            ".mp4": "video/mp4", ".webm": "video/webm", ".mkv": "video/x-matroska",
-            ".mov": "video/quicktime", ".mp3": "audio/mpeg", ".m4a": "audio/mp4",
-            ".opus": "audio/opus", ".ogg": "audio/ogg", ".wav": "audio/wav",
-            ".flac": "audio/flac",
+            ".mp4": "video/mp4",
+            ".mp3": "audio/mpeg",
         }
         if not self.store.complete(job_id, output.name, content_types[extension], size):
             shutil.rmtree(job_dir, ignore_errors=True)
