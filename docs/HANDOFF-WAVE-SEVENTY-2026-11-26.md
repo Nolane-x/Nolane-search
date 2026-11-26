@@ -26,8 +26,16 @@ Branch: feat/wave-70-local-saved-places-itinerary
 - No new upstream provider or routing service is introduced. OSM map links continue to open the public OpenStreetMap website.
 - The public Overpass endpoint remains for bounded low-volume personal queries only.
 
-## Validation plan
+## Validation results
 
-- UI tests cover privacy disclosure, versioned browser storage, the 50-place cap, validation of stored records, manual ordering, GPX MIME/type and the explicit no-routing boundary.
-- Existing geolocation permission and HTTPS result-link assertions remain.
-- Full TypeScript, Vitest, Python runner, Worker build, production smoke and deployment checks must pass before merge/deploy.
+- UI logic was exercised with a mocked browser surface: save, duplicate handling, reorder, restore validation, remove, GPX MIME/waypoint content and XML escaping passed. No favorite API call was made.
+- PR CI and main CI passed TypeScript, 41 Vitest files / 419 tests, deployment-script checks, 449 Python runner tests and Worker build.
+- Production deploy, Telegram webhook/command registration, Worker export and the Telegram Workspace/Nearby anonymous-access smoke all passed. See rollout evidence below.
+
+## Production rollout — Wave 70 (2026-11-26)
+
+- [PR #144](https://github.com/Nolane-x/Nolane-search/pull/144) merged as `09a65237d0253316dfdf6dfad2128857bc39ff5d`.
+- PR CI #45749439137 and main CI #45749647312 passed TypeScript, 41 Vitest files / 419 tests, deployment checks, 449 Python runner tests and Worker build.
+- Cloudflare deploy #45749647341 succeeded with Worker version `bcc51f91-edd2-4cec-b4f3-be339d7a4918`; Telegram webhook and commands were verified/registered. Worker export #45749647309 succeeded.
+- Production smoke passed for Workspace HTML/CSP/auth/tabs, Nearby link, anonymous `/nearby` redirect and nearby search API anonymous 401. Smoke does not make a live Overpass query.
+- No D1 migration, new upstream provider or routing engine was needed.
