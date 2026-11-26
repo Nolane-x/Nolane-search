@@ -18,7 +18,7 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("Mở / tải video gốc");
     expect(html).toContain("MEDIA DOWNLOADER · PRIVATE TEMPORARY SHARE");
     expect(html).toContain("Không hỗ trợ cookie/tài khoản đăng nhập, vượt paywall hoặc DRM.");
-    expect(html).toContain("snapshot lưu tệp có thể tồn tại đến 30 ngày");
+    expect(html).toContain("tệp lưu trên ổ đĩa máy chủ và tự xóa sau 12 giờ");
     expect(html).toContain("data-media-downloader-enabled=\"false\"");
     expect(html).toContain("/api/media/download");
     expect(html).toContain("/api/media/downloads/");
@@ -26,7 +26,8 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("download-renew");
     expect(html).toContain("download-revoke");
     expect(html).toContain("download-cancel");
-    expect(html).toContain("Link media tạm thời dùng Container snapshot beta");
+    expect(html).toContain("Media Downloader cần Media Node tự host");
+    expect(html).toContain("Tailscale Funnel");
     expect(html).toContain("document.createElement('iframe')");
     expect(html).toContain("safeMediaEmbedUrl(item)");
     expect(html).toContain("Nhúng player '+item.provider");

@@ -63,31 +63,30 @@ jobs:
         run: |
           python -m py_compile media-node/server.py
           python -m unittest discover -s media-node -p 'test_*.py'
-      - name: Test media downloader service
-        run: |
-          python -m py_compile media-downloader/server.py
-          python -m unittest discover -s media-downloader -p 'test_*.py'
-      - name: Build media downloader container
-        run: docker build --pull -t nolane-media-downloader:ci ./media-downloader
-      - name: Verify private downloader container endpoint
-        shell: bash
-        run: |
-          set -euo pipefail
-          token="ci-internal-token-$(python -c 'import secrets; print(secrets.token_hex(32))')"
-          docker run -d --name nolane-media-downloader-ci -e "NOLANE_INTERNAL_TOKEN=$token" -p 127.0.0.1:18080:8080 nolane-media-downloader:ci
-          trap 'docker rm -f nolane-media-downloader-ci >/dev/null 2>&1 || true' EXIT
-          ready=false
-          for attempt in {1..30}; do
-            if curl --fail --silent --show-error -H "x-nolane-internal: $token" http://127.0.0.1:18080/health >/tmp/nolane-media-health.json; then ready=true; break; fi
-            sleep 1
-          done
-          test "$ready" = true
-          python -c 'import json; d=json.load(open("/tmp/nolane-media-health.json")); assert d["ok"] is True'
-          status="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/health)"
-          test "$status" = "401"
-      - name: Build Worker with default feature gates
+      - name: Build Worker with free-tier configuration
         run: npx cf build
-      - name: Build Worker with opt-in Container configuration
-        env:
-          MEDIA_DOWNLOADER_CONTAINER_ENABLED: "true"
-        run: npx cf build
+
+  media-node-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Run Media Node policy, storage and HTTP tests
+        shell: pwsh
+        run: |
+          python -m py_compile media-node/server.py
+          python -m unittest discover -s media-node -p 'test_*.py'
+      - name: Validate PowerShell installer syntax without changing runner firewall
+        shell: pwsh
+        run: |
+          $files = @("media-node/install.ps1", "media-node/start.ps1", "media-node/uninstall.ps1")
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          }

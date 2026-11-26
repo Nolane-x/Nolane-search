@@ -12,3 +12,8 @@ coverage/
 # Python runner cache
 __pycache__/
 *.py[cod]
+
+# Self-hosted media node secrets, virtualenv and temporary media
+media-node/.env
+media-node/.venv/
+media-node/data/

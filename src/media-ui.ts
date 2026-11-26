@@ -50,8 +50,8 @@ const HTML = String.raw`<!doctype html>
    <button id="download-revoke" class="download-action hidden" type="button">Thu hồi link</button>
   </div>
  </div>
- <div id="download-disabled" class="download-warning hidden">Tính năng hiện chưa được kích hoạt trên máy chủ. Chủ tài khoản cần cấu hình Cloudflare Containers và Workers Paid; Nolane sẽ không tự bật dịch vụ trả phí.</div>
- <div class="download-warning">Chỉ nhập trang công khai và chỉ tải nội dung bạn có quyền tải. Không hỗ trợ cookie/tài khoản đăng nhập, vượt paywall hoặc DRM. Giới hạn hiện tại: một tác vụ cho mỗi tài khoản, tối đa 2 giờ nội dung và 3 GB tệp. Link chia sẻ có hạn 12 giờ; snapshot lưu tệp có thể tồn tại đến 30 ngày kể từ lần khôi phục gần nhất và không thể xóa vật lý thủ công trong beta. Không dùng để chia sẻ nội dung riêng tư hoặc nhạy cảm.</div>
+ <div id="download-disabled" class="download-warning hidden">Media Node cá nhân chưa được kết nối. Cần bật máy tính chủ, dịch vụ local và Tailscale Funnel; cấu hình này không cần dịch vụ Cloudflare trả phí.</div>
+ <div class="download-warning">Chỉ tải trang công khai và nội dung bạn có quyền sử dụng. Không hỗ trợ cookie, đăng nhập, vượt paywall hoặc DRM. Media Node chạy trên máy tính cá nhân: một tác vụ tại một thời điểm, hàng đợi tối đa 3 tác vụ, nguồn tối đa 2 giờ và tệp tối đa 3 GB. Tệp lưu trên ổ đĩa máy chủ và tự xóa sau 12 giờ; link chia sẻ cũng hết hạn sau 12 giờ. Máy tính, Internet và Tailscale Funnel phải hoạt động khi tải hoặc phát. Không dùng cho nội dung riêng tư hay nhạy cảm.</div>
 </section>
 <section class="playback-lab" aria-labelledby="playback-lab-title">
  <div class="lab-heading"><div><span class="lab-kicker">BROWSER COMPATIBILITY BENCH</span><h2 id="playback-lab-title">Playback Lab</h2><p>Chạy thử các nguồn công khai để kiểm tra CORS, codec, chất lượng, audio và phụ đề ngay trong player của Nolane.</p></div><span class="lab-badge">HLS · DASH</span></div>
@@ -79,7 +79,7 @@ const HTML = String.raw`<!doctype html>
 <div class="meta"><span id="status">Đang kiểm tra phiên đăng nhập…</span><span id="count"></span></div>
 <div id="notice" class="notice hidden"></div>
 <section id="results" class="grid"></section>
-<div class="footer">Wikimedia Commons, Openverse và iNaturalist cung cấp ảnh kèm nguồn/tác giả/giấy phép theo từng mục. NASA và Internet Archive có thể phát hoặc mở/tải tệp gốc khi hồ sơ công khai liệt kê URL phù hợp; quyền sử dụng khác nhau theo từng mục. PeerTube dùng chỉ mục liên mạng SepiaSearch, không bao phủ mọi instance; video mở tại máy chủ gốc. <strong>Media Downloader hoạt động theo feature flag riêng.</strong> Khi chưa được bật, giao diện chỉ hiển thị trạng thái chờ; Telegram Bot API vẫn có giới hạn tải tệp 20 MB. Link media tạm thời dùng Container snapshot beta, không phải kho lưu trữ vĩnh viễn. Hãy xem trang nguồn và điều khoản trước khi tải hoặc tái sử dụng.</div>
+<div class="footer">Wikimedia Commons, Openverse và iNaturalist cung cấp ảnh kèm nguồn/tác giả/giấy phép theo từng mục. NASA và Internet Archive có thể phát hoặc mở/tải tệp gốc khi hồ sơ công khai liệt kê URL phù hợp; quyền sử dụng khác nhau theo từng mục. PeerTube dùng chỉ mục liên mạng SepiaSearch, không bao phủ mọi instance; video mở tại máy chủ gốc. <strong>Media Downloader cần Media Node tự host.</strong> Worker chỉ xác thực và truyền luồng; file media lưu tạm trên máy tính chủ, không lưu trong D1, R2 hay GitHub. Liên kết phát phụ thuộc máy tính và Tailscale Funnel đang online. Hãy xem trang nguồn và điều khoản trước khi tải hoặc tái sử dụng.</div>
 </main>
 <script>
 (function(){
