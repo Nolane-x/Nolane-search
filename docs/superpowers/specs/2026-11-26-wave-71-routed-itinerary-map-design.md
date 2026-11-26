@@ -52,6 +52,7 @@ The chosen approach is option 1. Revisit options 2 or 3 before public/high-traff
 
 - Keep the feature in src/nearby-ui.ts; route computation is requested directly by the browser. This preserves the browser's normal User-Agent and Referer behavior required by the public services and avoids storing route requests in the Worker.
 - Use Leaflet 1.9.4 with pinned CDN Subresource Integrity. On CDN load failure, leave the saved itinerary usable and show a clear map-unavailable message; never crash the entire page.
+- Defer Leaflet map initialization and OSM tile requests until the user explicitly clicks Tính tuyến đường. Do not fit or pan a map to locally saved POIs on page load; map viewport tiles can reveal the area to the tile provider.
 - Use OSM raster tiles from https://tile.openstreetmap.org/{z}/{x}/{y}.png, only as Leaflet requests tiles for the visible map. Show © OpenStreetMap contributors and an OpenStreetMap copyright link.
 - Change the page's referrer policy from no-referrer to strict-origin-when-cross-origin so the tile provider receives a valid origin Referer without exposing the full page path.
 - Allow only the exact routing hosts in CSP and use fixed profile-to-endpoint mappings:
@@ -63,7 +64,7 @@ The chosen approach is option 1. Revisit options 2 or 3 before public/high-traff
 - Bound one route to 10 waypoints. If the saved list exceeds 10, route only the first 10 in its current order and show an explicit notice. A route requires at least two selected points.
 - Validate response before drawing: HTTP success, code === "Ok", a first route, finite non-negative duration/distance, a valid LineString of bounded finite [longitude, latitude] pairs, and leg count consistent with the requested adjacent stops. Display provider errors safely using textContent.
 - Render numeric stop markers and the route polyline. Show total km/minutes plus each adjacent pair's distance and estimated time. Fit the map to the route and invalidate map size after layout changes.
-- Route request disclosure must say stop coordinates are sent directly to the selected external routing service and requests may be logged there. Favorites remain localStorage-only and are not sent to Nolane's server.
+- Route request disclosure must say stop coordinates are sent directly to the selected external routing service and requests may be logged there. OSM tile requests after the explicit click also reveal the viewed map area to the tile provider. Favorites remain localStorage-only and are not sent to Nolane's server.
 - The current route is transient page state only. Do not write it to localStorage, D1, telemetry, or any API.
 - CSP must permit Leaflet's pinned unpkg CSS/JS, OSM tile host, and the three fixed route endpoints only. Referrer-policy must meet OSM tile requirements.
 
