@@ -56,7 +56,7 @@ Official references:
 - Both Worker and Node reject private, loopback, link-local, CGNAT, multicast, reserved and special-use DNS results, including IPv4-mapped IPv6 and translation prefixes.
 - The Windows installer adds per-executable outbound Windows Defender Firewall blocks for Python, Node and FFmpeg to private/special-use address ranges. This second network-layer control protects against extractor redirects and DNS rebinding after the initial hostname preflight. The installer fails closed if the Windows firewall is disabled or rules cannot be installed/verified.
 - No cookie import, browser profile, username/password, private account content, DRM/paywall circumvention, playlist extraction or arbitrary proxy route.
-- Bounded execution: one active job, queue cap three per owner, source duration at most 2 hours, yt-dlp input file ceiling 1,400 MiB, final output ceiling 3 GiB and a 30-minute process watchdog.
+- Bounded execution: one active job, queue cap three per owner, source duration at most 2 hours, yt-dlp input file ceiling 1,400 MiB, final output ceiling 3 GiB per job, aggregate retained/in-progress media ceiling 6 GiB and a 30-minute process watchdog.
 - Completed output and share links expire after 12 hours. Node serves HEAD and bounded 1 MiB HTTP Range chunks.
 
 ## Operator prerequisites

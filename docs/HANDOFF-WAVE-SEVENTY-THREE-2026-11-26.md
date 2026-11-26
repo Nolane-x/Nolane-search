@@ -20,7 +20,7 @@ The original Cloudflare Container and Durable Object snapshot prototype is being
 - One download process at a time.
 - At most three queued/running jobs per owner.
 - Maximum source duration 7,200 seconds.
-- yt-dlp input file guard 1,400 MiB; final output ceiling 3 GiB.
+- yt-dlp input file guard 1,400 MiB; final output ceiling 3 GiB per job; total local retained/in-progress media ceiling 6 GiB.
 - 30-minute job watchdog.
 - Completed file retention 12 hours; public share token TTL 12 hours.
 - MP4 video up to 1080p or MP3 audio 192 kbps.

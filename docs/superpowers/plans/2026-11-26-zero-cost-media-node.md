@@ -18,7 +18,7 @@ Spec: docs/superpowers/specs/2026-11-26-zero-cost-media-node-design.md
 - Node requests require a 256-bit shared secret and owner ID.
 - No cookies, browser profiles, login credentials, DRM/paywall bypass, playlists, or arbitrary proxy endpoints.
 - One exclusive Media Node process per data directory; one active downloader process; at most three queued or running jobs per owner.
-- Source duration max 7,200 seconds; final output max 3 GiB; watchdog 30 minutes.
+- Source duration max 7,200 seconds; final output max 3 GiB per job; total retained/in-progress media max 6 GiB; watchdog 30 minutes.
 - Temporary file and share retention is 12 hours; HTTP Range and HEAD are required.
 - GitHub Actions is CI/CD only, not an end-user downloader backend.
 - Feature remains disabled until operator completes local installation and configures MEDIA_NODE_URL and MEDIA_NODE_TOKEN.

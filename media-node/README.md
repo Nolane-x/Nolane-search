@@ -58,6 +58,10 @@ Keep the token private. Do not put it in source code, an issue, a PR, a screensh
 
 No paid Cloudflare plan, R2 bucket or GitHub Actions runtime is used by the downloader. GitHub Actions remains CI/CD only.
 
+## Storage budget
+
+The Media Node recursively counts all regular files under `data/jobs`, including unfinished fragments. It refuses to start a new job once retained media reaches 6 GiB and checks the per-job 3 GiB cap and aggregate 6 GiB cap every two seconds while a download runs. If the aggregate cap is exceeded, the active process is stopped and its partial job folder is removed. This is a local temporary-storage cap, not extra cloud storage.
+
 ## Operation
 
 - Start now: Start-ScheduledTask -TaskName "Nolane Media Node"
