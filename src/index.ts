@@ -483,7 +483,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     if (!parsed.ok) return jsonResponse({ error: parsed.error }, 400);
 
     const jobId = crypto.randomUUID();
-    const shareToken = randomHex();
+    const initialShareTokenHash = await sha256Hex(randomHex());
     const startResponse = await callMediaDownloader(env, session.userId, "/internal/start", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -492,7 +492,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
         url: parsed.value.url,
         format: parsed.value.format,
         quality: parsed.value.quality,
-        shareTokenHash: await sha256Hex(shareToken),
+        shareTokenHash: initialShareTokenHash,
       }),
     });
     if (!startResponse.ok) {
@@ -500,7 +500,6 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
       return jsonResponse({ error: value.error || "Không thể khởi tạo tác vụ tải media." }, startResponse.status);
     }
     const result = await startResponse.json() as { status?: string; progress?: number };
-    const shareUrl = new URL("/media/watch/" + session.userId + "/" + jobId + "?token=" + shareToken, request.url).toString();
     return jsonResponse({
       jobId,
       status: result.status || "queued",
@@ -509,7 +508,6 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
       quality: parsed.value.quality,
       sourceHost: new URL(parsed.value.url).hostname,
       statusUrl: "/api/media/downloads/" + jobId,
-      shareUrl,
       shareExpiresAt: null,
       limits: { maximumOutputBytes: 3 * 1024 * 1024 * 1024, maximumSourceDurationSeconds: 7200 },
     }, 202);
