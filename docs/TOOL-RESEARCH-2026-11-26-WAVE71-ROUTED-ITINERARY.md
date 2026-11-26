@@ -55,7 +55,7 @@ The three route endpoints are not interchangeable. OSRM project frontend configu
 
 ## Primary references
 
-- OSRM HTTP Route API: https://project-osrm.org/docs/v5.24.0/api/#route-service
+- OSRM HTTP Route API: https://project-osrm.org/docs/v26.6.1/http#route-service
 - Project OSRM frontend's public profiles: https://github.com/Project-OSRM/osrm-frontend/blob/gh-pages/src/leaflet_options.js
 - OSRM demo server policy: https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server
 - FOSSGIS routing service information: https://routing.openstreetmap.de/about.html
