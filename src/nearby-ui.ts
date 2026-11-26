@@ -49,6 +49,20 @@ button{cursor:pointer}
 .place-meta{font-size:10px;line-height:1.5;color:var(--muted);margin-top:8px}
 .place-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
 .place-actions a{border:1px solid var(--line);border-radius:9px;padding:7px 9px;color:var(--accent);font-size:10px;font-weight:800;text-decoration:none}
+.place-actions button,.saved-actions button{border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--surface);color:var(--ink);font-size:10px;font-weight:800}
+.place-actions .save-btn{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--accent)}
+.place-actions button:disabled,.saved-actions button:disabled{opacity:.45;cursor:not-allowed}
+.saved-list{display:grid;gap:8px}
+.saved-place{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:9px;align-items:center;border:1px solid var(--line);border-radius:13px;padding:10px;background:var(--panel)}
+.stop-number{display:grid;place-items:center;width:26px;height:26px;border-radius:9px;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);font-size:11px;font-weight:900}
+.saved-place h3{font-size:12px;line-height:1.4;margin:0 0 3px}
+.saved-place .place-meta{margin:0}
+.saved-actions{display:flex;justify-content:flex-end;gap:5px;flex-wrap:wrap}
+.saved-actions button{padding:6px 7px}
+.saved-actions a{border:1px solid var(--line);border-radius:8px;padding:6px 7px;color:var(--accent);font-size:10px;font-weight:800;text-decoration:none}
+.export-btn{border:0;border-radius:11px;padding:10px 13px;background:var(--accent);color:var(--accent-text);font-size:11px;font-weight:850}
+.saved-toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:12px 0 0}
+.saved-toolbar span{font-size:10px;color:var(--muted)}
 .empty{border:1px dashed var(--line);border-radius:14px;padding:18px;text-align:center;color:var(--muted);font-size:11px;line-height:1.6}
 .attribution{font-size:10px;color:var(--muted);line-height:1.6;margin-top:12px}
 .attribution a{color:var(--accent)}
@@ -74,13 +88,20 @@ button{cursor:pointer}
  <div class="field"><label for="radius">Bán kính tìm kiếm</label><select id="radius"><option value="500">500 m</option><option value="1000">1 km</option><option value="1500" selected>1,5 km</option><option value="3000">3 km</option><option value="5000">5 km</option></select></div>
 </div>
 <button id="search" class="search-btn" type="button">Tìm địa điểm quanh đây ↗</button>
-<p class="privacy">Quyền riêng tư: tọa độ chỉ được gửi cho truy vấn bạn chủ động yêu cầu tới OpenStreetMap Overpass API. Nolane không lưu tọa độ vào D1 hoặc lịch sử tìm kiếm. Không có vị trí nào được tự động suy đoán.</p>
+<p class="privacy">Quyền riêng tư: tọa độ tìm kiếm chỉ được gửi cho truy vấn bạn chủ động yêu cầu tới OpenStreetMap Overpass API; Nolane không lưu vị trí tìm kiếm vào D1 hoặc lịch sử. Địa điểm yêu thích chỉ được lưu trên trình duyệt này sau khi bạn bấm Lưu, gồm tên, loại và tọa độ của điểm đã chọn; không tải lên máy chủ và không đồng bộ giữa thiết bị.</p>
 <div id="status" class="status" role="status" aria-live="polite"></div>
 </section>
 <section class="panel" aria-live="polite">
 <div class="results-head"><strong>Kết quả tìm kiếm</strong><span id="resultCount">Chưa có truy vấn</span></div>
 <div id="results" class="result-list"><div class="empty">Chọn vị trí và danh mục ở trên để bắt đầu.</div></div>
 <div class="attribution">Dữ liệu bản đồ © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>, được cung cấp theo Open Database License (ODbL).</div>
+</section>
+<section class="panel" aria-live="polite">
+ <div class="results-head"><strong>Địa điểm đã lưu · Lịch trình</strong><span id="savedCount">0 / 50 điểm</span></div>
+ <p class="help">Lưu các địa điểm bạn quan tâm, sau đó dùng nút lên/xuống để xếp thứ tự ghé thăm. Dữ liệu chỉ nằm trong bộ nhớ trình duyệt của thiết bị này.</p>
+ <div id="savedPlaces" class="saved-list"><div class="empty">Chưa có điểm nào được lưu. Bấm “Lưu địa điểm” ở một kết quả để thêm vào lịch trình.</div></div>
+ <div class="saved-toolbar"><span id="savedHint">Lịch trình là thứ tự do bạn tự sắp xếp, chưa phải tuyến đường được tối ưu.</span><button id="exportGpx" class="export-btn" type="button" disabled>Xuất lịch trình GPX ↓</button></div>
+ <p class="attribution">GPX chứa các điểm dừng theo đúng thứ tự bạn sắp xếp. Nó không chứa đường đi, thời gian di chuyển hoặc chỉ dẫn rẽ; hãy mở bằng ứng dụng bản đồ có hỗ trợ GPX. Việc xuất tệp chỉ diễn ra khi bạn bấm nút.</p>
 </section>
 </main>
 <script>
@@ -111,12 +132,88 @@ $('locate').addEventListener('click',function(){
 function addText(parent,tag,className,value){var el=document.createElement(tag);if(className)el.className=className;el.textContent=value||'';parent.appendChild(el);return el}
 function safeHttps(value){try{var url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password&&!url.port?url.toString():null}catch(e){return null}}
 function distanceText(m){return m<1000?m+' m':(m/1000).toFixed(1)+' km'}
+var STORAGE_KEY='nolane.nearby.saved-places.v1';
+var MAX_SAVED=50;
+function cleanSavedPlace(raw){
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
+ var id=String(raw.id||'').match(/^(node|way|relation)\\/([1-9]\\d{0,15})$/);
+ var latitude=raw.latitude,longitude=raw.longitude;
+ if(!id||typeof latitude!=='number'||!Number.isFinite(latitude)||latitude < -90||latitude > 90||typeof longitude!=='number'||!Number.isFinite(longitude)||longitude < -180||longitude > 180)return null;
+ function cleanText(value,max){return String(value||'').replace(/[\\u0000-\\u001f\\u007f]/g,' ').trim().slice(0,max)}
+ var name=cleanText(raw.name,160);if(!name)return null;
+ return {id:id[1]+'/'+id[2],name:name,category:cleanText(raw.category,40),categoryLabel:cleanText(raw.categoryLabel,60),detailType:cleanText(raw.detailType,80),latitude:latitude,longitude:longitude,address:cleanText(raw.address,220)};
+}
+function loadSavedPlaces(){
+ try{
+  var raw=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
+  if(!Array.isArray(raw))return [];
+  var seen={};return raw.slice(0,MAX_SAVED).map(cleanSavedPlace).filter(function(place){if(!place||seen[place.id])return false;seen[place.id]=true;return true}).slice(0,MAX_SAVED);
+ }catch(error){return []}
+}
+var savedPlaces=loadSavedPlaces();
+function persistSavedPlaces(next){
+ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(next));savedPlaces=next;renderSavedPlaces();return true}
+ catch(error){setStatus('Không thể lưu trên trình duyệt này. Hãy kiểm tra chế độ riêng tư hoặc dung lượng lưu trữ.',true);return false}
+}
+function savePlace(raw){
+ var place=cleanSavedPlace({id:raw.id,name:raw.name,category:raw.category,categoryLabel:raw.categoryLabel,detailType:raw.detailType,latitude:raw.latitude,longitude:raw.longitude,address:raw.address});
+ if(!place){setStatus('Không thể lưu địa điểm do dữ liệu không hợp lệ.',true);return}
+ if(savedPlaces.some(function(item){return item.id===place.id})){setStatus('Địa điểm này đã có trong danh sách lưu.');return}
+ if(savedPlaces.length>=MAX_SAVED){setStatus('Danh sách đã đạt giới hạn '+MAX_SAVED+' địa điểm. Hãy xóa bớt trước khi lưu thêm.',true);return}
+ if(persistSavedPlaces(savedPlaces.concat([place])))setStatus('Đã lưu “'+place.name+'” trên thiết bị này.');
+}
+function moveSavedPlace(index,delta){
+ var target=index+delta;if(target<0||target>=savedPlaces.length)return;
+ var next=savedPlaces.slice();var item=next[index];next[index]=next[target];next[target]=item;persistSavedPlaces(next);
+}
+function removeSavedPlace(index){
+ if(index<0||index>=savedPlaces.length)return;
+ var removed=savedPlaces[index];if(persistSavedPlaces(savedPlaces.filter(function(_,i){return i!==index})))setStatus('Đã xóa “'+removed.name+'” khỏi danh sách trên thiết bị này.');
+}
+function osmMapUrl(place){
+ var lat=place.latitude.toFixed(5),lon=place.longitude.toFixed(5);
+ return 'https://www.openstreetmap.org/?mlat='+lat+'&mlon='+lon+'#map=18/'+lat+'/'+lon;
+}
+function syncResultSaveButtons(){
+ document.querySelectorAll('.place').forEach(function(card){
+  var id=card.getAttribute('data-osm-id'),button=card.querySelector('.save-btn');if(!id||!button)return;
+  var isSaved=savedPlaces.some(function(item){return item.id===id});button.textContent=isSaved?'Đã lưu':'＋ Lưu địa điểm';button.disabled=isSaved;
+ });
+}
+function renderSavedPlaces(){
+ var box=$('savedPlaces');if(!box)return;box.replaceChildren();
+ $('savedCount').textContent=savedPlaces.length+' / '+MAX_SAVED+' điểm';
+ $('exportGpx').disabled=savedPlaces.length===0;
+ syncResultSaveButtons();
+ if(!savedPlaces.length){addText(box,'div','empty','Chưa có điểm nào được lưu. Bấm “Lưu địa điểm” ở một kết quả để thêm vào lịch trình.');return}
+ savedPlaces.forEach(function(place,index){
+  var card=addText(box,'article','saved-place','');
+  addText(card,'span','stop-number',String(index+1));
+  var details=addText(card,'div','','');addText(details,'h3','',place.name);
+  addText(details,'div','place-meta',[place.categoryLabel||place.category,place.address].filter(Boolean).join(' · '));
+  var actions=addText(card,'div','saved-actions','');
+  var up=addText(actions,'button','','↑');up.type='button';up.setAttribute('aria-label','Đưa '+place.name+' lên');up.disabled=index===0;up.addEventListener('click',function(){moveSavedPlace(index,-1)});
+  var down=addText(actions,'button','','↓');down.type='button';down.setAttribute('aria-label','Đưa '+place.name+' xuống');down.disabled=index===savedPlaces.length-1;down.addEventListener('click',function(){moveSavedPlace(index,1)});
+  var map=addText(actions,'a','','OSM');map.href=osmMapUrl(place);map.target='_blank';map.rel='noopener noreferrer';map.className='saved-map-link';
+  var remove=addText(actions,'button','','Xóa');remove.type='button';remove.setAttribute('aria-label','Xóa '+place.name);remove.addEventListener('click',function(){removeSavedPlace(index)});
+ });
+}
+function xmlEscape(value){return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;')}
+function exportSavedPlaces(){
+ if(!savedPlaces.length)return;
+ var route=savedPlaces.map(function(place){return '    <rtept lat="'+place.latitude.toFixed(7)+'" lon="'+place.longitude.toFixed(7)+'"><name>'+xmlEscape(place.name)+'</name><desc>'+xmlEscape(place.categoryLabel||place.category)+'</desc></rtept>'}).join('\\n');
+ var gpx='<?xml version="1.0" encoding="UTF-8"?>\\n<gpx version="1.1" creator="Nolane Search" xmlns="http://www.topografix.com/GPX/1/1">\\n  <rte>\\n    <name>Nolane itinerary</name>\\n'+route+'\\n  </rte>\\n</gpx>\\n';
+ var url=URL.createObjectURL(new Blob([gpx],{type:'application/gpx+xml;charset=utf-8'}));
+ var link=document.createElement('a');link.href=url;link.download='nolane-itinerary.gpx';document.body.appendChild(link);link.click();link.remove();window.setTimeout(function(){URL.revokeObjectURL(url)},1000);
+ setStatus('Đã xuất '+savedPlaces.length+' điểm dừng thành tệp GPX. Tệp giữ thứ tự đã sắp xếp, không chứa tuyến đường được tính toán.');
+}
+$('exportGpx').addEventListener('click',exportSavedPlaces);
 function render(data){
  var box=$('results');box.replaceChildren();
  $('resultCount').textContent=data.resultCount+' địa điểm · '+distanceText(data.radiusMeters);
  if(!data.places.length){addText(box,'div','empty','Không tìm thấy địa điểm có tên trong bán kính này. Hãy thử tăng bán kính hoặc chọn danh mục khác.');return}
  data.places.forEach(function(place){
-  var card=addText(box,'article','place','');
+  var card=addText(box,'article','place','');card.setAttribute('data-osm-id',place.id);
   var top=addText(card,'div','place-top','');var title=addText(top,'div','','');
   addText(title,'h3','',place.name);addText(title,'div','place-type',place.detailType||place.categoryLabel);
   addText(top,'span','distance',distanceText(place.distanceMeters));
@@ -126,6 +223,9 @@ function render(data){
   var map=safeHttps(place.mapUrl);if(map){var link=addText(actions,'a','','Xem bản đồ');link.href=map;link.target='_blank';link.rel='noopener noreferrer'}
   var osm=safeHttps(place.osmUrl);if(osm){var source=addText(actions,'a','','Trang dữ liệu OSM');source.href=osm;source.target='_blank';source.rel='noopener noreferrer'}
   var website=safeHttps(place.website);if(website){var site=addText(actions,'a','','Website');site.href=website;site.target='_blank';site.rel='noopener noreferrer'}
+  var alreadySaved=savedPlaces.some(function(item){return item.id===place.id});
+  var save=addText(actions,'button','save-btn',alreadySaved?'Đã lưu':'＋ Lưu địa điểm');save.type='button';save.disabled=alreadySaved;
+  save.addEventListener('click',function(){savePlace(place);if(savedPlaces.some(function(item){return item.id===place.id})){save.textContent='Đã lưu';save.disabled=true}});
  });
  var note=data.note||'Dữ liệu có thể chưa đầy đủ hoặc đã cũ.';
  addText(box,'div','attribution',note+(data.dataUpdatedAt?' · Dữ liệu OSM cập nhật: '+data.dataUpdatedAt:''));
@@ -142,6 +242,7 @@ $('search').addEventListener('click',async function(){
  }catch(error){setStatus(error&&error.message?error.message:'Không thể hoàn tất truy vấn.',true)}
  finally{button.disabled=false}
 });
+renderSavedPlaces();
 })();
 </script>
 </body>

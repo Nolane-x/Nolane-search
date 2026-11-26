@@ -15,14 +15,26 @@ describe("Nearby Places UI", () => {
     expect(html).toContain("OpenStreetMap contributors");
     expect(html).toContain("ODbL");
     expect(html).toContain("/api/nearby/search");
-    expect(html).toContain("tọa độ chỉ được gửi");
+    expect(html).toContain("tọa độ tìm kiếm chỉ được gửi");
     expect(html).toContain("Dùng vị trí hiện tại");
     expect(html).toContain('<option value="essentials">Tiện ích thiết yếu (nhiều nhóm)</option>');
     expect(html).toContain("function syncEssentialsRadius()");
     expect(html).toContain("if(five)five.disabled=essentials;");
     expect(html).toContain("if(essentials&&$('radius').value==='5000')$('radius').value='3000';");
     expect(html).toContain("Địa điểm quanh đây");
-    expect(html).not.toContain("localStorage");
+    expect(html).toContain("Địa điểm yêu thích chỉ được lưu trên trình duyệt này");
+    expect(html).toContain("var STORAGE_KEY='nolane.nearby.saved-places.v1';");
+    expect(html).toContain("var MAX_SAVED=50;");
+    expect(html).toContain("localStorage.setItem(STORAGE_KEY,JSON.stringify(next))");
+    expect(html).toContain("function cleanSavedPlace(raw)");
+    expect(html).toContain("typeof latitude!=='number'");
+    expect(html).toContain("slice(0,MAX_SAVED)");
+    expect(html).toContain("function moveSavedPlace(index,delta)");
+    expect(html).toContain("function exportSavedPlaces()");
+    expect(html).toContain("application/gpx+xml;charset=utf-8");
+    expect(html).toContain('<rtept lat="');
+    expect(html).toContain("chưa phải tuyến đường được tối ưu");
+    expect(html).not.toContain("/api/nearby/saved");
   });
 
   it("only requests browser geolocation from an explicit user click", async () => {
