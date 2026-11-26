@@ -253,7 +253,7 @@ export class MediaDownloader extends DurableObject<Env> {
     const container = this.ctx.container;
     if (!container) throw new Error("Media downloader container is not configured.");
 
-    const egress = this.ctx.exports.MediaDownloaderEgress({ props: {} });
+    const egress = this.ctx.exports.MediaDownloaderEgress;
 
     // Register both interceptors before startup. The container has no direct
     // Internet/DNS route; every outbound HTTP(S) hop goes through this Worker.
