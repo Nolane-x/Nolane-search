@@ -53,7 +53,7 @@ Replace the Wave 73 Cloudflare Containers and Durable Object snapshot design wit
 - Windows installer adds program-scoped outbound firewall blocks for Python, FFmpeg and Node against private, link-local, CGNAT, reserved IPv4 and special IPv6 ranges. FFmpeg and Node also have loopback blocked; Python loopback is reserved for the local proxy/API. Funnel must not be enabled if firewall and proxy smoke checks cannot be installed and verified.
 - No generic proxy, filesystem endpoint, cookie support, browser profiles, or credentials.
 - One exclusive Media Node process per data directory, one active download globally, at most three queued or running jobs for the owner.
-- Max source duration 7,200 seconds, output 3 GiB, watchdog 30 minutes.
+- Max source duration 7,200 seconds, output 3 GiB per job, total retained/in-progress media 6 GiB, watchdog 30 minutes.
 - Cancel terminates the process tree; expired files are removed by the local cleanup job.
 - HTTP Range and HEAD are streamed in bounded chunks. Never load the entire file into memory.
 - Tailscale Funnel's beta status and unquantified bandwidth limits mean no throughput SLA can be promised.
