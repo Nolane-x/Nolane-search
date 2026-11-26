@@ -56,3 +56,6 @@ No files were installed on the user's computer; no secrets were read or written;
 ## Verification
 
 CI must pass on both Ubuntu and Windows for Python tests, PowerShell parser checks, TypeScript/Vitest and Worker build. Browser HLS/DASH and Safari playback suites are regressions for the existing media discovery/player UI, not proof that a live Funnel download was tested. Manual end-to-end verification remains outstanding until the operator enables the local node.
+
+
+Final network rule: Python retains loopback for the local API/proxy and is blocked from private/special-use ranges; FFmpeg and Node have all outbound traffic blocked because they process local files and bundled scripts only. The installer verifies rule address filters and passes both authenticated health and HTTPS proxy smoke checks before setup is accepted.

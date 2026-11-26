@@ -63,13 +63,12 @@ $blockedRanges = @(
     "::/128", "::1/128", "::ffff:0:0/96", "64:ff9b::/96", "64:ff9b:1::/48", "2001:20::/28", "fc00::/7",
     "fe80::/10", "ff00::/8", "2001:db8::/32", "2001::/23", "2002::/16"
 )
-$blockedRangesWithLoopback = @($blockedRanges) + @("127.0.0.0/8")
 $programs = @(
-    # Python needs loopback access only to the fixed local egress proxy (port 8766).
+    # Python needs loopback for its local API/proxy; private and special-use ranges remain blocked.
     @{ Name = "python"; Path = $venvPython; Blocked = $blockedRanges },
-    # FFmpeg and Node do not need network access to the host or private networks.
-    @{ Name = "ffmpeg"; Path = $ffmpeg.Source; Blocked = $blockedRangesWithLoopback },
-    @{ Name = "node"; Path = $node.Source; Blocked = $blockedRangesWithLoopback }
+    # FFmpeg and Node do all work locally; they must have no outbound network access.
+    @{ Name = "ffmpeg"; Path = $ffmpeg.Source; Blocked = @("Any") },
+    @{ Name = "node"; Path = $node.Source; Blocked = @("Any") }
 )
 foreach ($program in $programs) {
     if (-not (Test-Path $program.Path)) { throw "Missing executable for outbound isolation: $($program.Path)" }
@@ -81,6 +80,13 @@ foreach ($program in $programs) {
     $rule = Get-NetFirewallRule -Name ($rulePrefix + $program.Name) -ErrorAction Stop
     if ($rule.Enabled -ne "True" -or $rule.Direction -ne "Outbound" -or $rule.Action -ne "Block") {
         throw "Firewall isolation could not be verified for $($program.Name). Do not enable Tailscale Funnel."
+    }
+    $addressFilter = Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $rule -ErrorAction Stop
+    $actualAddresses = @($addressFilter.RemoteAddress)
+    foreach ($expectedAddress in $program.Blocked) {
+        if ($actualAddresses -notcontains $expectedAddress) {
+            throw "The outbound firewall address filter is incomplete for $($program.Name): $expectedAddress"
+        }
     }
 }
 

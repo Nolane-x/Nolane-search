@@ -88,3 +88,6 @@ This design is an owner-operated personal utility, not a 24/7 public media CDN. 
 - Official references:
   - https://tailscale.com/pricing
   - https://tailscale.com/docs/features/tailscale-funnel
+
+
+Additional local firewall hardening: the Windows installer verifies the configured remote-address filter on each program-scoped rule. Python retains loopback for the service/proxy but private/special-use destinations are blocked; FFmpeg and Node receive `RemoteAddress=Any` outbound block rules because their processing is local-only.

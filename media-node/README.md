@@ -20,7 +20,7 @@ The node runs yt-dlp and FFmpeg on your own Windows computer. Nolane Search's ex
 3. Run: Set-ExecutionPolicy -Scope Process Bypass -Force
 4. Run: .\install.ps1
 
-The installer creates a Python virtual environment, installs pinned yt-dlp packages (including the local EJS challenge scripts), generates a 256-bit random local secret, installs outbound Windows Firewall blocks for Python/FFmpeg/Node to private and special-use address ranges, verifies those rules, and registers a per-user logon task. The Python rule leaves loopback available only so yt-dlp can reach the local egress proxy; all outbound HTTP(S) from yt-dlp is forced through that proxy. The proxy rejects every non-public DNS answer and connects to a pinned numeric IP. FFmpeg and Node also have loopback blocked. The installer performs a live HTTPS test through the proxy and stops the service if it fails. It does not open an inbound router port.
+The installer creates a Python virtual environment, installs pinned yt-dlp packages (including the local EJS challenge scripts), generates a 256-bit random local secret, and installs per-program outbound Windows Firewall rules. Python may use loopback for the local API/proxy but cannot connect to private or special-use address ranges. FFmpeg and Node have all outbound network traffic blocked because they only process local files/run locally installed scripts. The installer verifies the rule filters, then registers a per-user logon task. yt-dlp is forced through the local egress proxy; the proxy rejects every non-public DNS answer and connects to a pinned numeric IP. A live authenticated API health check and HTTPS proxy test must both pass before setup is accepted. No inbound router port is opened.
 
 If firewall profiles are disabled or any protection cannot be installed and verified, setup stops. Do not enable Funnel until the firewall rules are present.
 
@@ -80,7 +80,7 @@ The local database, exclusive process lock and media are stored under media-node
 - Every internal route, including health, requires that secret.
 - Share URLs use random 256-bit tokens; only their SHA-256 hashes are stored locally.
 - Source URLs are validated by both Worker and node. yt-dlp is forced through a local HTTP/CONNECT proxy; the proxy revalidates every request/redirect, rejects a hostname if any DNS answer is non-public, and opens sockets to the selected numeric IP so the OS cannot perform a second DNS lookup. Only ports 80 and 443 are allowed.
-- Windows Firewall blocks private, link-local, CGNAT and special-use ranges for Python, FFmpeg and Node. FFmpeg/Node also have loopback blocked. Python may use loopback only for the fixed local proxy/API; the proxy itself will not connect to local or private addresses.
+- Windows Firewall blocks private, link-local, CGNAT and special-use ranges for Python. FFmpeg and Node have all outbound network traffic blocked. Python retains loopback for the local API/proxy; all supported downloader requests are forced through the validated egress proxy.
 - No browser cookies, credentials, paywall or DRM bypass, playlists or generic proxy.
 - Download subprocesses are bounded by duration, output size, wall time and concurrency. Logs do not record source URLs or tokens.
 - Temporary share links expire after 12 hours and can be revoked.
