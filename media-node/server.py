@@ -667,7 +667,8 @@ class MediaWorker:
         reader.join(timeout=1)
         with self.process_lock:
             self.processes.pop(job_id, None)
-        if cancelled or row is not None and row["cancel_requested"]:
+        final_state = self.store.get_job(job_id, job["owner_id"])
+        if cancelled or final_state is None or final_state["cancel_requested"]:
             shutil.rmtree(job_dir, ignore_errors=True)
             self.store.mark_cancelled(job_id)
             return

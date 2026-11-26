@@ -1,75 +1,58 @@
-# Wave 73 handoff — 2026-11-26
+# Wave 73 handoff — zero-cost self-hosted Media Node
 
-Branch: feat/wave-73-container-media-downloader  
-Base: current main after Wave 72  
-Scope: private, feature-gated yt-dlp/FFmpeg Container downloader and temporary Range share prototype  
-Merge/deploy: not merged or deployed. Keep both feature switches off.
+Date: 2026-11-26
+Branch: feat/wave-73-container-media-downloader
+PR: https://github.com/Nolane-x/Nolane-search/pull/149
+State: Draft / open / unmerged / undeployed. No paid feature, cloud resource, tunnel or storage bucket has been enabled.
 
-## What has been built on this branch
+## What changed
 
-### 1. Container downloader service
+The original Cloudflare Container and Durable Object snapshot prototype is being replaced with a personal Media Node.
 
-- Docker image: Node 22, Python 3, yt-dlp, yt-dlp-ejs, FFmpeg, tini and util-linux.
-- yt-dlp pinned at 2026.11.23; EJS component 0.8.0.
-- Private Python HTTP service with a per-owner internal token, no URL access logs, a single active job, cancellation, progress, MP4/MP3 output and Range/HEAD/GET serving.
-- Runs as unprivileged UID 10001. Extractor arguments are passed as an argv array, not a shell string. Browser cookies, login profiles, usernames/passwords, playlist processing and metadata files are disabled.
-- Limits: 1080p maximum, one item, source duration up to 2 hours, 3 GiB output ceiling, 1,400 MiB extractor estimate ceiling and 30-minute process watchdog.
+- Cloudflare Worker: existing Free plan, user session and owner access checks, node request authentication, Range-preserving response streaming.
+- Local Windows Media Node: Python 3.12 service, SQLite job state, yt-dlp + yt-dlp-ejs + Node 22, FFmpeg.
+- Public HTTPS ingress: Tailscale Funnel Personal pointing to 127.0.0.1:8765.
+- Storage: temporary files on the operator's local drive. No D1 media bytes, no R2, no GitHub Artifacts, no Container snapshots.
+- GitHub Actions: CI/CD only, never per-user download compute.
 
-### 2. Worker control plane and egress policy
+## Operational limits
 
-- Added TypeScript URL normalization, reserved/private IP checks and DoH A/AAAA checks that fail closed.
-- Added MediaDownloaderEgress WorkerEntrypoint. The Container starts with enableInternet=false; outbound HTTP/HTTPS is intercepted by Worker code, which removes authorization/cookie/forwarding headers, validates host/DNS and uses manual redirects so later hops are rechecked.
-- Added MediaDownloader Durable Object, one named instance per allowlisted owner, owner-only start/status/cancel, internal token, progress polling, snapshot state, share-token rotation and revoke.
-- Explicitly note residual DNS time-of-check/time-of-use: DNS is checked before Worker fetch, but the Worker fetch does not pin the resolver answer to a socket IP. Keep the feature off until a dedicated security review/adversarial test proves the deployment-specific egress boundary is acceptable.
+- One download process at a time.
+- At most three queued/running jobs per owner.
+- Maximum source duration 7,200 seconds.
+- yt-dlp input file guard 1,400 MiB; final output ceiling 3 GiB.
+- 30-minute job watchdog.
+- Completed file retention 12 hours; public share token TTL 12 hours.
+- MP4 video up to 1080p or MP3 audio 192 kbps.
+- No credentials, browser cookies, private account content, playlists, DRM/paywall bypass or generic URL proxy.
+- The host must be awake and online. Funnel is beta with non-configurable bandwidth limits and no published numeric throughput SLA.
+- Tailscale Personal is for personal/non-commercial use only; this branch is not a commercial service.
 
-### 3. Temporary web sharing
+## Files
 
-- A successful job is snapshotted; media bytes stay out of D1 and Telegram.
-- Share links use a random 256-bit bearer token and store only its hash in Durable Object SQLite state.
-- Browser player supports GET/HEAD and HTTP Range; private no-store headers are used.
-- Link expiry: 12 hours. Share token can be rotated or revoked.
-- Cloudflare snapshot is public beta, cannot be manually deleted, and can remain up to 30 days after last restore. The implementation allows only one retained snapshot per owner and blocks a new download until 30 days after the last restore (or initial snapshot creation if never restored). Revoking link access does not delete the snapshot.
+- media-node/server.py: local API, URL/DNS policy, SQLite store, worker, output checks and Range/HEAD streaming.
+- media-node/requirements.txt: pinned yt-dlp packages.
+- media-node/install.ps1: fail-closed Windows prerequisites, firewall policy, local token and scheduled task.
+- media-node/start.ps1, uninstall.ps1, .env.example and README.md: operator lifecycle/setup.
+- src/media-downloader.ts: strict Tailscale Funnel origin/path request helper.
+- src/index.ts: owner authorization, node requests and streamed share route.
+- src/types.ts and cloudflare.config.ts: Worker Free-only bindings.
+- tests/media-downloader.test.ts and media-node/test_server.py: policy and API tests.
+- docs/superpowers/specs/2026-11-26-zero-cost-media-node-design.md: design.
+- docs/superpowers/plans/2026-11-26-zero-cost-media-node.md: execution checklist.
 
-### 4. Feature gates
+## Manual owner steps — not yet done
 
-- MEDIA_DOWNLOADER_CONTAINER_ENABLED: GitHub Actions secret. When true, programmatic config defines the Container image and DO export.
-- MEDIA_DOWNLOADER_ENABLED: Cloudflare runtime secret. Must also be true before Media Studio/Worker accepts download jobs. Deployment writes false when unset.
-- Do not set either secret or deploy with the Container enabled until the owner confirms Workers Paid, Container availability and the security review. No Paid billing change or R2 activation was made by this branch.
+1. Ensure required software is already installed on the Windows host: Python 3.12, Node.js 22+, FFmpeg and Tailscale.
+2. Run media-node/install.ps1 from an elevated PowerShell session. This installs local Python packages and Windows Firewall rules; it fails closed if any rule cannot be verified.
+3. Verify local service logs and then manually enable Funnel:
+   tailscale funnel --bg --https=443 http://127.0.0.1:8765
+   tailscale funnel status
+4. Copy only the HTTPS Funnel URL and generated 64-character local token to GitHub Actions secrets MEDIA_NODE_URL and MEDIA_NODE_TOKEN. Never commit or message the token.
+5. After PR merge is explicitly authorized, run the normal deploy workflow. Until these secrets are configured, the feature stays disabled.
 
-## Known limitations / blockers
+No files were installed on the user's computer; no secrets were read or written; no Cloudflare setting, billing plan, R2 bucket, Funnel endpoint or deployment was changed by this work.
 
-1. R2 remains disabled. The Cloudflare API was checked and still returns HTTP 403 / code 10042, requiring activation in Dashboard. R2-based durable storage is still the long-term option.
-2. Cloudflare Containers require Workers Paid, use metered compute, and durable_object scheduling/snapshots are public beta. The connected account's plan has not been confirmed for this deployment.
-3. Snapshot retention is not deletion: the application invalidates links, but Cloudflare snapshots expire automatically up to 30 days after last restore and cannot be manually deleted. One active snapshot per owner is enforced to avoid accumulation.
-4. yt-dlp extractor coverage is not a guarantee. Provider changes, georestrictions, rate limits, codecs and content rights affect individual URLs.
-5. No gallery-dl image-gallery support, no multi-item playlists, no logged-in sources, no DRM/paywall bypass, no permanent share links.
+## Verification
 
-## Files changed / added
-
-- cloudflare.config.ts
-- src/types.ts
-- src/index.ts
-- src/media-ui.ts
-- src/media-downloader-policy.ts
-- src/media-downloader.ts
-- media-downloader/Dockerfile
-- media-downloader/entrypoint.sh
-- media-downloader/server.py
-- media-downloader/test_server.py
-- tests/media-downloader-policy.test.ts
-- tests/media-ui.test.ts
-- tests/cloudflare-workers.ts (Vitest-only Cloudflare runtime shim)
-- vitest.config.ts (Node test-only alias; not used by production Worker builds)
-- .github/workflows/ci.yml
-- .github/workflows/deploy.yml
-
-Research: docs/TOOL-RESEARCH-2026-11-26-WAVE73-DOWNLOADER-CONTAINERS.md.
-
-## Required verification before merging
-
-- TypeScript typecheck and full Vitest suite pass.
-- Python downloader server tests pass.
-- Docker image builds; the container internal health endpoint succeeds with the random internal token and returns 401 without it.
-- Cloudflare Worker build passes with the default feature gates off and with `MEDIA_DOWNLOADER_CONTAINER_ENABLED=true` (opt-in config validation only; no deploy).
-- Adversarial SSRF/redirect/DNS-rebinding review is recorded. A green build is not proof of safe egress.
-- Do not merge/deploy the Container path unless the account owner has confirmed Workers Paid and explicitly chosen to enable the feature.
+CI must pass on both Ubuntu and Windows for Python tests, PowerShell parser checks, TypeScript/Vitest and Worker build. Browser HLS/DASH and Safari playback suites are regressions for the existing media discovery/player UI, not proof that a live Funnel download was tested. Manual end-to-end verification remains outstanding until the operator enables the local node.

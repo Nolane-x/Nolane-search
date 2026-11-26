@@ -1,99 +1,79 @@
-# Wave 73 research — self-hosted media downloader and temporary streaming
+# Wave 73 research — $0 self-hosted media processing and temporary streaming
 
-Checked: 2026-11-26  
-Branch: feat/wave-73-container-media-downloader  
-State: implementation prototype; feature flag is disabled by default. Not deployed.
+Checked: 2026-11-26
+Branch: feat/wave-73-container-media-downloader
+PR: https://github.com/Nolane-x/Nolane-search/pull/149
+Status: Draft; not merged, not deployed, and the feature remains disabled until the operator completes local setup.
 
-## 1. Goal and architecture
+## Decision
 
-Wave 72 closed two discovery gaps (licensed nature photos and city-based place discovery), but Media Studio still could not download source media or share large output files. The GitHub Actions runner is suitable for one-shot file processing, but not a long-running media download service and browser Range streaming.
+Do not use a paid Cloudflare Worker, Cloudflare Container, Durable Object snapshot, R2, paid VM, subscription, or hosted third-party downloader API.
 
-Wave 73 prototypes a private Cloudflare Container attached to a per-owner Durable Object. The Container runs Node 22, Python, yt-dlp and FFmpeg. The Worker remains the control plane: authenticate the owner, validate URL/options, create a bounded job, poll progress, issue time-limited share tokens and stream Range requests. D1 and Telegram do not hold media bytes.
+The selected architecture separates the application from the heavy media workload:
 
-The chosen engine is yt-dlp, not a hosted third-party API. The image pins yt-dlp[default] 2026.11.23 and yt-dlp-ejs 0.8.0; Node 22 is available as the JavaScript runtime for extractors that require challenge solving. FFmpeg performs audio extraction and media muxing.
+1. Cloudflare Workers Free remains the existing Nolane Search application, session/authentication boundary, owner authorization and streaming proxy. It makes authenticated HTTPS requests to one configured Media Node. It forwards response bodies as streams and preserves browser Range requests; it never stores media bytes.
+2. Media Node runs on an existing Windows computer owned by the operator. It uses Python 3.12, SQLite, yt-dlp, yt-dlp-ejs, Node.js 22 and FFmpeg. Job metadata and temporary media files stay on that computer.
+3. Tailscale Funnel Personal exposes the loopback-only Media Node over an assigned HTTPS *.ts.net host. The Python server binds to 127.0.0.1:8765; it is not opened on the LAN or router.
+4. GitHub Actions is used for project CI and deployment only. It does not process end-user downloads.
 
-Upstream references:
+This adds no recurring platform fee when using the existing computer and Internet service and an eligible Tailscale Personal account. Electricity, Internet service and the operator's own hardware are not included in the meaning of "$0".
+
+## Why GitHub Actions is not the downloader backend
+
+Public repositories can use GitHub-hosted standard runners without a per-minute bill, but GitHub's Additional Product Terms prohibit using Actions as a CDN or as part of a serverless application. Jobs also run on ephemeral runners; Actions artifacts are not a durable user media store. Using a workflow dispatch for every visitor request would be a poor and potentially disallowed service architecture.
+
+Official policy:
+https://docs.github.com/en/site-policy/github-terms/github-additional-product-terms
+
+GitHub remains valuable for Linux and Windows test matrices, syntax/build validation, reproducible dependency pinning, source history, code review, issues, releases and deployment of the existing Worker.
+
+## Why free shared containers are not selected
+
+A free shared container or Space can be useful for a demo, preview or short CI job, but sleeping instances, ephemeral disks, runtime quotas and bandwidth ceilings are unsuitable as a dependable media-processing and share origin. A free service should not be represented as permanent storage or unlimited streaming.
+
+Hugging Face Spaces reference:
+https://huggingface.co/docs/hub/spaces-overview#hardware-resources
+
+## Cost and platform constraints
+
+- Cloudflare Workers Free is the existing application and proxy. Current Workers limits allow streaming responses, with no enforced response-body size limit and no hard HTTP wall-time limit while the client remains connected. CPU time is separately limited, so yt-dlp and FFmpeg processing never runs inside the Worker.
+- The Worker response streaming path must pass Response.body through; it must not read the entire media into an ArrayBuffer or store media bytes in D1.
+- Tailscale Funnel is beta, available on plans including Personal; Funnel bandwidth limits are non-configurable and no numeric throughput SLA is published. Funnel exposes the local service to anyone on the public Internet, so every internal API request requires a 256-bit secret and owner ID.
+- Tailscale Personal is intended for personal/non-commercial use. Do not use this design as a commercial public downloader service without a plan that permits that use.
+- If Funnel bandwidth or availability is insufficient, the $0 constraints and large-file public sharing requirements conflict. Reduce share sizes, use local playback or wait for a user-approved budget; do not silently migrate to a paid tier.
+
+Official references:
+- Workers limits: https://developers.cloudflare.com/workers/platform/limits/
+- Tailscale Funnel: https://tailscale.com/kb/1223/funnel
+- Tailscale plans: https://tailscale.com/pricing
+
+## Security controls
+
+- Worker validates the user's web session, private-chat identity and allowlist before starting, cancelling or sharing.
+- Worker accepts only a configured HTTPS Tailscale Funnel origin (*.ts.net) and fixed /internal/... paths. It strips cookies/authorization headers, adds the 256-bit shared token and authenticated owner ID, and does not follow redirects.
+- Node constant-time compares the internal token, validates owner IDs and job IDs, uses SQLite owner scoping, and logs no request paths, query strings, tokens or source URLs.
+- Public share uses a random 256-bit token; only its SHA-256 hash is stored. The share token is sent over the authenticated Worker-to-node channel in a header.
+- Both Worker and Node reject private, loopback, link-local, CGNAT, multicast, reserved and special-use DNS results, including IPv4-mapped IPv6 and translation prefixes.
+- The Windows installer adds per-executable outbound Windows Defender Firewall blocks for Python, Node and FFmpeg to private/special-use address ranges. This second network-layer control protects against extractor redirects and DNS rebinding after the initial hostname preflight. The installer fails closed if the Windows firewall is disabled or rules cannot be installed/verified.
+- No cookie import, browser profile, username/password, private account content, DRM/paywall circumvention, playlist extraction or arbitrary proxy route.
+- Bounded execution: one active job, queue cap three per owner, source duration at most 2 hours, yt-dlp input file ceiling 1,400 MiB, final output ceiling 3 GiB and a 30-minute process watchdog.
+- Completed output and share links expire after 12 hours. Node serves HEAD and bounded 1 MiB HTTP Range chunks.
+
+## Operator prerequisites
+
+- Existing Windows 10/11 computer with Python 3.12, Node.js 22+, FFmpeg and Tailscale installed.
+- Windows Defender Firewall enabled for all profiles.
+- Run media-node/install.ps1 in an elevated PowerShell session; do not enable Funnel if it fails.
+- Manually sign into Tailscale and run:
+  tailscale funnel --bg --https=443 http://127.0.0.1:8765
+- Add the resulting HTTPS Funnel URL and local 64-character secret to GitHub Actions secrets MEDIA_NODE_URL and MEDIA_NODE_TOKEN; then deploy the existing Worker workflow after the PR is accepted.
+- The computer must be awake, signed in, running the scheduled Media Node task and connected to the Internet for download/playback.
+
+## Upstream tools
+
 - yt-dlp: https://github.com/yt-dlp/yt-dlp
-- yt-dlp EJS: https://github.com/yt-dlp/yt-dlp/wiki/EJS
+- yt-dlp JavaScript challenge solving: https://github.com/yt-dlp/yt-dlp/wiki/EJS
 - FFmpeg: https://ffmpeg.org/
-- OpenGrab (UI/queue reference): https://github.com/Skydope/OpenGrab
-- MeTube (UI/queue reference): https://github.com/alexta69/metube
-- Cobalt API (alternative self-hosted API; AGPL-3.0): https://github.com/imputnet/cobalt
+- Tailscale Funnel: https://tailscale.com/kb/1223/funnel
 
-This prototype does not copy OmniGet, OpenGrab, MeTube or Cobalt source/UI. It independently composes yt-dlp and FFmpeg. gallery-dl/image-gallery support is not included yet.
-
-## 2. Cloudflare requirements and constraints
-
-Official documentation:
-- Containers scheduling policies: https://developers.cloudflare.com/containers/configuration/scheduling-policy/
-- Outbound interception: https://developers.cloudflare.com/containers/configuration/outbound-traffic/
-- Durable Object Container API: https://developers.cloudflare.com/containers/api/durable-object-container/
-- Snapshots: https://developers.cloudflare.com/containers/guides/snapshots/
-- Limits and instance types: https://developers.cloudflare.com/containers/platform/limits/
-- Programmatic cloudflare.config.ts: https://developers.cloudflare.com/cf/projects/cloudflare-config/
-
-The implementation uses the durable_object scheduling policy (public beta), with standard-1 selected at runtime. The documented default size is 0.5 vCPU, 4 GiB RAM and 8 GB disk. Containers require Workers Paid. The owner has not confirmed a Paid plan, so this code is not enabled.
-
-The Container starts with enableInternet=false. Every HTTP request and every HTTPS request is intercepted by a WorkerEntrypoint. The egress Worker strips cookies, authorization, proxy credentials, Worker-internal headers and forwarding headers; accepts only public HTTP(S) hosts; checks A/AAAA DNS answers; sends redirects back as manual responses; and applies the policy again when yt-dlp follows a redirect. Non-HTTP(S) egress and direct DNS are blocked by the Container network policy.
-
-Security caveat: the DNS check and the subsequent Worker fetch are separate resolution operations; this prototype does not pin an IP address at the socket layer. It therefore must not be described as a complete DNS-rebinding proof. It is owner-only and remains feature-gated pending a dedicated SSRF/egress review and adversarial tests for DNS changes, redirects, unusual URL forms and provider behavior.
-
-## 3. Download policy and resource bounds
-
-First supported outputs:
-- Video: MP4, maximum selected height 1080p (best is capped at 1080p).
-- Audio: MP3 at 192 kbps.
-- One media item only; playlists are disabled.
-- Source duration ceiling: 2 hours.
-- Output file ceiling: 3 GiB (also enforced with a process file-size limit).
-- Extractor download estimate ceiling: 1,400 MiB.
-- One active job per owner/DO.
-- Maximum extractor process runtime: 30 minutes; cancellation kills the process group.
-- Container service runs as unprivileged Linux user UID 10001, does not log request URLs, and accepts no browser cookies, login profiles, usernames or passwords.
-- No DRM/paywall bypass or logged-in content is supported. Users must only download material they have the right to access and save.
-
-The Worker validates the submitted URL before dispatch. It rejects non-HTTP(S) schemes, IP literals (including IPv4-mapped and obfuscated numeric forms), reserved/local hostnames, URL credentials, custom ports, fragments and control characters. DNS checks fail closed when the resolver returns private, link-local, loopback, CGNAT, ULA, multicast, reserved or no address. The Container has no direct Internet or DNS route.
-
-A supported yt-dlp extractor does not mean every site/video is guaranteed to work; site changes, geo restrictions, rate limits, codecs and legal rights still apply.
-
-## 4. Temporary share and Range streaming
-
-R2 remains disabled on the connected Cloudflare account. A live R2 bucket was checked through Cloudflare API and returned HTTP 403 / code 10042 ("Please enable R2 through the Cloudflare Dashboard"). Wave 73 therefore prototypes temporary Container snapshots rather than pretending R2 is available.
-
-On successful download:
-1. The Durable Object validates output metadata and snapshots the Container filesystem.
-2. The snapshot handle is stored in DO SQLite state; media bytes are not written to D1 or Telegram.
-3. The Container is destroyed.
-4. An owner-authorized, random 256-bit share token is issued only after the snapshot exists. Only the token hash is stored.
-5. The public player validates the token and streams media through the Container TCP port with HTTP Range support, private no-store caching and no-referrer policy.
-
-Application-level link expiry is 12 hours. The owner can rotate the token or revoke it; revocation prevents future requests but cannot delete the underlying snapshot. The snapshot API is public beta, snapshots are immutable, and Cloudflare documents automatic expiry up to 30 days after the last restore; there is no manual delete/list API.
-
-To avoid accumulating snapshots, the prototype retains at most one snapshot per owner and blocks a new download until 30 days after the last restore (or initial snapshot creation if it was never restored). Revoking a share does not shorten the physical snapshot retention window.
-
-This is temporary sharing, not permanent object storage. If frequent or durable sharing is required, enable R2 and replace snapshots with a private R2 bucket, multipart uploads, checksum verification, short-lived authorized links and Range streaming.
-
-## 5. Feature gate and deployment state
-
-Two independent switches protect the feature:
-- MEDIA_DOWNLOADER_CONTAINER_ENABLED: GitHub Actions secret. When true, the programmatic config defines the Container application and DO export.
-- MEDIA_DOWNLOADER_ENABLED: Cloudflare runtime secret. Must also be true before Media Studio/API accepts download jobs. Deploy defaults it to false when unset.
-
-Both must be explicitly configured by the account owner after confirming Workers Paid and Container availability. If either is absent, the API returns 503 and the UI stays disabled. No Paid plan, Container or R2 resource is activated by this branch.
-
-## 6. Test plan
-
-The branch adds:
-- TypeScript URL/IP/DNS policy tests, including numeric IP obfuscation and reserved IPv6 ranges.
-- Python service tests for UUID job IDs, fixed argument arrays, no credential inputs, safe output paths, symlink rejection, supported MIME types and HTTP Range edge cases.
-- CI steps that build the Docker image, run its private health endpoint with an internal token and verify the unauthenticated endpoint returns 401.
-- Existing full Worker Vitest/typecheck/build and 449-test Python file-runner suite remain required.
-
-A passing unit/build test does not establish that Containers are enabled on this account or prove every third-party extractor works. No production download or public share link is claimed until the owner enables the required plan/switches and an end-to-end smoke test is performed.
-
-## 7. Next gates
-
-1. CI must pass TypeScript, Vitest, Python service tests, Docker build/private endpoint smoke and Worker build.
-2. Review Container outbound interception and DNS-rebinding residual risk before enabling.
-3. Confirm Workers Paid and Container beta availability with the account owner; do not silently change billing.
-4. If frequent or durable sharing is required, enable R2 and move completed files to private R2 instead of retaining Container snapshots.
+This design is an owner-operated personal utility, not a 24/7 public media CDN. The PR remains draft until both Linux and Windows CI pass and the operator completes and verifies local setup.

@@ -137,6 +137,21 @@ class MediaNodePolicyTests(unittest.TestCase):
             (folder / "linked.mp4").symlink_to(outside)
             self.assertIsNone(server.safe_output_file(root, job_id))
 
+    def test_cancelled_job_cannot_be_completed_and_owner_scope_is_enforced(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = server.MediaNodeStore(Path(temp))
+            running_id = "7f3dd2d7-4d41-4ef9-9e18-b4f56a510c24"
+            queued_id = "7f3dd2d7-4d41-4ef9-9e18-b4f56a510c23"
+            store.enqueue(running_id, 123, "https://example.org/video", "video", "720", "example.org")
+            store.enqueue(queued_id, 123, "https://example.org/video", "video", "720", "example.org")
+            store.claim_next()
+            self.assertIsNone(store.request_cancel(running_id, 456))
+            cancelled = store.request_cancel(running_id, 123)
+            self.assertTrue(cancelled["cancel_requested"])
+            self.assertFalse(store.complete(running_id, "clip.mp4", "video/mp4", 100))
+            queued = store.request_cancel(queued_id, 123)
+            self.assertEqual(queued["status"], "cancelled")
+
     def test_local_health_endpoint_requires_internal_token(self):
         with tempfile.TemporaryDirectory() as temp:
             store = server.MediaNodeStore(Path(temp))
@@ -146,6 +161,17 @@ class MediaNodePolicyTests(unittest.TestCase):
             import urllib.request
             thread = threading.Thread(target=httpd.serve_forever, daemon=True)
             thread.start()
+            job_id = "7f3dd2d7-4d41-4ef9-9e18-b4f56a510c25"
+            store.enqueue(job_id, 123, "https://example.org/video", "video", "720", "example.org")
+            store.claim_next()
+            job_folder = Path(temp) / "jobs" / job_id
+            job_folder.mkdir(parents=True, exist_ok=True)
+            (job_folder / "clip.mp4").write_bytes(b"media")
+            self.assertTrue(store.complete(job_id, "clip.mp4", "video/mp4", 5))
+            share_token = "b" * 64
+            share_hash = hashlib.sha256(share_token.encode()).hexdigest()
+            store.renew_share(job_id, 123, share_hash)
+
             try:
                 url = "http://127.0.0.1:" + str(httpd.server_port) + "/health"
                 with self.assertRaises(urllib.error.HTTPError) as error:
@@ -155,6 +181,19 @@ class MediaNodePolicyTests(unittest.TestCase):
                 with urllib.request.urlopen(request, timeout=2) as response:
                     self.assertEqual(response.status, 200)
                     self.assertTrue(server.json.loads(response.read())["ok"])
+
+                file_url = "http://127.0.0.1:" + str(httpd.server_port) + "/internal/share-file/" + job_id
+                headers = {
+                    "x-nolane-internal": "c" * 64,
+                    "x-nolane-owner-id": "123",
+                    "x-nolane-share-token": share_token,
+                    "Range": "bytes=1-3",
+                }
+                request = urllib.request.Request(file_url, headers=headers)
+                with urllib.request.urlopen(request, timeout=2) as response:
+                    self.assertEqual(response.status, 206)
+                    self.assertEqual(response.headers.get("Content-Range"), "bytes 1-3/5")
+                    self.assertEqual(response.read(), b"edi")
             finally:
                 httpd.shutdown()
                 httpd.server_close()

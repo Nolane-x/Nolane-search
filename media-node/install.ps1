@@ -52,7 +52,7 @@ if ($token -notmatch '^[a-fA-F0-9]{64}$') {
     $token = ([BitConverter]::ToString($bytes)).Replace("-", "").ToLowerInvariant()
 }
 Set-Content -Path $envPath -Value ("NOLANE_INTERNAL_TOKEN=" + $token) -Encoding ASCII
-& icacls.exe $envPath /inheritance:r /grant:r ("{0}:(R,W)" -f $env:USERNAME) | Out-Null
+& icacls.exe $envPath /inheritance:r /grant:r ("{0}:(R,W)" -f $identity.Name) | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Unable to restrict access to the local secret file." }
 
 $blockedRanges = @(
@@ -60,7 +60,7 @@ $blockedRanges = @(
     "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24",
     "192.88.99.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24",
     "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4", "255.255.255.255/32",
-    "::/128", "::1/128", "::ffff:0:0/96", "64:ff9b::/96", "fc00::/7",
+    "::/128", "::1/128", "::ffff:0:0/96", "64:ff9b::/96", "64:ff9b:1::/48", "2001:20::/28", "fc00::/7",
     "fe80::/10", "ff00::/8", "2001:db8::/32", "2001::/23", "2002::/16"
 )
 $programs = @(
