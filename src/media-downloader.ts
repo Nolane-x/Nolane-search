@@ -140,9 +140,29 @@ export class MediaDownloaderEgress extends WorkerEntrypoint<Env> {
         redirect: "manual",
         signal: AbortSignal.timeout(60_000),
       });
-      // Redirects are deliberately manual. yt-dlp follows them by issuing a new
-      // request, which passes through this policy and DNS validation again.
-      return await fetch(outbound);
+      // Redirects are deliberately manual. Reject non-HTTP(S), credentialed or
+      // otherwise forbidden Location targets before they can bypass the egress
+      // handler (for example, a redirect to file://).
+      const upstream = await fetch(outbound);
+      if (upstream.status >= 300 && upstream.status < 400) {
+        const location = upstream.headers.get("location");
+        if (location) {
+          try {
+            const target = new URL(location, url);
+            const validated = normalizeMediaDownloadUrl(target.toString());
+            if (!validated.ok) {
+              await upstream.body?.cancel().catch(() => undefined);
+              return new Response("Redirect target is not allowed", { status: 403 });
+            }
+          } catch {
+            await upstream.body?.cancel().catch(() => undefined);
+            return new Response("Redirect target is not allowed", { status: 403 });
+          }
+        }
+      }
+      // yt-dlp follows the manual redirect by issuing a new request, which is
+      // intercepted and DNS-checked again.
+      return upstream;
     } catch {
       return new Response("Outbound request failed or timed out", { status: 502 });
     }
