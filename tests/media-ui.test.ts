@@ -18,7 +18,7 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("Mở / tải video gốc");
     expect(html).toContain("MEDIA DOWNLOADER · PRIVATE TEMPORARY SHARE");
     expect(html).toContain("Không hỗ trợ cookie, đăng nhập, vượt paywall hoặc DRM.");
-    expect(html).toContain("tệp lưu trên ổ đĩa máy chủ và tự xóa sau 12 giờ");
+    expect(html).toContain("Tệp lưu trên ổ đĩa máy chủ và tự xóa sau 12 giờ");
     expect(html).toContain("data-media-downloader-enabled=\"false\"");
     expect(html).toContain("/api/media/download");
     expect(html).toContain("/api/media/downloads/");

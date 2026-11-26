@@ -325,7 +325,7 @@ class MediaNodeStore:
         if media_format not in ("video", "audio") or quality not in ("best", "1080", "720", "480"):
             raise ValueError("Invalid media selection.")
         now = time.time()
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
             count = db.execute(
                 "SELECT COUNT(*) AS n FROM jobs WHERE owner_id=? AND status IN ('queued','running')",
@@ -347,7 +347,7 @@ class MediaNodeStore:
             db.execute("COMMIT")
 
     def claim_next(self) -> dict | None:
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT * FROM jobs WHERE status='queued' ORDER BY created_at LIMIT 1").fetchone()
             if row is None:
@@ -365,7 +365,7 @@ class MediaNodeStore:
     def get_job(self, job_id: str, owner_id: int) -> dict | None:
         if not JOB_ID_RE.fullmatch(job_id):
             return None
-        with self._connect() as db:
+        with self._connection() as db:
             row = db.execute("SELECT * FROM jobs WHERE job_id=? AND owner_id=?", (job_id, owner_id)).fetchone()
             result = self._job_view(row)
             if result is not None:
@@ -374,14 +374,14 @@ class MediaNodeStore:
             return result
 
     def get_source_url(self, job_id: str) -> str | None:
-        with self._connect() as db:
+        with self._connection() as db:
             row = db.execute("SELECT source_url FROM jobs WHERE job_id=?", (job_id,)).fetchone()
             return row["source_url"] if row else None
 
     def update_progress(self, job_id: str, progress: float) -> None:
         now = time.time()
         bounded = max(0.0, min(100.0, float(progress)))
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute(
                 "UPDATE jobs SET progress=?, updated_at=? WHERE job_id=? AND status='running' AND cancel_requested=0",
                 (bounded, now, job_id),
@@ -391,7 +391,7 @@ class MediaNodeStore:
         moment = time.time() if now is None else float(now)
         if size < 1 or size > MAX_OUTPUT_BYTES:
             return False
-        with self._connect() as db:
+        with self._connection() as db:
             changed = db.execute("""
                 UPDATE jobs SET status='complete', progress=100, updated_at=?, completed_at=?,
                     cleanup_at=?, file_name=?, content_type=?, size=?, error=NULL
@@ -400,21 +400,21 @@ class MediaNodeStore:
             return changed == 1
 
     def fail(self, job_id: str, safe_error: str = "The media source could not be downloaded.") -> None:
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute("""
                 UPDATE jobs SET status=CASE WHEN cancel_requested=1 THEN 'cancelled' ELSE 'failed' END,
                     updated_at=?, error=? WHERE job_id=? AND status='running'
             """, (time.time(), safe_error[:180], job_id))
 
     def mark_cancelled(self, job_id: str) -> None:
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute(
                 "UPDATE jobs SET status='cancelled', updated_at=?, cancel_requested=1 WHERE job_id=? AND status IN ('queued','running')",
                 (time.time(), job_id),
             )
 
     def request_cancel(self, job_id: str, owner_id: int) -> dict | None:
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT * FROM jobs WHERE job_id=? AND owner_id=?", (job_id, owner_id)).fetchone()
             if row is None:
@@ -439,7 +439,7 @@ class MediaNodeStore:
             return None
         moment = time.time() if now is None else float(now)
         expires = moment + SHARE_TTL_SECONDS
-        with self._connect() as db:
+        with self._connection() as db:
             changed = db.execute("""
                 UPDATE jobs SET share_token_hash=?, share_expires_at=?, updated_at=?
                 WHERE job_id=? AND owner_id=? AND status='complete' AND cleanup_at>?
@@ -454,7 +454,7 @@ class MediaNodeStore:
         if not TOKEN_RE.fullmatch(token):
             return None
         moment = time.time() if now is None else float(now)
-        with self._connect() as db:
+        with self._connection() as db:
             row = db.execute("""
                 SELECT * FROM jobs WHERE job_id=? AND owner_id=? AND status='complete'
                     AND share_token_hash IS NOT NULL AND share_expires_at>? AND cleanup_at>?
@@ -467,7 +467,7 @@ class MediaNodeStore:
             return self._job_view(row)
 
     def revoke(self, job_id: str, owner_id: int) -> bool:
-        with self._connect() as db:
+        with self._connection() as db:
             changed = db.execute("""
                 UPDATE jobs SET share_token_hash=NULL, share_expires_at=NULL, updated_at=?
                 WHERE job_id=? AND owner_id=? AND share_token_hash IS NOT NULL
@@ -475,7 +475,7 @@ class MediaNodeStore:
             return changed == 1
 
     def recover_interrupted(self) -> None:
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute("""
                 UPDATE jobs SET status='failed', updated_at=?, error='Media Node restarted while this task was running.'
                 WHERE status='running'
@@ -483,7 +483,7 @@ class MediaNodeStore:
 
     def expire_due(self) -> None:
         now = time.time()
-        with self._connect() as db:
+        with self._connection() as db:
             rows = db.execute(
                 "SELECT job_id FROM jobs WHERE cleanup_at IS NOT NULL AND cleanup_at<=? AND status='complete'",
                 (now,),
