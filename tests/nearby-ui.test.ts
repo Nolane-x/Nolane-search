@@ -27,7 +27,8 @@ describe("Nearby Places UI", () => {
     expect(html).toContain("var MAX_SAVED=50;");
     expect(html).toContain("localStorage.setItem(STORAGE_KEY,JSON.stringify(next))");
     expect(html).toContain("function cleanSavedPlace(raw)");
-    expect(html).toContain("/^(node|way|relation)\\/(\\d+)$/");
+    expect(html).toContain("typeof raw.latitude!=='number'");
+    expect(html).toContain("slice(0,MAX_SAVED)");
     expect(html).toContain("function moveSavedPlace(index,delta)");
     expect(html).toContain("function exportSavedPlaces()");
     expect(html).toContain("application/gpx+xml;charset=utf-8");
