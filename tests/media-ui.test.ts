@@ -16,7 +16,16 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("document.createElement('audio')");
     expect(html).toContain("Mở / tải audio gốc");
     expect(html).toContain("Mở / tải video gốc");
-    expect(html).toContain("Hiện chưa có downloader đa website hoặc kho chia sẻ file riêng tư.");
+    expect(html).toContain("MEDIA DOWNLOADER · PRIVATE TEMPORARY SHARE");
+    expect(html).toContain("Không hỗ trợ cookie/tài khoản đăng nhập, vượt paywall hoặc DRM.");
+    expect(html).toContain("snapshot lưu tệp có thể tồn tại đến 30 ngày");
+    expect(html).toContain("data-media-downloader-enabled=\"false\"");
+    expect(html).toContain("/api/media/download");
+    expect(html).toContain("/api/media/downloads/");
+    expect(html).toContain("download-submit");
+    expect(html).toContain("download-renew");
+    expect(html).toContain("download-revoke");
+    expect(html).toContain("download-cancel");
     expect(html).toContain("R2 được kích hoạt trước");
     expect(html).toContain("document.createElement('iframe')");
     expect(html).toContain("safeMediaEmbedUrl(item)");
@@ -41,6 +50,16 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("select.className='stream-rate'");
     expect(html).toContain("video.playbackRate=rate");
     expect(html).toContain("Nguồn thử do bên thứ ba lưu trữ");
+  });
+
+  it("enables the downloader UI only when its feature flag is true", async () => {
+    const disabled = await (await mediaAppResponse(false, false)).text();
+    expect(disabled).toContain('data-media-downloader-enabled="false"');
+    expect(disabled).toContain("if(!downloaderEnabled)");
+    const enabled = await (await mediaAppResponse(false, true)).text();
+    expect(enabled).toContain('data-media-downloader-enabled="true"');
+    expect(enabled).toContain("navigator.clipboard.writeText(activeShareUrl)");
+    expect(enabled).toContain("/api/media/downloads/'+encodeURIComponent(activeDownloadId)+'/share");
   });
 
   it("serves syntactically valid inline browser JavaScript", async () => {
