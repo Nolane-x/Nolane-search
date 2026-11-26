@@ -33,7 +33,7 @@
 
 ## Downloader: researched, not enabled
 
-OpenGrab, yt-dlp, gallery-dl, FFmpeg and aria2 were reviewed as potential upstream engines. OpenGrab is self-hosted and documents host-level egress filtering as a second SSRF defense. It is a reference application, not a remote API backend. OmniGet is also a desktop/local-service reference; do not copy GPL-3.0 application source without license review.
+OpenGrab, yt-dlp, gallery-dl, FFmpeg and aria2 were reviewed as potential upstream engines. OpenGrab is self-hosted and documents host-level egress filtering as a second SSRF defense. It is a reference application, not a remote API backend. OmniGet is also a desktop/local-service reference; do not copy GPL-3.0 application source without license review. Cobalt is now the preferred self-hosted API prototype candidate: it offers URL processing and temporary stream/tunnel responses across a broad service matrix, but its API is AGPL-3.0, its separate web UI is CC-BY-NC-SA-4.0/non-commercial, and upstream explicitly disallows using the public hosted API in third-party projects without permission. MeTube is another self-hosted yt-dlp UI reference, not a ready Cloudflare API. See the expanded candidate comparison in the research document.
 
 A universal downloader was deliberately not enabled because the runner still needs enforceable network egress protection against private IPs, metadata endpoints, redirects and DNS rebinding. Public-site extraction must not use cookies, logged-in sessions or DRM/paywall bypasses. Use fixed arguments and bounded job resources.
 
