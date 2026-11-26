@@ -5,6 +5,18 @@ const USER_AGENT = "NolaneSearch/0.1 (+https://github.com/Nolane-x/Nolane-search
 const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
 const NASA_API = "https://images-api.nasa.gov";
 const NASA_ASSET_HOST = "images-assets.nasa.gov";
+const INATURALIST_API = "https://api.inaturalist.org/v1";
+const INATURALIST_PHOTO_HOST = "inaturalist-open-data.s3.amazonaws.com";
+const INATURALIST_LICENSES: Record<string, string> = {
+  cc0: "CC0",
+  cc0_1_0: "CC0",
+  "cc-by": "CC BY",
+  "cc-by-sa": "CC BY-SA",
+  "cc-by-nc": "CC BY-NC",
+  "cc-by-nd": "CC BY-ND",
+  "cc-by-nc-sa": "CC BY-NC-SA",
+  "cc-by-nc-nd": "CC BY-NC-ND",
+};
 
 function object(value: unknown, label: string): Obj {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(label + " returned an unexpected response.");
@@ -85,7 +97,7 @@ function extValue(metadata: Obj, key: string): string | null {
 export interface MediaSearchItem {
   id: string;
   title: string;
-  provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive" | "PeerTube";
+  provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive" | "PeerTube" | "iNaturalist";
   mediaType: "image" | "video" | "audio";
   sourceUrl: string;
   previewUrl: string | null;
@@ -291,6 +303,120 @@ export async function searchOpenverseImages(queryInput: unknown, limitInput?: un
     query,
     items,
     note: "Openverse indexes openly licensed and public-domain images, but the license may include attribution, share-alike, non-commercial or no-derivatives conditions. Preserve creator and source links and review the original license before reuse; open licensing does not automatically permit every use.",
+  };
+}
+
+/**
+ * Search iNaturalist research-grade observations with explicitly licensed photos.
+ * Only the iNaturalist Open Data S3 host is used for image previews; the API can
+ * also return non-open static.inaturalist.org photos, which are intentionally
+ * excluded. Exact observation coordinates are never returned.
+ */
+export async function searchINaturalistObservations(
+  queryInput: unknown,
+  limitInput?: unknown,
+  iconicTaxonInput?: unknown,
+): Promise<{ status: string; source: string; query: string; items: MediaSearchItem[]; note: string }> {
+  const query = cleanText(queryInput, "query", 2, 140);
+  const limit = boundedInt(limitInput, "limit", 6, 1, 8);
+  const allowedTaxa = ["Animalia", "Plantae", "Fungi", "Aves", "Mammalia", "Insecta", "Reptilia", "Amphibia"];
+  if (iconicTaxonInput !== undefined && !allowedTaxa.includes(String(iconicTaxonInput))) {
+    throw new Error("iconic_taxon must be one of: " + allowedTaxa.join(", ") + ".");
+  }
+
+  const url = new URL("/observations", INATURALIST_API);
+  url.searchParams.set("q", query);
+  url.searchParams.set("per_page", String(limit));
+  url.searchParams.set("page", "1");
+  url.searchParams.set("order_by", "observed_on");
+  url.searchParams.set("order", "desc");
+  url.searchParams.set("quality_grade", "research");
+  url.searchParams.set("photo_license", "any");
+  url.searchParams.append("has[]", "photos");
+  if (iconicTaxonInput !== undefined) url.searchParams.append("iconic_taxa[]", String(iconicTaxonInput));
+
+  const payload = object(await fetchJson<unknown>(url, "iNaturalist", 500_000), "iNaturalist observations");
+  const rows = Array.isArray(payload.results) ? payload.results : [];
+  const items: MediaSearchItem[] = [];
+
+  for (const raw of rows.slice(0, limit)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const row = raw as Obj;
+    const observationId = nonNegativeInteger(row.id, 2_147_483_647);
+    if (observationId === null || observationId < 1) continue;
+
+    const taxon = nestedObject(row.taxon);
+    const taxonName = metadataText(taxon.name, 220);
+    const commonName = metadataText(taxon.preferred_common_name, 180);
+    const fallbackName = metadataText(row.species_guess, 180);
+    const title = commonName || fallbackName || taxonName || "Nature observation";
+    const photos = Array.isArray(row.photos) ? row.photos : [];
+    let selected: { photoId: number; ext: string; attribution: string; license: string; width: number | null; height: number | null } | null = null;
+
+    for (const candidate of photos) {
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
+      const photo = candidate as Obj;
+      const photoId = nonNegativeInteger(photo.id, 2_147_483_647);
+      const rawLicense = typeof photo.license_code === "string"
+        ? photo.license_code.trim().toLowerCase().replace(/_/g, "-") : "";
+      const license = INATURALIST_LICENSES[rawLicense] ?? null;
+      const photoUrl = safeHttpUrl(photo.url, INATURALIST_PHOTO_HOST);
+      const attribution = metadataText(photo.attribution, 360);
+      if (photoId === null || photoId < 1 || !license || !photoUrl || !attribution) continue;
+      const path = new URL(photoUrl).pathname;
+      const match = path.match(/^\/photos\/(\d+)\/square\.(jpg|jpeg|png)$/i);
+      if (!match || Number(match[1]) !== photoId) continue;
+      const dimensions = nestedObject(photo.original_dimensions);
+      const width = nonNegativeInteger(dimensions.width, 20_000);
+      const height = nonNegativeInteger(dimensions.height, 20_000);
+      selected = {
+        photoId,
+        ext: match[2].toLowerCase(),
+        attribution,
+        license,
+        width,
+        height,
+      };
+      break;
+    }
+    if (!selected) continue;
+
+    const photoBase = "https://" + INATURALIST_PHOTO_HOST + "/photos/" + selected.photoId + "/";
+    const observedOn = typeof row.observed_on === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.observed_on)
+      ? row.observed_on : null;
+    const scientificName = taxonName && commonName && taxonName !== commonName ? taxonName : null;
+    const iconicTaxon = metadataText(taxon.iconic_taxon_name, 80);
+    const description = [
+      scientificName,
+      observedOn ? "Observed " + observedOn : null,
+      iconicTaxon,
+      "Research-grade observation",
+    ].filter(Boolean).join(" · ") || null;
+
+    items.push({
+      id: "inat-" + observationId + "-" + selected.photoId,
+      title,
+      provider: "iNaturalist",
+      mediaType: "image",
+      sourceUrl: "https://www.inaturalist.org/observations/" + observationId,
+      previewUrl: photoBase + "medium." + selected.ext,
+      mediaUrl: photoBase + "original." + selected.ext,
+      description,
+      credit: selected.attribution,
+      license: selected.license,
+      licenseUrl: null,
+      dateCreated: observedOn,
+      width: selected.width,
+      height: selected.height,
+    });
+  }
+
+  return {
+    status: items.length ? "ok" : "not_found",
+    source: "iNaturalist API · research-grade observations",
+    query,
+    items,
+    note: "These are community-submitted research-grade observations, not guaranteed species identifications. Only photos with a recognized Creative Commons/CC0 license and an iNaturalist Open Data image URL are shown. Each license has its own attribution, commercial-use and derivative-work conditions; open the observation page before reuse. Exact observation coordinates are deliberately omitted. The iNaturalist API recommends keeping requests around one per second.",
   };
 }
 
@@ -873,6 +999,9 @@ export async function runMediaDiscoveryTool(name: string, rawArgs: unknown): Pro
   }
   if (name === "search_peertube_videos") {
     return JSON.stringify(await searchPeerTubeVideos(args.query, args.limit, args.include_nsfw));
+  }
+  if (name === "search_inaturalist_observations") {
+    return JSON.stringify(await searchINaturalistObservations(args.query, args.limit, args.iconic_taxon));
   }
   if (name === "lookup_food_product") return lookupFoodProduct(args.barcode);
   if (name === "lookup_consumer_product") return lookupConsumerProduct(args.barcode, args.product_type);
