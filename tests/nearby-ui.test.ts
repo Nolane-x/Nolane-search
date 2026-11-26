@@ -132,6 +132,7 @@ async function mountNearbyBrowser(routeResponse: unknown, savedPlacesInput?: Arr
   };
   const layers: Array<{ data?: unknown; bounds?: unknown }> = [];
   const tileCalls: string[] = [];
+  const mapCenters: Array<{ center: unknown; zoom: unknown }> = [];
   const makeLayer = (data?: unknown) => ({
     data,
     addTo() { layers.push({ data }); return this; },
@@ -143,7 +144,7 @@ async function mountNearbyBrowser(routeResponse: unknown, savedPlacesInput?: Arr
   const leaflet = {
     map() {
       return {
-        setView() { return this; },
+        setView(center: unknown, zoom: unknown) { mapCenters.push({ center, zoom }); return this; },
         addLayer() { return this; },
         fitBounds() { return this; },
         invalidateSize() { return this; },
@@ -174,7 +175,7 @@ async function mountNearbyBrowser(routeResponse: unknown, savedPlacesInput?: Arr
   new Function("document", "localStorage", "window", "URL", "Blob", "navigator", "fetch", "L", script)(
     documentMock, localStorageMock, windowMock, urlMock, class TestBlob {}, {}, fetchMock, leaflet,
   );
-  return { elements, calls, layers, tileCalls, html, storage };
+  return { elements, calls, layers, tileCalls, mapCenters, html, storage };
 }
 
 describe("Nearby Places routed itinerary", () => {
@@ -204,6 +205,7 @@ describe("Nearby Places routed itinerary", () => {
     await routeButton!.click();
     expect(mounted.calls).toHaveLength(1);
     expect(mounted.tileCalls).toEqual(["https://tile.openstreetmap.org/{z}/{x}/{y}.png"]);
+    expect(mounted.mapCenters[0].center).toEqual([20.84545, 106.68855]);
     expect(mounted.calls[0].url).toContain("https://router.project-osrm.org/route/v1/driving/106.68810,20.84490;106.68900,20.84600");
     expect(mounted.calls[0].url).toContain("geometries=geojson");
     expect(mounted.elements.get("routeSummary")?.textContent).toContain("1.25 km");
