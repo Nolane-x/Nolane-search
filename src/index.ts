@@ -19,6 +19,7 @@ import { nearbyAppResponse } from "./nearby-ui";
 import { searchNearbyPlaces, NearbyPlacesInputError } from "./nearby-places-tools";
 import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, searchPeerTubeVideos } from "./media-discovery-tools";
 import { resolveMediaEmbed } from "./media-embed-resolver";
+import { parseMediaDownloadInput } from "./media-downloader-policy";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import { planToolWorkflow } from "./workflow-planner";
 import type { AiFunctionTool, AiTask } from "./ai-router";
@@ -280,6 +281,132 @@ async function parseJsonBody(request: Request): Promise<Record<string, unknown> 
   return parseJsonObjectBody(request, 30_000);
 }
 
+function mediaDownloaderStub(env: Env, ownerId: number) {
+  if (!env.MEDIA_DOWNLOADER) return null;
+  return env.MEDIA_DOWNLOADER.get(env.MEDIA_DOWNLOADER.idFromName(String(ownerId)));
+}
+
+function mediaDownloaderEnabled(env: Env): boolean {
+  return env.MEDIA_DOWNLOADER_ENABLED === "true" && Boolean(env.MEDIA_DOWNLOADER);
+}
+
+async function callMediaDownloader(
+  env: Env,
+  ownerId: number,
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const stub = mediaDownloaderStub(env, ownerId);
+  if (!stub) return jsonResponse({ error: "Media Downloader chưa được cấu hình." }, 503);
+  return stub.fetch(new Request("https://media-downloader.internal" + path, init));
+}
+
+function safeMediaShareJobId(value: string): boolean {
+  return /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
+}
+
+function mediaSharePageHtml(
+  title: string,
+  fileUrl: string,
+  contentType: string,
+  fileName: string,
+): string {
+  const escape = (value: string) => value.replace(/[&<>"']/g, character => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character] || "");
+  const audio = contentType.startsWith("audio/");
+  const player = audio
+    ? '<audio controls preload="metadata" src="' + escape(fileUrl) + '"></audio>'
+    : '<video controls playsinline preload="metadata" src="' + escape(fileUrl) + '"></video>';
+  return '<!doctype html><html lang="vi"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">' +
+    '<title>' + escape(title) + '</title>' +
+    '<style>*{box-sizing:border-box}body{margin:0;background:#0b1220;color:#edf3ff;font:15px/1.55 system-ui,sans-serif;min-height:100vh;display:grid;place-items:center;padding:24px}.card{width:min(920px,100%);background:#121d2f;border:1px solid #26354d;border-radius:18px;padding:22px}.card h1{font-size:clamp(20px,4vw,30px);margin:0 0 8px}.muted{color:#9aabc4;font-size:13px}video,audio{display:block;width:100%;max-height:72vh;background:#000;border-radius:12px;margin:18px 0}a{color:#a9c1ff;overflow-wrap:anywhere}.foot{border-top:1px solid #26354d;padding-top:14px;margin-top:16px}</style>' +
+    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; media-src \'self\'; base-uri \'none\'; form-action \'none\'; frame-ancestors \'none\'"></head><body>' +
+    '<main class="card"><h1>' + escape(title) + '</h1><p class="muted">Liên kết chia sẻ tạm thời · phát trực tiếp có hỗ trợ tua video.</p>' +
+    player + '<p><a href="' + escape(fileUrl) + '" download="' + escape(fileName) + '">Tải tệp xuống</a></p>' +
+    '<div class="foot muted">Liên kết riêng tư sẽ hết hạn theo thời hạn do người chia sẻ đặt. Không chuyển tiếp liên kết cho người khác nếu bạn không có quyền chia sẻ nội dung này.</div></main></body></html>';
+}
+
+async function handlePublicMediaShare(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const parts = url.pathname.split("/").filter(Boolean);
+  const routeKind = parts[1];
+  const ownerIdText = parts[2] || "";
+  const jobId = parts[3] || "";
+  if (!["watch", "file"].includes(routeKind) || !/^[0-9]{1,20}$/.test(ownerIdText) || !safeMediaShareJobId(jobId)) {
+    return new Response("Not found", { status: 404 });
+  }
+  const ownerId = Number(ownerIdText);
+  if (!Number.isSafeInteger(ownerId) || !allowedUser(env, ownerId) || !mediaDownloaderEnabled(env)) {
+    return new Response("Not found", { status: 404 });
+  }
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("Method not allowed", { status: 405, headers: { allow: "GET, HEAD" } });
+  }
+  const token = url.searchParams.get("token") || "";
+  if (!/^[a-f0-9]{64}$/i.test(token)) return new Response("Not found", { status: 404 });
+
+  if (routeKind === "watch") {
+    const infoResponse = await callMediaDownloader(env, ownerId, "/internal/share-info/" + jobId, {
+      method: "GET",
+      headers: { "x-nolane-share-token": token },
+    });
+    if (!infoResponse.ok) return new Response("Liên kết không hợp lệ hoặc đã hết hạn.", { status: 404 });
+    const info = await infoResponse.json() as {
+      fileName?: string; contentType?: string; size?: number; shareExpiresAt?: number;
+    };
+    const contentType = typeof info.contentType === "string" ? info.contentType : "";
+    const allowedTypes = new Set([
+      "video/mp4", "video/webm", "video/x-matroska", "video/quicktime",
+      "audio/mpeg", "audio/mp4", "audio/opus", "audio/ogg", "audio/wav", "audio/flac",
+    ]);
+    if (!allowedTypes.has(contentType) || !Number.isSafeInteger(info.size) || (info.size || 0) < 1) {
+      return new Response("Tệp media không hợp lệ.", { status: 404 });
+    }
+    const fileUrl = "/media/file/" + ownerId + "/" + jobId + "?token=" + encodeURIComponent(token);
+    const html = mediaSharePageHtml(
+      typeof info.fileName === "string" ? info.fileName : "Nolane Media",
+      fileUrl,
+      contentType,
+      typeof info.fileName === "string" ? info.fileName : "nolane-media",
+    );
+    return new Response(html, {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "private, no-store, max-age=0",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; media-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      },
+    });
+  }
+
+  const fileResponse = await callMediaDownloader(env, ownerId, "/internal/share-file/" + jobId, {
+    method: request.method,
+    headers: {
+      "x-nolane-share-token": token,
+      ...(request.headers.get("range") ? { range: request.headers.get("range")! } : {}),
+    },
+  });
+  const headers = new Headers();
+  for (const name of [
+    "content-type", "content-length", "content-range", "content-disposition", "accept-ranges",
+    "cache-control", "x-content-type-options", "referrer-policy",
+  ]) {
+    const value = fileResponse.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  headers.set("cache-control", "private, no-store");
+  headers.set("referrer-policy", "no-referrer");
+  return new Response(request.method === "HEAD" ? null : fileResponse.body, {
+    status: fileResponse.status,
+    headers,
+  });
+}
+
+
 
 
 /**
@@ -339,6 +466,106 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
 
   const session = await getWebSession(request, env);
   if (!session) return jsonResponse({ error: "Phiên đăng nhập không hợp lệ hoặc đã hết hạn." }, 401);
+
+  if (url.pathname === "/api/media/download" && request.method === "POST") {
+    if (!mediaDownloaderEnabled(env)) {
+      return jsonResponse({
+        error: "Media Downloader chưa được bật. Chủ tài khoản cần cấu hình Cloudflare Containers và Workers Paid trước.",
+      }, 503);
+    }
+    if (session.chatId !== session.userId || !allowedUser(env, session.userId)) {
+      return jsonResponse({ error: "Chỉ tài khoản chủ sở hữu trong chat riêng mới được tải media." }, 403);
+    }
+    const body = await parseJsonObjectBody(request, 8_000);
+    if (!body) return jsonResponse({ error: "Dữ liệu tải media không hợp lệ hoặc quá lớn." }, 400);
+    const parsed = parseMediaDownloadInput(body);
+    if (!parsed.ok) return jsonResponse({ error: parsed.error }, 400);
+
+    const jobId = crypto.randomUUID();
+    const shareToken = randomHex();
+    const startResponse = await callMediaDownloader(env, session.userId, "/internal/start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jobId,
+        url: parsed.value.url,
+        format: parsed.value.format,
+        quality: parsed.value.quality,
+        shareTokenHash: await sha256Hex(shareToken),
+      }),
+    });
+    if (!startResponse.ok) {
+      const value = await startResponse.json().catch(() => ({})) as { error?: string };
+      return jsonResponse({ error: value.error || "Không thể khởi tạo tác vụ tải media." }, startResponse.status);
+    }
+    const result = await startResponse.json() as { status?: string; progress?: number };
+    const shareUrl = new URL("/media/watch/" + session.userId + "/" + jobId + "?token=" + shareToken, request.url).toString();
+    return jsonResponse({
+      jobId,
+      status: result.status || "queued",
+      progress: 0,
+      format: parsed.value.format,
+      quality: parsed.value.quality,
+      sourceHost: new URL(parsed.value.url).hostname,
+      statusUrl: "/api/media/downloads/" + jobId,
+      shareUrl,
+      shareExpiresAt: null,
+      limits: { maximumOutputBytes: 3 * 1024 * 1024 * 1024, maximumSourceDurationSeconds: 7200 },
+    }, 202);
+  }
+
+  const downloadStatusMatch = url.pathname.match(/^\\/api\\/media\\/downloads\\/([a-f0-9-]{36})$/i);
+  if (downloadStatusMatch && request.method === "GET") {
+    const jobId = downloadStatusMatch[1];
+    if (!safeMediaShareJobId(jobId)) return jsonResponse({ error: "Không tìm thấy tác vụ." }, 404);
+    const response = await callMediaDownloader(env, session.userId, "/internal/status/" + jobId);
+    return new Response(response.body, {
+      status: response.status,
+      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
+
+  const downloadShareMatch = url.pathname.match(/^\\/api\\/media\\/downloads\\/([a-f0-9-]{36})\\/share$/i);
+  if (downloadShareMatch && request.method === "POST") {
+    if (session.chatId !== session.userId || !allowedUser(env, session.userId)) {
+      return jsonResponse({ error: "Tài khoản không được phép chia sẻ tệp." }, 403);
+    }
+    const jobId = downloadShareMatch[1];
+    if (!safeMediaShareJobId(jobId)) return jsonResponse({ error: "Không tìm thấy tác vụ." }, 404);
+    const shareToken = randomHex();
+    const response = await callMediaDownloader(env, session.userId, "/internal/renew-share/" + jobId, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tokenHash: await sha256Hex(shareToken) }),
+    });
+    if (!response.ok) return new Response(response.body, { status: response.status, headers: { "content-type": "application/json" } });
+    const info = await response.json() as { shareExpiresAt?: number; fileName?: string; size?: number };
+    const shareUrl = new URL("/media/watch/" + session.userId + "/" + jobId + "?token=" + shareToken, request.url).toString();
+    return jsonResponse({ shareUrl, shareExpiresAt: info.shareExpiresAt || null });
+  }
+
+  const downloadCancelMatch = url.pathname.match(/^\\/api\\/media\\/downloads\\/([a-f0-9-]{36})\\/cancel$/i);
+  if (downloadCancelMatch && request.method === "POST") {
+    const jobId = downloadCancelMatch[1];
+    if (!safeMediaShareJobId(jobId)) return jsonResponse({ error: "Không tìm thấy tác vụ." }, 404);
+    const response = await callMediaDownloader(env, session.userId, "/internal/cancel/" + jobId, { method: "POST" });
+    return new Response(response.body, {
+      status: response.status,
+      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
+
+  const downloadRevokeMatch = url.pathname.match(/^\\/api\\/media\\/downloads\\/([a-f0-9-]{36})$/i);
+  if (downloadRevokeMatch && request.method === "DELETE") {
+    const jobId = downloadRevokeMatch[1];
+    if (!safeMediaShareJobId(jobId)) return jsonResponse({ error: "Không tìm thấy tác vụ." }, 404);
+    const response = await callMediaDownloader(env, session.userId, "/internal/revoke/" + jobId, { method: "DELETE" });
+    return new Response(response.body, {
+      status: response.status,
+      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
+
 
   if (url.pathname === "/api/nearby/search" && request.method === "POST") {
     const body = await parseJsonObjectBody(request, 8_000);
@@ -3302,11 +3529,15 @@ async function recoverStaleDeepJobs(env: Env): Promise<number> {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if ((url.pathname.startsWith("/media/watch/") || url.pathname.startsWith("/media/file/")) &&
+        (request.method === "GET" || request.method === "HEAD")) {
+      return handlePublicMediaShare(request, env);
+    }
     if (request.method === "GET" && url.pathname === "/telegram") return telegramMiniAppResponse();
     if (request.method === "GET" && url.pathname === "/") return webAppResponse();
     if (request.method === "GET" && url.pathname === "/media") {
       const session = await getWebSession(request, env);
-      return session ? mediaAppResponse(env.MEDIA_ALLOW_NSFW === "true") : Response.redirect(new URL("/", request.url), 302);
+      return session ? mediaAppResponse(env.MEDIA_ALLOW_NSFW === "true", mediaDownloaderEnabled(env)) : Response.redirect(new URL("/", request.url), 302);
     }
     if (request.method === "GET" && url.pathname === "/nearby") {
       const session = await getWebSession(request, env);
