@@ -1,4 +1,4 @@
-Nolane Tools hiện có **534 công cụ đã được đăng ký và triển khai trên production** sau Wave 46, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. [PR #99](https://github.com/Nolane-x/Nolane-search/pull/99) đã merge vào `main` bằng commit `b80eee059281932193106b5c90f21ce306dea9e2`. Main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609), Worker export và live health smoke [45332866447](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866447), Cloudflare deployment [45332866563](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866563) đều thành công. Latest Worker Version ID: `2b7c15c7-ca12-4721-a248-1cb47b921f2a`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema; tệp tiếp tục được xử lý trên GitHub-hosted runner dùng một lần.
+Nolane Tools hiện có **534 công cụ đã được đăng ký và triển khai trên production** sau Wave 46, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. **Đây là số file processor** cho luồng `/tool` và `/ai_file`, không phải số AI Agent function tools. Tách riêng, sau Wave 72 AI Agent có **56 function tools** có thể tự gọi để tra cứu dữ liệu, khám phá media, địa điểm và tiện ích. [PR #99](https://github.com/Nolane-x/Nolane-search/pull/99) đã merge vào `main` bằng commit `b80eee059281932193106b5c90f21ce306dea9e2`. Main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609), Worker export và live health smoke [45332866447](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866447), Cloudflare deployment [45332866563](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866563) đều thành công. Latest Worker Version ID: `2b7c15c7-ca12-4721-a248-1cb47b921f2a`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema; tệp tiếp tục được xử lý trên GitHub-hosted runner dùng một lần.
 
 ## Wave 46 — home, vehicle and rental tools — deployed to production
 
@@ -975,6 +975,21 @@ Các auditor dưới đây đọc HTML như dữ liệu, không fetch `href`/`sr
 
 
 ## AI Agent
+
+### Current direct-call discovery catalog — Wave 72
+
+The AI Agent exposes **56 unique function tools**, separately from the 534 file processors listed above. These are discovery and everyday-information functions; they do not increase the file-processor count or turn arbitrary URLs into downloads.
+
+Wave 72 adds two user-facing functions:
+
+| Function | Use |
+|---|---|
+| `search_inaturalist_observations` | Find research-grade wildlife, plant, fungi and nature observations with CC0/Creative Commons photo licenses, attribution and source links. Exact coordinates are omitted; photos outside the iNaturalist Open Data host and records without a recognized license/credit are excluded. |
+| `search_places_in_city` | Find public food, shopping, pharmacy, health, ATM, fuel, charging, parks, attractions and accommodation places in a city/town explicitly named by the user. It asks for clarification when city/region names are ambiguous and never infers device location. |
+
+The wider discovery surface includes web and public-page search, books and public-domain reading, museum/art collections, images and nature media, video/audio catalogs and PeerTube, recipes and food/product lookup, weather and environmental data, public holidays, maps/nearby places, entertainment catalogs, dictionaries/encyclopedic references, country/economic information and other practical lookup tools. Each upstream source has its own coverage, freshness, licensing and availability limits; the tool output should preserve those limitations.
+
+Wave 72 release evidence: [PR #148](https://github.com/Nolane-x/Nolane-search/pull/148), [deployment status](STATUS.md), [research and downloader assessment](TOOL-RESEARCH-2026-11-26-WAVE72-NATURE-LOCAL-DOWNLOADER.md).
 
 ### Pipeline orchestration
 - AI File no longer has to select exactly one processor. It can plan an ordered chain of distinct processors without the old four-step cap, such as `video-audio → audio-convert → audio-transcribe`, `pdf-text → text-clean`, or `json-to-csv → csv-clean → csv-to-xlsx`.
