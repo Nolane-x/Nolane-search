@@ -51,7 +51,7 @@ const HTML = String.raw`<!doctype html>
   </div>
  </div>
  <div id="download-disabled" class="download-warning hidden">Media Node cá nhân chưa được kết nối. Cần bật máy tính chủ, dịch vụ local và Tailscale Funnel; cấu hình này không cần dịch vụ Cloudflare trả phí.</div>
- <div class="download-warning">Chỉ tải trang công khai và nội dung bạn có quyền sử dụng. Không hỗ trợ cookie, đăng nhập, vượt paywall hoặc DRM. Media Node chạy trên máy tính cá nhân: một tác vụ tại một thời điểm, hàng đợi tối đa 3 tác vụ, nguồn tối đa 2 giờ và tệp tối đa 3 GB. Tệp lưu trên ổ đĩa máy chủ và tự xóa sau 12 giờ; link chia sẻ cũng hết hạn sau 12 giờ. Máy tính, Internet và Tailscale Funnel phải hoạt động khi tải hoặc phát. Không dùng cho nội dung riêng tư hay nhạy cảm.</div>
+ <div class="download-warning">Chỉ tải trang công khai và nội dung bạn có quyền sử dụng. Không hỗ trợ cookie, đăng nhập, vượt paywall hoặc DRM. Media Node chạy trên máy tính cá nhân: một tác vụ tại một thời điểm, hàng đợi tối đa 3 tác vụ, nguồn tối đa 2 giờ, tệp tối đa 3 GB và tổng kho tạm tối đa 6 GB. Tệp lưu trên ổ đĩa máy chủ và tự xóa sau 12 giờ; link chia sẻ cũng hết hạn sau 12 giờ. Máy tính, Internet và Tailscale Funnel phải hoạt động khi tải hoặc phát. Không dùng cho nội dung riêng tư hay nhạy cảm.</div>
 </section>
 <section class="playback-lab" aria-labelledby="playback-lab-title">
  <div class="lab-heading"><div><span class="lab-kicker">BROWSER COMPATIBILITY BENCH</span><h2 id="playback-lab-title">Playback Lab</h2><p>Chạy thử các nguồn công khai để kiểm tra CORS, codec, chất lượng, audio và phụ đề ngay trong player của Nolane.</p></div><span class="lab-badge">HLS · DASH</span></div>

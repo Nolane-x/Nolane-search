@@ -520,7 +520,11 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
       sourceHost,
       statusUrl: "/api/media/downloads/" + jobId,
       shareExpiresAt: null,
-      limits: { maximumOutputBytes: 3 * 1024 * 1024 * 1024, maximumSourceDurationSeconds: 7200 },
+      limits: {
+        maximumOutputBytes: 3 * 1024 * 1024 * 1024,
+        maximumStoredBytes: 6 * 1024 * 1024 * 1024,
+        maximumSourceDurationSeconds: 7200,
+      },
     }, 202);
   }
 
