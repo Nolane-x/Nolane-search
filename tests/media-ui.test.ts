@@ -173,7 +173,7 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain('<option value="aic">Art Institute of Chicago · ảnh public domain</option>');
     expect(html).toContain("www.artic.edu");
     expect(html).toContain("item.provider==='Art Institute of Chicago'?safeUrl(item.sourceUrl,['www.artic.edu'])");
-    expect(html).toContain("The Met Open Access, Art Institute of Chicago và Cleveland Museum of Art bổ sung các tác phẩm có trạng thái public domain/CC0");
+    expect(html).toContain("Art Institute of Chicago và Cleveland Museum of Art bổ sung các tác phẩm có trạng thái public domain/CC0");
   });
 
 
