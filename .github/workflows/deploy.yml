@@ -27,6 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CF_SEND_TELEMETRY: "false"
+      # Set true only after the owner confirms Workers Paid and Container activation.
+      MEDIA_DOWNLOADER_CONTAINER_ENABLED: ${{ secrets.MEDIA_DOWNLOADER_CONTAINER_ENABLED }}
     steps:
       - name: Validate required deployment secrets
         env:
@@ -118,15 +120,19 @@ jobs:
           NOLANE_GH_ACTIONS_TOKEN: ${{ secrets.NOLANE_GH_ACTIONS_TOKEN }}
           MEDIA_ALLOW_NSFW: ${{ secrets.MEDIA_ALLOW_NSFW }}
           MEDIA_DAILYMOTION_PLAYER_ID: ${{ secrets.MEDIA_DAILYMOTION_PLAYER_ID }}
+          MEDIA_DOWNLOADER_ENABLED: ${{ secrets.MEDIA_DOWNLOADER_ENABLED }}
         shell: bash
         run: |
           set -euo pipefail
           umask 077
           trap 'rm -f .cloudflare-secrets' EXIT
           : > .cloudflare-secrets
-          for key in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET ALLOWED_TELEGRAM_USER_IDS TAVILY_API_KEY TELEGRAM_ARCHIVE_CHAT_ID EXA_API_KEY BRAVE_SEARCH_API_KEY TINYFISH_API_KEY OPENROUTER_API_KEY OPENROUTER_MODEL OPENROUTER_MODELS AI_ROUTER_CONFIG GITHUB_TOKEN NOLANE_GH_ACTIONS_TOKEN MEDIA_ALLOW_NSFW MEDIA_DAILYMOTION_PLAYER_ID; do
+          for key in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET ALLOWED_TELEGRAM_USER_IDS TAVILY_API_KEY TELEGRAM_ARCHIVE_CHAT_ID EXA_API_KEY BRAVE_SEARCH_API_KEY TINYFISH_API_KEY OPENROUTER_API_KEY OPENROUTER_MODEL OPENROUTER_MODELS AI_ROUTER_CONFIG GITHUB_TOKEN NOLANE_GH_ACTIONS_TOKEN MEDIA_ALLOW_NSFW MEDIA_DAILYMOTION_PLAYER_ID MEDIA_DOWNLOADER_ENABLED; do
             value="${!key:-}"
             if [[ "$key" == "MEDIA_ALLOW_NSFW" && -z "$value" ]]; then
+              value='false'
+            fi
+            if [[ "$key" == "MEDIA_DOWNLOADER_ENABLED" && -z "$value" ]]; then
               value='false'
             fi
             if [[ "$key" == "AI_ROUTER_CONFIG" && -z "$value" ]]; then
