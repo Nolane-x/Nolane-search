@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 PORT = 8080
 DATA_ROOT = Path("/data/jobs")
 MAX_REQUEST_BYTES = 8_000
-MAX_OUTPUT_BYTES = 5 * 1024 * 1024 * 1024
+MAX_OUTPUT_BYTES = 3 * 1024 * 1024 * 1024
 MAX_DURATION_SECONDS = 2 * 60 * 60
 JOB_ID_RE = re.compile(r"^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$", re.I)
 ALLOWED_EXTENSIONS = {
@@ -33,8 +33,6 @@ ALLOWED_EXTENSIONS = {
     ".mp3", ".m4a", ".opus", ".ogg", ".wav", ".flac",
 }
 INTERNAL_TOKEN = os.environ.get("NOLANE_INTERNAL_TOKEN", "")
-if len(INTERNAL_TOKEN) < 32:
-    raise RuntimeError("NOLANE_INTERNAL_TOKEN must contain at least 32 characters.")
 
 LOCK = threading.RLock()
 JOBS: dict[str, dict[str, Any]] = {}
@@ -139,7 +137,7 @@ def _command(job_id: str, url: str, media_format: str, quality: str) -> tuple[li
         "--retries", "2",
         "--fragment-retries", "2",
         "--concurrent-fragments", "2",
-        "--max-filesize", "2500M",
+        "--max-filesize", "1400M",
         "--match-filter", f"duration <= {MAX_DURATION_SECONDS}",
         "--js-runtimes", "node",
         "--remote-components", "ejs:github",
@@ -164,13 +162,17 @@ def _command(job_id: str, url: str, media_format: str, quality: str) -> tuple[li
 
 def _run_job(job_id: str, url: str, media_format: str, quality: str) -> None:
     process: subprocess.Popen[str] | None = None
+    watchdog: threading.Timer | None = None
     try:
-        args, folder = _command(job_id, url, media_format, quality)
         with LOCK:
+            existing = JOBS.get(job_id)
+            if not existing or existing.get("status") == "cancelled":
+                return
             JOBS[job_id] = {
                 "id": job_id, "status": "running", "progress": 0,
-                "createdAt": int(time.time() * 1000), "error": None,
+                "createdAt": existing.get("createdAt", int(time.time() * 1000)), "error": None,
             }
+        args, folder = _command(job_id, url, media_format, quality)
 
         def limit_file_size() -> None:
             import resource
@@ -192,6 +194,9 @@ def _run_job(job_id: str, url: str, media_format: str, quality: str) -> None:
         )
         with LOCK:
             PROCESSES[job_id] = process
+        watchdog = threading.Timer(30 * 60, lambda: _kill_process_group(process))
+        watchdog.daemon = True
+        watchdog.start()
 
         if process.stdout:
             for line in process.stdout:
@@ -227,11 +232,21 @@ def _run_job(job_id: str, url: str, media_format: str, quality: str) -> None:
     except Exception as error:  # noqa: BLE001
         _fail_job(job_id, type(error).__name__)
     finally:
+        if watchdog:
+            watchdog.cancel()
         with LOCK:
             PROCESSES.pop(job_id, None)
             state = JOBS.get(job_id)
         if state and state.get("status") != "complete":
             shutil.rmtree(DATA_ROOT / job_id, ignore_errors=True)
+
+
+
+def _kill_process_group(process: subprocess.Popen[str]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
 
 
 def _fail_job(job_id: str, error_code: str) -> None:
@@ -425,6 +440,8 @@ class Server(ThreadingHTTPServer):
 
 
 def main() -> None:
+    if len(INTERNAL_TOKEN) < 32:
+        raise RuntimeError("NOLANE_INTERNAL_TOKEN must contain at least 32 characters.")
     DATA_ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
     server = Server(("0.0.0.0", PORT), Handler)
     server.serve_forever(poll_interval=0.25)
