@@ -136,10 +136,10 @@ var STORAGE_KEY='nolane.nearby.saved-places.v1';
 var MAX_SAVED=50;
 function cleanSavedPlace(raw){
  if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
- var id=String(raw.id||'').match(/^(node|way|relation)\/([1-9]\d{0,15})$/);
+ var id=String(raw.id||'').match(/^(node|way|relation)\\/([1-9]\\d{0,15})$/);
  var latitude=raw.latitude,longitude=raw.longitude;
  if(!id||typeof latitude!=='number'||!Number.isFinite(latitude)||latitude < -90||latitude > 90||typeof longitude!=='number'||!Number.isFinite(longitude)||longitude < -180||longitude > 180)return null;
- function cleanText(value,max){return String(value||'').replace(/[\u0000-\u001f\u007f]/g,' ').trim().slice(0,max)}
+ function cleanText(value,max){return String(value||'').replace(/[\\u0000-\\u001f\\u007f]/g,' ').trim().slice(0,max)}
  var name=cleanText(raw.name,160);if(!name)return null;
  return {id:id[1]+'/'+id[2],name:name,category:cleanText(raw.category,40),categoryLabel:cleanText(raw.categoryLabel,60),detailType:cleanText(raw.detailType,80),latitude:latitude,longitude:longitude,address:cleanText(raw.address,220)};
 }
@@ -201,8 +201,8 @@ function renderSavedPlaces(){
 function xmlEscape(value){return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;')}
 function exportSavedPlaces(){
  if(!savedPlaces.length)return;
- var route=savedPlaces.map(function(place){return '    <rtept lat="'+place.latitude.toFixed(7)+'" lon="'+place.longitude.toFixed(7)+'"><name>'+xmlEscape(place.name)+'</name><desc>'+xmlEscape(place.categoryLabel||place.category)+'</desc></rtept>'}).join('\n');
- var gpx='<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Nolane Search" xmlns="http://www.topografix.com/GPX/1/1">\n  <rte>\n    <name>Nolane itinerary</name>\n'+route+'\n  </rte>\n</gpx>\n';
+ var route=savedPlaces.map(function(place){return '    <rtept lat="'+place.latitude.toFixed(7)+'" lon="'+place.longitude.toFixed(7)+'"><name>'+xmlEscape(place.name)+'</name><desc>'+xmlEscape(place.categoryLabel||place.category)+'</desc></rtept>'}).join('\\n');
+ var gpx='<?xml version="1.0" encoding="UTF-8"?>\\n<gpx version="1.1" creator="Nolane Search" xmlns="http://www.topografix.com/GPX/1/1">\\n  <rte>\\n    <name>Nolane itinerary</name>\\n'+route+'\\n  </rte>\\n</gpx>\\n';
  var url=URL.createObjectURL(new Blob([gpx],{type:'application/gpx+xml;charset=utf-8'}));
  var link=document.createElement('a');link.href=url;link.download='nolane-itinerary.gpx';document.body.appendChild(link);link.click();link.remove();window.setTimeout(function(){URL.revokeObjectURL(url)},1000);
  setStatus('Đã xuất '+savedPlaces.length+' điểm dừng thành tệp GPX. Tệp giữ thứ tự đã sắp xếp, không chứa tuyến đường được tính toán.');
