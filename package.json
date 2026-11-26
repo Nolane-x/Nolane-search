@@ -9,7 +9,7 @@
     "build": "cf build",
     "deploy": "cf deploy",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --config vitest.config.ts",
     "migrate": "node scripts/migrate.mjs",
     "set:webhook": "node scripts/set-webhook.mjs",
     "set:commands": "node scripts/set-commands.mjs"
