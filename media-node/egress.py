@@ -97,7 +97,7 @@ def create_egress_proxy(
                     resolver=resolver,
                 )
                 upstream = connect_public_host(
-                    normalized_host, 443, resolver, is_public_ip, connector, connector,
+                    normalized_host, 443, resolver, is_public_ip, connector,
                 )
             except (EgressProxyError, ValueError, OSError):
                 self._reject(403)
@@ -159,7 +159,7 @@ def create_egress_proxy(
                     return
 
                 upstream = connect_public_host(
-                    normalized_host, 80, resolver, is_public_ip, connector, connector,
+                    normalized_host, 80, resolver, is_public_ip, connector,
                 )
                 upstream.settimeout(PROXY_IDLE_TIMEOUT_SECONDS)
                 request_target = parsed.path or "/"

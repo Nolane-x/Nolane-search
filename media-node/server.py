@@ -31,84 +31,10 @@ MEDIA_NODE_HOST = "127.0.0.1"
 MEDIA_PROXY_HOST = MEDIA_NODE_HOST
 MEDIA_PROXY_PORT = int(os.environ.get("NOLANE_MEDIA_PROXY_PORT", "8766"))
 MEDIA_PROXY_URL = "http://" + MEDIA_PROXY_HOST + ":" + str(MEDIA_PROXY_PORT)
-_INSTANCE_LOCKS: set[str] = set()
-_INSTANCE_LOCKS_GUARD = threading.Lock()
-
-class InstanceAlreadyRunning(RuntimeError):
+class SourceUrlError(ValueError):
     pass
 
-class InstanceLock:
-    """Cross-process exclusive lock; the OS releases it automatically on crash."""
-    def __init__(self, path: Path):
-        self.path = Path(path).resolve()
-        self._key = str(self.path).casefold() if os.name == "nt" else str(self.path)
-        self._handle = None
-        with _INSTANCE_LOCKS_GUARD:
-            if self._key in _INSTANCE_LOCKS:
-                raise InstanceAlreadyRunning("A Media Node instance already owns this data directory.")
-            _INSTANCE_LOCKS.add(self._key)
-        try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self._handle = self.path.open("a+b")
-            if self.path.stat().st_size == 0:
-                self._handle.write(b"\\0")
-                self._handle.flush()
-            self._handle.seek(0)
-            if os.name == "nt":
-                import msvcrt
-                msvcrt.locking(self._handle.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(self._handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except (OSError, ImportError) as error:
-            if self._handle is not None:
-                self._handle.close()
-                self._handle = None
-            with _INSTANCE_LOCKS_GUARD:
-                _INSTANCE_LOCKS.discard(self._key)
-            raise InstanceAlreadyRunning("The Media Node data directory is already locked or cannot be locked.") from error
-
-    def close(self) -> None:
-        if self._handle is None:
-            return
-        try:
-            if os.name == "nt":
-                import msvcrt
-                self._handle.seek(0)
-                msvcrt.locking(self._handle.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(self._handle.fileno(), fcntl.LOCK_UN)
-        finally:
-            self._handle.close()
-            self._handle = None
-            with _INSTANCE_LOCKS_GUARD:
-                _INSTANCE_LOCKS.discard(self._key)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        self.close()
-
-MAX_BODY_BYTES = 8 * 1024
-MAX_OUTPUT_BYTES = 3 * 1024 * 1024 * 1024
-MAX_EXTRACTOR_FILE_BYTES = 1400 * 1024 * 1024
-MAX_SOURCE_DURATION_SECONDS = 2 * 60 * 60
-JOB_TIMEOUT_SECONDS = 30 * 60
-SHARE_TTL_SECONDS = 12 * 60 * 60
-FILE_RETENTION_SECONDS = 12 * 60 * 60
-MAX_OWNER_JOBS = 3
-JOB_ID_RE = re.compile(r"^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$", re.I)
-TOKEN_RE = re.compile(r"^[a-f0-9]{64}$", re.I)
-HOST_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
-ALLOWED_EXTENSIONS = {".mp4", ".mp3"}
-RESERVED_SUFFIXES = (
-    ".localhost", ".local", ".internal", ".test", ".example", ".invalid",
-    ".onion", ".arpa", ".home", ".lan", ".corp",
-)
-
-class SourceUrlError(ValueError):
+class QueueFull(RuntimeError):
     pass
 
 _INSTANCE_LOCKS: set[str] = set()
