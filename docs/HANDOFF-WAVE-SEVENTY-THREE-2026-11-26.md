@@ -58,6 +58,8 @@ Merge/deploy: not merged or deployed. Keep both feature switches off.
 - media-downloader/test_server.py
 - tests/media-downloader-policy.test.ts
 - tests/media-ui.test.ts
+- tests/cloudflare-workers.ts (Vitest-only Cloudflare runtime shim)
+- vitest.config.ts (Node test-only alias; not used by production Worker builds)
 - .github/workflows/ci.yml
 - .github/workflows/deploy.yml
 
@@ -68,6 +70,6 @@ Research: docs/TOOL-RESEARCH-2026-11-26-WAVE73-DOWNLOADER-CONTAINERS.md.
 - TypeScript typecheck and full Vitest suite pass.
 - Python downloader server tests pass.
 - Docker image builds; the container internal health endpoint succeeds with the random internal token and returns 401 without it.
-- Cloudflare Worker build and deployment-script checks pass.
+- Cloudflare Worker build passes with the default feature gates off and with `MEDIA_DOWNLOADER_CONTAINER_ENABLED=true` (opt-in config validation only; no deploy).
 - Adversarial SSRF/redirect/DNS-rebinding review is recorded. A green build is not proof of safe egress.
 - Do not merge/deploy the Container path unless the account owner has confirmed Workers Paid and explicitly chosen to enable the feature.
