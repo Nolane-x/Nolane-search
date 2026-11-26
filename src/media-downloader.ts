@@ -355,6 +355,10 @@ export class MediaDownloader extends DurableObject<Env> {
 
     try {
       await this.ensureContainer();
+      const beforeDispatch = await this.readState();
+      if (!beforeDispatch || beforeDispatch.jobId !== state.jobId || beforeDispatch.status !== "queued") {
+        throw new Error("Media download was cancelled before dispatch.");
+      }
       const response = await this.containerRequest("/jobs", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -367,17 +371,27 @@ export class MediaDownloader extends DurableObject<Env> {
       });
       if (!response.ok) {
         const error = response.status === 409 ? "A media download is already running." : "Container rejected the media job.";
-        state.status = "failed";
-        state.errorCode = "container_rejected";
-        await this.writeState(state);
+        const latest = await this.readState();
+        if (latest?.jobId === state.jobId && latest.status === "queued") {
+          latest.status = "failed";
+          latest.errorCode = "container_rejected";
+          await this.writeState(latest);
+        }
         throw new Error(error);
+      }
+      const afterDispatch = await this.readState();
+      if (!afterDispatch || afterDispatch.jobId !== state.jobId ||
+          ["cancelled", "revoked"].includes(afterDispatch.status)) {
+        await this.containerRequest("/jobs/" + state.jobId + "/cancel", { method: "POST" }).catch(() => undefined);
+        throw new Error("Media download was cancelled during dispatch.");
       }
       return { jobId: state.jobId, status: "queued", progress: 0 };
     } catch (error) {
-      if (state.status !== "failed") {
-        state.status = "failed";
-        state.errorCode = "container_start_failed";
-        await this.writeState(state);
+      const latest = await this.readState();
+      if (latest?.jobId === state.jobId && ["queued", "running"].includes(latest.status)) {
+        latest.status = "failed";
+        latest.errorCode = "container_start_failed";
+        await this.writeState(latest);
       }
       throw error;
     }
