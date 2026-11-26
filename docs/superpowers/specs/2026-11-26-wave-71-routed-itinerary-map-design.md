@@ -60,12 +60,12 @@ The chosen approach is option 1. Revisit options 2 or 3 before public/high-traff
   - cycling: https://routing.openstreetmap.de/routed-bike/route/v1/bike
   - walking: https://routing.openstreetmap.de/routed-foot/route/v1/foot
 - Send coordinates in longitude,latitude order as required by OSRM. Ask for GeoJSON geometry, no alternatives and no route steps for the first iteration. Use the returned route's distance and duration, and its legs' distance/duration. Do not estimate traffic.
-- Only explicit button activation can start a route request. Disable the button while in flight and enforce a minimum 1,100 ms between route-provider calls in the page instance. Do not automatically retry, recalculate on reorder, or send requests on page load.
+- Only explicit button activation can start a route request. Disable the button while in flight and enforce a minimum 1,100 ms between route-provider calls, using a local timestamp-only cooldown key shared across page loads/tabs. Do not automatically retry, recalculate on reorder, or send requests on page load.
 - Bound one route to 10 waypoints. If the saved list exceeds 10, route only the first 10 in its current order and show an explicit notice. A route requires at least two selected points.
 - Validate response before drawing: HTTP success, code === "Ok", a first route, finite non-negative duration/distance, a valid LineString of bounded finite [longitude, latitude] pairs, and leg count consistent with the requested adjacent stops. Display provider errors safely using textContent.
 - Render numeric stop markers and the route polyline. Show total km/minutes plus each adjacent pair's distance and estimated time. Fit the map to the route and invalidate map size after layout changes.
 - Route request disclosure must say stop coordinates are sent directly to the selected external routing service and requests may be logged there. OSM tile requests after the explicit click also reveal the viewed map area to the tile provider. Favorites remain localStorage-only and are not sent to Nolane's server.
-- The current route is transient page state only. Do not write it to localStorage, D1, telemetry, or any API.
+- The current route is transient page state only. Do not write it to localStorage, D1, telemetry, or any API. The only route-related localStorage value is a numeric cooldown timestamp; it contains no place IDs, coordinates or route details.
 - CSP must permit Leaflet's pinned unpkg CSS/JS, OSM tile host, and the three fixed route endpoints only. Referrer-policy must meet OSM tile requirements.
 
 ## Security, privacy and provider limits
