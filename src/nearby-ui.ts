@@ -370,7 +370,7 @@ async function requestSavedPlacesRoute(){
   $('routeStatus').textContent=error&&error.message?error.message:'Không thể tính tuyến đường lúc này.';
   $('routeStatus').classList.add('error');
  }finally{
-  routeRequestInFlight=false;$('routeButton').disabled=false;
+  routeRequestInFlight=false;$('routeButton').disabled=savedPlaces.length<2;
  }
 }
 $('routeButton').addEventListener('click',requestSavedPlacesRoute);
@@ -411,7 +411,7 @@ function renderSavedPlaces(){
  $('savedCount').textContent=savedPlaces.length+' / '+MAX_SAVED+' điểm';
  $('exportGpx').disabled=savedPlaces.length===0;
  syncResultSaveButtons();
- if(!savedPlaces.length){addText(box,'div','empty','Chưa có điểm nào được lưu. Bấm “Lưu địa điểm” ở một kết quả để thêm vào lịch trình.');refreshRouteStops();return}
+ if(!savedPlaces.length){addText(box,'div','empty','Chưa có điểm nào được lưu. Bấm “Lưu địa điểm” ở một kết quả để thêm vào lịch trình.');refreshRouteStops();$('routeButton').disabled=true;return}
  savedPlaces.forEach(function(place,index){
   var card=addText(box,'article','saved-place','');
   addText(card,'span','stop-number',String(index+1));
@@ -424,6 +424,7 @@ function renderSavedPlaces(){
   var remove=addText(actions,'button','','Xóa');remove.type='button';remove.setAttribute('aria-label','Xóa '+place.name);remove.addEventListener('click',function(){removeSavedPlace(index)});
  });
  refreshRouteStops();
+ $('routeButton').disabled=savedPlaces.length<2||routeRequestInFlight;
 }
 function xmlEscape(value){return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;')}
 function exportSavedPlaces(){
