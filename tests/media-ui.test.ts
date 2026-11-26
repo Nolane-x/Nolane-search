@@ -173,14 +173,15 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain('<option value="aic">Art Institute of Chicago · ảnh public domain</option>');
     expect(html).toContain("www.artic.edu");
     expect(html).toContain("item.provider==='Art Institute of Chicago'?safeUrl(item.sourceUrl,['www.artic.edu'])");
-    expect(html).toContain("Art Institute of Chicago bổ sung tác phẩm được bảo tàng đánh dấu public domain");
+    expect(html).toContain("The Met Open Access, Art Institute of Chicago và Cleveland Museum of Art bổ sung các tác phẩm có trạng thái public domain/CC0");
   });
 
 
   it("offers Cleveland Museum Open Access as a trusted CC0 image-only source", async () => {
-    const html = await (await mediaAppResponse()).text();
+    const response = mediaAppResponse();
+    const html = await response.text();
     expect(html).toContain('<option value="cleveland">Cleveland Museum of Art · ảnh CC0</option>');
-    expect(html).toContain("openaccess-cdn.clevelandart.org");
+    expect(response.headers.get("content-security-policy")).toContain("https://openaccess-cdn.clevelandart.org");
     expect(html).toContain("item.provider==='Cleveland Museum of Art'?safeUrl(item.sourceUrl,['clevelandart.org'])");
     expect(html).toContain("Cleveland Museum of Art bổ sung các tác phẩm có trạng thái public domain/CC0");
   });
