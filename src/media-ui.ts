@@ -582,6 +582,7 @@ if(!downloaderEnabled){
  $('download-disabled').classList.remove('hidden');
  $('download-form').querySelectorAll('input,select,button').forEach(function(element){element.disabled=true;});
 }else{
+ $('download-submit').disabled=false;
  try{
   activeDownloadId=sessionStorage.getItem('nolane-media-downloader-job')||'';
   if(/^[a-f0-9-]{36}$/i.test(activeDownloadId))pollDownload(activeDownloadId);
