@@ -5,6 +5,7 @@ const HTML = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>Nolane · Địa điểm quanh đây</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
 <style>
 :root{color-scheme:light dark;--bg:#f3f5f9;--surface:#fff;--panel:#f9faff;--ink:#1b2233;--muted:#68738a;--line:#e2e7f0;--accent:#5379e7;--accent-text:#fff;--success:#14845b;--danger:#bd4252}
 @media(prefers-color-scheme:dark){:root{--bg:#10141d;--surface:#171e2b;--panel:#1c2635;--ink:#eef3fc;--muted:#9ba8bc;--line:#303b4e;--accent:#7898ff;--accent-text:#101625;--success:#65d7a5;--danger:#ff8492}}
@@ -63,6 +64,23 @@ button{cursor:pointer}
 .export-btn{border:0;border-radius:11px;padding:10px 13px;background:var(--accent);color:var(--accent-text);font-size:11px;font-weight:850}
 .saved-toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:12px 0 0}
 .saved-toolbar span{font-size:10px;color:var(--muted)}
+.route-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:end}
+.route-controls .field{min-width:0}
+.route-controls select{width:100%;border:1px solid var(--line);border-radius:11px;padding:10px 11px;background:var(--panel);color:var(--ink);font:inherit;font-size:12px}
+.route-button{border:0;border-radius:11px;padding:11px 14px;background:var(--accent);color:var(--accent-text);font-size:11px;font-weight:850;white-space:nowrap}
+.route-button:disabled{opacity:.5;cursor:not-allowed}
+.route-summary{font-size:12px;line-height:1.5;font-weight:850;margin-top:12px}
+.route-status{font-size:10px;line-height:1.55;color:var(--muted);margin-top:8px;white-space:pre-wrap}
+.route-status.error{color:var(--danger)}
+.route-map{position:relative;height:340px;min-height:270px;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:12px;background:var(--panel);z-index:0}
+.route-map-placeholder{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--muted);font-size:11px;line-height:1.6;pointer-events:none;z-index:500}
+.route-legs{display:grid;gap:7px;margin-top:10px}
+.route-leg{border:1px solid var(--line);border-radius:11px;padding:9px 10px;background:var(--panel);font-size:10px;line-height:1.5}
+.route-leg strong{font-size:11px}
+.route-provider-note{font-size:10px;color:var(--muted);line-height:1.6;margin-top:10px}
+.route-provider-note a{color:var(--accent)}
+.route-stop-icon{display:grid;place-items:center;width:28px;height:28px;border:2px solid white;border-radius:50%;background:var(--accent);color:white;box-shadow:0 1px 5px #0008;font-size:11px;font-weight:900}
+@media(max-width:440px){.route-controls{grid-template-columns:1fr}.route-controls button{width:100%}.route-map{height:300px}}
 .empty{border:1px dashed var(--line);border-radius:14px;padding:18px;text-align:center;color:var(--muted);font-size:11px;line-height:1.6}
 .attribution{font-size:10px;color:var(--muted);line-height:1.6;margin-top:12px}
 .attribution a{color:var(--accent)}
@@ -103,7 +121,21 @@ button{cursor:pointer}
  <div class="saved-toolbar"><span id="savedHint">Lịch trình là thứ tự do bạn tự sắp xếp, chưa phải tuyến đường được tối ưu.</span><button id="exportGpx" class="export-btn" type="button" disabled>Xuất lịch trình GPX ↓</button></div>
  <p class="attribution">GPX chứa các điểm dừng theo đúng thứ tự bạn sắp xếp. Nó không chứa đường đi, thời gian di chuyển hoặc chỉ dẫn rẽ; hãy mở bằng ứng dụng bản đồ có hỗ trợ GPX. Việc xuất tệp chỉ diễn ra khi bạn bấm nút.</p>
 </section>
+<section class="panel" aria-live="polite">
+ <h2>Bản đồ tuyến đường</h2>
+ <p class="help">Hiển thị đường đi theo đúng thứ tự điểm bạn đã xếp. Chỉ gửi yêu cầu định tuyến khi bạn bấm nút; thời gian là ước tính theo hồ sơ đường, không phải giao thông trực tiếp.</p>
+ <div class="route-controls">
+  <div class="field"><label for="routeProfile">Phương tiện</label><select id="routeProfile"><option value="driving">Ô tô</option><option value="cycling">Xe đạp</option><option value="walking">Đi bộ</option></select></div>
+  <button id="routeButton" class="route-button" type="button">Tính tuyến đường ↗</button>
+ </div>
+ <div id="routeStatus" class="route-status" role="status" aria-live="polite">Lưu ít nhất hai địa điểm rồi bấm Tính tuyến đường để tính quãng đường thực tế.</div>
+ <div id="routeSummary" class="route-summary" aria-live="polite"></div>
+ <div id="routeMap" class="route-map" role="region" aria-label="Bản đồ các điểm dừng và tuyến đường được tính" tabindex="0"><div id="routeMapPlaceholder" class="route-map-placeholder">Bản đồ chỉ tải sau khi bạn chủ động bấm “Tính tuyến đường”. Khi đó nhà cung cấp bản đồ sẽ thấy khu vực đang xem qua yêu cầu các ô bản đồ.</div></div>
+ <div id="routeLegs" class="route-legs"></div>
+ <p class="route-provider-note">Yêu cầu tuyến đường gửi tọa độ các điểm dừng trực tiếp tới OSRM hoặc FOSSGIS theo phương tiện đã chọn; nhà cung cấp có thể ghi log yêu cầu. Dịch vụ công cộng dùng cho lưu lượng cá nhân thấp, tối đa một yêu cầu mỗi giây, không có SLA. Khi bản đồ mở sau thao tác đó, yêu cầu ô bản đồ cũng cho nhà cung cấp OSM biết vùng đang xem. Bản đồ © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>. Chỉ tải các ô bản đồ cần cho vùng đang xem, không tải trước hoặc dùng ngoại tuyến.</p>
+</section>
 </main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script>
 (function(){
 var $=function(id){return document.getElementById(id)};
@@ -151,6 +183,229 @@ function loadSavedPlaces(){
  }catch(error){return []}
 }
 var savedPlaces=loadSavedPlaces();
+var ROUTE_PROFILES={
+ driving:'https://router.project-osrm.org/route/v1/driving/',
+ cycling:'https://routing.openstreetmap.de/routed-bike/route/v1/bike/',
+ walking:'https://routing.openstreetmap.de/routed-foot/route/v1/foot/'
+};
+var ROUTE_MAX_STOPS=10;
+var ROUTE_MAX_RESPONSE_BYTES=1500000;
+var ROUTE_MAX_GEOMETRY_POINTS=20000;
+var ROUTE_COOLDOWN_KEY='nolane.nearby.route-last-request-at.v1';
+var routeMap=null,routeLineLayer=null,routeStopLayer=null,routeMapFailed=false,routeMapRequested=false;
+var routeRequestInFlight=false,lastRouteRequestAt=0,lastRenderedRouteKey=null,routeRevision=0;
+function reserveRouteRequestTime(now){
+ var persisted=0;
+ try{
+  var stored=Number(localStorage.getItem(ROUTE_COOLDOWN_KEY));
+  if(Number.isFinite(stored)&&stored>0)persisted=stored;
+ }catch(error){}
+ var last=Math.max(lastRouteRequestAt,persisted);
+ var wait=last?1100-(now-last):0;
+ if(wait>0)return wait;
+ lastRouteRequestAt=now;
+ try{localStorage.setItem(ROUTE_COOLDOWN_KEY,String(now))}catch(error){}
+ return 0;
+}
+function routeProfileValue(){var value=$('routeProfile').value;return Object.prototype.hasOwnProperty.call(ROUTE_PROFILES,value)?value:'driving'}
+function routeKey(){
+ return routeProfileValue()+'|'+savedPlaces.slice(0,ROUTE_MAX_STOPS).map(function(place){return place.id+':'+place.latitude+','+place.longitude}).join(';');
+}
+function routeDistanceText(meters){return meters>=1000?(meters/1000).toFixed(2)+' km':Math.round(meters)+' m'}
+function routeDurationText(seconds){
+ var minutes=Math.max(1,Math.round(seconds/60));
+ if(minutes<60)return minutes+' phút';
+ var hours=Math.floor(minutes/60),remaining=minutes%60;
+ return hours+' giờ'+(remaining?' '+remaining+' phút':'');
+}
+function clearRouteResult(message){
+ if(routeLineLayer&&typeof routeLineLayer.clearLayers==='function')routeLineLayer.clearLayers();
+ $('routeSummary').textContent='';
+ $('routeLegs').replaceChildren();
+ if(message)$('routeStatus').textContent=message;
+}
+function routeMapLibrary(){return typeof L!=='undefined'&&L&&typeof L.map==='function'?L:null}
+function ensureRouteMap(){
+ if(routeMap)return routeMap;
+ if(routeMapFailed)return null;
+ var leaflet=routeMapLibrary();
+ if(!leaflet){routeMapFailed=true;$('routeMapPlaceholder').style.display='grid';$('routeMapPlaceholder').textContent='Thư viện Leaflet chưa sẵn sàng. Bạn vẫn có thể tính tổng quãng đường và thời gian; đường vẽ sẽ không hiển thị.';$('routeStatus').textContent='Thư viện bản đồ không tải được. Danh sách địa điểm và GPX vẫn dùng được; hãy thử tải lại trang.';return null}
+ try{
+  var initialPoints=savedPlaces.slice(0,ROUTE_MAX_STOPS);
+  var initialCenter=initialPoints.length
+   ? [initialPoints.reduce(function(sum,place){return sum+place.latitude},0)/initialPoints.length,
+      initialPoints.reduce(function(sum,place){return sum+place.longitude},0)/initialPoints.length]
+   : [0,0];
+  routeMap=leaflet.map('routeMap',{scrollWheelZoom:false}).setView(initialCenter,13);
+  if(initialPoints.length>1){
+   var initialBounds=leaflet.latLngBounds(initialPoints.map(function(place){return [place.latitude,place.longitude]}));
+   routeMap.fitBounds(initialBounds,{padding:[28,28],maxZoom:15});
+  }
+  $('routeMapPlaceholder').style.display='none';
+  leaflet.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+   maxZoom:19,attribution:'© OpenStreetMap contributors'
+  }).addTo(routeMap);
+  routeLineLayer=leaflet.layerGroup().addTo(routeMap);
+  routeStopLayer=leaflet.layerGroup().addTo(routeMap);
+  return routeMap;
+ }catch(error){
+  routeMapFailed=true;routeMap=null;
+  $('routeStatus').textContent='Không thể khởi tạo bản đồ. Danh sách điểm và xuất GPX vẫn hoạt động.';
+  return null;
+ }
+}
+function refreshRouteStops(){
+ var nextKey=routeKey();
+ if(lastRenderedRouteKey!==null&&lastRenderedRouteKey!==nextKey){
+  routeRevision+=1;clearRouteResult('Lịch trình hoặc phương tiện đã thay đổi. Hãy tính lại tuyến đường nếu cần.');
+ }
+ lastRenderedRouteKey=nextKey;
+ if(!routeMapRequested)return;
+ var map=ensureRouteMap();var leaflet=routeMapLibrary();
+ if(!map||!leaflet||!routeStopLayer)return;
+ routeStopLayer.clearLayers();
+ var points=savedPlaces.slice(0,ROUTE_MAX_STOPS);
+ points.forEach(function(place,index){
+  var icon=leaflet.divIcon({
+   className:'route-stop-icon',html:String(index+1),iconSize:[28,28],iconAnchor:[14,14]
+  });
+  var marker=leaflet.marker([place.latitude,place.longitude],{icon:icon});
+  marker.bindTooltip(String(index+1),{direction:'top',offset:[0,-10]});
+  routeStopLayer.addLayer(marker);
+ });
+ if(points.length>0){
+  var bounds=leaflet.latLngBounds(points.map(function(place){return [place.latitude,place.longitude]}));
+  map.fitBounds(bounds,{padding:[28,28],maxZoom:15});
+ }
+ map.invalidateSize();
+ if(savedPlaces.length>ROUTE_MAX_STOPS){
+  $('routeStatus').textContent='Danh sách có '+savedPlaces.length+' điểm. Tuyến đường dùng 10 điểm đầu theo đúng thứ tự hiện tại.';
+ }else if(points.length<2){
+  $('routeStatus').textContent='Lưu ít nhất hai địa điểm rồi bấm Tính tuyến đường để tính quãng đường thực tế.';
+ }
+}
+async function readRoutePayload(response){
+ var max=ROUTE_MAX_RESPONSE_BYTES;
+ var declared=Number(response.headers.get('content-length'));
+ if(Number.isFinite(declared)&&declared>max)throw new Error('Phản hồi định tuyến vượt giới hạn kích thước cho phép.');
+ if(!response.body)throw new Error('Nhà cung cấp trả về phản hồi rỗng.');
+ var reader=response.body.getReader(),chunks=[],total=0;
+ try{
+  while(true){
+   var part=await reader.read();if(part.done)break;
+   total+=part.value.byteLength;
+   if(total>max){await reader.cancel('route response too large').catch(function(){});throw new Error('Phản hồi định tuyến vượt giới hạn kích thước cho phép.')}
+   chunks.push(part.value);
+  }
+ }finally{reader.releaseLock()}
+ var bytes=new Uint8Array(total),offset=0;
+ chunks.forEach(function(chunk){bytes.set(chunk,offset);offset+=chunk.byteLength});
+ try{return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))}
+ catch(error){throw new Error('Nhà cung cấp trả về dữ liệu JSON không hợp lệ.')}
+}
+function validateRoutePayload(data,expectedStops){
+ if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Dữ liệu tuyến đường không hợp lệ.');
+ if(data.code!=='Ok'){
+  if(data.code==='NoRoute')throw new Error('Không tìm được đường nối tất cả điểm dừng. Hãy thử danh mục hoặc phương tiện khác.');
+  if(data.code==='NoSegment')throw new Error('Một điểm dừng không nằm gần đường có thể định tuyến. Hãy kiểm tra lại địa điểm.');
+  if(data.code==='TooBig')throw new Error('Tuyến đường quá lớn. Hãy giảm số điểm dừng.');
+  throw new Error('Dịch vụ định tuyến trả về lỗi: '+String(data.code||'không rõ').slice(0,40));
+ }
+ var route=Array.isArray(data.routes)?data.routes[0]:null;
+ if(!route||!Number.isFinite(route.distance)||route.distance<0||!Number.isFinite(route.duration)||route.duration<0)
+  throw new Error('Nhà cung cấp không trả về tổng quãng đường/thời gian hợp lệ.');
+ if(!route.geometry||route.geometry.type!=='LineString'||!Array.isArray(route.geometry.coordinates)||
+    route.geometry.coordinates.length<2||route.geometry.coordinates.length>ROUTE_MAX_GEOMETRY_POINTS)
+  throw new Error('Hình dạng tuyến đường không hợp lệ hoặc vượt giới hạn điểm.');
+ var coordinates=route.geometry.coordinates.map(function(point){
+  if(!Array.isArray(point)||point.length<2||typeof point[0]!=='number'||typeof point[1]!=='number'||
+     !Number.isFinite(point[0])||!Number.isFinite(point[1])||point[0]<-180||point[0]>180||point[1]<-90||point[1]>90)
+   throw new Error('Tọa độ trong hình học tuyến đường không hợp lệ.');
+  return [point[0],point[1]];
+ });
+ if(!Array.isArray(route.legs)||route.legs.length!==expectedStops-1)
+  throw new Error('Số chặng tuyến đường không khớp với danh sách điểm dừng.');
+ var legs=route.legs.map(function(leg){
+  if(!leg||!Number.isFinite(leg.distance)||leg.distance<0||!Number.isFinite(leg.duration)||leg.duration<0)
+   throw new Error('Thông tin một chặng tuyến đường không hợp lệ.');
+  return {distance:leg.distance,duration:leg.duration};
+ });
+ if(!Array.isArray(data.waypoints)||data.waypoints.length!==expectedStops)
+  throw new Error('Số điểm định tuyến trả về không khớp với lịch trình.');
+ return {distance:route.distance,duration:route.duration,geometry:{type:'LineString',coordinates:coordinates},legs:legs};
+}
+function buildRouteUrl(profile,places){
+ var base=ROUTE_PROFILES[profile];
+ if(!base)throw new Error('Phương tiện định tuyến không hợp lệ.');
+ var coordinates=places.map(function(place){return place.longitude.toFixed(5)+','+place.latitude.toFixed(5)}).join(';');
+ return base+coordinates+'?overview=full&geometries=geojson&steps=false&alternatives=false';
+}
+function drawComputedRoute(route,places){
+ var leaflet=routeMapLibrary();
+ if(!routeMap||!leaflet||!routeLineLayer){
+  $('routeStatus').textContent='Đã tính được quãng đường và thời gian, nhưng bản đồ không hiển thị do thư viện Leaflet không tải được.';
+  return;
+ }
+ routeLineLayer.clearLayers();
+ var feature={type:'Feature',properties:{},geometry:route.geometry};
+ routeLineLayer.addLayer(leaflet.geoJSON(feature,{style:{color:'#5379e7',weight:5,opacity:.88,lineCap:'round',lineJoin:'round'}}));
+ var bounds=leaflet.latLngBounds(route.geometry.coordinates.map(function(point){return [point[1],point[0]]}));
+ routeMap.fitBounds(bounds,{padding:[34,34],maxZoom:16});
+ routeMap.invalidateSize();
+}
+function renderRouteMetrics(route,places){
+ $('routeSummary').textContent='Tổng quãng đường: '+routeDistanceText(route.distance)+' · Thời gian ước tính: '+routeDurationText(route.duration);
+ var box=$('routeLegs');box.replaceChildren();
+ route.legs.forEach(function(leg,index){
+  var label=places[index].name+' → '+places[index+1].name;
+  var row=addText(box,'div','route-leg','');
+  addText(row,'strong','',String(index+1)+'. '+label);
+  addText(row,'div','',routeDistanceText(leg.distance)+' · '+routeDurationText(leg.duration));
+ });
+}
+async function requestSavedPlacesRoute(){
+ if(routeRequestInFlight)return;
+ if(savedPlaces.length<2){$('routeStatus').textContent='Cần ít nhất hai địa điểm đã lưu để tính tuyến đường.';return}
+ var profile=routeProfileValue(),places=savedPlaces.slice(0,ROUTE_MAX_STOPS);
+ var url;
+ try{url=buildRouteUrl(profile,places)}catch(error){$('routeStatus').textContent=error.message;return}
+ var now=Date.now(),wait=reserveRouteRequestTime(now);
+ if(wait>0){
+  $('routeStatus').textContent='Để bảo vệ dịch vụ bản đồ công cộng, hãy chờ '+(wait/1000).toFixed(1)+' giây trước yêu cầu tiếp theo.';
+  return;
+ }
+ routeRequestInFlight=true;$('routeButton').disabled=true;
+ routeMapRequested=true;refreshRouteStops();
+ var signature=routeKey(),revision=routeRevision;
+ $('routeStatus').classList.remove('error');
+ $('routeStatus').textContent='Đang tính tuyến đường qua dịch vụ '+(profile==='driving'?'ô tô':profile==='cycling'?'xe đạp':'đi bộ')+'…';
+ try{
+  var response=await fetch(url,{
+   method:'GET',mode:'cors',credentials:'omit',redirect:'error',
+   headers:{accept:'application/json'},referrerPolicy:'strict-origin-when-cross-origin'
+  });
+  if(!response.ok)throw new Error('Dịch vụ định tuyến trả về HTTP '+response.status+'. Hãy thử lại sau.');
+  var payload=await readRoutePayload(response);
+  var route=validateRoutePayload(payload,places.length);
+  if(revision!==routeRevision||signature!==routeKey()){
+   $('routeStatus').textContent='Lịch trình đã thay đổi trong lúc chờ định tuyến. Kết quả cũ đã bị bỏ qua; hãy bấm tính lại.';
+   return;
+  }
+  drawComputedRoute(route,places);
+  renderRouteMetrics(route,places);
+  $('routeStatus').textContent='Đã tính tuyến theo thứ tự bạn đã xếp. Thời gian chỉ là ước tính theo hồ sơ đường, không phản ánh giao thông trực tiếp.'+
+   (savedPlaces.length>ROUTE_MAX_STOPS?' Đã dùng 10 điểm đầu; các điểm còn lại chưa được đưa vào tuyến.':'');
+ }catch(error){
+  $('routeStatus').textContent=error&&error.message?error.message:'Không thể tính tuyến đường lúc này.';
+  $('routeStatus').classList.add('error');
+ }finally{
+  routeRequestInFlight=false;$('routeButton').disabled=savedPlaces.length<2;
+ }
+}
+$('routeButton').addEventListener('click',requestSavedPlacesRoute);
+$('routeProfile').addEventListener('change',function(){
+ routeRevision+=1;clearRouteResult('Đã đổi phương tiện. Bấm Tính tuyến đường để tính lại.');
+});
 function persistSavedPlaces(next){
  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(next));savedPlaces=next;renderSavedPlaces();return true}
  catch(error){setStatus('Không thể lưu trên trình duyệt này. Hãy kiểm tra chế độ riêng tư hoặc dung lượng lưu trữ.',true);return false}
@@ -185,7 +440,7 @@ function renderSavedPlaces(){
  $('savedCount').textContent=savedPlaces.length+' / '+MAX_SAVED+' điểm';
  $('exportGpx').disabled=savedPlaces.length===0;
  syncResultSaveButtons();
- if(!savedPlaces.length){addText(box,'div','empty','Chưa có điểm nào được lưu. Bấm “Lưu địa điểm” ở một kết quả để thêm vào lịch trình.');return}
+ if(!savedPlaces.length){addText(box,'div','empty','Chưa có điểm nào được lưu. Bấm “Lưu địa điểm” ở một kết quả để thêm vào lịch trình.');refreshRouteStops();$('routeButton').disabled=true;return}
  savedPlaces.forEach(function(place,index){
   var card=addText(box,'article','saved-place','');
   addText(card,'span','stop-number',String(index+1));
@@ -197,6 +452,8 @@ function renderSavedPlaces(){
   var map=addText(actions,'a','','OSM');map.href=osmMapUrl(place);map.target='_blank';map.rel='noopener noreferrer';map.className='saved-map-link';
   var remove=addText(actions,'button','','Xóa');remove.type='button';remove.setAttribute('aria-label','Xóa '+place.name);remove.addEventListener('click',function(){removeSavedPlace(index)});
  });
+ refreshRouteStops();
+ $('routeButton').disabled=savedPlaces.length<2||routeRequestInFlight;
 }
 function xmlEscape(value){return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;')}
 function exportSavedPlaces(){
@@ -254,8 +511,8 @@ export function nearbyAppResponse(): Response {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store, max-age=0",
       "x-content-type-options": "nosniff",
-      "referrer-policy": "no-referrer",
-      "content-security-policy": "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "content-security-policy": "default-src 'self'; script-src 'unsafe-inline' https://unpkg.com; style-src 'unsafe-inline' https://unpkg.com; connect-src 'self' https://router.project-osrm.org https://routing.openstreetmap.de; img-src 'self' data: https://tile.openstreetmap.org https://unpkg.com; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
     },
   });
 }
