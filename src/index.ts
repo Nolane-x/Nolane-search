@@ -514,7 +514,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     }, 202);
   }
 
-  const downloadStatusMatch = url.pathname.match(/^\\/api\\/media\\/downloads\\/([a-f0-9-]{36})$/i);
+  const downloadStatusMatch = url.pathname.match(/^\/api\/media\/downloads\//([a-f0-9-]{36})$/i);
   if (downloadStatusMatch && request.method === "GET") {
     const jobId = downloadStatusMatch[1];
     if (!safeMediaShareJobId(jobId)) return jsonResponse({ error: "Không tìm thấy tác vụ." }, 404);
@@ -525,7 +525,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     });
   }
 
-  const downloadShareMatch = url.pathname.match(/^\\/api\\/media\\/downloads\\/([a-f0-9-]{36})\\/share$/i);
+  const downloadShareMatch = url.pathname.match(/^\/api\/media\/downloads\//([a-f0-9-]{36})\\/share$/i);
   if (downloadShareMatch && request.method === "POST") {
     if (session.chatId !== session.userId || !allowedUser(env, session.userId)) {
       return jsonResponse({ error: "Tài khoản không được phép chia sẻ tệp." }, 403);
@@ -544,7 +544,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     return jsonResponse({ shareUrl, shareExpiresAt: info.shareExpiresAt || null });
   }
 
-  const downloadCancelMatch = url.pathname.match(/^\\/api\\/media\\/downloads\\/([a-f0-9-]{36})\\/cancel$/i);
+  const downloadCancelMatch = url.pathname.match(/^\/api\/media\/downloads\//([a-f0-9-]{36})\\/cancel$/i);
   if (downloadCancelMatch && request.method === "POST") {
     const jobId = downloadCancelMatch[1];
     if (!safeMediaShareJobId(jobId)) return jsonResponse({ error: "Không tìm thấy tác vụ." }, 404);
@@ -555,7 +555,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     });
   }
 
-  const downloadRevokeMatch = url.pathname.match(/^\\/api\\/media\\/downloads\\/([a-f0-9-]{36})$/i);
+  const downloadRevokeMatch = url.pathname.match(/^\/api\/media\/downloads\//([a-f0-9-]{36})$/i);
   if (downloadRevokeMatch && request.method === "DELETE") {
     const jobId = downloadRevokeMatch[1];
     if (!safeMediaShareJobId(jobId)) return jsonResponse({ error: "Không tìm thấy tác vụ." }, 404);
