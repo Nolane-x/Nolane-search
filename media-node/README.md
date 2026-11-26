@@ -8,7 +8,8 @@ The node runs yt-dlp and FFmpeg on your own Windows computer. Nolane Search's ex
 - Python 3.12 with the py launcher.
 - Node.js 22 or newer.
 - FFmpeg available as ffmpeg.exe on PATH.
-- Tailscale installed and signed in to a Personal tailnet.
+- Tailscale v1.38.3 or newer, installed and signed in to a Personal tailnet.
+- MagicDNS and HTTPS enabled for the tailnet; Funnel node attribute is permitted by the tailnet policy.
 - Windows Defender Firewall enabled for all network profiles.
 - This is designed for one personal, non-commercial owner. Tailscale Personal's free plan is not for commercial use.
 
@@ -30,7 +31,7 @@ After the task has started, verify the local service from PowerShell:
     Get-ScheduledTask -TaskName "Nolane Media Node"
     Get-Content .\data\media-node.log -Tail 20
 
-Run the Tailscale CLI command:
+Confirm MagicDNS is enabled and Tailscale is signed in. Then run the Tailscale CLI command:
 
     tailscale funnel --bg --https=443 http://127.0.0.1:8765
 
@@ -38,7 +39,7 @@ Tailscale displays or prompts for the Funnel URL. It must be an HTTPS hostname e
 
     tailscale funnel status
 
-Funnel is a public internet endpoint, not a private tailnet-only endpoint. Only the token-authenticated API is exposed. The Worker-facing Python API and the separate HTTP CONNECT proxy both bind only to 127.0.0.1 (ports 8765 and 8766). Funnel must expose port 8765 only. Do not change either loopback binding or expose port 8766.
+Funnel is a public internet endpoint, not a private tailnet-only endpoint. It is currently beta, is available across Tailscale plans, and has non-configurable bandwidth limits. Tailscale Personal is $0 for personal, non-commercial use only. Funnel requires MagicDNS, HTTPS/certificates, and a `funnel` node attribute in the tailnet policy; the CLI may prompt for approval and automatically add that attribute. If the CLI reports a policy problem, open the Tailscale admin console → Access controls → Funnel → Add Funnel to policy. The Funnel port is HTTPS 443; ports 8443 and 10000 are also supported. Only the token-authenticated API is exposed. The Worker-facing Python API and the separate HTTP CONNECT proxy both bind only to 127.0.0.1 (ports 8765 and 8766). Funnel must expose port 8765 only. Do not change either loopback binding or expose port 8766.
 
 Tailscale Funnel is beta and its bandwidth limits are non-configurable. The official docs do not publish a numeric throughput guarantee. Large file shares may therefore be slow or capped. This is not an unlimited CDN.
 

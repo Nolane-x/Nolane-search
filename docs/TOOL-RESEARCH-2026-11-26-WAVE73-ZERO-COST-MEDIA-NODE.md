@@ -77,3 +77,14 @@ Official references:
 - Tailscale Funnel: https://tailscale.com/kb/1223/funnel
 
 This design is an owner-operated personal utility, not a 24/7 public media CDN. The PR remains draft until both Linux and Windows CI pass and the operator completes and verifies local setup.
+
+
+## Official Tailscale eligibility and Funnel prerequisites
+
+- Tailscale Personal is $0 and is for personal, non-commercial use. The Personal plan has unlimited user devices and up to six users in one tailnet.
+- Funnel is beta and available on all plans; it exposes a local service through a public HTTPS Funnel URL.
+- Funnel prerequisites: Tailscale v1.38.3+, MagicDNS, HTTPS certificates, and a Funnel node attribute in the tailnet policy. The CLI can prompt for approval and create the required policy attribute automatically.
+- Funnel port limits: 443, 8443, or 10000; traffic has non-configurable bandwidth limits.
+- Official references:
+  - https://tailscale.com/pricing
+  - https://tailscale.com/docs/features/tailscale-funnel
