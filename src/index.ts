@@ -20,6 +20,7 @@ import { searchNearbyPlaces, NearbyPlacesInputError } from "./nearby-places-tool
 import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, searchPeerTubeVideos } from "./media-discovery-tools";
 import { resolveMediaEmbed } from "./media-embed-resolver";
 import { parseMediaDownloadInput } from "./media-downloader-policy";
+export { MediaDownloader, MediaDownloaderEgress } from "./media-downloader";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import { planToolWorkflow } from "./workflow-planner";
 import type { AiFunctionTool, AiTask } from "./ai-router";
