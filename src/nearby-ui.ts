@@ -348,11 +348,12 @@ async function requestSavedPlacesRoute(){
   $('routeStatus').textContent='Để bảo vệ dịch vụ bản đồ công cộng, hãy chờ '+(wait/1000).toFixed(1)+' giây trước yêu cầu tiếp theo.';
   return;
  }
- var profile=routeProfileValue(),places=savedPlaces.slice(0,ROUTE_MAX_STOPS),signature=routeKey(),revision=routeRevision;
+ var profile=routeProfileValue(),places=savedPlaces.slice(0,ROUTE_MAX_STOPS);
  var url;
  try{url=buildRouteUrl(profile,places)}catch(error){$('routeStatus').textContent=error.message;return}
  routeRequestInFlight=true;lastRouteRequestAt=now;$('routeButton').disabled=true;
  routeMapRequested=true;refreshRouteStops();
+ var signature=routeKey(),revision=routeRevision;
  $('routeStatus').classList.remove('error');
  $('routeStatus').textContent='Đang tính tuyến đường qua dịch vụ '+(profile==='driving'?'ô tô':profile==='cycling'?'xe đạp':'đi bộ')+'…';
  try{
