@@ -137,8 +137,10 @@ export class MediaDownloaderEgress extends WorkerEntrypoint<Env> {
         method,
         headers,
         body: method === "POST" ? body : undefined,
+        // Do not apply a fixed wall-clock timeout to the response stream: large
+        // media bodies may legitimately take minutes. yt-dlp enforces its own
+        // per-socket timeout and cancellation is propagated by the caller.
         redirect: "manual",
-        signal: AbortSignal.timeout(60_000),
       });
       // Redirects are deliberately manual. Reject non-HTTP(S), credentialed or
       // otherwise forbidden Location targets before they can bypass the egress
