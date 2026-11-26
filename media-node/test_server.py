@@ -87,9 +87,12 @@ class MediaNodePolicyTests(unittest.TestCase):
             self.assertEqual(claimed["job_id"], job_id)
             self.assertEqual(claimed["status"], "running")
             restarted = server.MediaNodeStore(Path(temp))
-            self.assertEqual(restarted.get_job(job_id, 123)["status"], "running")
-            restarted.update_progress(job_id, 42.5)
-            self.assertEqual(restarted.get_job(job_id, 123)["progress"], 42.5)
+            self.assertEqual(restarted.get_job(job_id, 123)["status"], "failed")
+            next_job = "7f3dd2d7-4d41-4ef9-9e18-b4f56a510c22"
+            restarted.enqueue(next_job, 123, "https://example.org/video", "video", "720", "example.org")
+            restarted.claim_next()
+            restarted.update_progress(next_job, 42.5)
+            self.assertEqual(restarted.get_job(next_job, 123)["progress"], 42.5)
 
     def test_store_bounds_the_owner_queue(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -125,7 +128,7 @@ class MediaNodePolicyTests(unittest.TestCase):
             folder = root / job_id
             folder.mkdir()
             (folder / "clip.mp4").write_bytes(b"media")
-            self.assertEqual(server.safe_output_file(root, job_id), folder / "clip.mp4")
+            self.assertEqual(server.safe_output_file(root, job_id), folder.resolve() / "clip.mp4")
             (folder / "track.mp3").write_bytes(b"audio")
             self.assertIsNone(server.safe_output_file(root, job_id))
             (folder / "track.mp3").unlink()

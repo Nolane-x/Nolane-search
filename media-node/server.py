@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from contextlib import contextmanager
 import hmac
 import ipaddress
 import json
@@ -53,17 +54,41 @@ def is_public_ip(value: str) -> bool:
         address = ipaddress.ip_address(value.split("%", 1)[0])
     except ValueError:
         return False
-    if isinstance(address, ipaddress.IPv6Address):
-        if address.ipv4_mapped is not None:
-            return False
-        special_v6 = (
-            ipaddress.ip_network("64:ff9b::/96"),
-            ipaddress.ip_network("2001::/23"),
-            ipaddress.ip_network("2002::/16"),
+    if (
+        address.is_multicast or address.is_loopback or address.is_link_local
+        or address.is_private or address.is_reserved or address.is_unspecified
+        or not address.is_global
+    ):
+        return False
+    if isinstance(address, ipaddress.IPv4Address):
+        blocked_v4 = (
+            ipaddress.ip_network("0.0.0.0/8"),
+            ipaddress.ip_network("10.0.0.0/8"),
+            ipaddress.ip_network("100.64.0.0/10"),
+            ipaddress.ip_network("127.0.0.0/8"),
+            ipaddress.ip_network("169.254.0.0/16"),
+            ipaddress.ip_network("172.16.0.0/12"),
+            ipaddress.ip_network("192.0.0.0/24"),
+            ipaddress.ip_network("192.0.2.0/24"),
+            ipaddress.ip_network("192.88.99.0/24"),
+            ipaddress.ip_network("192.168.0.0/16"),
+            ipaddress.ip_network("198.18.0.0/15"),
+            ipaddress.ip_network("198.51.100.0/24"),
+            ipaddress.ip_network("203.0.113.0/24"),
+            ipaddress.ip_network("224.0.0.0/4"),
+            ipaddress.ip_network("240.0.0.0/4"),
         )
-        if any(address in network for network in special_v6):
-            return False
-    return bool(address.is_global)
+        return not any(address in network for network in blocked_v4)
+    blocked_v6 = (
+        ipaddress.ip_network("64:ff9b::/96"),
+        ipaddress.ip_network("64:ff9b:1::/48"),
+        ipaddress.ip_network("2001::/23"),
+        ipaddress.ip_network("2001:20::/28"),
+        ipaddress.ip_network("2002::/16"),
+    )
+    if address.ipv4_mapped is not None:
+        return False
+    return not any(address in network for network in blocked_v6)
 
 def resolve_public_candidates(host: str) -> list[str]:
     try:
@@ -203,7 +228,9 @@ def safe_output_file(root: Path, job_id: str) -> Path | None:
             return None
         outputs: list[Path] = []
         for candidate in folder.iterdir():
-            if candidate.is_symlink() or not candidate.is_file():
+            if candidate.is_symlink():
+                return None
+            if not candidate.is_file():
                 continue
             if candidate.suffix.lower() in ALLOWED_EXTENSIONS:
                 if candidate.resolve().parent != folder:
@@ -211,7 +238,7 @@ def safe_output_file(root: Path, job_id: str) -> Path | None:
                 outputs.append(candidate)
         if len(outputs) != 1:
             return None
-        return outputs[0]
+        return outputs[0].resolve(strict=True)
     except OSError:
         return None
 
@@ -232,8 +259,22 @@ class MediaNodeStore:
         connection.execute("PRAGMA foreign_keys=ON")
         return connection
 
+    @contextmanager
+    def _connection(self):
+        db = self._connect()
+        try:
+            yield db
+        except BaseException:
+            try:
+                db.rollback()
+            except sqlite3.Error:
+                pass
+            raise
+        finally:
+            db.close()
+
     def _initialize(self) -> None:
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.execute("""
                 CREATE TABLE IF NOT EXISTS jobs (
@@ -594,6 +635,7 @@ class MediaWorker:
         reader = threading.Thread(target=read_output, name="nolane-media-output", daemon=True)
         reader.start()
         started = time.monotonic()
+        row = None
         timed_out = False
         too_large = False
         cancelled = False
