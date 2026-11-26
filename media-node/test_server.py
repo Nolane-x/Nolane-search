@@ -134,6 +134,22 @@ class MediaNodePolicyTests(unittest.TestCase):
             self.assertTrue(store.revoke(job_id, 123))
             self.assertIsNone(store.authorize_share(job_id, 123, token, now=1_000_002))
 
+    def test_share_renewal_never_outlives_local_file_retention(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = server.MediaNodeStore(Path(temp))
+            job_id = "7f3dd2d7-4d41-4ef9-9e18-b4f56a510c27"
+            start = 2_000_000
+            store.enqueue(job_id, 123, "https://example.org/video", "video", "720", "example.org")
+            store.claim_next()
+            store.complete(job_id, "clip.mp4", "video/mp4", 1234, now=start)
+            refreshed_token = "d" * 64
+            refreshed_hash = hashlib.sha256(refreshed_token.encode()).hexdigest()
+            near_expiry = start + server.FILE_RETENTION_SECONDS - 60
+            share = store.renew_share(job_id, 123, refreshed_hash, now=near_expiry)
+            self.assertEqual(share["share_expires_at"], start + server.FILE_RETENTION_SECONDS)
+            self.assertIsNotNone(store.authorize_share(job_id, 123, refreshed_token, now=near_expiry + 1))
+            self.assertIsNone(store.authorize_share(job_id, 123, refreshed_token, now=start + server.FILE_RETENTION_SECONDS + 1))
+
     def test_output_discovery_rejects_symlinks_and_ambiguous_files(self):
         job_id = "7f3dd2d7-4d41-4ef9-9e18-b4f56a510c21"
         with tempfile.TemporaryDirectory() as temp:

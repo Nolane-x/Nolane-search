@@ -193,7 +193,7 @@ describe("self-hosted Media Node copy", () => {
   it("contains no retired Container or snapshot messages", async () => {
     const html = await (await mediaAppResponse(false, true)).text();
     expect(html).toContain("Media Node bắt đầu tải");
-    expect(html).toContain("Tệp cục bộ sẽ được xóa tự động");
+    expect(html).toContain("Tệp cục bộ sẽ được xóa theo thời hạn lưu trữ.");
     expect(html).not.toContain("container bắt đầu tải");
     expect(html).not.toContain("Snapshot vật lý");
   });

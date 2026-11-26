@@ -438,17 +438,27 @@ class MediaNodeStore:
         if not TOKEN_RE.fullmatch(token_hash):
             return None
         moment = time.time() if now is None else float(now)
-        expires = moment + SHARE_TTL_SECONDS
         with self._connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("""
+                SELECT cleanup_at FROM jobs
+                WHERE job_id=? AND owner_id=? AND status='complete' AND cleanup_at>?
+            """, (job_id, owner_id, moment)).fetchone()
+            if row is None:
+                db.execute("ROLLBACK")
+                return None
+            # Share expiry must never claim to outlive the local file-retention deadline.
+            expires = min(moment + SHARE_TTL_SECONDS, float(row["cleanup_at"]))
             changed = db.execute("""
                 UPDATE jobs SET share_token_hash=?, share_expires_at=?, updated_at=?
                 WHERE job_id=? AND owner_id=? AND status='complete' AND cleanup_at>?
             """, (token_hash.lower(), expires, moment, job_id, owner_id, moment)).rowcount
             if changed != 1:
+                db.execute("ROLLBACK")
                 return None
             row = db.execute("SELECT * FROM jobs WHERE job_id=?", (job_id,)).fetchone()
-            view = self._job_view(row)
-            return view
+            db.execute("COMMIT")
+            return self._job_view(row)
 
     def authorize_share(self, job_id: str, owner_id: int, token: str, now: float | None = None) -> dict | None:
         if not TOKEN_RE.fullmatch(token):
