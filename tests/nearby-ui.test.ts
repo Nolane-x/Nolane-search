@@ -30,7 +30,8 @@ describe("Nearby Places UI", () => {
     expect(html).toContain("Bản đồ chỉ tải sau khi bạn chủ động bấm");
     expect(html).toContain("khu vực đang xem qua yêu cầu các ô bản đồ");
     expect(html).toContain("var ROUTE_MAX_STOPS=10;");
-    expect(html).toContain("wait=1100-(now-lastRouteRequestAt)");
+    expect(html).toContain("function reserveRouteRequestTime(now)");
+    expect(html).toContain("localStorage.setItem(ROUTE_COOLDOWN_KEY,String(now))");
     expect(html).toContain("routeRequestInFlight");
     expect(html).toContain("data.code!=='Ok'");
     expect(html).toContain("route.geometry.type!=='LineString'");
