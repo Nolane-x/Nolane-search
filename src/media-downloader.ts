@@ -553,8 +553,27 @@ export class MediaDownloader extends DurableObject<Env> {
     try {
       const restoredSnapshot = await this.ensureContainer(state.snapshot);
       if (restoredSnapshot) {
-        state.snapshotLastRestoredAt = Date.now();
-        await this.writeState(state);
+        const restoredAt = Date.now();
+        const tokenHash = await sha256Hex(token);
+        const retained = await this.ctx.storage.transaction(async transaction => {
+          const latest = await transaction.get<DownloadState>(STATE_KEY);
+          if (!latest || latest.jobId !== jobId || latest.status !== "complete" ||
+              !latest.shareTokenHash || !equalHex(tokenHash, latest.shareTokenHash) ||
+              !latest.shareExpiresAt || latest.shareExpiresAt <= restoredAt) return false;
+          latest.snapshotLastRestoredAt = restoredAt;
+          latest.updatedAt = restoredAt;
+          await transaction.put(STATE_KEY, latest);
+          return true;
+        });
+        if (!retained) {
+          await this.ctx.container?.destroy().catch(() => undefined);
+          return json({ error: "Share link is invalid or expired." }, 404);
+        }
+      }
+      const stillValid = await this.validShare(jobId, token);
+      if (!stillValid) {
+        await this.ctx.container?.destroy().catch(() => undefined);
+        return json({ error: "Share link is invalid or expired." }, 404);
       }
       await this.ctx.container?.setInactivityTimeout(10 * 60 * 1000);
       const headers = new Headers();
