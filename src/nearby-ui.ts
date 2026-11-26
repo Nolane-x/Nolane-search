@@ -72,7 +72,8 @@ button{cursor:pointer}
 .route-summary{font-size:12px;line-height:1.5;font-weight:850;margin-top:12px}
 .route-status{font-size:10px;line-height:1.55;color:var(--muted);margin-top:8px;white-space:pre-wrap}
 .route-status.error{color:var(--danger)}
-.route-map{height:340px;min-height:270px;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:12px;background:var(--panel);z-index:0}
+.route-map{position:relative;height:340px;min-height:270px;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:12px;background:var(--panel);z-index:0}
+.route-map-placeholder{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--muted);font-size:11px;line-height:1.6;pointer-events:none;z-index:500}
 .route-legs{display:grid;gap:7px;margin-top:10px}
 .route-leg{border:1px solid var(--line);border-radius:11px;padding:9px 10px;background:var(--panel);font-size:10px;line-height:1.5}
 .route-leg strong{font-size:11px}
@@ -129,9 +130,9 @@ button{cursor:pointer}
  </div>
  <div id="routeStatus" class="route-status" role="status" aria-live="polite">Lưu ít nhất hai địa điểm rồi bấm Tính tuyến đường để tính quãng đường thực tế.</div>
  <div id="routeSummary" class="route-summary" aria-live="polite"></div>
- <div id="routeMap" class="route-map" role="img" aria-label="Bản đồ các điểm dừng và tuyến đường được tính"></div>
+ <div id="routeMap" class="route-map" role="img" aria-label="Bản đồ các điểm dừng và tuyến đường được tính"><div id="routeMapPlaceholder" class="route-map-placeholder">Bản đồ chỉ tải sau khi bạn chủ động bấm “Tính tuyến đường”. Khi đó nhà cung cấp bản đồ sẽ thấy khu vực đang xem qua yêu cầu các ô bản đồ.</div></div>
  <div id="routeLegs" class="route-legs"></div>
- <p class="route-provider-note">Yêu cầu tuyến đường gửi tọa độ các điểm dừng trực tiếp tới OSRM hoặc FOSSGIS theo phương tiện đã chọn; nhà cung cấp có thể ghi log yêu cầu. Dịch vụ công cộng dùng cho lưu lượng cá nhân thấp, tối đa một yêu cầu mỗi giây, không có SLA. Bản đồ © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>. Chỉ tải các ô bản đồ cần cho vùng đang xem, không tải trước hoặc dùng ngoại tuyến.</p>
+ <p class="route-provider-note">Yêu cầu tuyến đường gửi tọa độ các điểm dừng trực tiếp tới OSRM hoặc FOSSGIS theo phương tiện đã chọn; nhà cung cấp có thể ghi log yêu cầu. Dịch vụ công cộng dùng cho lưu lượng cá nhân thấp, tối đa một yêu cầu mỗi giây, không có SLA. Yêu cầu định tuyến gửi tọa độ tới OSRM/FOSSGIS; khi bản đồ được mở sau thao tác đó, yêu cầu ô bản đồ cũng cho nhà cung cấp OSM biết vùng đang xem. Bản đồ © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>. Chỉ tải các ô bản đồ cần cho vùng đang xem, không tải trước hoặc dùng ngoại tuyến.</p>
 </section>
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
@@ -190,7 +191,7 @@ var ROUTE_PROFILES={
 var ROUTE_MAX_STOPS=10;
 var ROUTE_MAX_RESPONSE_BYTES=1500000;
 var ROUTE_MAX_GEOMETRY_POINTS=20000;
-var routeMap=null,routeLineLayer=null,routeStopLayer=null,routeMapFailed=false;
+var routeMap=null,routeLineLayer=null,routeStopLayer=null,routeMapFailed=false,routeMapRequested=false;
 var routeRequestInFlight=false,lastRouteRequestAt=0,lastRenderedRouteKey=null,routeRevision=0;
 function routeProfileValue(){var value=$('routeProfile').value;return Object.prototype.hasOwnProperty.call(ROUTE_PROFILES,value)?value:'driving'}
 function routeKey(){
@@ -214,9 +215,10 @@ function ensureRouteMap(){
  if(routeMap)return routeMap;
  if(routeMapFailed)return null;
  var leaflet=routeMapLibrary();
- if(!leaflet){routeMapFailed=true;setStatus('Thư viện bản đồ không tải được. Danh sách địa điểm và GPX vẫn dùng được; hãy thử tải lại trang.',true);$('routeStatus').textContent='Thư viện Leaflet chưa sẵn sàng. Bạn vẫn có thể tính tổng quãng đường và thời gian; đường vẽ sẽ không hiển thị.';return null}
+ if(!leaflet){routeMapFailed=true;$('routeMapPlaceholder').style.display='grid';$('routeMapPlaceholder').textContent='Thư viện Leaflet chưa sẵn sàng. Bạn vẫn có thể tính tổng quãng đường và thời gian; đường vẽ sẽ không hiển thị.';$('routeStatus').textContent='Thư viện bản đồ không tải được. Danh sách địa điểm và GPX vẫn dùng được; hãy thử tải lại trang.';return null}
  try{
   routeMap=leaflet.map('routeMap',{scrollWheelZoom:false}).setView([20.8449,106.6881],13);
+  $('routeMapPlaceholder').style.display='none';
   leaflet.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
    maxZoom:19,attribution:'© OpenStreetMap contributors'
   }).addTo(routeMap);
@@ -235,6 +237,7 @@ function refreshRouteStops(){
   routeRevision+=1;clearRouteResult('Lịch trình hoặc phương tiện đã thay đổi. Hãy tính lại tuyến đường nếu cần.');
  }
  lastRenderedRouteKey=nextKey;
+ if(!routeMapRequested)return;
  var map=ensureRouteMap();var leaflet=routeMapLibrary();
  if(!map||!leaflet||!routeStopLayer)return;
  routeStopLayer.clearLayers();
@@ -349,6 +352,8 @@ async function requestSavedPlacesRoute(){
  var url;
  try{url=buildRouteUrl(profile,places)}catch(error){$('routeStatus').textContent=error.message;return}
  routeRequestInFlight=true;lastRouteRequestAt=now;$('routeButton').disabled=true;
+ routeMapRequested=true;refreshRouteStops();
+ $('routeStatus').classList.remove('error');
  $('routeStatus').textContent='Đang tính tuyến đường qua dịch vụ '+(profile==='driving'?'ô tô':profile==='cycling'?'xe đạp':'đi bộ')+'…';
  try{
   var response=await fetch(url,{
