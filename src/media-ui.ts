@@ -467,7 +467,7 @@ function showDownloadState(title,detail,progress){
 }
 function showDownloadActions(state){
  $('download-copy').classList.toggle('hidden',!activeShareUrl);
- $('download-renew').classList.toggle('hidden',!(state==='complete'&&!activeShareUrl));
+ $('download-renew').classList.toggle('hidden',state!=='complete');
  $('download-cancel').classList.toggle('hidden',!(['queued','running'].includes(state)));
  $('download-revoke').classList.toggle('hidden',state!=='complete');
  $('download-share-link').classList.toggle('hidden',!activeShareUrl);
@@ -480,6 +480,7 @@ async function pollDownload(jobId){
  try{
   var state=await api('/api/media/downloads/'+encodeURIComponent(jobId));
   if(generation!==downloadPollGeneration)return;
+  if(state.shareExpiresAt&&state.shareExpiresAt<=Date.now())activeShareUrl='';
   var detail=state.error||(
    state.status==='complete'?'Đã tải xong · '+(state.size?new Intl.NumberFormat('vi-VN').format(state.size)+' byte':'tệp đã sẵn sàng'):
    state.status==='failed'?'Không thể hoàn tất tác vụ.':
