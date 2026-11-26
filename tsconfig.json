@@ -23,6 +23,7 @@
     "src/**/*.ts",
     "tests/**/*.ts",
     "cloudflare.config.ts",
-    "vite.config.ts"
+    "vite.config.ts",
+    "vitest.config.ts"
   ]
 }
