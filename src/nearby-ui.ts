@@ -130,9 +130,9 @@ button{cursor:pointer}
  </div>
  <div id="routeStatus" class="route-status" role="status" aria-live="polite">Lưu ít nhất hai địa điểm rồi bấm Tính tuyến đường để tính quãng đường thực tế.</div>
  <div id="routeSummary" class="route-summary" aria-live="polite"></div>
- <div id="routeMap" class="route-map" role="img" aria-label="Bản đồ các điểm dừng và tuyến đường được tính"><div id="routeMapPlaceholder" class="route-map-placeholder">Bản đồ chỉ tải sau khi bạn chủ động bấm “Tính tuyến đường”. Khi đó nhà cung cấp bản đồ sẽ thấy khu vực đang xem qua yêu cầu các ô bản đồ.</div></div>
+ <div id="routeMap" class="route-map" role="region" aria-label="Bản đồ các điểm dừng và tuyến đường được tính" tabindex="0"><div id="routeMapPlaceholder" class="route-map-placeholder">Bản đồ chỉ tải sau khi bạn chủ động bấm “Tính tuyến đường”. Khi đó nhà cung cấp bản đồ sẽ thấy khu vực đang xem qua yêu cầu các ô bản đồ.</div></div>
  <div id="routeLegs" class="route-legs"></div>
- <p class="route-provider-note">Yêu cầu tuyến đường gửi tọa độ các điểm dừng trực tiếp tới OSRM hoặc FOSSGIS theo phương tiện đã chọn; nhà cung cấp có thể ghi log yêu cầu. Dịch vụ công cộng dùng cho lưu lượng cá nhân thấp, tối đa một yêu cầu mỗi giây, không có SLA. Yêu cầu định tuyến gửi tọa độ tới OSRM/FOSSGIS; khi bản đồ được mở sau thao tác đó, yêu cầu ô bản đồ cũng cho nhà cung cấp OSM biết vùng đang xem. Bản đồ © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>. Chỉ tải các ô bản đồ cần cho vùng đang xem, không tải trước hoặc dùng ngoại tuyến.</p>
+ <p class="route-provider-note">Yêu cầu tuyến đường gửi tọa độ các điểm dừng trực tiếp tới OSRM hoặc FOSSGIS theo phương tiện đã chọn; nhà cung cấp có thể ghi log yêu cầu. Dịch vụ công cộng dùng cho lưu lượng cá nhân thấp, tối đa một yêu cầu mỗi giây, không có SLA. Khi bản đồ mở sau thao tác đó, yêu cầu ô bản đồ cũng cho nhà cung cấp OSM biết vùng đang xem. Bản đồ © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>. Chỉ tải các ô bản đồ cần cho vùng đang xem, không tải trước hoặc dùng ngoại tuyến.</p>
 </section>
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
