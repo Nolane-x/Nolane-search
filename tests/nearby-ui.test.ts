@@ -215,11 +215,13 @@ describe("Nearby Places routed itinerary", () => {
     foot.elements.get("routeProfile")!.value = "walking";
     await foot.elements.get("routeButton")!.click();
     expect(foot.calls[0].url).toContain("https://routing.openstreetmap.de/routed-foot/route/v1/foot/");
+    expect(foot.elements.get("routeSummary")?.textContent).toContain("1.25 km");
 
     const bike = await mountNearbyBrowser(routeFixture);
     bike.elements.get("routeProfile")!.value = "cycling";
     await bike.elements.get("routeButton")!.click();
     expect(bike.calls[0].url).toContain("https://routing.openstreetmap.de/routed-bike/route/v1/bike/");
+    expect(bike.elements.get("routeSummary")?.textContent).toContain("1.25 km");
   });
 
   it("blocks a rapid repeat route request in the same page instance", async () => {
