@@ -59,6 +59,7 @@ button{cursor:pointer}
 .saved-place .place-meta{margin:0}
 .saved-actions{display:flex;justify-content:flex-end;gap:5px;flex-wrap:wrap}
 .saved-actions button{padding:6px 7px}
+.saved-actions a{border:1px solid var(--line);border-radius:8px;padding:6px 7px;color:var(--accent);font-size:10px;font-weight:800;text-decoration:none}
 .export-btn{border:0;border-radius:11px;padding:10px 13px;background:var(--accent);color:var(--accent-text);font-size:11px;font-weight:850}
 .saved-toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:12px 0 0}
 .saved-toolbar span{font-size:10px;color:var(--muted)}
@@ -146,7 +147,7 @@ function loadSavedPlaces(){
  try{
   var raw=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
   if(!Array.isArray(raw))return [];
-  var seen={};return raw.map(cleanSavedPlace).filter(function(place){if(!place||seen[place.id])return false;seen[place.id]=true;return true}).slice(0,MAX_SAVED);
+  var seen={};return raw.slice(0,MAX_SAVED).map(cleanSavedPlace).filter(function(place){if(!place||seen[place.id])return false;seen[place.id]=true;return true}).slice(0,MAX_SAVED);
  }catch(error){return []}
 }
 var savedPlaces=loadSavedPlaces();
@@ -169,15 +170,21 @@ function removeSavedPlace(index){
  if(index<0||index>=savedPlaces.length)return;
  var removed=savedPlaces[index];if(persistSavedPlaces(savedPlaces.filter(function(_,i){return i!==index})))setStatus('Đã xóa “'+removed.name+'” khỏi danh sách trên thiết bị này.');
 }
-function osmObjectUrl(place){return 'https://www.openstreetmap.org/'+place.id}
 function osmMapUrl(place){
  var lat=place.latitude.toFixed(5),lon=place.longitude.toFixed(5);
  return 'https://www.openstreetmap.org/?mlat='+lat+'&mlon='+lon+'#map=18/'+lat+'/'+lon;
+}
+function syncResultSaveButtons(){
+ document.querySelectorAll('.place').forEach(function(card){
+  var id=card.getAttribute('data-osm-id'),button=card.querySelector('.save-btn');if(!id||!button)return;
+  var isSaved=savedPlaces.some(function(item){return item.id===id});button.textContent=isSaved?'Đã lưu':'＋ Lưu địa điểm';button.disabled=isSaved;
+ });
 }
 function renderSavedPlaces(){
  var box=$('savedPlaces');if(!box)return;box.replaceChildren();
  $('savedCount').textContent=savedPlaces.length+' / '+MAX_SAVED+' điểm';
  $('exportGpx').disabled=savedPlaces.length===0;
+ syncResultSaveButtons();
  if(!savedPlaces.length){addText(box,'div','empty','Chưa có điểm nào được lưu. Bấm “Lưu địa điểm” ở một kết quả để thêm vào lịch trình.');return}
  savedPlaces.forEach(function(place,index){
   var card=addText(box,'article','saved-place','');
@@ -187,7 +194,7 @@ function renderSavedPlaces(){
   var actions=addText(card,'div','saved-actions','');
   var up=addText(actions,'button','','↑');up.type='button';up.setAttribute('aria-label','Đưa '+place.name+' lên');up.disabled=index===0;up.addEventListener('click',function(){moveSavedPlace(index,-1)});
   var down=addText(actions,'button','','↓');down.type='button';down.setAttribute('aria-label','Đưa '+place.name+' xuống');down.disabled=index===savedPlaces.length-1;down.addEventListener('click',function(){moveSavedPlace(index,1)});
-  var map=addText(actions,'a','','OSM');map.href=osmMapUrl(place);map.target='_blank';map.rel='noopener noreferrer';map.className='place-actions a';
+  var map=addText(actions,'a','','OSM');map.href=osmMapUrl(place);map.target='_blank';map.rel='noopener noreferrer';map.className='saved-map-link';
   var remove=addText(actions,'button','','Xóa');remove.type='button';remove.setAttribute('aria-label','Xóa '+place.name);remove.addEventListener('click',function(){removeSavedPlace(index)});
  });
 }
@@ -206,7 +213,7 @@ function render(data){
  $('resultCount').textContent=data.resultCount+' địa điểm · '+distanceText(data.radiusMeters);
  if(!data.places.length){addText(box,'div','empty','Không tìm thấy địa điểm có tên trong bán kính này. Hãy thử tăng bán kính hoặc chọn danh mục khác.');return}
  data.places.forEach(function(place){
-  var card=addText(box,'article','place','');
+  var card=addText(box,'article','place','');card.setAttribute('data-osm-id',place.id);
   var top=addText(card,'div','place-top','');var title=addText(top,'div','','');
   addText(title,'h3','',place.name);addText(title,'div','place-type',place.detailType||place.categoryLabel);
   addText(top,'span','distance',distanceText(place.distanceMeters));
