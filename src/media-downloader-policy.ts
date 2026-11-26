@@ -87,7 +87,7 @@ export function isPublicIpAddress(value: string): boolean {
   if ((v6 >> 125n) !== 1n) return false;
   // Documentation, benchmarking and special-purpose 2001::/23 ranges.
   if ((v6 >> 96n) === (0x20010db8n)) return false; // 2001:db8::/32
-  if ((v6 >> 113n) === (0x2001n << 7n)) return false; // 2001::/23
+  if ((v6 >> 105n) === 0x200100n) return false; // 2001::/23
   return true;
 }
 
