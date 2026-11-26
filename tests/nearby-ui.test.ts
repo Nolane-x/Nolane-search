@@ -27,6 +27,8 @@ describe("Nearby Places UI", () => {
     expect(html).toContain("https://routing.openstreetmap.de/routed-bike/route/v1/bike/");
     expect(html).toContain("https://routing.openstreetmap.de/routed-foot/route/v1/foot/");
     expect(html).toContain("nhà cung cấp có thể ghi log yêu cầu");
+    expect(html).toContain("Bản đồ chỉ tải sau khi bạn chủ động bấm");
+    expect(html).toContain("khu vực đang xem qua yêu cầu các ô bản đồ");
     expect(html).toContain("var ROUTE_MAX_STOPS=10;");
     expect(html).toContain("wait=1100-(now-lastRouteRequestAt)");
     expect(html).toContain("routeRequestInFlight");
@@ -84,7 +86,7 @@ class NearbyTestElement {
   children: NearbyTestElement[] = [];
   listeners: Record<string, (event?: unknown) => unknown> = {};
   attributes: Record<string, string> = {};
-  classList = { toggle: () => undefined };
+  classList = { toggle: () => undefined, add: () => undefined, remove: () => undefined };
   value = "";
   disabled = false;
   href = "";
@@ -126,6 +128,7 @@ async function mountNearbyBrowser(routeResponse: unknown) {
     setItem(key: string, value: string) { storage.set(key, value); },
   };
   const layers: Array<{ data?: unknown; bounds?: unknown }> = [];
+  const tileCalls: string[] = [];
   const makeLayer = (data?: unknown) => ({
     data,
     addTo() { layers.push({ data }); return this; },
@@ -143,7 +146,7 @@ async function mountNearbyBrowser(routeResponse: unknown) {
         invalidateSize() { return this; },
       };
     },
-    tileLayer() { return makeLayer(); },
+    tileLayer(url: string) { tileCalls.push(url); return makeLayer(); },
     layerGroup() { return makeLayer(); },
     circleMarker() { return makeLayer(); },
     marker() { return makeLayer(); },
@@ -168,7 +171,7 @@ async function mountNearbyBrowser(routeResponse: unknown) {
   new Function("document", "localStorage", "window", "URL", "Blob", "navigator", "fetch", "L", script)(
     documentMock, localStorageMock, windowMock, urlMock, class TestBlob {}, {}, fetchMock, leaflet,
   );
-  return { elements, calls, layers, html };
+  return { elements, calls, layers, tileCalls, html };
 }
 
 describe("Nearby Places routed itinerary", () => {
@@ -192,10 +195,12 @@ describe("Nearby Places routed itinerary", () => {
   it("requests a driving route only after an explicit click and renders real distance and duration", async () => {
     const mounted = await mountNearbyBrowser(routeFixture);
     expect(mounted.calls).toHaveLength(0);
+    expect(mounted.tileCalls).toHaveLength(0);
     const routeButton = mounted.elements.get("routeButton");
     expect(routeButton).toBeDefined();
     await routeButton!.click();
     expect(mounted.calls).toHaveLength(1);
+    expect(mounted.tileCalls).toEqual(["https://tile.openstreetmap.org/{z}/{x}/{y}.png"]);
     expect(mounted.calls[0].url).toContain("https://router.project-osrm.org/route/v1/driving/106.68810,20.84490;106.68900,20.84600");
     expect(mounted.calls[0].url).toContain("geometries=geojson");
     expect(mounted.elements.get("routeSummary")?.textContent).toContain("1.25 km");
