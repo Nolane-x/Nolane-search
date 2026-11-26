@@ -268,12 +268,12 @@ class MediaNodePolicyTests(unittest.TestCase):
     def test_public_dns_results_are_validated_as_a_complete_set(self):
         public_resolver = lambda host: ["93.184.216.34", "2606:4700:4700::1111"]
         self.assertEqual(
-            server.resolve_public_addresses("example.org", resolver=public_resolver),
+            server.resolve_public_addresses("example.org", resolver=public_resolver, is_public_ip=server.is_public_ip),
             ["2606:4700:4700::1111", "93.184.216.34"],
         )
         mixed_resolver = lambda host: ["93.184.216.34", "169.254.169.254"]
         with self.assertRaises(server.SourceUrlError):
-            server.resolve_public_addresses("example.org", resolver=mixed_resolver)
+            server.resolve_public_addresses("example.org", resolver=mixed_resolver, is_public_ip=server.is_public_ip)
 
     def test_upstream_connection_uses_the_pinned_numeric_address(self):
         calls = []
@@ -281,6 +281,7 @@ class MediaNodePolicyTests(unittest.TestCase):
         result = server.connect_public_host(
             "example.org", 443,
             resolver=lambda host: ["93.184.216.34"],
+            is_public_ip=server.is_public_ip,
             connector=lambda address, timeout: calls.append((address, timeout)) or sentinel,
         )
         self.assertIs(result, sentinel)
@@ -293,6 +294,7 @@ class MediaNodePolicyTests(unittest.TestCase):
             server.connect_public_host(
                 "example.org", 443,
                 resolver=lambda host: ["93.184.216.34", "10.1.2.3"],
+                is_public_ip=server.is_public_ip,
                 connector=lambda address, timeout: calls.append(address),
             )
         self.assertEqual(calls, [])
@@ -301,6 +303,8 @@ class MediaNodePolicyTests(unittest.TestCase):
         proxy = server.create_egress_proxy(
             host="127.0.0.1", port=0,
             resolver=lambda host: ["127.0.0.1"],
+            normalize_url=server.normalize_source_url,
+            is_public_ip=server.is_public_ip,
         )
         thread = threading.Thread(target=proxy.serve_forever, daemon=True)
         thread.start()
@@ -321,6 +325,8 @@ class MediaNodePolicyTests(unittest.TestCase):
         proxy = server.create_egress_proxy(
             host="127.0.0.1", port=0,
             resolver=lambda host: ["192.168.1.1"],
+            normalize_url=server.normalize_source_url,
+            is_public_ip=server.is_public_ip,
         )
         thread = threading.Thread(target=proxy.serve_forever, daemon=True)
         thread.start()
@@ -341,6 +347,8 @@ class MediaNodePolicyTests(unittest.TestCase):
         proxy = server.create_egress_proxy(
             host="127.0.0.1", port=0,
             resolver=lambda host: ["93.184.216.34"],
+            normalize_url=server.normalize_source_url,
+            is_public_ip=server.is_public_ip,
         )
         try:
             self.assertEqual(proxy.server_address[0], "127.0.0.1")
