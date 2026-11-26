@@ -197,7 +197,7 @@ describe("Nearby Places · OpenStreetMap", () => {
     const mock = vi.fn();
     vi.stubGlobal("fetch", mock);
     await expect(searchPlacesInCity({ city: "H", category: "food" })).rejects.toBeInstanceOf(NearbyPlacesInputError);
-    await expect(searchPlacesInCity({ city: "Hanoi", category: "food", country_code: "VNM" })).rejects.toThrow("two letters");
+    await expect(searchPlacesInCity({ city: "Hanoi", category: "food", country_code: "VNM" })).rejects.toThrow("hai chữ cái");
     await expect(searchPlacesInCity({ city: "Hanoi", category: "unknown" })).rejects.toThrow("category");
     await expect(searchPlacesInCity({ city: "Hanoi", category: "essentials", radius_m: 4000 })).rejects.toThrow("3000 m");
     expect(mock).not.toHaveBeenCalled();
