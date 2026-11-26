@@ -107,7 +107,7 @@ class NearbyTestElement {
   click() { return this.listeners.click?.(); }
 }
 
-async function mountNearbyBrowser(routeResponse: unknown, savedPlacesInput?: Array<Record<string, unknown>>) {
+async function mountNearbyBrowser(routeResponse: unknown, savedPlacesInput?: Array<Record<string, unknown>>, sharedStorage?: Map<string, string>) {
   const elements = new Map<string, NearbyTestElement>();
   const documentMock = {
     getElementById(id: string) {
@@ -124,7 +124,7 @@ async function mountNearbyBrowser(routeResponse: unknown, savedPlacesInput?: Arr
     { id: "node/501", name: "Điểm A", category: "food", categoryLabel: "Ăn uống", latitude: 20.8449, longitude: 106.6881, address: "Hải Phòng" },
     { id: "way/502", name: "Điểm B", category: "shopping", categoryLabel: "Mua sắm", latitude: 20.8460, longitude: 106.6890, address: "Hải Phòng" },
   ];
-  const storage = new Map([["nolane.nearby.saved-places.v1", JSON.stringify(seed)]]);
+  const storage = sharedStorage || new Map([["nolane.nearby.saved-places.v1", JSON.stringify(seed)]]);
   const localStorageMock = {
     getItem(key: string) { return storage.get(key) || null; },
     setItem(key: string, value: string) { storage.set(key, value); },
@@ -173,7 +173,7 @@ async function mountNearbyBrowser(routeResponse: unknown, savedPlacesInput?: Arr
   new Function("document", "localStorage", "window", "URL", "Blob", "navigator", "fetch", "L", script)(
     documentMock, localStorageMock, windowMock, urlMock, class TestBlob {}, {}, fetchMock, leaflet,
   );
-  return { elements, calls, layers, tileCalls, html };
+  return { elements, calls, layers, tileCalls, html, storage };
 }
 
 describe("Nearby Places routed itinerary", () => {
@@ -230,6 +230,19 @@ describe("Nearby Places routed itinerary", () => {
     await mounted.elements.get("routeButton")!.click();
     expect(mounted.calls).toHaveLength(1);
     expect(mounted.elements.get("routeStatus")?.textContent).toContain("chờ");
+  });
+
+  it("shares the routing cooldown across page loads without storing route coordinates", async () => {
+    const first = await mountNearbyBrowser(routeFixture);
+    await first.elements.get("routeButton")!.click();
+    expect(first.storage.has("nolane.nearby.route-last-request-at.v1")).toBe(true);
+    const storedCooldown = first.storage.get("nolane.nearby.route-last-request-at.v1") || "";
+    expect(Number.isFinite(Number(storedCooldown))).toBe(true);
+    expect(storedCooldown).not.toContain("106.");
+    const second = await mountNearbyBrowser(routeFixture, undefined, first.storage);
+    await second.elements.get("routeButton")!.click();
+    expect(second.calls).toHaveLength(0);
+    expect(second.elements.get("routeStatus")?.textContent).toContain("chờ");
   });
 
   it("shows a safe no-route message instead of drawing an invalid result", async () => {
