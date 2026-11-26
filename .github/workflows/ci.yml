@@ -61,7 +61,7 @@ jobs:
           python -m unittest discover -s tools -p 'test_*.py'
       - name: Test zero-cost self-hosted media node
         run: |
-          python -m py_compile media-node/server.py
+          python -m py_compile media-node/server.py media-node/egress.py
           python -m unittest discover -s media-node -p 'test_*.py'
       - name: Build Worker with free-tier configuration
         run: npx cf build

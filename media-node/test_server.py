@@ -272,7 +272,7 @@ class MediaNodePolicyTests(unittest.TestCase):
             ["2606:4700:4700::1111", "93.184.216.34"],
         )
         mixed_resolver = lambda host: ["93.184.216.34", "169.254.169.254"]
-        with self.assertRaises(server.SourceUrlError):
+        with self.assertRaises(server.EgressProxyError):
             server.resolve_public_addresses("example.org", resolver=mixed_resolver, is_public_ip=server.is_public_ip)
 
     def test_upstream_connection_uses_the_pinned_numeric_address(self):
@@ -290,7 +290,7 @@ class MediaNodePolicyTests(unittest.TestCase):
 
     def test_upstream_connection_never_attempts_a_mixed_private_dns_answer(self):
         calls = []
-        with self.assertRaises(server.SourceUrlError):
+        with self.assertRaises(server.EgressProxyError):
             server.connect_public_host(
                 "example.org", 443,
                 resolver=lambda host: ["93.184.216.34", "10.1.2.3"],

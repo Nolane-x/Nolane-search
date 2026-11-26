@@ -48,10 +48,11 @@ Replace the Wave 73 Cloudflare Containers and Durable Object snapshot design wit
 - Worker-to-node requests carry a 256-bit random shared token and the verified owner ID.
 - Node internal routes require both headers. Health is also protected.
 - Node stores only SHA-256 hashes of temporary share tokens.
-- URL policy accepts public HTTP(S) hostnames only, rejects userinfo, unusual ports, IP literals and internal names, resolves all A/AAAA addresses and fails closed when any address is non-global.
-- Windows installer adds program-scoped outbound firewall blocks for Python, FFmpeg and Node against private, loopback, link-local, CGNAT, reserved IPv4 and special IPv6 ranges. This protects redirects and DNS rebinding at connection time. Funnel must not be enabled if the firewall protection cannot be installed and verified.
+- URL policy accepts public HTTP(S) hostnames only, rejects userinfo, unusual ports, IP literals and internal names.
+- yt-dlp is forced through a bounded loopback HTTP/CONNECT egress proxy. Every initial URL and redirect is resolved immediately before connection; all DNS answers must be globally routable; sockets connect to the already-validated numeric address, preventing DNS rebinding between validation and connect. Only ports 80 and 443 are supported.
+- Windows installer adds program-scoped outbound firewall blocks for Python, FFmpeg and Node against private, link-local, CGNAT, reserved IPv4 and special IPv6 ranges. FFmpeg and Node also have loopback blocked; Python loopback is reserved for the local proxy/API. Funnel must not be enabled if firewall and proxy smoke checks cannot be installed and verified.
 - No generic proxy, filesystem endpoint, cookie support, browser profiles, or credentials.
-- One active process globally, at most three queued or running jobs for the owner.
+- One exclusive Media Node process per data directory, one active download globally, at most three queued or running jobs for the owner.
 - Max source duration 7,200 seconds, output 3 GiB, watchdog 30 minutes.
 - Cancel terminates the process tree; expired files are removed by the local cleanup job.
 - HTTP Range and HEAD are streamed in bounded chunks. Never load the entire file into memory.

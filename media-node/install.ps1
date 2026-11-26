@@ -56,23 +56,26 @@ Set-Content -Path $envPath -Value ("NOLANE_INTERNAL_TOKEN=" + $token) -Encoding 
 if ($LASTEXITCODE -ne 0) { throw "Unable to restrict access to the local secret file." }
 
 $blockedRanges = @(
-    "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8",
+    "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10",
     "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24",
     "192.88.99.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24",
     "203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4", "255.255.255.255/32",
     "::/128", "::1/128", "::ffff:0:0/96", "64:ff9b::/96", "64:ff9b:1::/48", "2001:20::/28", "fc00::/7",
     "fe80::/10", "ff00::/8", "2001:db8::/32", "2001::/23", "2002::/16"
 )
+$blockedRangesWithLoopback = @($blockedRanges) + @("127.0.0.0/8")
 $programs = @(
-    @{ Name = "python"; Path = $venvPython },
-    @{ Name = "ffmpeg"; Path = $ffmpeg.Source },
-    @{ Name = "node"; Path = $node.Source }
+    # Python needs loopback access only to the fixed local egress proxy (port 8766).
+    @{ Name = "python"; Path = $venvPython; Blocked = $blockedRanges },
+    # FFmpeg and Node do not need network access to the host or private networks.
+    @{ Name = "ffmpeg"; Path = $ffmpeg.Source; Blocked = $blockedRangesWithLoopback },
+    @{ Name = "node"; Path = $node.Source; Blocked = $blockedRangesWithLoopback }
 )
 foreach ($program in $programs) {
     if (-not (Test-Path $program.Path)) { throw "Missing executable for outbound isolation: $($program.Path)" }
     $ruleName = $rulePrefix + $program.Name
     Get-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-    New-NetFirewallRule -Name $ruleName -DisplayName ("Nolane Media Node outbound private-network block (" + $program.Name + ")") -Direction Outbound -Action Block -Enabled True -Profile Any -Program $program.Path -RemoteAddress $blockedRanges | Out-Null
+    New-NetFirewallRule -Name $ruleName -DisplayName ("Nolane Media Node outbound private-network block (" + $program.Name + ")") -Direction Outbound -Action Block -Enabled True -Profile Any -Program $program.Path -RemoteAddress $program.Blocked | Out-Null
 }
 foreach ($program in $programs) {
     $rule = Get-NetFirewallRule -Name ($rulePrefix + $program.Name) -ErrorAction Stop
@@ -88,6 +91,27 @@ $principalTask = New-ScheduledTaskPrincipal -UserId $identity.Name -LogonType In
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Days 0) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principalTask -Settings $settings -Description "Owner-only local media download and temporary playback service." -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
+
+# Fail closed unless the service and its pinned public-egress proxy are reachable
+# through the same Python executable covered by the firewall rules.
+$proxySmoke = @'
+import urllib.request
+proxy = "http://127.0.0.1:8766"
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({"http": proxy, "https": proxy}))
+with opener.open("https://example.com/", timeout=12) as response:
+    if response.status < 200 or response.status >= 400:
+        raise SystemExit("The local egress proxy returned an unexpected status.")
+'@
+$proxyReady = $false
+for ($attempt = 0; $attempt -lt 20; $attempt++) {
+    & $venvPython -c $proxySmoke *> $null
+    if ($LASTEXITCODE -eq 0) { $proxyReady = $true; break }
+    Start-Sleep -Seconds 1
+}
+if (-not $proxyReady) {
+    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    throw "The Media Node public-egress proxy failed its HTTPS smoke test. Do not enable Tailscale Funnel."
+}
 
 Write-Host ""
 Write-Host "Nolane Media Node installed. The service listens only on 127.0.0.1:8765."

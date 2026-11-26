@@ -19,7 +19,7 @@ The node runs yt-dlp and FFmpeg on your own Windows computer. Nolane Search's ex
 3. Run: Set-ExecutionPolicy -Scope Process Bypass -Force
 4. Run: .\install.ps1
 
-The installer creates a Python virtual environment, installs pinned yt-dlp packages, generates a 256-bit random local secret, installs outbound Windows Firewall blocks for Python/FFmpeg/Node to private and special-use address ranges, verifies those rules, and registers a per-user logon task. It does not open an inbound router port.
+The installer creates a Python virtual environment, installs pinned yt-dlp packages (including the local EJS challenge scripts), generates a 256-bit random local secret, installs outbound Windows Firewall blocks for Python/FFmpeg/Node to private and special-use address ranges, verifies those rules, and registers a per-user logon task. The Python rule leaves loopback available only so yt-dlp can reach the local egress proxy; all outbound HTTP(S) from yt-dlp is forced through that proxy. The proxy rejects every non-public DNS answer and connects to a pinned numeric IP. FFmpeg and Node also have loopback blocked. The installer performs a live HTTPS test through the proxy and stops the service if it fails. It does not open an inbound router port.
 
 If firewall profiles are disabled or any protection cannot be installed and verified, setup stops. Do not enable Funnel until the firewall rules are present.
 
@@ -38,7 +38,7 @@ Tailscale displays or prompts for the Funnel URL. It must be an HTTPS hostname e
 
     tailscale funnel status
 
-Funnel is a public internet endpoint, not a private tailnet-only endpoint. Only the token-authenticated API is exposed. The Python service itself binds to 127.0.0.1, not 0.0.0.0. Do not change this binding.
+Funnel is a public internet endpoint, not a private tailnet-only endpoint. Only the token-authenticated API is exposed. The Worker-facing Python API and the separate HTTP CONNECT proxy both bind only to 127.0.0.1 (ports 8765 and 8766). Funnel must expose port 8765 only. Do not change either loopback binding or expose port 8766.
 
 Tailscale Funnel is beta and its bandwidth limits are non-configurable. The official docs do not publish a numeric throughput guarantee. Large file shares may therefore be slow or capped. This is not an unlimited CDN.
 
@@ -67,15 +67,15 @@ No paid Cloudflare plan, R2 bucket or GitHub Actions runtime is used by the down
 - Uninstall service/rules: .\uninstall.ps1 (Administrator)
 - Also delete local job database and media: .\uninstall.ps1 -RemoveData (Administrator)
 
-The local database and media are stored under media-node\data. Completed media expires after 12 hours; unshared, cancelled and failed job metadata is periodically cleaned. The computer must remain powered on, connected to the Internet and signed in for new downloads and playback. Sleep, shutdown, ISP limits, upload speed and Funnel limits affect availability.
+The local database, exclusive process lock and media are stored under media-node\data. Only one Media Node process may own that directory; a second launch exits without touching queued jobs. Completed media expires after 12 hours; unshared, cancelled and failed job metadata is periodically cleaned. The computer must remain powered on, connected to the Internet and signed in for new downloads and playback. Sleep, shutdown, ISP limits, upload speed and Funnel limits affect availability.
 
 ## Security model
 
 - Every Worker-to-node call uses an independent 256-bit secret and owner ID.
 - Every internal route, including health, requires that secret.
 - Share URLs use random 256-bit tokens; only their SHA-256 hashes are stored locally.
-- Source URLs are validated by both Worker and node, and every DNS answer must be globally routable.
-- Windows Firewall outbound rules block private, loopback, link-local, CGNAT and special-use ranges for Python, FFmpeg and Node. Redirects to those ranges should therefore fail at the network layer too.
+- Source URLs are validated by both Worker and node. yt-dlp is forced through a local HTTP/CONNECT proxy; the proxy revalidates every request/redirect, rejects a hostname if any DNS answer is non-public, and opens sockets to the selected numeric IP so the OS cannot perform a second DNS lookup. Only ports 80 and 443 are allowed.
+- Windows Firewall blocks private, link-local, CGNAT and special-use ranges for Python, FFmpeg and Node. FFmpeg/Node also have loopback blocked. Python may use loopback only for the fixed local proxy/API; the proxy itself will not connect to local or private addresses.
 - No browser cookies, credentials, paywall or DRM bypass, playlists or generic proxy.
 - Download subprocesses are bounded by duration, output size, wall time and concurrency. Logs do not record source URLs or tokens.
 - Temporary share links expire after 12 hours and can be revoked.

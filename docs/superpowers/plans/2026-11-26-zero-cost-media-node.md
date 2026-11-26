@@ -17,7 +17,7 @@ Spec: docs/superpowers/specs/2026-11-26-zero-cost-media-node-design.md
 - Worker requests require a valid session, private-chat owner identity and allowlist.
 - Node requests require a 256-bit shared secret and owner ID.
 - No cookies, browser profiles, login credentials, DRM/paywall bypass, playlists, or arbitrary proxy endpoints.
-- One active downloader process; at most three queued or running jobs per owner.
+- One exclusive Media Node process per data directory; one active downloader process; at most three queued or running jobs per owner.
 - Source duration max 7,200 seconds; final output max 3 GiB; watchdog 30 minutes.
 - Temporary file and share retention is 12 hours; HTTP Range and HEAD are required.
 - GitHub Actions is CI/CD only, not an end-user downloader backend.
@@ -101,7 +101,7 @@ Steps:
 
 ### Task 5: Verification and review
 
-- [ ] Run full Python tests on Ubuntu and Windows.
+- [ ] Run full Python tests on Ubuntu and Windows, including public/private proxy routing and CONNECT tunnel behavior.
 - [ ] Run all TypeScript tests, type-check and default Worker build.
 - [ ] Verify no active Container, Durable Object snapshot or R2 dependency remains in downloader code/config/CI.
 - [ ] Review cancellation races, Range streaming, token redaction and DNS-rebinding defenses.
