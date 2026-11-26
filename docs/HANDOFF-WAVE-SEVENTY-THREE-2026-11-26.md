@@ -12,7 +12,7 @@ The original Cloudflare Container and Durable Object snapshot prototype is being
 - Cloudflare Worker: existing Free plan, user session and owner access checks, node request authentication, Range-preserving response streaming.
 - Local Windows Media Node: Python 3.12 service, SQLite job state, yt-dlp + yt-dlp-ejs + Node 22, FFmpeg.
 - Public HTTPS ingress: Tailscale Funnel Personal pointing to 127.0.0.1:8765.
-- Storage: temporary files on the operator's local drive. No D1 media bytes, no R2, no GitHub Artifacts, no Container snapshots.
+- Storage: temporary files on the operator's local drive. Media bytes are not sent to the database, GitHub Actions artifacts or a hosted bucket.
 - GitHub Actions: CI/CD only, never per-user download compute.
 
 ## Operational limits
@@ -51,7 +51,7 @@ The original Cloudflare Container and Durable Object snapshot prototype is being
 4. Copy only the HTTPS Funnel URL and generated 64-character local token to GitHub Actions secrets MEDIA_NODE_URL and MEDIA_NODE_TOKEN. Never commit or message the token.
 5. After PR merge is explicitly authorized, run the normal deploy workflow. Until these secrets are configured, the feature stays disabled.
 
-No files were installed on the user's computer; no secrets were read or written; no Cloudflare setting, billing plan, R2 bucket, Funnel endpoint or deployment was changed by this work.
+No files were installed on the user's computer; no secrets were read or written; no account setting, billing plan, Funnel endpoint or deployment was changed by this work.
 
 ## Verification
 

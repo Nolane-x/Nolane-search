@@ -1,6 +1,6 @@
 # Nolane Media Node (self-hosted, no subscription)
 
-The node runs yt-dlp and FFmpeg on your own Windows computer. Nolane Search's existing Cloudflare Worker authenticates the owner and streams completed files. Media bytes never enter D1, R2, GitHub Artifacts or a cloud bucket.
+The node runs yt-dlp and FFmpeg on your own Windows computer. Nolane Search's existing application gateway authenticates the owner and streams completed files. Media bytes remain on the local disk and are never uploaded to GitHub Actions or a remote storage bucket.
 
 ## Requirements
 
@@ -56,7 +56,7 @@ In the GitHub repository Settings, add these Actions secrets:
 
 Keep the token private. Do not put it in source code, an issue, a PR, a screenshot or a chat message. After saving the two secrets, run the existing Cloudflare deploy workflow from the repository Actions tab. The workflow uploads the optional secrets to the existing Worker; when either is absent, Media Studio remains disabled.
 
-No paid Cloudflare plan, R2 bucket or GitHub Actions runtime is used by the downloader. GitHub Actions remains CI/CD only.
+No recurring cloud storage, hosted compute or GitHub Actions runtime is used by the downloader. GitHub Actions remains CI/CD only.
 
 ## Storage budget
 

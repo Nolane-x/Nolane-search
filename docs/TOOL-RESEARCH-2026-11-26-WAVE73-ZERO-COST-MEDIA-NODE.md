@@ -7,7 +7,7 @@ Status: Draft; not merged, not deployed, and the feature remains disabled until 
 
 ## Decision
 
-Do not use a paid Cloudflare Worker, Cloudflare Container, Durable Object snapshot, R2, paid VM, subscription, or hosted third-party downloader API.
+Do not use paid managed compute, hosted media storage, a subscription, or a hosted third-party downloader API.
 
 The selected architecture separates the application from the heavy media workload:
 

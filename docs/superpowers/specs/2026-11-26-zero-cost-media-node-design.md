@@ -15,7 +15,7 @@ Replace the Wave 73 Cloudflare Containers and Durable Object snapshot design wit
 - Preserve owner-only create, inspect, cancel, renew-share and revoke operations in Media Studio.
 - Share a completed file temporarily with HTTP Range support for browser seeking.
 - Keep GitHub Actions as CI/CD only; do not use hosted Actions runners as a user-facing backend.
-- Avoid paid Workers, R2, hosted compute, external media storage and paid tunnel plans.
+- Avoid paid managed compute, hosted media storage, subscriptions and paid tunnel plans.
 
 ## Non-goals
 

@@ -12,7 +12,7 @@ Spec: docs/superpowers/specs/2026-11-26-zero-cost-media-node-design.md
 
 ## Global constraints
 
-- No paid Workers, cloud runtime, R2, hosted media storage, or paid credits.
+- No paid managed compute, hosted media storage, or paid credits.
 - The Media Node binds to 127.0.0.1:8765; only Tailscale Funnel is exposed.
 - Worker requests require a valid session, private-chat owner identity and allowlist.
 - Node requests require a 256-bit shared secret and owner ID.
@@ -103,6 +103,6 @@ Steps:
 
 - [ ] Run full Python tests on Ubuntu and Windows, including public/private proxy routing and CONNECT tunnel behavior.
 - [ ] Run all TypeScript tests, type-check and default Worker build.
-- [ ] Verify no active Container, Durable Object snapshot or R2 dependency remains in downloader code/config/CI.
+- [ ] Verify the downloader uses only the owner's local disk and has no hosted media-storage dependency.
 - [ ] Review cancellation races, Range streaming, token redaction and DNS-rebinding defenses.
 - [ ] Keep PR #149 as Draft; do not merge or deploy.
