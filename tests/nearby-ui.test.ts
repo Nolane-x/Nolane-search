@@ -205,7 +205,8 @@ describe("Nearby Places routed itinerary", () => {
     await routeButton!.click();
     expect(mounted.calls).toHaveLength(1);
     expect(mounted.tileCalls).toEqual(["https://tile.openstreetmap.org/{z}/{x}/{y}.png"]);
-    expect(mounted.mapCenters[0].center).toEqual([20.84545, 106.68855]);
+    expect(mounted.mapCenters[0].center[0]).toBeCloseTo(20.84545, 5);
+    expect(mounted.mapCenters[0].center[1]).toBeCloseTo(106.68855, 5);
     expect(mounted.calls[0].url).toContain("https://router.project-osrm.org/route/v1/driving/106.68810,20.84490;106.68900,20.84600");
     expect(mounted.calls[0].url).toContain("geometries=geojson");
     expect(mounted.elements.get("routeSummary")?.textContent).toContain("1.25 km");
