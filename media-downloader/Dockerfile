@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PATH="/opt/venv/bin:\${PATH}"
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-venv ffmpeg ca-certificates tini \
+    && apt-get install -y --no-install-recommends python3 python3-venv ffmpeg ca-certificates tini util-linux \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir \
