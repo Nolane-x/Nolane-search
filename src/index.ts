@@ -17,7 +17,7 @@ import { telegramMiniAppResponse } from "./telegram-mini-app-ui";
 import { mediaAppResponse } from "./media-ui";
 import { nearbyAppResponse } from "./nearby-ui";
 import { searchNearbyPlaces, NearbyPlacesInputError } from "./nearby-places-tools";
-import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, searchPeerTubeVideos, searchMetMuseumArtworks } from "./media-discovery-tools";
+import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, searchPeerTubeVideos, searchMetMuseumArtworks, searchAicMuseumImages } from "./media-discovery-tools";
 import { resolveMediaEmbed } from "./media-embed-resolver";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import { planToolWorkflow } from "./workflow-planner";
@@ -397,10 +397,10 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     if (query.length < 2 || query.length > 160) {
       return jsonResponse({ error: "Từ khóa media phải có từ 2 đến 160 ký tự." }, 400);
     }
-    if (!["all","image","video","audio"].includes(kind) || !["all","commons","nasa","openverse","archive","peertube","inaturalist","met"].includes(provider)) {
+    if (!["all","image","video","audio"].includes(kind) || !["all","commons","nasa","openverse","archive","peertube","inaturalist","met","aic"].includes(provider)) {
       return jsonResponse({ error: "Bộ lọc media không hợp lệ." }, 400);
     }
-    if (kind === "video" && ["commons","openverse","inaturalist","met"].includes(provider)) {
+    if (kind === "video" && ["commons","openverse","inaturalist","met","aic"].includes(provider)) {
       return jsonResponse({ error: "Nguồn được chọn chỉ hỗ trợ hình ảnh trong Media Portal." }, 400);
     }
     if (kind === "audio" && provider !== "all" && provider !== "archive") {
@@ -453,6 +453,12 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
       if ((provider === "all" || provider === "inaturalist") && (kind === "all" || kind === "image")) {
         tasks.push({ name: "iNaturalist", run: async () => {
           const result = await searchINaturalistObservations(query, 8);
+          return { items: result.items, source: result.source };
+        }});
+      }
+      if ((provider === "all" || provider === "aic") && (kind === "all" || kind === "image")) {
+        tasks.push({ name: "Art Institute of Chicago", run: async () => {
+          const result = await searchAicMuseumImages(query, 8);
           return { items: result.items, source: result.source };
         }});
       }

@@ -153,8 +153,8 @@ describe("Media Portal media discovery experience", () => {
 
   it("disables incompatible providers for image, video and audio filters", async () => {
     const html = await (await mediaAppResponse()).text();
-    expect(html).toContain("kind==='audio'?['commons','nasa','openverse','peertube','inaturalist','met']");
-    expect(html).toContain("kind==='video'?['commons','openverse','inaturalist','met']");
+    expect(html).toContain("kind==='audio'?['commons','nasa','openverse','peertube','inaturalist','met','aic']");
+    expect(html).toContain("kind==='video'?['commons','openverse','inaturalist','met','aic']");
     expect(html).toContain("kind==='image'?['archive','peertube']");
   });
 
@@ -166,6 +166,14 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("item.provider==='The Met'?safeUrl(item.sourceUrl,['www.metmuseum.org'])");
     expect(html).toContain("The Met Open Access");
     expect(html).toContain("CC0");
+  });
+
+  it("offers Art Institute of Chicago as a trusted public-domain image source", async () => {
+    const html = await (await mediaAppResponse()).text();
+    expect(html).toContain('<option value="aic">Art Institute of Chicago · ảnh public domain</option>');
+    expect(html).toContain("www.artic.edu");
+    expect(html).toContain("item.provider==='Art Institute of Chicago'?safeUrl(item.sourceUrl,['www.artic.edu'])");
+    expect(html).toContain("Art Institute of Chicago bổ sung tác phẩm được bảo tàng đánh dấu public domain");
   });
 
   it("offers PeerTube as a video-only provider and links to the exact origin host", async () => {

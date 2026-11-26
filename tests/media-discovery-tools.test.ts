@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, lookupFoodProduct, lookupConsumerProduct, compareFoodProducts, searchMetMuseumArtworks } from "../src/media-discovery-tools";
+import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, lookupFoodProduct, lookupConsumerProduct, compareFoodProducts, searchMetMuseumArtworks, searchAicMuseumImages } from "../src/media-discovery-tools";
 import { executeAgentTool, AGENT_TOOL_DEFINITIONS } from "../src/agent-tools";
 import type { Env } from "../src/types";
 
@@ -721,6 +721,35 @@ describe("Wave 52 media and product discovery", () => {
     }));
     const result = JSON.parse(await executeAgentTool(env, "search_met_open_access_artworks", { query: "test artwork" }));
     expect(result.items[0]).toMatchObject({ provider: "The Met", title: "Test Artwork", license: "CC0" });
+  });
+
+
+  it("reuses the throttled Art Institute discovery and returns only safe public-domain museum images", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("api.artic.edu");
+      const params = JSON.parse(url.searchParams.get("params") || "{}");
+      expect(params.query.term.is_public_domain).toBe(true);
+      expect(params.limit).toBe(3);
+      expect(new Headers(init?.headers).get("AIC-User-Agent")).toContain("NolaneSearch");
+      return json({ pagination: { total: 2 }, data: [
+        { id: 129884, title: "Public Artwork", artist_title: "Artist A",
+          date_display: "1900", medium_display: "Oil", image_id: "aabbccdd-1122-3344-5566-778899001122",
+          is_public_domain: true, web_url: "https://www.artic.edu/artworks/129884" },
+        { id: 129885, title: "Private Artwork", artist_title: "Artist B",
+          image_id: "bbccddaa-1122-3344-5566-778899001122", is_public_domain: false,
+          web_url: "https://www.artic.edu/artworks/129885" },
+      ] });
+    }));
+    const result = await searchAicMuseumImages("Monet", 3);
+    expect(result.status).toBe("ok");
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: "aic-129884", provider: "Art Institute of Chicago", mediaType: "image",
+      sourceUrl: "https://www.artic.edu/artworks/129884",
+      previewUrl: "https://www.artic.edu/iiif/2/aabbccdd-1122-3344-5566-778899001122/full/843,/0/default.jpg",
+      license: "Public domain", credit: "Artist A",
+    });
   });
 
 });

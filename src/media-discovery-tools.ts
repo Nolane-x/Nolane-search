@@ -1,3 +1,4 @@
+import { runLiveEverydayTool } from "./live-everyday-tools";
 import { readJsonResponse } from "./http";
 
 type Obj = Record<string, unknown>;
@@ -100,7 +101,7 @@ function extValue(metadata: Obj, key: string): string | null {
 export interface MediaSearchItem {
   id: string;
   title: string;
-  provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive" | "PeerTube" | "iNaturalist" | "The Met";
+  provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive" | "PeerTube" | "iNaturalist" | "The Met" | "Art Institute of Chicago";
   mediaType: "image" | "video" | "audio";
   sourceUrl: string;
   previewUrl: string | null;
@@ -320,6 +321,61 @@ export async function searchOpenverseImages(queryInput: unknown, limitInput?: un
  * each object is fetched and must explicitly be public-domain with images on the
  * museum's exact image host before it can be returned.
  */
+/**
+ * Adapt the existing rate-limited Art Institute public-domain search to the
+ * Media Studio result contract. Reuse the original source implementation so
+ * its per-isolate one-request-per-second guard and museum User-Agent stay active.
+ */
+export async function searchAicMuseumImages(
+  queryInput: unknown,
+  limitInput?: unknown,
+): Promise<{ status: string; source: string; query: string; items: MediaSearchItem[]; note: string }> {
+  const query = cleanText(queryInput, "query", 2, 140);
+  const limit = boundedInt(limitInput, "limit", 6, 1, 8);
+  const payload = object(JSON.parse(await runLiveEverydayTool("search_museum_artworks", { query, limit })) as unknown,
+    "Art Institute of Chicago media search");
+  const artworks = Array.isArray(payload.artworks) ? payload.artworks.slice(0, limit) : [];
+  const items = artworks.flatMap((raw): MediaSearchItem[] => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const artwork = raw as Obj;
+    if (artwork.is_public_domain !== true || typeof artwork.id !== "number" ||
+        typeof artwork.title !== "string" || artwork.title.length > 240) return [];
+    const imageUrl = safeHttpUrl(artwork.image_url, "www.artic.edu");
+    const sourceUrl = safeHttpUrl(artwork.museum_page, "www.artic.edu");
+    if (!imageUrl || !sourceUrl || !new URL(imageUrl).pathname.startsWith("/iiif/2/") ||
+        !new URL(sourceUrl).pathname.startsWith("/artworks/")) return [];
+    const artist = metadataText(artwork.artist, 140);
+    const description = [
+      metadataText(artwork.date, 100),
+      metadataText(artwork.medium, 220),
+      metadataText(artwork.dimensions, 180),
+      metadataText(artwork.origin, 100),
+      metadataText(artwork.copyright_notice, 240),
+    ].filter(Boolean).join(" · ") || null;
+    return [{
+      id: "aic-" + artwork.id,
+      title: artwork.title.slice(0, 240),
+      provider: "Art Institute of Chicago",
+      mediaType: "image",
+      sourceUrl,
+      previewUrl: imageUrl,
+      mediaUrl: imageUrl,
+      description,
+      credit: artist,
+      license: "Public domain",
+      licenseUrl: null,
+      dateCreated: metadataText(artwork.date, 100),
+    }];
+  });
+  return {
+    status: items.length ? "ok" : "not_found",
+    source: "Art Institute of Chicago · public-domain collection",
+    query,
+    items,
+    note: "Only artworks that the museum API explicitly marks public domain and that have a verified museum image and object page are shown. The Art Institute asks clients to keep API requests below 60 per minute and identify the application; Nolane reuses its existing one-request-per-second guarded search. Check the museum page for item-specific notices before reuse.",
+  };
+}
+
 export async function searchMetMuseumArtworks(
   queryInput: unknown,
   limitInput?: unknown,
