@@ -1,43 +1,49 @@
-# Wave 73 research — The Met Open Access images
+# Wave 73 research — Museum Open Access image discovery
 
 Date: 2026-11-26  
-Status: implementation candidate in PR #150; not yet merged or deployed.
+Status: implementation candidate in PR #150; not merged or deployed.
 
-## Why this source
+## The Met Open Access
 
-The Metropolitan Museum of Art exposes a public collection API without an API key. The museum describes its Open Access dataset and corresponding public-domain images as CC0. The source is useful for artwork searches, historical objects, illustration references and visual research.
+The Metropolitan Museum of Art exposes a public collection API without an API key. Its Open Access dataset and eligible public-domain images are released under CC0.
 
 Official references:
 - API: https://metmuseum.github.io/
 - Open Access: https://www.metmuseum.org/hubs/open-access
 - Dataset: https://github.com/metmuseum/openaccess
 
-## API version and request budget
-
-The legacy `/public/collection/v1/search` endpoint was announced for retirement on October 1, 2026. Use the paginated `/public/collection/v1.1/search` endpoint instead, with `q`, `hasImages=true`, `offset=0` and a bounded `limit`. The API documentation asks users to remain below 80 requests per second.
-
-Search returns object IDs, not the final image or rights decision. For every returned object, fetch its object record and independently require:
+The retired legacy search endpoint is replaced by paginated `/public/collection/v1.1/search`. Search results are candidate object IDs only. For each item, the integration fetches the object record and requires:
 - `isPublicDomain === true`
-- `primaryImageSmall` and `primaryImage` are HTTPS URLs on `images.metmuseum.org`
-- `objectURL` is an HTTPS URL on `www.metmuseum.org`
+- `primaryImageSmall` and `primaryImage` use HTTPS on `images.metmuseum.org`
+- `objectURL` uses HTTPS on `www.metmuseum.org`
 
-Only records that satisfy all conditions are returned. Records with unknown, false or missing public-domain status are omitted. The source page, artist and collection credit line are retained. The UI labels the license CC0; source metadata remains available for context.
+Missing/unknown rights and untrusted URLs are rejected. Artist, date, medium, credit and source-page metadata are preserved. Requests are bounded to 1–8 objects.
 
-## Nolane integration scope
+## Art Institute of Chicago
 
-- Media Studio: image-only provider `The Met`; disabled for video and audio searches.
-- AI Agent: `search_met_open_access_artworks`, bounded to 1–8 objects.
-- API responses contain metadata and official origin image URLs. Nolane does not proxy or copy image binaries.
-- No API key or new deployment secret is required.
+Official API documentation: https://api.artic.edu/docs/
 
-## Verification requirements
+Media Studio reuses the existing `search_museum_artworks` implementation rather than duplicating the API client. The adapter accepts only records explicitly marked public domain, verifies the museum's IIIF image path and artwork page, and preserves artist/date/medium/context. The existing museum request throttle and identifying User-Agent remain in force.
 
-- Test the current `v1.1/search` endpoint and pagination parameters.
-- Reject non-public-domain objects, missing image URLs, wrong image hosts and untrusted object page URLs.
-- Confirm the image CSP allows the exact Met image host in addition to existing sources.
-- Confirm Media Studio disables The Met when video or audio is selected.
-- CI must pass before merge. This candidate document does not imply the PR has been merged or deployed.
+## Nolane integration
 
-## Known scope boundaries
+- Media Studio adds The Met and Art Institute of Chicago as image-only providers.
+- Provider filters prevent museum sources appearing in video/audio searches.
+- The Met is also available to the AI Agent as `search_met_open_access_artworks`.
+- Images are loaded from official museum origins; Nolane does not proxy/copy the image binaries.
+- No API key, new deployment secret, paid service or storage is needed.
 
-This is a museum/open-access image source, not general reverse-image search, not an image generator and not a general video downloader. It does not infer or override rights for items outside The Met's Open Access collection.
+## Boundaries
+
+These are curated museum collections, not general reverse-image search, generated imagery or a universal web image crawler. Public-domain flags are honored per object; the integration does not override rights notices or imply that every museum object is reusable.
+
+## Related no-cost video path
+
+Large video download/playback is a separate problem and must not be solved by turning GitHub Actions into a public CDN. PR #149 proposes an owner-operated Media Node:
+- GitHub Actions is used for CI/CD only.
+- yt-dlp and FFmpeg execute locally on the operator's Windows host.
+- Temporary media remains on local disk, with expiring owner-scoped links and HTTP Range streaming through the existing Worker Free gateway.
+- Tailscale Funnel Personal can expose the local service over HTTPS at $0 for personal, non-commercial use, subject to beta bandwidth limits and host uptime.
+- Telegram remains the small-file/archive-index route, not the large-video storage layer.
+
+No Cloudflare R2, paid Containers, paid VM, paid tunnel, paid API, or new recurring cost is part of this design.
