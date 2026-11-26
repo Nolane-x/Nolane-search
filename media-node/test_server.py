@@ -1,6 +1,8 @@
 from __future__ import annotations
 import hashlib
+import socket
 import sys
+import threading
 import tempfile
 import unittest
 from pathlib import Path
@@ -73,8 +75,11 @@ class MediaNodePolicyTests(unittest.TestCase):
                      "--match-filter", "--js-runtimes"]:
             self.assertIn(flag, args)
         for forbidden in ["--cookies", "--cookies-from-browser", "--username",
-                          "--password", "--proxy", "shell"]:
+                          "--password", "shell"]:
             self.assertNotIn(forbidden, args)
+        self.assertIn("--proxy", args)
+        self.assertIn(server.MEDIA_PROXY_URL, args)
+        self.assertNotIn("--remote-components", args)
 
         with tempfile.TemporaryDirectory() as temp:
             best_args = server.build_ytdlp_command(
@@ -258,6 +263,89 @@ class MediaNodePolicyTests(unittest.TestCase):
                 httpd.shutdown()
                 httpd.server_close()
                 thread.join(timeout=2)
+
+
+    def test_public_dns_results_are_validated_as_a_complete_set(self):
+        public_resolver = lambda host: ["93.184.216.34", "2606:4700:4700::1111"]
+        self.assertEqual(
+            server.resolve_public_addresses("example.org", resolver=public_resolver),
+            ["2606:4700:4700::1111", "93.184.216.34"],
+        )
+        mixed_resolver = lambda host: ["93.184.216.34", "169.254.169.254"]
+        with self.assertRaises(server.SourceUrlError):
+            server.resolve_public_addresses("example.org", resolver=mixed_resolver)
+
+    def test_upstream_connection_uses_the_pinned_numeric_address(self):
+        calls = []
+        sentinel = object()
+        result = server.connect_public_host(
+            "example.org", 443,
+            resolver=lambda host: ["93.184.216.34"],
+            connector=lambda address, timeout: calls.append((address, timeout)) or sentinel,
+        )
+        self.assertIs(result, sentinel)
+        self.assertEqual(calls[0][0], ("93.184.216.34", 443))
+        self.assertEqual(calls[0][1], 15)
+
+    def test_upstream_connection_never_attempts_a_mixed_private_dns_answer(self):
+        calls = []
+        with self.assertRaises(server.SourceUrlError):
+            server.connect_public_host(
+                "example.org", 443,
+                resolver=lambda host: ["93.184.216.34", "10.1.2.3"],
+                connector=lambda address, timeout: calls.append(address),
+            )
+        self.assertEqual(calls, [])
+
+    def test_local_egress_proxy_rejects_private_https_connect_targets(self):
+        proxy = server.create_egress_proxy(
+            host="127.0.0.1", port=0,
+            resolver=lambda host: ["127.0.0.1"],
+        )
+        thread = threading.Thread(target=proxy.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with socket.create_connection(proxy.server_address, timeout=2) as client:
+                client.sendall(
+                    b"CONNECT example.org:443 HTTP/1.1\\r\\n"
+                    b"Host: example.org:443\\r\\n\\r\\n"
+                )
+                response = client.recv(2048)
+                self.assertIn(b"403", response.split(b"\\r\\n", 1)[0])
+        finally:
+            proxy.shutdown()
+            proxy.server_close()
+            thread.join(timeout=2)
+
+    def test_local_egress_proxy_rejects_private_http_destinations(self):
+        proxy = server.create_egress_proxy(
+            host="127.0.0.1", port=0,
+            resolver=lambda host: ["192.168.1.1"],
+        )
+        thread = threading.Thread(target=proxy.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with socket.create_connection(proxy.server_address, timeout=2) as client:
+                client.sendall(
+                    b"GET http://example.org/video HTTP/1.1\\r\\n"
+                    b"Host: example.org\\r\\n\\r\\n"
+                )
+                response = client.recv(2048)
+                self.assertIn(b"403", response.split(b"\\r\\n", 1)[0])
+        finally:
+            proxy.shutdown()
+            proxy.server_close()
+            thread.join(timeout=2)
+
+    def test_proxy_factory_binds_only_to_loopback(self):
+        proxy = server.create_egress_proxy(
+            host="127.0.0.1", port=0,
+            resolver=lambda host: ["93.184.216.34"],
+        )
+        try:
+            self.assertEqual(proxy.server_address[0], "127.0.0.1")
+        finally:
+            proxy.server_close()
 
 if __name__ == "__main__":
     unittest.main()
