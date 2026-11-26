@@ -31,6 +31,22 @@ MEDIA_NODE_HOST = "127.0.0.1"
 MEDIA_PROXY_HOST = MEDIA_NODE_HOST
 MEDIA_PROXY_PORT = int(os.environ.get("NOLANE_MEDIA_PROXY_PORT", "8766"))
 MEDIA_PROXY_URL = "http://" + MEDIA_PROXY_HOST + ":" + str(MEDIA_PROXY_PORT)
+MAX_BODY_BYTES = 8 * 1024
+MAX_OUTPUT_BYTES = 3 * 1024 * 1024 * 1024
+MAX_EXTRACTOR_FILE_BYTES = 1400 * 1024 * 1024
+MAX_SOURCE_DURATION_SECONDS = 2 * 60 * 60
+JOB_TIMEOUT_SECONDS = 30 * 60
+SHARE_TTL_SECONDS = 12 * 60 * 60
+FILE_RETENTION_SECONDS = 12 * 60 * 60
+MAX_OWNER_JOBS = 3
+JOB_ID_RE = re.compile(r"^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$", re.I)
+TOKEN_RE = re.compile(r"^[a-f0-9]{64}$", re.I)
+HOST_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+ALLOWED_EXTENSIONS = {".mp4", ".mp3"}
+RESERVED_SUFFIXES = (
+    ".localhost", ".local", ".internal", ".test", ".example", ".invalid",
+    ".onion", ".arpa", ".home", ".lan", ".corp",
+)
 class SourceUrlError(ValueError):
     pass
 
