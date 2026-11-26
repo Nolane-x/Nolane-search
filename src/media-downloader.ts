@@ -170,14 +170,16 @@ export class MediaDownloader extends DurableObject<Env> {
       const body = await parseJsonObjectBody(request, 8_000);
       if (!body) return json({ error: "Invalid request body." }, 400);
       try {
-        const result = await this.startDownload({
-          jobId: typeof body.jobId === "string" ? body.jobId : "",
-          url: typeof body.url === "string" ? body.url : "",
-          format: body.format === "audio" ? "audio" : body.format === "video" ? "video" : "",
-          quality: body.quality === "best" || body.quality === "1080" || body.quality === "720" || body.quality === "480"
-            ? body.quality : "invalid",
-          shareTokenHash: typeof body.shareTokenHash === "string" ? body.shareTokenHash : "",
-        });
+        const jobId = typeof body.jobId === "string" ? body.jobId : null;
+        const sourceUrl = typeof body.url === "string" ? body.url : null;
+        const format = body.format === "audio" || body.format === "video" ? body.format : null;
+        const quality = body.quality === "best" || body.quality === "1080" || body.quality === "720" || body.quality === "480"
+          ? body.quality : null;
+        const shareTokenHash = typeof body.shareTokenHash === "string" ? body.shareTokenHash : null;
+        if (!jobId || !sourceUrl || !format || !quality || !shareTokenHash) {
+          return json({ error: "Invalid media job fields." }, 400);
+        }
+        const result = await this.startDownload({ jobId, url: sourceUrl, format, quality, shareTokenHash });
         return json(result, 202);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Media download could not start.";
