@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import select
 import socket
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
 
 CONNECT_TIMEOUT_SECONDS = 15
 PROXY_IDLE_TIMEOUT_SECONDS = 120
 MAX_PROXY_REQUEST_BODY = 1024 * 1024
-MAX_PROXY_HEADER_BYTES = 64 * 1024
 
 class EgressProxyError(ValueError):
     pass
@@ -60,6 +59,7 @@ def create_egress_proxy(
     resolver: Callable[[str], list[str]],
     normalize_url: Callable[..., tuple[str, str]],
     is_public_ip: Callable[[str], bool],
+    connector: Callable[..., socket.socket] = socket.create_connection,
 ) -> ThreadingHTTPServer:
     class ProxyHandler(BaseHTTPRequestHandler):
         server_version = "NolaneMediaEgress/1"
@@ -97,7 +97,7 @@ def create_egress_proxy(
                     resolver=resolver,
                 )
                 upstream = connect_public_host(
-                    normalized_host, 443, resolver, is_public_ip,
+                    normalized_host, 443, resolver, is_public_ip, connector,
                 )
             except (EgressProxyError, ValueError, OSError):
                 self._reject(403)
@@ -159,7 +159,7 @@ def create_egress_proxy(
                     return
 
                 upstream = connect_public_host(
-                    normalized_host, 80, resolver, is_public_ip,
+                    normalized_host, 80, resolver, is_public_ip, connector,
                 )
                 upstream.settimeout(PROXY_IDLE_TIMEOUT_SECONDS)
                 request_target = parsed.path or "/"
@@ -214,7 +214,7 @@ def create_egress_proxy(
         daemon_threads = True
 
         def __init__(self, address, handler):
-            self._request_slots = __import__("threading").BoundedSemaphore(16)
+            self._request_slots = threading.BoundedSemaphore(16)
             super().__init__(address, handler)
 
         def process_request(self, request, client_address):

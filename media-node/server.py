@@ -30,6 +30,66 @@ PORT = int(os.environ.get("NOLANE_MEDIA_PORT", "8765"))
 MEDIA_PROXY_HOST = "127.0.0.1"
 MEDIA_PROXY_PORT = int(os.environ.get("NOLANE_MEDIA_PROXY_PORT", "8766"))
 MEDIA_PROXY_URL = "http://" + MEDIA_PROXY_HOST + ":" + str(MEDIA_PROXY_PORT)
+_INSTANCE_LOCKS: set[str] = set()
+_INSTANCE_LOCKS_GUARD = threading.Lock()
+
+class InstanceAlreadyRunning(RuntimeError):
+    pass
+
+class InstanceLock:
+    """Cross-process exclusive lock; the OS releases it automatically on crash."""
+    def __init__(self, path: Path):
+        self.path = Path(path).resolve()
+        self._key = str(self.path).casefold() if os.name == "nt" else str(self.path)
+        self._handle = None
+        with _INSTANCE_LOCKS_GUARD:
+            if self._key in _INSTANCE_LOCKS:
+                raise InstanceAlreadyRunning("A Media Node instance already owns this data directory.")
+            _INSTANCE_LOCKS.add(self._key)
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._handle = self.path.open("a+b")
+            if self.path.stat().st_size == 0:
+                self._handle.write(b"\\0")
+                self._handle.flush()
+            self._handle.seek(0)
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(self._handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(self._handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (OSError, ImportError) as error:
+            if self._handle is not None:
+                self._handle.close()
+                self._handle = None
+            with _INSTANCE_LOCKS_GUARD:
+                _INSTANCE_LOCKS.discard(self._key)
+            raise InstanceAlreadyRunning("The Media Node data directory is already locked or cannot be locked.") from error
+
+    def close(self) -> None:
+        if self._handle is None:
+            return
+        try:
+            if os.name == "nt":
+                import msvcrt
+                self._handle.seek(0)
+                msvcrt.locking(self._handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(self._handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            self._handle.close()
+            self._handle = None
+            with _INSTANCE_LOCKS_GUARD:
+                _INSTANCE_LOCKS.discard(self._key)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+
 MAX_BODY_BYTES = 8 * 1024
 MAX_OUTPUT_BYTES = 3 * 1024 * 1024 * 1024
 MAX_EXTRACTOR_FILE_BYTES = 1400 * 1024 * 1024
@@ -1056,22 +1116,32 @@ def main() -> int:
     if not TOKEN_RE.fullmatch(token):
         print("NOLANE_INTERNAL_TOKEN must be a 64-character hexadecimal secret.", file=sys.stderr)
         return 2
-    store = MediaNodeStore(DATA_ROOT)
-    httpd = create_http_server(store, token, PORT, start_worker=True)
-    print("Nolane Media Node listening on 127.0.0.1:" + str(PORT))
     try:
+        instance_lock = InstanceLock(DATA_ROOT / "media-node.lock")
+    except InstanceAlreadyRunning:
+        print("Nolane Media Node is already running for this data directory.", file=sys.stderr)
+        return 3
+
+    httpd = None
+    try:
+        store = MediaNodeStore(DATA_ROOT)
+        httpd = create_http_server(store, token, PORT, start_worker=True)
+        print("Nolane Media Node listening on 127.0.0.1:" + str(PORT))
+        print("Validated media egress proxy listening on 127.0.0.1:" + str(MEDIA_PROXY_PORT))
         httpd.serve_forever(poll_interval=0.5)
     except KeyboardInterrupt:
         pass
     finally:
-        httpd.shutdown()
-        httpd.server_close()
-        httpd.media_worker.stop()
-        if httpd.egress_proxy is not None:
-            httpd.egress_proxy.shutdown()
-            httpd.egress_proxy.server_close()
-        if httpd.egress_proxy_thread is not None:
-            httpd.egress_proxy_thread.join(timeout=3)
+        if httpd is not None:
+            httpd.shutdown()
+            httpd.server_close()
+            httpd.media_worker.stop()
+            if httpd.egress_proxy is not None:
+                httpd.egress_proxy.shutdown()
+                httpd.egress_proxy.server_close()
+            if httpd.egress_proxy_thread is not None:
+                httpd.egress_proxy_thread.join(timeout=3)
+        instance_lock.close()
     return 0
 
 if __name__ == "__main__":
