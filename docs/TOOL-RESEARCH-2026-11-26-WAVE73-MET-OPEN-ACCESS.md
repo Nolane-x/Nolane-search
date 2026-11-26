@@ -46,7 +46,7 @@ Large video download/playback is a separate problem and must not be solved by tu
 - Tailscale Funnel Personal can expose the local service over HTTPS at $0 for personal, non-commercial use, subject to beta bandwidth limits and host uptime.
 - Telegram remains the small-file/archive-index route, not the large-video storage layer.
 
-No Cloudflare R2, paid Containers, paid VM, paid tunnel, paid API, or new recurring cost is part of this design.
+The design uses the operator's own host and free personal ingress, with no recurring media storage or compute service.
 
 
 

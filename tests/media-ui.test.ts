@@ -16,8 +16,8 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("document.createElement('audio')");
     expect(html).toContain("Mở / tải audio gốc");
     expect(html).toContain("Mở / tải video gốc");
-    expect(html).toContain("Hiện chưa có downloader đa website hoặc kho chia sẻ file riêng tư.");
-    expect(html).toContain("R2 được kích hoạt trước");
+    expect(html).toContain("Tải media dung lượng lớn và chia sẻ link riêng tư chưa được bật trên production");
+    expect(html).toContain("phương án Media Node miễn phí chạy trên máy cá nhân đang được review tại PR #149");
     expect(html).toContain("document.createElement('iframe')");
     expect(html).toContain("safeMediaEmbedUrl(item)");
     expect(html).toContain("Nhúng player '+item.provider");
