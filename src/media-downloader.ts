@@ -152,11 +152,12 @@ export class MediaDownloader extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    // Container state is recoverable from the DO snapshot/state on the next
+    // request. Do not hold blockConcurrencyWhile across container I/O.
     if (ctx.container?.running) {
-      void ctx.blockConcurrencyWhile(async () => {
-        await ctx.container?.setInactivityTimeout(CONTAINER_IDLE_MS);
-        this.observeExit();
-      });
+      void ctx.container.setInactivityTimeout(CONTAINER_IDLE_MS)
+        .then(() => this.observeExit())
+        .catch(() => undefined);
     }
   }
 
@@ -169,7 +170,14 @@ export class MediaDownloader extends DurableObject<Env> {
       const body = await parseJsonObjectBody(request, 8_000);
       if (!body) return json({ error: "Invalid request body." }, 400);
       try {
-        const result = await this.startDownload(body as unknown as InternalStartBody);
+        const result = await this.startDownload({
+          jobId: typeof body.jobId === "string" ? body.jobId : "",
+          url: typeof body.url === "string" ? body.url : "",
+          format: body.format === "audio" ? "audio" : body.format === "video" ? "video" : "",
+          quality: body.quality === "best" || body.quality === "1080" || body.quality === "720" || body.quality === "480"
+            ? body.quality : "invalid",
+          shareTokenHash: typeof body.shareTokenHash === "string" ? body.shareTokenHash : "",
+        });
         return json(result, 202);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Media download could not start.";
