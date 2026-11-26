@@ -15,7 +15,7 @@ describe("Nearby Places UI", () => {
     expect(html).toContain("OpenStreetMap contributors");
     expect(html).toContain("ODbL");
     expect(html).toContain("/api/nearby/search");
-    expect(html).toContain("tọa độ chỉ được gửi");
+    expect(html).toContain("tọa độ tìm kiếm chỉ được gửi");
     expect(html).toContain("Dùng vị trí hiện tại");
     expect(html).toContain('<option value="essentials">Tiện ích thiết yếu (nhiều nhóm)</option>');
     expect(html).toContain("function syncEssentialsRadius()");
