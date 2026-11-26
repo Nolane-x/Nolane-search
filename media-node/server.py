@@ -844,6 +844,11 @@ def create_http_server(
         server_version = "NolaneMediaNode/1"
         sys_version = ""
 
+        def setup(self) -> None:
+            super().setup()
+            # Bound slow headers and idle media clients without buffering files.
+            self.connection.settimeout(120)
+
         def log_message(self, format: str, *args) -> None:
             # Access tokens, source URLs and query strings must never reach logs.
             return

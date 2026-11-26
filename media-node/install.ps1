@@ -102,6 +102,22 @@ with opener.open("https://example.com/", timeout=12) as response:
     if response.status < 200 or response.status >= 400:
         raise SystemExit("The local egress proxy returned an unexpected status.")
 '@
+$apiReady = $false
+for ($attempt = 0; $attempt -lt 20; $attempt++) {
+    try {
+        $health = Invoke-WebRequest -Uri "http://127.0.0.1:8765/health" -Headers @{ "x-nolane-internal" = $token } -TimeoutSec 3 -UseBasicParsing
+        if ($health.StatusCode -eq 200 -and $health.Content.Contains("nolane-media-node")) {
+            $apiReady = $true
+            break
+        }
+    } catch { }
+    Start-Sleep -Seconds 1
+}
+if (-not $apiReady) {
+    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    throw "The local Media Node API did not pass its authenticated health test. Do not enable Tailscale Funnel."
+}
+
 $proxyReady = $false
 for ($attempt = 0; $attempt -lt 20; $attempt++) {
     & $venvPython -c $proxySmoke *> $null

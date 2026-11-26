@@ -1,6 +1,7 @@
 from __future__ import annotations
 import hashlib
 import socket
+import subprocess
 import sys
 import threading
 import tempfile
@@ -479,6 +480,33 @@ class MediaNodePolicyTests(unittest.TestCase):
             second = server.InstanceLock(lock_path)
             second.close()
 
+
+
+    def test_instance_lock_excludes_a_second_process(self):
+        with tempfile.TemporaryDirectory() as temp:
+            lock_path = Path(temp) / "media-node.lock"
+            parent_lock = server.InstanceLock(lock_path)
+            try:
+                module_path = str(Path(server.__file__).parent)
+                lock_literal = repr(str(lock_path))
+                code = (
+                    "import sys; from pathlib import Path; "
+                    "sys.path.insert(0, " + repr(module_path) + "); "
+                    "import server; "
+                    "try_lock = None; "
+                    "try:\n"
+                    "    try_lock = server.InstanceLock(Path(" + lock_literal + "))\n"
+                    "except server.InstanceAlreadyRunning:\n"
+                    "    raise SystemExit(23)\n"
+                    "raise SystemExit(0)\n"
+                )
+                child = subprocess.run(
+                    [sys.executable, "-c", code],
+                    capture_output=True, text=True, timeout=10,
+                )
+                self.assertEqual(child.returncode, 23, child.stdout + child.stderr)
+            finally:
+                parent_lock.close()
 
     def test_expired_files_are_deleted_and_share_tokens_invalidated(self):
         with tempfile.TemporaryDirectory() as temp:
