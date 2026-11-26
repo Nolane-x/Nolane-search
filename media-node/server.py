@@ -19,6 +19,7 @@ import time
 import unicodedata
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from egress import EgressProxyError, connect_public_host, create_egress_proxy, resolve_public_addresses
 from pathlib import Path
 from typing import Callable
 from urllib.parse import quote, urlsplit, urlunsplit
@@ -26,6 +27,9 @@ from urllib.parse import quote, urlsplit, urlunsplit
 DATA_ROOT = Path(os.environ.get("NOLANE_MEDIA_DATA_DIR", Path(__file__).with_name("data"))).resolve()
 DB_PATH = DATA_ROOT / "media-node.sqlite3"
 PORT = int(os.environ.get("NOLANE_MEDIA_PORT", "8765"))
+MEDIA_PROXY_HOST = "127.0.0.1"
+MEDIA_PROXY_PORT = int(os.environ.get("NOLANE_MEDIA_PROXY_PORT", "8766"))
+MEDIA_PROXY_URL = "http://" + MEDIA_PROXY_HOST + ":" + str(MEDIA_PROXY_PORT)
 MAX_BODY_BYTES = 8 * 1024
 MAX_OUTPUT_BYTES = 3 * 1024 * 1024 * 1024
 MAX_EXTRACTOR_FILE_BYTES = 1400 * 1024 * 1024
@@ -146,9 +150,10 @@ def normalize_source_url(
         raise SourceUrlError("The source hostname is invalid.")
     if labels[-1].isdigit() or labels[-1].startswith("0x"):
         raise SourceUrlError("Numeric hostnames are not supported.")
-    addresses = resolver(host)
-    if not addresses or any(not is_public_ip(address) for address in addresses):
-        raise SourceUrlError("Every resolved address must be globally routable.")
+    try:
+        addresses = resolve_public_addresses(host, resolver, is_public_ip)
+    except EgressProxyError as error:
+        raise SourceUrlError(str(error)) from error
     netloc = host
     path = parsed.path or "/"
     return urlunsplit((scheme, netloc, path, parsed.query, "")), host
@@ -182,6 +187,7 @@ def build_ytdlp_command(
     python_executable: str | None = None,
     ffmpeg_path: str | None = None,
     node_path: str | None = None,
+    proxy_url: str = MEDIA_PROXY_URL,
 ) -> list[str]:
     if not JOB_ID_RE.fullmatch(job_id):
         raise ValueError("Invalid job ID.")
@@ -190,6 +196,13 @@ def build_ytdlp_command(
     node_path = node_path or shutil.which("node") or "node"
     output_dir.mkdir(parents=True, exist_ok=True)
     output_template = str(output_dir / "%(title).120B [%(id)s].%(ext)s")
+    proxy = urlsplit(proxy_url)
+    if (
+        proxy.scheme != "http" or proxy.hostname != MEDIA_PROXY_HOST
+        or proxy.port != MEDIA_PROXY_PORT or proxy.username or proxy.password
+        or proxy.path not in ("", "/") or proxy.query or proxy.fragment
+    ):
+        raise ValueError("The downloader must use the local public-egress proxy.")
     args = [
         python_executable, "-m", "yt_dlp",
         "--ignore-config", "--no-playlist", "--no-cache-dir",
@@ -201,7 +214,7 @@ def build_ytdlp_command(
         "--progress-template", "download:PROGRESS:%(progress._percent_str)s",
         "--ffmpeg-location", ffmpeg_path,
         "--js-runtimes", "node:" + node_path,
-        "--remote-components", "ejs:github",
+        "--proxy", proxy_url,
         "--output", output_template,
     ]
     if media_format == "audio":
@@ -569,8 +582,9 @@ def _terminate_process_tree(process: subprocess.Popen) -> None:
             pass
 
 class MediaWorker:
-    def __init__(self, store: MediaNodeStore):
+    def __init__(self, store: MediaNodeStore, proxy_url: str = MEDIA_PROXY_URL):
         self.store = store
+        self.proxy_url = proxy_url
         self.stop_event = threading.Event()
         self.thread = threading.Thread(target=self._run, name="nolane-media-worker", daemon=True)
         self.process_lock = threading.Lock()
@@ -619,7 +633,7 @@ class MediaWorker:
         node = shutil.which("node") or "node"
         command = build_ytdlp_command(
             job_id, url, job["media_format"], job["quality"],
-            job_dir, sys.executable, ffmpeg, node,
+            job_dir, sys.executable, ffmpeg, node, self.proxy_url,
         )
         kwargs = {
             "cwd": str(job_dir),
@@ -726,6 +740,23 @@ def create_http_server(
     if not TOKEN_RE.fullmatch(token):
         raise ValueError("NOLANE_INTERNAL_TOKEN must be a 256-bit hex secret.")
     worker = MediaWorker(store)
+    proxy_server = None
+    proxy_thread = None
+    if start_worker:
+        proxy_server = create_egress_proxy(
+            host=MEDIA_PROXY_HOST,
+            port=MEDIA_PROXY_PORT,
+            resolver=resolve_public_candidates,
+            normalize_url=normalize_source_url,
+            is_public_ip=is_public_ip,
+        )
+        proxy_thread = threading.Thread(
+            target=proxy_server.serve_forever,
+            kwargs={"poll_interval": 0.5},
+            name="nolane-media-egress",
+            daemon=True,
+        )
+        proxy_thread.start()
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "NolaneMediaNode/1"
@@ -1003,9 +1034,19 @@ def create_http_server(
             finally:
                 self._request_slots.release()
 
-    server = BoundedThreadingHTTPServer(("127.0.0.1", port), Handler)
+    try:
+        server = BoundedThreadingHTTPServer(("127.0.0.1", port), Handler)
+    except BaseException:
+        if proxy_server is not None:
+            proxy_server.shutdown()
+            proxy_server.server_close()
+        if proxy_thread is not None:
+            proxy_thread.join(timeout=2)
+        raise
     server.daemon_threads = True
     server.media_worker = worker
+    server.egress_proxy = proxy_server
+    server.egress_proxy_thread = proxy_thread
     if start_worker:
         worker.start()
     return server
@@ -1026,6 +1067,11 @@ def main() -> int:
         httpd.shutdown()
         httpd.server_close()
         httpd.media_worker.stop()
+        if httpd.egress_proxy is not None:
+            httpd.egress_proxy.shutdown()
+            httpd.egress_proxy.server_close()
+        if httpd.egress_proxy_thread is not None:
+            httpd.egress_proxy_thread.join(timeout=3)
     return 0
 
 if __name__ == "__main__":
