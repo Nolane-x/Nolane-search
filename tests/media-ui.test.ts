@@ -9,6 +9,7 @@ describe("Media Portal media discovery experience", () => {
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(response.headers.get("content-security-policy")).toContain("media-src 'self'");
     expect(response.headers.get("content-security-policy")).toContain("https://archive.org");
+    expect(response.headers.get("content-security-policy")).toContain("https://inaturalist-open-data.s3.amazonaws.com");
     expect(response.headers.get("content-security-policy")).toContain("frame-src https:");
     expect(html).toContain('<option value="audio">Chỉ audio</option>');
     expect(html).toContain('data-kind="audio"');
