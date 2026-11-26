@@ -7,6 +7,7 @@ const PORT = 8080;
 const INSTANCE = "standard-1";
 const MAX_OUTPUT_BYTES = 3 * 1024 * 1024 * 1024;
 const SHARE_TTL_MS = 12 * 60 * 60 * 1000;
+const SNAPSHOT_MAX_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const CONTAINER_IDLE_MS = 6 * 60 * 60 * 1000;
 const STATE_KEY = "media-downloader:current:v1";
 const SECRET_KEY = "media-downloader:container-secret:v1";
@@ -33,6 +34,8 @@ interface DownloadState {
   size?: number;
   errorCode?: string;
   snapshot?: SnapshotHandle;
+  snapshotCreatedAt?: number;
+  snapshotLastRestoredAt?: number;
   shareTokenHash?: string;
   shareExpiresAt?: number;
 }
@@ -147,7 +150,7 @@ export class MediaDownloaderEgress extends WorkerEntrypoint<Env> {
 }
 
 export class MediaDownloader extends DurableObject<Env> {
-  private starting: Promise<void> | null = null;
+  private starting: Promise<boolean> | null = null;
   private monitoring: Promise<void> | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -236,22 +239,22 @@ export class MediaDownloader extends DurableObject<Env> {
     return secret;
   }
 
-  private async ensureContainer(snapshot?: SnapshotHandle): Promise<void> {
+  private async ensureContainer(snapshot?: SnapshotHandle): Promise<boolean> {
     const container = this.ctx.container;
     if (!container) throw new Error("Media downloader container is not configured.");
     if (container.running) {
       await container.setInactivityTimeout(CONTAINER_IDLE_MS);
       this.observeExit();
-      return;
+      return false;
     }
 
     this.starting ??= this.startContainer(snapshot).finally(() => {
       this.starting = null;
     });
-    await this.starting;
+    return this.starting;
   }
 
-  private async startContainer(snapshot?: SnapshotHandle): Promise<void> {
+  private async startContainer(snapshot?: SnapshotHandle): Promise<boolean> {
     const container = this.ctx.container;
     if (!container) throw new Error("Media downloader container is not configured.");
 
@@ -284,7 +287,7 @@ export class MediaDownloader extends DurableObject<Env> {
           signal: AbortSignal.timeout(1000),
         });
         await response.body?.cancel();
-        if (response.ok) return;
+        if (response.ok) return Boolean(snapshot);
         lastError = new Error("Downloader health check returned HTTP " + response.status);
       } catch (error) {
         lastError = error;
@@ -341,7 +344,10 @@ export class MediaDownloader extends DurableObject<Env> {
     const claimed = await this.ctx.storage.transaction(async transaction => {
       const current = await transaction.get<DownloadState>(STATE_KEY);
       if (current && ["queued", "running"].includes(current.status)) return false;
-      if (current?.snapshot && current.shareExpiresAt && current.shareExpiresAt > Date.now()) return false;
+      if (current?.snapshot) {
+        const lastRestore = current.snapshotLastRestoredAt ?? current.snapshotCreatedAt ?? current.createdAt;
+        if (lastRestore + SNAPSHOT_MAX_RETENTION_MS > Date.now()) return false;
+      }
       await transaction.put(STATE_KEY, state);
       return true;
     });
@@ -417,6 +423,8 @@ export class MediaDownloader extends DurableObject<Env> {
                 state.contentType = job.contentType;
                 state.size = size;
                 state.snapshot = { id: snapshot.id, size: snapshot.size, name: snapshot.name };
+                state.snapshotCreatedAt = Date.now();
+                state.snapshotLastRestoredAt = state.snapshotCreatedAt;
                 state.shareExpiresAt = Date.now() + SHARE_TTL_MS;
                 await this.writeState(state);
                 await this.ctx.container.destroy();
@@ -482,6 +490,10 @@ export class MediaDownloader extends DurableObject<Env> {
     if (!state || state.jobId !== jobId || state.status !== "complete" || !state.snapshot) {
       return json({ error: "A completed media file is required before sharing." }, 409);
     }
+    const lastRestore = state.snapshotLastRestoredAt ?? state.snapshotCreatedAt ?? state.createdAt;
+    if (lastRestore + SNAPSHOT_MAX_RETENTION_MS <= Date.now()) {
+      return json({ error: "The temporary media snapshot has expired. Create a new download." }, 410);
+    }
     state.shareTokenHash = tokenHash.toLowerCase();
     state.shareExpiresAt = Date.now() + SHARE_TTL_MS;
     await this.writeState(state);
@@ -501,6 +513,8 @@ export class MediaDownloader extends DurableObject<Env> {
     if (!state || state.jobId !== jobId || state.status !== "complete" ||
         !state.snapshot || !state.shareTokenHash ||
         !state.shareExpiresAt || state.shareExpiresAt <= Date.now()) return null;
+    const lastRestore = state.snapshotLastRestoredAt ?? state.snapshotCreatedAt ?? state.createdAt;
+    if (lastRestore + SNAPSHOT_MAX_RETENTION_MS <= Date.now()) return null;
     const tokenHash = await sha256Hex(token);
     return equalHex(tokenHash, state.shareTokenHash) ? state : null;
   }
@@ -523,7 +537,11 @@ export class MediaDownloader extends DurableObject<Env> {
     const state = await this.validShare(jobId, token);
     if (!state || !state.snapshot) return json({ error: "Share link is invalid or expired." }, 404);
     try {
-      await this.ensureContainer(state.snapshot);
+      const restoredSnapshot = await this.ensureContainer(state.snapshot);
+      if (restoredSnapshot) {
+        state.snapshotLastRestoredAt = Date.now();
+        await this.writeState(state);
+      }
       await this.ctx.container?.setInactivityTimeout(10 * 60 * 1000);
       const headers = new Headers();
       const range = request.headers.get("range");
@@ -561,8 +579,8 @@ export class MediaDownloader extends DurableObject<Env> {
     }
     state.status = "revoked";
     state.shareTokenHash = undefined;
-    state.snapshot = undefined;
-    state.shareExpiresAt = undefined;
+    // Keep snapshot metadata after revocation. Snapshots cannot be manually
+    // deleted, so this prevents another one from being created before expiry.
     await this.writeState(state);
     return json({
       ok: true,
