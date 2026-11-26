@@ -10,7 +10,7 @@ Branch: feat/wave-71-routed-itinerary-map
 - The route request occurs only after the user clicks Tính tuyến đường. It uses the first 10 saved places in their current order; up to 50 favorites can still be retained locally.
 - Successful responses draw the route geometry, numbered stop markers, total distance/duration and a breakdown for each leg between consecutive saved places.
 - Route output validation includes HTTP status, OSRM code, LineString geometry, finite/range-checked coordinate pairs, a 20,000-point geometry cap, finite non-negative metrics, expected waypoint count and expected legs.
-- The UI blocks concurrent requests and enforces a 1,100 ms per-page cooldown. No retries or route request fan-out are added.
+- The UI blocks concurrent requests and enforces a 1,100 ms cooldown using a local numeric timestamp shared across page loads/tabs. This key contains no POI or route information. No retries or route request fan-out are added.
 - The map/tile layer is lazy-loaded only after route calculation is explicitly requested, so opening Nearby does not send saved-place positions to OSM tile servers.
 - Tile attribution and direct route-provider logging disclosure are visible; page Referrer-Policy is strict-origin-when-cross-origin.
 
