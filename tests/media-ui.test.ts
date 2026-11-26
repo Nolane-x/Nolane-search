@@ -26,7 +26,7 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("download-renew");
     expect(html).toContain("download-revoke");
     expect(html).toContain("download-cancel");
-    expect(html).toContain("R2 được kích hoạt trước");
+    expect(html).toContain("Link media tạm thời dùng Container snapshot beta");
     expect(html).toContain("document.createElement('iframe')");
     expect(html).toContain("safeMediaEmbedUrl(item)");
     expect(html).toContain("Nhúng player '+item.provider");
