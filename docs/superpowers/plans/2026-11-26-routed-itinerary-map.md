@@ -55,6 +55,7 @@
   - Assert markup includes a map container, profile selector values driving, cycling, walking, a manual route button and visible OSM attribution.
   - Assert static endpoint strings map driving to router.project-osrm.org/route/v1/driving, cycling to routing.openstreetmap.de/routed-bike/route/v1/bike, and walking to routing.openstreetmap.de/routed-foot/route/v1/foot.
   - Assert UI discloses direct transfer of stop coordinates and provider-side route logging.
+  - Execute the inline script in a browser shim and assert no route or tile request occurs at page load; the map tile request starts only after the explicit route click.
   - Assert code includes an explicit click listener, a 1,100 ms cooldown, one in-flight request guard and a 10-stop route cap.
   - Assert response validation covers code === "Ok", LineString, bounded finite coordinates and consistent legs.
   - Keep existing Wave68/69/70 assertions intact.
@@ -76,7 +77,7 @@
 
 - [ ] **Step 1: Add the Leaflet map surface**
   - Add Leaflet 1.9.4 CSS and JS with pinned SRI/crossorigin. Keep the map panel useful if the script fails to load.
-  - Add the OSM tile layer with visible attribution and a link to OSM copyright/fix map.
+  - Add the OSM tile layer with visible attribution and a link to OSM copyright/fix map. Do not initialize Leaflet or fetch tiles on page load; initialize only after the explicit route click.
 - [ ] **Step 2: Add fixed route profiles and request controls**
   - Add profile select (driving default, cycling, walking), manual route button and explicit provider-logging/privacy note.
   - Build URL only from the profile allowlist and validated saved POI numeric coordinates in lon,lat order.
@@ -114,7 +115,7 @@
 - Produces: a user-facing repo handoff plus a durable provider-policy note; no runtime configuration changes.
 
 - [ ] **Step 1: Document provider terms**
-  - State the one request/second maximum, no-SLA/best-effort boundary, route request logging, attribution and valid Referer requirements, and no offline/prefetch/bulk tiles.
+  - State the one request/second maximum, no-SLA/best-effort boundary, route request logging, attribution and valid Referer requirements, map lazy-load behavior, and no offline/prefetch/bulk tiles.
   - State that route duration is profile estimate, not live traffic.
 - [ ] **Step 2: Document actual implementation and limitations**
   - Record 10-waypoint route cap, first-10 ordering rule, profile endpoint map, no server-side route/favorite persistence, and CDN/tile dependencies.
