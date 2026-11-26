@@ -26,7 +26,7 @@ The three route endpoints are not interchangeable. OSRM project frontend configu
 ## Usage / operational restrictions
 
 - Public OSRM/FOSSGIS instances are best-effort community services, not a contracted backend with an uptime or latency SLA.
-- Use no more than one route request per second. The UI enforces a 1,100 ms minimum interval per page and prevents concurrent requests. Use remains intentionally low-volume and owner-only.
+- Use no more than one route request per second. The UI enforces a 1,100 ms minimum interval, prevents concurrent requests, and stores only a numeric cooldown timestamp in localStorage so reloads and sequential requests from other tabs share the cooldown. No POI IDs, coordinates or route data are stored in that key. Use remains intentionally low-volume and owner-only.
 - The route providers may log incoming route requests. Route coordinates leave the browser and are sent to the selected provider only after an explicit click.
 - The app does not retry, fan out, auto-refresh or route when the page opens.
 - Browser User-Agent is native and the response policy strict-origin-when-cross-origin sends an origin Referer without the full route page path.
