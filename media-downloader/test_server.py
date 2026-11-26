@@ -56,6 +56,23 @@ class MediaDownloaderServerTests(unittest.TestCase):
                 self.assertNotIn("--password", args)
                 self.assertNotIn("shell", args)
 
+    def test_extractor_environment_does_not_inherit_internal_or_proxy_secrets(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            with patch.dict(os.environ, {
+                "NOLANE_INTERNAL_TOKEN": "must-not-leak",
+                "HTTPS_PROXY": "https://secret-proxy.example",
+                "HTTP_PROXY": "http://secret-proxy.example",
+                "AWS_SECRET_ACCESS_KEY": "must-not-leak",
+            }, clear=False):
+                child_env = server._extractor_environment(folder)
+        self.assertEqual(child_env["HOME"], str(folder))
+        self.assertEqual(child_env["TMPDIR"], str(folder))
+        self.assertNotIn("NOLANE_INTERNAL_TOKEN", child_env)
+        self.assertNotIn("HTTPS_PROXY", child_env)
+        self.assertNotIn("HTTP_PROXY", child_env)
+        self.assertNotIn("AWS_SECRET_ACCESS_KEY", child_env)
+
     def test_audio_command_uses_mp3_extraction(self):
         job_id = str(uuid.uuid4())
         with tempfile.TemporaryDirectory() as temp:
