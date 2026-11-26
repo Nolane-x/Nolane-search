@@ -19,7 +19,7 @@ import { runConsumerDiscoveryTool } from "./consumer-discovery-tools";
 import { runOpenKnowledgeTool } from "./open-knowledge-tools";
 import { runAnimeCatalogTool } from "./anime-catalog-tools";
 import { runSteamGamesTool } from "./steam-games-tools";
-import { searchNearbyPlaces } from "./nearby-places-tools";
+import { searchNearbyPlaces, searchPlacesInCity } from "./nearby-places-tools";
 import { translateText } from "./translation";
 import type { Env, SearchMode } from "./types";
 
@@ -296,6 +296,20 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
         location: { type: "string", minLength: 2, maxLength: 100, description: "City or town name, not a street address." },
         country_code: { type: "string", pattern: "^[A-Za-z]{2}$", description: "Optional two-letter ISO country code." }
       }, required: ["location"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_places_in_city",
+      description: "Find named public places in a city or town the user explicitly names. Geocodes only that supplied city name, asks for clarification when names are ambiguous, then searches public OpenStreetMap records for food, shopping, pharmacies, healthcare, ATMs, fuel, EV charging, parks, attractions or accommodation. This never uses or guesses the user's current device location; distances are straight-line and opening hours are not live status.",
+      parameters: { type: "object", properties: {
+        city: { type: "string", minLength: 2, maxLength: 100, description: "City or town explicitly named by the user, e.g. Hai Phong." },
+        country_code: { type: "string", pattern: "^[A-Za-z]{2}$", description: "Optional ISO country code such as VN; add it when the city name is ambiguous." },
+        category: { type: "string", enum: ["food", "shopping", "pharmacy", "medical", "atm", "fuel", "charging", "parks", "sightseeing", "stay", "essentials"], description: "Choose one category; essentials searches common food, pharmacy, medical, banking, fuel, EV charging and convenience-store places." },
+        radius_m: { type: "integer", minimum: 200, maximum: 5000, description: "Search radius from the named city's geocoded center; defaults to 1500 m. Essentials is capped at 3000 m." },
+        limit: { type: "integer", minimum: 1, maximum: 25, description: "Maximum number of named places, defaults to 12." }
+      }, required: ["city", "category"], additionalProperties: false }
     }
   },
   {
@@ -2238,6 +2252,9 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
   if (name === "search_nearby_places") {
     return JSON.stringify(await searchNearbyPlaces(args));
   }
+  if (name === "search_places_in_city") {
+    return JSON.stringify(await searchPlacesInCity(args));
+  }
   if (["search_steam_games","get_steam_game_details"].includes(name)) {
     return (await runSteamGamesTool(name, args)).slice(0, 12_000);
   }
@@ -2307,6 +2324,7 @@ export async function runAgentLoop(
     "Use get_marine_forecast for general wave/swell outlooks only, never for navigation or rescue advice. Use get_earthquake_activity for USGS recorded events, never as an early-warning or safety-clearance service. Use search_books for human reading/catalog requests and lookup_postal_code for postcode reference data, preserving each provider’s coverage and accuracy limits.",
     "Use search_inaturalist_observations when people ask for licensed wildlife, plant, fungi or nature photos; report the photo's exact Creative Commons/CC0 license and attribution, omit exact coordinates, and do not present community observations as guaranteed species identification.",
     "Use search_nearby_places only when the user explicitly provides coordinates or deliberately shares device location; never guess location, infer current coordinates, or geocode a city/street. Ask the user to share a location or enter latitude/longitude. Search one category within its bounded radius; use essentials when the user wants a broad essentials scan; label OpenStreetMap as the source, explain that straight-line distance is not a route and opening_hours is not live open status.",
+    "Use search_places_in_city when the user names a city or town and wants public places there; it geocodes only that explicit name, returns clarification choices for ambiguous locations, and never infers device location. Use search_nearby_places only with coordinates the user explicitly supplied or deliberately shared. For both, label OpenStreetMap, explain straight-line distance and that opening hours are not live status.",
     "Use get_weather_forecast and check_air_quality for location-specific model data; use convert_currency for dated daily reference rates; use get_public_holidays and find_long_weekends for country or subdivision holiday planning. Do not guess current readings. Ask for a country when a city is ambiguous. Distinguish forecast data from ground-station readings and daily currency reference rates from trading or retail exchange quotes. Open-Meteo free API use is non-commercial and must follow its fair-use terms.",
     "process_text_content is for bounded text input up to 40,000 characters. For an uploaded image, PDF, Office file, audio/video, archive or other catalog-supported file, use prepare_file_processing only when that function is available and the user explicitly wants the file processed or says they will upload it. It only prepares a private Telegram upload session; the user must still send the file, and no processor has run until the job returns.",
     "The uploaded-file planner can select any ready catalog processor that matches the file and validated data-flow transitions. Do not claim that a file was processed before a completed job result is received. Prefer ordinary-user processors unless a technical file task is explicit.",
