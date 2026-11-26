@@ -71,7 +71,7 @@ describe("Wave 73 media downloader URL policy", () => {
     for (const address of [
       "::", "::1", "fe80::1", "fc00::1", "fd12::1234",
       "ff02::1", "::ffff:192.168.1.1", "2001:db8::1",
-      "2001::1", "64:ff9b::808:808",
+      "2001::1", "2002:c000:0201::1", "64:ff9b::808:808",
     ]) {
       expect(isPublicIpAddress(address), address).toBe(false);
     }
