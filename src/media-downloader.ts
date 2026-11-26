@@ -465,6 +465,10 @@ export class MediaDownloader extends DurableObject<Env> {
       }
     }
 
+    if (["failed", "cancelled"].includes(state.status) && this.ctx.container?.running) {
+      await this.ctx.container.destroy().catch(() => undefined);
+    }
+
     return json({
       jobId: state.jobId,
       status: state.status,
@@ -493,6 +497,7 @@ export class MediaDownloader extends DurableObject<Env> {
       state.status = "cancelled";
       state.shareTokenHash = undefined;
       await this.writeState(state);
+      if (this.ctx.container?.running) await this.ctx.container.destroy().catch(() => undefined);
       return json({ ok: true, status: state.status });
     }
     return this.revoke(jobId);
