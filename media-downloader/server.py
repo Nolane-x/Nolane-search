@@ -174,10 +174,9 @@ def _run_job(job_id: str, url: str, media_format: str, quality: str) -> None:
             }
         args, folder = _command(job_id, url, media_format, quality)
 
-        def limit_file_size() -> None:
-            import resource
-            resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_OUTPUT_BYTES, MAX_OUTPUT_BYTES))
-
+        # Use prlimit instead of preexec_fn: this HTTP server is multithreaded,
+        # and Python warns that preexec_fn can deadlock after fork in a threaded process.
+        args = ["/usr/bin/prlimit", f"--fsize={MAX_OUTPUT_BYTES}:{MAX_OUTPUT_BYTES}", "--", *args]
         process = subprocess.Popen(
             args,
             stdin=subprocess.DEVNULL,
@@ -190,7 +189,6 @@ def _run_job(job_id: str, url: str, media_format: str, quality: str) -> None:
             cwd=str(folder),
             close_fds=True,
             start_new_session=True,
-            preexec_fn=limit_file_size,
         )
         with LOCK:
             PROCESSES[job_id] = process
@@ -251,7 +249,7 @@ def _kill_process_group(process: subprocess.Popen[str]) -> None:
 
 def _fail_job(job_id: str, error_code: str) -> None:
     with LOCK:
-        if job_id in JOBS:
+        if job_id in JOBS and JOBS[job_id].get("status") != "cancelled":
             JOBS[job_id].update({
                 "status": "failed", "progress": 0,
                 "error": error_code, "completedAt": int(time.time() * 1000),
@@ -380,6 +378,14 @@ class Handler(BaseHTTPRequestHandler):
                     os.killpg(process.pid, signal.SIGTERM)
                 except ProcessLookupError:
                     pass
+                def force_stop() -> None:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                watchdog = threading.Timer(5, force_stop)
+                watchdog.daemon = True
+                watchdog.start()
             shutil.rmtree(DATA_ROOT / job_id, ignore_errors=True)
             self._json({"id": job_id, "status": "cancelled"})
             return
