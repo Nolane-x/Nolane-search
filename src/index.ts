@@ -19,8 +19,8 @@ import { nearbyAppResponse } from "./nearby-ui";
 import { searchNearbyPlaces, NearbyPlacesInputError } from "./nearby-places-tools";
 import { searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, searchPeerTubeVideos } from "./media-discovery-tools";
 import { resolveMediaEmbed } from "./media-embed-resolver";
-import { parseMediaDownloadInput } from "./media-downloader-policy";
-export { MediaDownloader, MediaDownloaderEgress } from "./media-downloader";
+import { hasOnlyPublicDnsAnswers, parseMediaDownloadInput } from "./media-downloader-policy";
+import { createMediaNodeRequest, isMediaNodeConfigured } from "./media-downloader";
 import { completeAi, getAiRouterStatus } from "./ai-router";
 import { planToolWorkflow } from "./workflow-planner";
 import type { AiFunctionTool, AiTask } from "./ai-router";
@@ -282,13 +282,8 @@ async function parseJsonBody(request: Request): Promise<Record<string, unknown> 
   return parseJsonObjectBody(request, 30_000);
 }
 
-function mediaDownloaderStub(env: Env, ownerId: number) {
-  if (!env.MEDIA_DOWNLOADER) return null;
-  return env.MEDIA_DOWNLOADER.get(env.MEDIA_DOWNLOADER.idFromName(String(ownerId)));
-}
-
 function mediaDownloaderEnabled(env: Env): boolean {
-  return env.MEDIA_DOWNLOADER_ENABLED === "true" && Boolean(env.MEDIA_DOWNLOADER);
+  return isMediaNodeConfigured(env);
 }
 
 async function callMediaDownloader(
@@ -296,10 +291,17 @@ async function callMediaDownloader(
   ownerId: number,
   path: string,
   init: RequestInit = {},
+  timeoutMs = 12_000,
 ): Promise<Response> {
-  const stub = mediaDownloaderStub(env, ownerId);
-  if (!stub) return jsonResponse({ error: "Media Downloader chưa được cấu hình." }, 503);
-  return stub.fetch(new Request("https://media-downloader.internal" + path, init));
+  const nodeRequest = createMediaNodeRequest(env, ownerId, path, init, timeoutMs);
+  if (!nodeRequest) return jsonResponse({ error: "Media Node chưa được cấu hình đúng." }, 503);
+  try {
+    return await fetch(nodeRequest);
+  } catch {
+    return jsonResponse({
+      error: "Media Node đang offline hoặc không thể kết nối. Hãy bật máy chủ Media Node và Tailscale Funnel.",
+    }, 502);
+  }
 }
 
 function safeMediaShareJobId(value: string): boolean {
@@ -390,7 +392,7 @@ async function handlePublicMediaShare(request: Request, env: Env): Promise<Respo
       "x-nolane-share-token": token,
       ...(request.headers.get("range") ? { range: request.headers.get("range")! } : {}),
     },
-  });
+  }, 0);
   const headers = new Headers();
   for (const name of [
     "content-type", "content-length", "content-range", "content-disposition", "accept-ranges",
@@ -471,7 +473,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
   if (url.pathname === "/api/media/download" && request.method === "POST") {
     if (!mediaDownloaderEnabled(env)) {
       return jsonResponse({
-        error: "Media Downloader chưa được bật. Chủ tài khoản cần cấu hình Cloudflare Containers và Workers Paid trước.",
+        error: "Media Node cá nhân chưa được kết nối. Hãy hoàn tất cài đặt máy chủ và Tailscale Funnel; không cần Workers Paid.",
       }, 503);
     }
     if (session.chatId !== session.userId || !allowedUser(env, session.userId)) {
@@ -482,17 +484,25 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
     const parsed = parseMediaDownloadInput(body);
     if (!parsed.ok) return jsonResponse({ error: parsed.error }, 400);
 
+    const sourceHost = new URL(parsed.value.url).hostname;
+    try {
+      if (!await hasOnlyPublicDnsAnswers(sourceHost)) {
+        return jsonResponse({ error: "Tên miền nguồn không phân giải hoàn toàn tới địa chỉ Internet công khai." }, 400);
+      }
+    } catch {
+      return jsonResponse({ error: "Không thể xác minh DNS an toàn cho nguồn media." }, 502);
+    }
+
     const jobId = crypto.randomUUID();
-    const initialShareTokenHash = await sha256Hex(randomHex());
     const startResponse = await callMediaDownloader(env, session.userId, "/internal/start", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         jobId,
+        ownerId: session.userId,
         url: parsed.value.url,
         format: parsed.value.format,
         quality: parsed.value.quality,
-        shareTokenHash: initialShareTokenHash,
       }),
     });
     if (!startResponse.ok) {
@@ -506,7 +516,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
       progress: 0,
       format: parsed.value.format,
       quality: parsed.value.quality,
-      sourceHost: new URL(parsed.value.url).hostname,
+      sourceHost,
       statusUrl: "/api/media/downloads/" + jobId,
       shareExpiresAt: null,
       limits: { maximumOutputBytes: 3 * 1024 * 1024 * 1024, maximumSourceDurationSeconds: 7200 },

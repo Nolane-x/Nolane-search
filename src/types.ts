@@ -55,10 +55,10 @@ export interface Env {
   MEDIA_ALLOW_NSFW?: string;
   /** Optional Dailymotion Player ID supplied by the Worker deployment owner. */
   MEDIA_DAILYMOTION_PLAYER_ID?: string;
-  /** Explicit owner-controlled feature gate; false by default. */
-  MEDIA_DOWNLOADER_ENABLED?: string;
-  /** Optional Durable Object namespace present only when Containers are configured. */
-  MEDIA_DOWNLOADER?: DurableObjectNamespace;
+  /** HTTPS Tailscale Funnel URL for the operator-owned Media Node. */
+  MEDIA_NODE_URL?: string;
+  /** 256-bit shared secret used only between the Worker and Media Node. */
+  MEDIA_NODE_TOKEN?: string;
 }
 
 export interface D1Result<T = Record<string, unknown>> {
