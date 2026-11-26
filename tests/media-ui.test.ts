@@ -152,8 +152,8 @@ describe("Media Portal media discovery experience", () => {
 
   it("disables incompatible providers for image, video and audio filters", async () => {
     const html = await (await mediaAppResponse()).text();
-    expect(html).toContain("kind==='audio'?['commons','nasa','openverse','peertube']");
-    expect(html).toContain("kind==='video'?['commons','openverse']");
+    expect(html).toContain("kind==='audio'?['commons','nasa','openverse','peertube','inaturalist']");
+    expect(html).toContain("kind==='video'?['commons','openverse','inaturalist']");
     expect(html).toContain("kind==='image'?['archive','peertube']");
   });
 
