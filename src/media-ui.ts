@@ -454,6 +454,141 @@ async function api(path,options){
  if(!response.ok)throw new Error(data.error||('HTTP '+response.status));
  return data;
 }
+var downloaderEnabled=document.body.dataset.mediaDownloaderEnabled==='true';
+var activeDownloadId='';
+var activeShareUrl='';
+var downloadPollTimer=null;
+var downloadPollGeneration=0;
+function showDownloadState(title,detail,progress){
+ $('download-state').classList.add('visible');
+ $('download-title-state').textContent=title;
+ $('download-detail').textContent=detail||'';
+ $('download-progress-bar').style.width=Math.max(0,Math.min(100,Number(progress)||0))+'%';
+}
+function showDownloadActions(state){
+ $('download-copy').classList.toggle('hidden',!activeShareUrl);
+ $('download-renew').classList.toggle('hidden',!(state==='complete'&&!activeShareUrl));
+ $('download-cancel').classList.toggle('hidden',!(['queued','running'].includes(state)));
+ $('download-revoke').classList.toggle('hidden',state!=='complete');
+ $('download-share-link').classList.toggle('hidden',!activeShareUrl);
+ if(activeShareUrl){$('download-share-link').href=activeShareUrl;$('download-share-link').textContent='Mở link media tạm thời';}
+ $('download-submit').disabled=state==='complete'&&Boolean(activeShareUrl);
+}
+async function pollDownload(jobId){
+ var generation=++downloadPollGeneration;
+ if(downloadPollTimer)clearTimeout(downloadPollTimer);
+ try{
+  var state=await api('/api/media/downloads/'+encodeURIComponent(jobId));
+  if(generation!==downloadPollGeneration)return;
+  var detail=state.error||(
+   state.status==='complete'?'Đã tải xong · '+(state.size?new Intl.NumberFormat('vi-VN').format(state.size)+' byte':'tệp đã sẵn sàng'):
+   state.status==='failed'?'Không thể hoàn tất tác vụ.':
+   state.status==='cancelled'?'Tác vụ đã bị hủy.':
+   'Đang tải từ '+(state.sourceHost||'nguồn media')+'…'
+  );
+  if(state.shareExpiresAt)detail+=' · link hết hạn '+new Date(state.shareExpiresAt).toLocaleString('vi-VN');
+  showDownloadState('Tác vụ '+state.status,detail,state.progress);
+  if(state.status==='complete'){
+   if(!activeShareUrl){
+    try{
+     var renewed=await api('/api/media/downloads/'+encodeURIComponent(jobId)+'/share',{method:'POST',headers:{'content-type':'application/json','origin':location.origin},body:'{}'});
+     activeShareUrl=renewed.shareUrl||'';
+    }catch(e){}
+   }
+   showDownloadActions('complete');
+   return;
+  }
+  showDownloadActions(state.status);
+  if(['failed','cancelled','revoked'].includes(state.status)){
+   if(state.status!=='revoked')$('download-submit').disabled=false;
+   return;
+  }
+  downloadPollTimer=setTimeout(function(){pollDownload(jobId)},2500);
+ }catch(error){
+  if(generation!==downloadPollGeneration)return;
+  showDownloadState('Không thể cập nhật tác vụ',error.message,0);
+  $('download-submit').disabled=false;
+ }
+}
+$('download-format').addEventListener('change',function(){
+ var isAudio=$('download-format').value==='audio';
+ $('download-quality').disabled=isAudio;
+});
+$('download-form').addEventListener('submit',async function(event){
+ event.preventDefault();
+ if(!downloaderEnabled){$('download-disabled').classList.remove('hidden');return;}
+ var url=$('download-url').value.trim();
+ if(url.length<12||url.length>2048){showDownloadState('URL không hợp lệ','URL phải dài 12–2048 ký tự.',0);return;}
+ $('download-submit').disabled=true;
+ $('download-disabled').classList.add('hidden');
+ showDownloadState('Đang tạo tác vụ','Đang kiểm tra URL và khởi tạo runner…',0);
+ activeDownloadId='';activeShareUrl='';
+ showDownloadActions('queued');
+ try{
+  var result=await api('/api/media/download',{method:'POST',headers:{'content-type':'application/json','origin':location.origin},body:JSON.stringify({
+   url:url,format:$('download-format').value,quality:$('download-format').value==='audio'?'720':$('download-quality').value
+  })});
+  activeDownloadId=result.jobId;
+  sessionStorage.setItem('nolane-media-downloader-job',activeDownloadId);
+  activeShareUrl=result.shareUrl||'';
+  showDownloadState('Tác vụ đã được tiếp nhận','Đang chờ container bắt đầu tải…',0);
+  showDownloadActions(result.status||'queued');
+  await pollDownload(activeDownloadId);
+ }catch(error){
+  showDownloadState('Không thể bắt đầu tải',error.message,0);
+  $('download-submit').disabled=false;
+ }
+});
+$('download-copy').addEventListener('click',async function(){
+ if(!activeShareUrl)return;
+ try{await navigator.clipboard.writeText(activeShareUrl);$('download-copy').textContent='Đã sao chép';}
+ catch(e){showDownloadState('Không sao chép được','Trình duyệt không cấp quyền clipboard. Hãy mở link rồi sao chép từ thanh địa chỉ.',100);}
+});
+$('download-renew').addEventListener('click',async function(){
+ if(!activeDownloadId)return;
+ $('download-renew').disabled=true;
+ try{
+  var data=await api('/api/media/downloads/'+encodeURIComponent(activeDownloadId)+'/share',{method:'POST',headers:{'content-type':'application/json','origin':location.origin},body:'{}'});
+  activeShareUrl=data.shareUrl||'';
+  showDownloadActions('complete');
+ }catch(error){showDownloadState('Không thể tạo link mới',error.message,100);}
+ finally{$('download-renew').disabled=false;}
+});
+$('download-cancel').addEventListener('click',async function(){
+ if(!activeDownloadId)return;
+ $('download-cancel').disabled=true;
+ try{
+  await api('/api/media/downloads/'+encodeURIComponent(activeDownloadId)+'/cancel',{method:'POST',headers:{'content-type':'application/json','origin':location.origin},body:'{}'});
+  if(downloadPollTimer)clearTimeout(downloadPollTimer);
+  await pollDownload(activeDownloadId);
+ }catch(error){showDownloadState('Không thể hủy tác vụ',error.message,0);}
+ finally{$('download-cancel').disabled=false;}
+});
+$('download-revoke').addEventListener('click',async function(){
+ if(!activeDownloadId||!confirm('Thu hồi quyền truy cập link chia sẻ? Snapshot vật lý không thể xóa ngay và sẽ tự hết hạn.'))return;
+ $('download-revoke').disabled=true;
+ try{
+  await api('/api/media/downloads/'+encodeURIComponent(activeDownloadId),{method:'DELETE',headers:{'origin':location.origin}});
+  activeShareUrl='';
+  showDownloadState('Đã thu hồi link','Link sẽ không còn truy cập được. Snapshot vật lý vẫn tự hết hạn theo chính sách của Cloudflare.',100);
+  showDownloadActions('revoked');
+  sessionStorage.removeItem('nolane-media-downloader-job');
+  activeDownloadId='';
+  $('download-submit').disabled=false;
+ }catch(error){showDownloadState('Không thể thu hồi link',error.message,0);}
+ finally{$('download-revoke').disabled=false;}
+});
+if(!downloaderEnabled){
+ $('download-disabled').classList.remove('hidden');
+ $('download-form').querySelectorAll('input,select,button').forEach(function(element){element.disabled=true;});
+}else{
+ try{
+  activeDownloadId=sessionStorage.getItem('nolane-media-downloader-job')||'';
+  if(/^[a-f0-9-]{36}$/i.test(activeDownloadId))pollDownload(activeDownloadId);
+  else activeDownloadId='';
+ }catch(e){}
+}
+
 function anchor(label,url,primary){
  if(!url)return null;var a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=label;if(primary)a.className='primary';return a;
 }
@@ -565,8 +700,9 @@ $('logout').addEventListener('click',async function(){try{await api('/api/auth/l
 })();
 </script>
 </body></html>`;
-export function mediaAppResponse(nsfwFeatureEnabled = false): Response {
-  const html = HTML.replace('__NSFW_ENABLED__', nsfwFeatureEnabled ? 'true' : 'false');
+export function mediaAppResponse(nsfwFeatureEnabled = false, mediaDownloaderFeatureEnabled = false): Response {
+  const html = HTML.replace('__NSFW_ENABLED__', nsfwFeatureEnabled ? 'true' : 'false')
+    .replace('__MEDIA_DOWNLOADER_ENABLED__', mediaDownloaderFeatureEnabled ? 'true' : 'false');
   return new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
