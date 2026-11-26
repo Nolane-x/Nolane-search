@@ -28,7 +28,9 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("download-revoke");
     expect(html).toContain("download-cancel");
     expect(html).toContain("Media Downloader cần Media Node tự host");
+    expect(html).toContain("không tải lên GitHub Actions hay kho media trên mạng");
     expect(html).toContain("Tailscale Funnel");
+    expect(html).toContain("file media được xử lý trên ổ đĩa của máy chủ");
     expect(html).toContain("document.createElement('iframe')");
     expect(html).toContain("safeMediaEmbedUrl(item)");
     expect(html).toContain("Nhúng player '+item.provider");

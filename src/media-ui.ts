@@ -50,7 +50,7 @@ const HTML = String.raw`<!doctype html>
    <button id="download-revoke" class="download-action hidden" type="button">Thu hồi link</button>
   </div>
  </div>
- <div id="download-disabled" class="download-warning hidden">Media Node cá nhân chưa được kết nối. Cần bật máy tính chủ, dịch vụ local và Tailscale Funnel; cấu hình này không cần dịch vụ Cloudflare trả phí.</div>
+ <div id="download-disabled" class="download-warning hidden">Media Node cá nhân chưa được kết nối. Cần bật máy tính chủ, dịch vụ local và Tailscale Funnel; file media được xử lý trên ổ đĩa của máy chủ.</div>
  <div class="download-warning">Chỉ tải trang công khai và nội dung bạn có quyền sử dụng. Không hỗ trợ cookie, đăng nhập, vượt paywall hoặc DRM. Media Node chạy trên máy tính cá nhân: một tác vụ tại một thời điểm, hàng đợi tối đa 3 tác vụ, nguồn tối đa 2 giờ, tệp tối đa 3 GB và tổng kho tạm tối đa 6 GB. Tệp lưu trên ổ đĩa máy chủ và tự xóa sau 12 giờ; link chia sẻ cũng hết hạn sau 12 giờ. Máy tính, Internet và Tailscale Funnel phải hoạt động khi tải hoặc phát. Không dùng cho nội dung riêng tư hay nhạy cảm.</div>
 </section>
 <section class="playback-lab" aria-labelledby="playback-lab-title">
@@ -79,7 +79,7 @@ const HTML = String.raw`<!doctype html>
 <div class="meta"><span id="status">Đang kiểm tra phiên đăng nhập…</span><span id="count"></span></div>
 <div id="notice" class="notice hidden"></div>
 <section id="results" class="grid"></section>
-<div class="footer">Wikimedia Commons, Openverse và iNaturalist cung cấp ảnh kèm nguồn/tác giả/giấy phép theo từng mục. NASA và Internet Archive có thể phát hoặc mở/tải tệp gốc khi hồ sơ công khai liệt kê URL phù hợp; quyền sử dụng khác nhau theo từng mục. PeerTube dùng chỉ mục liên mạng SepiaSearch, không bao phủ mọi instance; video mở tại máy chủ gốc. <strong>Media Downloader cần Media Node tự host.</strong> Worker chỉ xác thực và truyền luồng; file media lưu tạm trên máy tính chủ, không lưu trong D1, R2 hay GitHub. Liên kết phát phụ thuộc máy tính và Tailscale Funnel đang online. Hãy xem trang nguồn và điều khoản trước khi tải hoặc tái sử dụng.</div>
+<div class="footer">Wikimedia Commons, Openverse và iNaturalist cung cấp ảnh kèm nguồn/tác giả/giấy phép theo từng mục. NASA và Internet Archive có thể phát hoặc mở/tải tệp gốc khi hồ sơ công khai liệt kê URL phù hợp; quyền sử dụng khác nhau theo từng mục. PeerTube dùng chỉ mục liên mạng SepiaSearch, không bao phủ mọi instance; video mở tại máy chủ gốc. <strong>Media Downloader cần Media Node tự host.</strong> Worker chỉ xác thực và truyền luồng; file media lưu tạm trên ổ đĩa máy tính chủ, không tải lên GitHub Actions hay kho media trên mạng. Liên kết phát phụ thuộc máy tính và Tailscale Funnel đang online. Hãy xem trang nguồn và điều khoản trước khi tải hoặc tái sử dụng.</div>
 </main>
 <script>
 (function(){

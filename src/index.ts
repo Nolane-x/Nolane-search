@@ -474,7 +474,7 @@ async function handleWebApi(request: Request, env: Env): Promise<Response> {
   if (url.pathname === "/api/media/download" && request.method === "POST") {
     if (!mediaDownloaderEnabled(env)) {
       return jsonResponse({
-        error: "Media Node cá nhân chưa được kết nối. Hãy hoàn tất cài đặt máy chủ và Tailscale Funnel; không cần Workers Paid.",
+        error: "Media Node cá nhân chưa được kết nối. Hãy hoàn tất cài đặt máy chủ và Tailscale Funnel để bật tải media.",
       }, 503);
     }
     if (session.chatId !== session.userId || !allowedUser(env, session.userId)) {
