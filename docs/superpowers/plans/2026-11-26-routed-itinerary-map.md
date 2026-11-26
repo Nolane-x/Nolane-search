@@ -19,7 +19,7 @@
 - Tile requests are viewport-driven only. No bulk, offline or prefetch requests; respect provider caching.
 - Attribution remains visible: © OpenStreetMap contributors. Keep correct Referer behavior using strict-origin-when-cross-origin.
 - Routing provider disclosure: coordinates are sent directly to that provider and route requests may be logged there.
-- Never persist route geometry, route requests, search center or favorites to server/D1; Wave 70 favorite localStorage behavior remains unchanged.
+- Never persist route geometry, route requests, search center or favorites to server/D1; Wave 70 favorite localStorage behavior remains unchanged. A timestamp-only local cooldown key may be written to prevent reloads/tabs from violating the shared provider rate limit.
 - Do not claim live traffic, real navigation instructions, road-distance guarantee or ETA accuracy beyond the provider's route profile estimate.
 
 ## Files
@@ -84,7 +84,7 @@
   - Request geometries=geojson&overview=full&steps=false&alternatives=false.
   - Route only the first 10 saved entries; show an explicit notice when entries are omitted.
 - [ ] **Step 3: Add throttling and request-state safeguards**
-  - Block concurrent route requests and enforce 1,100 ms minimum spacing between provider calls.
+  - Block concurrent route requests and enforce 1,100 ms minimum spacing between provider calls, with a timestamp-only localStorage key shared across page loads/tabs.
   - Initialize/refresh the map first after the user's click, then capture the final itinerary signature and revision immediately before fetch. Ignore stale responses if profile or itinerary changed while the request was pending.
   - No auto-retry, no background call, and no route call from initialization.
 - [ ] **Step 4: Validate and display route**
