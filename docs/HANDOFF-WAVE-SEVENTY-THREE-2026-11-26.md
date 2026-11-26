@@ -10,9 +10,11 @@ Downloader branch: `feat/wave-73-container-media-downloader`
 
 - The Met Open Access: current paginated `/public/collection/v1.1/search`, explicit `isPublicDomain === true`, exact official image/source hosts, CC0 metadata.
 - Art Institute of Chicago: reuses the existing museum artwork search and its request throttle; only API-confirmed public-domain objects and verified museum image/object paths are shown.
-- Both providers are image-only, selectable in Media Studio, and unavailable for video/audio filters.
+- Cleveland Museum of Art Open Access: uses its public no-key API with the `cc0` and `has_image=1` filters; independently requires `share_license_status === "CC0"`, a canonical accession-number artwork page and a matching official web-image CDN path. Creator and artwork metadata are preserved.
+- All three museum providers are image-only, selectable in Media Studio, and unavailable for video/audio filters.
+- The AI Agent can query The Met and Cleveland Museum directly; Chicago remains available through the existing museum artwork tool.
 - AI Agent exposes The Met as a dedicated callable tool; Chicago remains available through the existing museum search tool.
-- No API key, new secret, storage bucket, media proxy or binary copy is required.
+- No API key, new secret, storage bucket, media proxy or binary copy is required for any museum image integration.
 
 ## Zero-cost video download and sharing
 
@@ -24,7 +26,7 @@ Use PR #149 as the separate implementation candidate for user-confirmed single-i
 - GitHub Actions remains CI/CD only. Do not turn hosted Actions runners or artifacts into a user-facing CDN/backend.
 - Telegram remains the existing low-friction archive/index and small-file path; it is not the large-video byte store.
 
-**Explicit cost constraint:** do not introduce Cloudflare R2, paid Containers, paid VMs, paid tunnels, paid media APIs, or any recurring storage/compute plan. No billing changes or resources are enabled by these PRs.
+**Explicit cost constraint:** do not introduce paid storage, paid compute, paid tunnels, paid media APIs or any recurring storage/compute plan. The chosen design must stay within free services and user-owned devices. No billing changes or resources are enabled by these PRs.
 
 ## Why GitHub Actions is not the media server
 

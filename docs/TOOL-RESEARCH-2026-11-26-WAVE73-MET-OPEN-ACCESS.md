@@ -47,3 +47,15 @@ Large video download/playback is a separate problem and must not be solved by tu
 - Telegram remains the small-file/archive-index route, not the large-video storage layer.
 
 No Cloudflare R2, paid Containers, paid VM, paid tunnel, paid API, or new recurring cost is part of this design.
+
+
+
+## Cleveland Museum of Art Open Access
+
+Official API documentation: https://openaccess-api.clevelandart.org/
+
+The museum publishes more than 64,000 artwork records and image assets for over 37,000 works under CC0 where applicable. The public API requires no API key. Search uses the documented `cc0` flag and `has_image=1` filter, with a small bounded result limit; the adapter independently checks `share_license_status === "CC0"`.
+
+Only records whose API rights field explicitly says CC0 are returned. The integration also checks the canonical artwork page path and official web-image CDN host/path against the accession number. Creator, date, technique, culture, department, type and measurements are retained when present. The browser CSP only permits the museum image CDN; images are loaded directly and are not copied or proxied. This source is image-only and unavailable for video/audio filters.
+
+Official docs: https://openaccess-api.clevelandart.org/ (CC0 policy, filters and response schema); https://www.clevelandart.org/open-access (reuse terms).

@@ -153,8 +153,8 @@ describe("Media Portal media discovery experience", () => {
 
   it("disables incompatible providers for image, video and audio filters", async () => {
     const html = await (await mediaAppResponse()).text();
-    expect(html).toContain("kind==='audio'?['commons','nasa','openverse','peertube','inaturalist','met','aic']");
-    expect(html).toContain("kind==='video'?['commons','openverse','inaturalist','met','aic']");
+    expect(html).toContain("kind==='audio'?['commons','nasa','openverse','peertube','inaturalist','met','aic','cleveland']");
+    expect(html).toContain("kind==='video'?['commons','openverse','inaturalist','met','aic','cleveland']");
     expect(html).toContain("kind==='image'?['archive','peertube']");
   });
 
@@ -174,6 +174,15 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("www.artic.edu");
     expect(html).toContain("item.provider==='Art Institute of Chicago'?safeUrl(item.sourceUrl,['www.artic.edu'])");
     expect(html).toContain("Art Institute of Chicago bổ sung tác phẩm được bảo tàng đánh dấu public domain");
+  });
+
+
+  it("offers Cleveland Museum Open Access as a trusted CC0 image-only source", async () => {
+    const html = await (await mediaAppResponse()).text();
+    expect(html).toContain('<option value="cleveland">Cleveland Museum of Art · ảnh CC0</option>');
+    expect(html).toContain("openaccess-cdn.clevelandart.org");
+    expect(html).toContain("item.provider==='Cleveland Museum of Art'?safeUrl(item.sourceUrl,['clevelandart.org'])");
+    expect(html).toContain("Cleveland Museum of Art bổ sung các tác phẩm có trạng thái public domain/CC0");
   });
 
   it("offers PeerTube as a video-only provider and links to the exact origin host", async () => {

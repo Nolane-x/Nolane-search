@@ -288,6 +288,17 @@ export const AGENT_TOOL_DEFINITIONS: AiFunctionTool[] = [
   {
     type: "function",
     function: {
+      name: "search_cleveland_museum_open_access_artworks",
+      description: "Search the Cleveland Museum of Art Open Access collection. Returns only artwork records explicitly marked CC0 with an image on the museum's official CDN and the matching artwork page. This is a curated museum collection, not general web image search.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", minLength: 2, maxLength: 140, description: "Artist, artwork title, material, period or subject." },
+        limit: { type: "integer", minimum: 1, maximum: 8, description: "Number of CC0 image results, defaults to 6." }
+      }, required: ["query"], additionalProperties: false }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "get_natural_events",
       description: "Look up NASA EONET's recent curated global natural-event records such as wildfires, severe storms, volcanoes or landslides. Filter by category, open/closed status and days. This is not an emergency warning service.",
       parameters: { type: "object", properties: {
@@ -2281,7 +2292,7 @@ export async function executeAgentTool(env: Env, name: string, rawArgs: unknown,
   if (name === "search_peertube_videos" && args.include_nsfw === true && env.MEDIA_ALLOW_NSFW !== "true") {
     throw new Error("NSFW search is disabled for this deployment. It requires the separately enabled adult-media feature gate.");
   }
-  if (["search_wikimedia_images","search_met_open_access_artworks","search_nasa_media","lookup_food_product","lookup_consumer_product","compare_food_products","search_openverse_images","search_inaturalist_observations","search_internet_archive_videos","search_internet_archive_audio","search_peertube_videos"].includes(name)) {
+  if (["search_wikimedia_images","search_met_open_access_artworks","search_cleveland_museum_open_access_artworks","search_nasa_media","lookup_food_product","lookup_consumer_product","compare_food_products","search_openverse_images","search_inaturalist_observations","search_internet_archive_videos","search_internet_archive_audio","search_peertube_videos"].includes(name)) {
     return (await runMediaDiscoveryTool(name, args)).slice(0, 12_000);
   }
   if (["search_country_profiles","get_world_bank_indicators","search_gbif_species","search_gbif_observations"].includes(name)) {

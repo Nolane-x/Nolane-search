@@ -11,6 +11,9 @@ const INATURALIST_PHOTO_HOST = "inaturalist-open-data.s3.amazonaws.com";
 const MET_COLLECTION_API = "https://collectionapi.metmuseum.org/public/collection";
 const MET_IMAGE_HOST = "images.metmuseum.org";
 const MET_SOURCE_HOST = "www.metmuseum.org";
+const CLEVELAND_API = "https://openaccess-api.clevelandart.org/api/artworks/";
+const CLEVELAND_IMAGE_HOST = "openaccess-cdn.clevelandart.org";
+const CLEVELAND_SOURCE_HOST = "clevelandart.org";
 const INATURALIST_LICENSES: Record<string, string> = {
   cc0: "CC0",
   "cc0-1-0": "CC0",
@@ -101,7 +104,7 @@ function extValue(metadata: Obj, key: string): string | null {
 export interface MediaSearchItem {
   id: string;
   title: string;
-  provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive" | "PeerTube" | "iNaturalist" | "The Met" | "Art Institute of Chicago";
+  provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive" | "PeerTube" | "iNaturalist" | "The Met" | "Art Institute of Chicago" | "Cleveland Museum of Art";
   mediaType: "image" | "video" | "audio";
   sourceUrl: string;
   previewUrl: string | null;
@@ -373,6 +376,76 @@ export async function searchAicMuseumImages(
     query,
     items,
     note: "Only artworks that the museum API explicitly marks public domain and that have a verified museum image and object page are shown. The Art Institute asks clients to keep API requests below 60 per minute and identify the application; Nolane reuses its existing one-request-per-second guarded search. Check the museum page for item-specific notices before reuse.",
+  };
+}
+
+
+/**
+ * Search the Cleveland Museum of Art Open Access API. The cc0 and has_image
+ * filters narrow candidates; each record is checked for explicit CC0 status,
+ * the canonical artwork page and its matching official image CDN path.
+ */
+export async function searchClevelandMuseumArtworks(
+  queryInput: unknown,
+  limitInput?: unknown,
+): Promise<{ status: string; source: string; query: string; items: MediaSearchItem[]; note: string }> {
+  const query = cleanText(queryInput, "query", 2, 140);
+  const limit = boundedInt(limitInput, "limit", 6, 1, 8);
+  const url = new URL(CLEVELAND_API);
+  url.searchParams.set("q", query);
+  url.searchParams.set("cc0", "");
+  url.searchParams.set("has_image", "1");
+  url.searchParams.set("skip", "0");
+  url.searchParams.set("limit", String(limit));
+  const payload = object(await fetchJson<unknown>(url, "Cleveland Museum of Art", 500_000), "Cleveland Museum of Art search");
+  const records = Array.isArray(payload.data) ? payload.data.slice(0, limit) : [];
+  const items: MediaSearchItem[] = [];
+
+  for (const raw of records) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const record = raw as Obj;
+    if (record.share_license_status !== "CC0") continue;
+    const artworkId = nonNegativeInteger(record.id, Number.MAX_SAFE_INTEGER);
+    const accession = metadataText(record.accession_number, 80);
+    if (artworkId === null || artworkId < 1 || !accession || !/^[A-Za-z0-9.-]{1,80}$/.test(accession)) continue;
+    const images = record.images && typeof record.images === "object" && !Array.isArray(record.images) ? record.images as Obj : {};
+    const webImage = images.web && typeof images.web === "object" && !Array.isArray(images.web) ? images.web as Obj : {};
+    const imageUrl = safeHttpUrl(webImage.url, CLEVELAND_IMAGE_HOST);
+    const sourceUrl = safeHttpUrl(record.url, CLEVELAND_SOURCE_HOST);
+    if (!imageUrl || !sourceUrl) continue;
+    const imagePath = new URL(imageUrl).pathname.split("/").filter(Boolean);
+    const imageFilename = imagePath[1] || "";
+    if (imagePath.length !== 2 || imagePath[0] !== accession ||
+        !imageFilename.startsWith(accession + "_web.") ||
+        !/\.(?:jpe?g|png)$/i.test(imageFilename) ||
+        new URL(sourceUrl).pathname !== "/art/" + accession) continue;
+
+    const creatorRows = Array.isArray(record.creators) ? record.creators : [];
+    const creators = creatorRows.flatMap(value => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+      const creator = value as Obj;
+      const name = metadataText(creator.description, 180) || metadataText(creator.name, 180);
+      return name ? [name] : [];
+    });
+    const credit = [...new Set(creators)].slice(0, 3).join(" · ") || null;
+    const description = [
+      metadataText(record.creation_date, 100), metadataText(record.technique, 180),
+      metadataText(record.culture, 120), metadataText(record.department, 100),
+      metadataText(record.type, 100), metadataText(record.measurements, 180),
+    ].filter(Boolean).join(" · ") || null;
+    items.push({
+      id: "cleveland-" + artworkId,
+      title: metadataText(record.title, 220) || "Cleveland Museum artwork " + accession,
+      provider: "Cleveland Museum of Art", mediaType: "image", sourceUrl,
+      previewUrl: imageUrl, mediaUrl: imageUrl, description, credit,
+      license: "CC0", licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+      dateCreated: metadataText(record.creation_date, 100),
+    });
+  }
+  return {
+    status: items.length ? "ok" : "not_found",
+    source: "Cleveland Museum of Art · Open Access CC0", query, items,
+    note: "Only records explicitly marked share_license_status=CC0 with a verified Cleveland Museum artwork page and matching official web-image path are returned. The API's cc0 and has_image filters are used as an initial filter; every returned record is checked again.",
   };
 }
 
@@ -1132,6 +1205,9 @@ export async function runMediaDiscoveryTool(name: string, rawArgs: unknown): Pro
   }
   if (name === "search_met_open_access_artworks") {
     return JSON.stringify(await searchMetMuseumArtworks(args.query, args.limit));
+  }
+  if (name === "search_cleveland_museum_open_access_artworks") {
+    return JSON.stringify(await searchClevelandMuseumArtworks(args.query, args.limit));
   }
   if (name === "search_inaturalist_observations") {
     return JSON.stringify(await searchINaturalistObservations(args.query, args.limit, args.iconic_taxon));
