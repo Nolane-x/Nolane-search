@@ -164,8 +164,8 @@ interface DnsJsonResponse {
 }
 
 /**
- * Resolves through Cloudflare's DNS-over-HTTPS JSON endpoint and fails closed.
- * Each outbound hop is checked again by the container's Worker egress handler.
+ * Resolves through Cloudflare's public DNS-over-HTTPS JSON endpoint and fails closed.
+ * The local node repeats DNS checks and Windows Firewall rules block private destinations at connection time.
  */
 export async function hasOnlyPublicDnsAnswers(host: string, fetcher: typeof fetch = fetch): Promise<boolean> {
   if (!isPublicDomainName(host)) return false;

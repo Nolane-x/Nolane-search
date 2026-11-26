@@ -522,7 +522,7 @@ $('download-form').addEventListener('submit',async function(event){
  if(url.length<12||url.length>2048){showDownloadState('URL không hợp lệ','URL phải dài 12–2048 ký tự.',0);return;}
  $('download-submit').disabled=true;
  $('download-disabled').classList.add('hidden');
- showDownloadState('Đang tạo tác vụ','Đang kiểm tra URL và khởi tạo runner…',0);
+ showDownloadState('Đang tạo tác vụ','Đang kiểm tra URL và kết nối Media Node…',0);
  activeDownloadId='';activeShareUrl='';
  showDownloadActions('queued');
  try{
