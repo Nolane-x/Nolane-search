@@ -14,6 +14,8 @@ const MET_SOURCE_HOST = "www.metmuseum.org";
 const CLEVELAND_API = "https://openaccess-api.clevelandart.org/api/artworks/";
 const CLEVELAND_IMAGE_HOST = "openaccess-cdn.clevelandart.org";
 const CLEVELAND_SOURCE_HOST = "clevelandart.org";
+const LOC_PHOTOS_API = "https://www.loc.gov/photos/";
+const LOC_IMAGE_HOSTS = new Set(["tile.loc.gov", "cdn.loc.gov"]);
 const INATURALIST_LICENSES: Record<string, string> = {
   cc0: "CC0",
   "cc0-1-0": "CC0",
@@ -55,6 +57,32 @@ function safeExternalHttpsUrl(value: unknown): string | null {
   try {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.port || url.username || url.password) return null;
+    return url.toString();
+  } catch { return null; }
+}
+function safeLocItemUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    if ((url.protocol !== "https:" && url.protocol !== "http:") ||
+        !["www.loc.gov", "loc.gov"].includes(url.hostname) ||
+        url.port || url.username || url.password) return null;
+    const path = url.pathname.replace(/\\/+$/, "");
+    if (!/^\\/(?:item|pictures\\/item)\\/[A-Za-z0-9._/-]{1,240}$/.test(path) ||
+        path.slice(1).split("/").some(part => part === "." || part === ".." || !part)) return null;
+    return new URL(path + "/", "https://www.loc.gov").toString();
+  } catch { return null; }
+}
+function safeLocImageUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  try {
+    const candidate = value.startsWith("//") ? "https:" + value : value;
+    const url = new URL(candidate);
+    if ((url.protocol !== "https:" && url.protocol !== "http:") ||
+        !LOC_IMAGE_HOSTS.has(url.hostname) || url.port || url.username || url.password ||
+        url.hash || !/^\\/(?:service|storage-services)\\//.test(url.pathname) ||
+        !/\\.(?:jpe?g|png|gif)$/i.test(url.pathname)) return null;
+    url.protocol = "https:";
     return url.toString();
   } catch { return null; }
 }
@@ -104,7 +132,7 @@ function extValue(metadata: Obj, key: string): string | null {
 export interface MediaSearchItem {
   id: string;
   title: string;
-  provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive" | "PeerTube" | "iNaturalist" | "The Met" | "Art Institute of Chicago" | "Cleveland Museum of Art";
+  provider: "Wikimedia Commons" | "NASA" | "Openverse" | "Internet Archive" | "PeerTube" | "iNaturalist" | "The Met" | "Art Institute of Chicago" | "Cleveland Museum of Art" | "Library of Congress";
   mediaType: "image" | "video" | "audio";
   sourceUrl: string;
   previewUrl: string | null;
@@ -446,6 +474,80 @@ export async function searchClevelandMuseumArtworks(
     status: items.length ? "ok" : "not_found",
     source: "Cleveland Museum of Art · Open Access CC0", query, items,
     note: "Only records explicitly marked share_license_status=CC0 with a verified Cleveland Museum artwork page and matching official web-image path are returned. The API's cc0 and has_image filters are used as an initial filter; every returned record is checked again.",
+  };
+}
+
+
+/**
+ * Search the Library of Congress Prints & Photographs endpoint. This is one
+ * bounded search request; the result's own rights advisory is preserved and
+ * never promoted to a blanket public-domain or Creative Commons license.
+ */
+export async function searchLibraryOfCongressPhotos(
+  queryInput: unknown,
+  limitInput?: unknown,
+): Promise<{ status: string; source: string; query: string; items: MediaSearchItem[]; note: string }> {
+  const query = cleanText(queryInput, "query", 2, 140);
+  const limit = boundedInt(limitInput, "limit", 6, 1, 8);
+  const url = new URL(LOC_PHOTOS_API);
+  url.searchParams.set("q", query);
+  url.searchParams.set("fo", "json");
+  url.searchParams.set("at", "results");
+  url.searchParams.set("c", String(limit));
+
+  const payload = object(await fetchJson<unknown>(url, "Library of Congress", 500_000), "Library of Congress photo search");
+  const records = Array.isArray(payload.results) ? payload.results.slice(0, limit) : [];
+  const items: MediaSearchItem[] = [];
+
+  for (const raw of records) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const record = raw as Obj;
+    if (record.access_restricted === true) continue;
+    const sourceUrl = safeLocItemUrl(record.id) || safeLocItemUrl(record.url);
+    const rawImages = Array.isArray(record.image_url)
+      ? record.image_url
+      : typeof record.image_url === "string" ? [record.image_url] : [];
+    const imageUrl = rawImages.map(safeLocImageUrl).find((value): value is string => Boolean(value));
+    if (!sourceUrl || !imageUrl) continue;
+
+    const pathId = new URL(sourceUrl).pathname.replace(/\\/+$/, "").split("/").slice(2).join("-");
+    const title = metadataText(record.title, 220) || "Library of Congress photograph";
+    const contributor = metadataText(record.contributor, 220) ||
+      metadataText(record.contributor_names, 220) ||
+      metadataText(record.creator, 220);
+    const rights = metadataText(record.rights_advisory, 260) ||
+      metadataText(record.rights, 260) ||
+      metadataText(record.access_advisory, 260);
+    const description = [
+      metadataText(record.date, 100) || metadataText(record.date_issued, 100),
+      metadataText(record.medium, 180),
+      metadataText(record.description, 240),
+      metadataText(record.subject, 180),
+      metadataText(record.original_format, 120),
+    ].filter(Boolean).join(" · ") || null;
+
+    items.push({
+      id: "loc-" + pathId.slice(0, 180),
+      title,
+      provider: "Library of Congress",
+      mediaType: "image",
+      sourceUrl,
+      previewUrl: imageUrl,
+      mediaUrl: imageUrl,
+      description,
+      credit: contributor,
+      license: rights || "Kiểm tra quyền sử dụng tại trang nguồn",
+      licenseUrl: null,
+      dateCreated: metadataText(record.date, 100) || metadataText(record.date_issued, 100),
+    });
+  }
+
+  return {
+    status: items.length ? "ok" : "not_found",
+    source: "Library of Congress · Prints & Photographs",
+    query,
+    items,
+    note: "The Library of Congress rights_advisory/rights fields are item-specific guidance, not a blanket reuse license. Access-restricted records are omitted; review the original item page and its rights information before reuse. This search makes one bounded API request and may be rate-limited (the public JSON/YAML API documents 20 requests per minute).",
   };
 }
 
@@ -1208,6 +1310,9 @@ export async function runMediaDiscoveryTool(name: string, rawArgs: unknown): Pro
   }
   if (name === "search_cleveland_museum_open_access_artworks") {
     return JSON.stringify(await searchClevelandMuseumArtworks(args.query, args.limit));
+  }
+  if (name === "search_library_of_congress_photos") {
+    return JSON.stringify(await searchLibraryOfCongressPhotos(args.query, args.limit));
   }
   if (name === "search_inaturalist_observations") {
     return JSON.stringify(await searchINaturalistObservations(args.query, args.limit, args.iconic_taxon));
