@@ -57,9 +57,8 @@ The Wave 62 R2 architecture remains unchanged: private R2 object storage + D1 me
 - `docs/TOOL-RESEARCH-2026-11-26-WAVE72-NATURE-LOCAL-DOWNLOADER.md`
 - `docs/HANDOFF-WAVE-SEVENTY-TWO-2026-11-26.md`
 
-## Next steps
+## Follow-on status
 
-1. Build a private, isolated downloader prototype around the Cobalt API or a separately sandboxed yt-dlp worker only after reviewing the upstream license and implementing runner-level egress protection plus SSRF/redirect/DNS-rebinding regression tests.
-2. Keep the public downloader gated until per-user authentication, quotas, file/duration caps, cancellation, job cleanup and rights guidance are in place.
-3. Ask the account owner to enable Cloudflare R2 (the previous account response was error `10042`), then implement multipart upload, checksum verification, private short-lived share links, HTTP Range playback/download, expiry and deletion.
-4. Do not treat Telegram's 20 MB `getFile` limit as a path for delivering larger media. Use the private web-media flow only after the R2 lifecycle is tested.
+The later owner-operated Media Node path was implemented and integrated through [PR #152](https://github.com/Nolane-x/Nolane-search/pull/152), then included in the deployed Worker. It remains disabled until the owner installs and verifies the Windows node, configures Tailscale HTTPS/Funnel and repository secrets `MEDIA_NODE_URL` / `MEDIA_NODE_TOKEN`, and passes real share/expiry/revocation/HTTP Range smoke tests.
+
+Cloudflare R2 remains a separate optional storage route; the last account check returned error `10042`, so private R2 multipart uploads and signed object links are not enabled. Do not imply that Telegram's 20 MB `getFile` limit or the deployed but gated Media Node currently provides a verified large-file service.
