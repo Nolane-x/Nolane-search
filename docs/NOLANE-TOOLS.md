@@ -1,9 +1,9 @@
-Nolane Tools hiện có **534 công cụ đã được đăng ký và triển khai trên production** sau Wave 46, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. **Đây là số file processor** cho luồng `/tool` và `/ai_file`, không phải số AI Agent function tools. Tách riêng, sau Wave 72 AI Agent có **56 function tools** có thể tự gọi để tra cứu dữ liệu, khám phá media, địa điểm và tiện ích. [PR #99](https://github.com/Nolane-x/Nolane-search/pull/99) đã merge vào `main` bằng commit `b80eee059281932193106b5c90f21ce306dea9e2`. Main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609), Worker export và live health smoke [45332866447](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866447), Cloudflare deployment [45332866563](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866563) đều thành công. Latest Worker Version ID: `2b7c15c7-ca12-4721-a248-1cb47b921f2a`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema; tệp tiếp tục được xử lý trên GitHub-hosted runner dùng một lần.
+Nolane Tools hiện có **542 công cụ đã được đăng ký và triển khai trên production** sau Wave 47, phát hành ngày 2026-11-27 trên Cloudflare Worker `nolane-search`. **Đây là số file processor** cho luồng `/tool` và `/ai_file`, không phải số AI Agent function tools. Tách riêng, sau Wave 72 AI Agent có **56 function tools** có thể tự gọi để tra cứu dữ liệu, khám phá media, địa điểm và tiện ích. Wave 47 được merge trong [PR #153](https://github.com/Nolane-x/Nolane-search/pull/153) bằng commit `42c354fec37d83c05d079909dbb7a8aead65707e`. Main CI [46004048162](https://github.com/Nolane-x/Nolane-search/actions/runs/46004048162) passed 43 Vitest files / 466 Python runner tests, Windows Media Node tests, deployment-script checks and Worker build. Cloudflare deployment [46004048399](https://github.com/Nolane-x/Nolane-search/actions/runs/46004048399) and Worker export [46004049426](https://github.com/Nolane-x/Nolane-search/actions/runs/46004049426) succeeded. Current Worker Version ID: `4439ef0d-e193-4cf1-af09-a9564e0c7f0b`. Telegram webhook and Mini App route smoke passed; no D1 migration was required.
 
 
-## Wave 47 — everyday-life utilities — PR candidate, not yet deployed
+## Wave 47 — everyday-life utilities — deployed to production
 
-PR [#153](https://github.com/Nolane-x/Nolane-search/pull/153) proposes eight additional file processors. The production baseline remains **534 deployed processors** until the PR passes CI, merges and the Worker deployment succeeds. Candidate catalog size: **542**.
+[PR #153](https://github.com/Nolane-x/Nolane-search/pull/153) merged into `main` as `42c354fec37d83c05d079909dbb7a8aead65707e`, increasing the production catalog from **534 to 542 file processors** (+8). Main CI [46004048162](https://github.com/Nolane-x/Nolane-search/actions/runs/46004048162) passed 43 Vitest files and 466 Python runner tests; Cloudflare deploy [46004048399](https://github.com/Nolane-x/Nolane-search/actions/runs/46004048399) and Worker export [46004049426](https://github.com/Nolane-x/Nolane-search/actions/runs/46004049426) succeeded. Worker Version ID: `4439ef0d-e193-4cf1-af09-a9564e0c7f0b`.
 
 | ID / command | Công cụ | Chức năng |
 |---|---|---|
@@ -20,7 +20,7 @@ PR [#153](https://github.com/Nolane-x/Nolane-search/pull/153) proposes eight add
 
 ## Wave 46 — home, vehicle and rental tools — deployed to production
 
-Wave 46 tăng catalog production từ **534 lên 534 công cụ** (+8). Tất cả 8 công cụ được nối vào direct AI JSON interface và GitHub Actions runner. PR CI [45332648456](https://github.com/Nolane-x/Nolane-search/actions/runs/45332648456), main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609), Worker export/health smoke và Cloudflare deployment đều hoàn thành thành công.
+Wave 46 tăng catalog production từ **526 lên 534 công cụ** (+8). Tất cả 8 công cụ được nối vào direct AI JSON interface và GitHub Actions runner. PR CI [45332648456](https://github.com/Nolane-x/Nolane-search/actions/runs/45332648456), main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609), Worker export/health smoke và Cloudflare deployment đều hoàn thành thành công.
 
 | ID / command | Công cụ | Chức năng |
 |---|---|---|

@@ -1,6 +1,6 @@
 # Verified Project Status
 
-Last verified: 2026-11-26. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
+Last verified: 2026-11-27. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
 ## Latest production release — Wave 72 (2026-11-26)
@@ -11,6 +11,20 @@ Last verified: 2026-11-26. Production deployment evidence is separated from owne
 - PR CI #676 [45768092963](https://github.com/Nolane-x/Nolane-search/actions/runs/45768092963) passed TypeScript, **41 Vitest files / 434 tests**, deployment-script checks, **449 Python runner tests** and Worker build. Main CI #677 [45768328822](https://github.com/Nolane-x/Nolane-search/actions/runs/45768328822) passed the same full checks. Chromium live HLS/DASH E2E #47 [45768092897](https://github.com/Nolane-x/Nolane-search/actions/runs/45768092897) and real Apple Safari native-HLS #11 [45768093057](https://github.com/Nolane-x/Nolane-search/actions/runs/45768093057) passed.
 - Cloudflare deploy #179 [45768328836](https://github.com/Nolane-x/Nolane-search/actions/runs/45768328836) succeeded and uploaded Worker Version ID `587cbb01-8adc-45d9-b7d0-a3c1d2df456f`. Telegram webhook verification, bot-command registration and Telegram Mini App route smoke passed. Worker export #172 [45768328802](https://github.com/Nolane-x/Nolane-search/actions/runs/45768328802) succeeded.
 - **Downloader/storage boundary remains unchanged:** Wave 72 does not add a generic multi-site downloader, durable private media storage or shareable large-video links. The last Cloudflare account check returned R2 error `10042` (R2 must be enabled in the Dashboard); Telegram Bot API `getFile` remains capped at 20 MB. Cobalt is the preferred self-hosted API prototype candidate after license review and host-level egress/SSRF protections; OmniGet, OpenGrab and MeTube are architecture/UI references, not hosted backends that Nolane can call without deploying them. See [Wave 72 research](TOOL-RESEARCH-2026-11-26-WAVE72-NATURE-LOCAL-DOWNLOADER.md) and [Wave 72 handoff](HANDOFF-WAVE-SEVENTY-TWO-2026-11-26.md).
+
+## File processor release — Wave 47 (2026-11-27)
+
+- [PR #153](https://github.com/Nolane-x/Nolane-search/pull/153) merged into `main` as `42c354fec37d83c05d079909dbb7a8aead65707e`. The file-processor catalog increases from **534 to 542** (+8): QR PNG, Wi-Fi QR, vCard contact bundle, iCalendar event generation, tiered electricity/water bill estimates, mobile-data plan comparison and home-Internet plan comparison.
+- Post-merge CI [#46004048162](https://github.com/Nolane-x/Nolane-search/actions/runs/46004048162) passed **43 Vitest files**, **466 Python runner tests**, deployment-script checks, Windows Media Node tests and Worker build. Pre-merge candidate CI [#46003800083](https://github.com/Nolane-x/Nolane-search/actions/runs/46003800083) also passed.
+- Cloudflare deployment [#46004048399](https://github.com/Nolane-x/Nolane-search/actions/runs/46004048399) succeeded. Worker export [#46004049426](https://github.com/Nolane-x/Nolane-search/actions/runs/46004049426) succeeded and exported the build to `cloudflare-build`. Current Worker Version ID: `4439ef0d-e193-4cf1-af09-a9564e0c7f0b`.
+- Telegram webhook verification (message + callback_query), bot-command registration and Telegram Mini App route smoke passed. No D1 migration was required.
+- **Pricing boundary:** electricity/water tariffs and mobile/Internet plan terms are user-entered values; these tools do not fetch live provider prices or verify real-world coverage/speed. Wi-Fi QR and vCard artifacts may contain sensitive credentials or personal information. These are file processors, not additional AI Agent function tools.
+
+## Media delivery infrastructure — Wave 73 (2026-11-27)
+
+- [PR #152](https://github.com/Nolane-x/Nolane-search/pull/152) merged as `d1b7eef1f12e1e0ae02e656382d48e3bb9db9005`, integrating the owner-operated Windows Media Node on top of the museum image providers and search-provider provenance. Its worker/session gateway is included in the current deployed Worker version above.
+- The Media Node feature intentionally remains **disabled until owner setup**. The owner must install and verify the local Windows node, configure Tailscale HTTPS/Funnel and set repository secrets `MEDIA_NODE_URL` and `MEDIA_NODE_TOKEN`, then pass a real HTTPS share/expiry/revocation/HTTP Range smoke test. The repository CI tests do not establish that the owner's machine or public tunnel is online.
+- The stale pre-rebase [PR #149](https://github.com/Nolane-x/Nolane-search/pull/149) was closed as superseded by #152. No paid media storage or GitHub Actions media CDN was introduced.
 
 ## Latest production release — Wave 71 (2026-11-26)
 
