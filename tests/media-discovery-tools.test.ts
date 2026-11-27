@@ -731,7 +731,7 @@ describe("Wave 52 media and product discovery", () => {
       expect(url.hostname).toBe("openaccess-api.clevelandart.org");
       expect(url.pathname).toBe("/api/artworks/");
       expect(url.searchParams.get("q")).toBe("water lilies");
-      expect(url.searchParams.has("cc0")).toBe(true);
+      expect(url.searchParams.get("cc0")).toBe("1");
       expect(url.searchParams.get("has_image")).toBe("1");
       expect(url.searchParams.get("skip")).toBe("0");
       expect(url.searchParams.get("limit")).toBe("4");
@@ -741,11 +741,12 @@ describe("Wave 52 media and product discovery", () => {
         creation_date: "1500s", technique: "ink and color on silk",
         culture: ["China, Jiaxing, 16th century"], department: "Chinese Art",
         type: "Painting", measurements: "26.4 x 28.4 cm",
-        url: "https://clevelandart.org/art/1998.78.14",
+        url: "https://www.clevelandart.org/art/1998.78.14",
         images: { web: { url: "https://openaccess-cdn.clevelandart.org/1998.78.14/1998.78.14_web.jpg" } },
       };
       return json({ data: [
         { ...base, id: 160729, share_license_status: "CC0" },
+        { ...base, id: 160733, accession_number: "1998.78.16", url: "https://clevelandart.org/art/1998.78.16", images: { web: { url: "https://openaccess-cdn.clevelandart.org/1998.78.16/1998.78.16_web.jpg" } }, share_license_status: "CC0" },
         { ...base, id: 160730, accession_number: "1998.78.15", share_license_status: "Copyrighted" },
         { ...base, id: 160731, share_license_status: "CC0", images: { web: { url: "https://evil.example/1998.78.14_web.jpg" } } },
         { ...base, id: 160732, share_license_status: "CC0", images: { web: { url: "https://openaccess-cdn.clevelandart.org/1998.78.99/1998.78.99_web.jpg" } } },
@@ -754,11 +755,11 @@ describe("Wave 52 media and product discovery", () => {
     const result = await searchClevelandMuseumArtworks("water lilies", 4);
     expect(result.status).toBe("ok");
     expect(result.source).toContain("Cleveland Museum of Art");
-    expect(result.items).toHaveLength(1);
+    expect(result.items).toHaveLength(2);
     expect(result.items[0]).toMatchObject({
       id: "cleveland-160729", provider: "Cleveland Museum of Art",
       mediaType: "image", title: "Baoyang Lake",
-      sourceUrl: "https://clevelandart.org/art/1998.78.14",
+      sourceUrl: "https://www.clevelandart.org/art/1998.78.14",
       previewUrl: "https://openaccess-cdn.clevelandart.org/1998.78.14/1998.78.14_web.jpg",
       mediaUrl: "https://openaccess-cdn.clevelandart.org/1998.78.14/1998.78.14_web.jpg",
       credit: "Song Xu (Chinese, 1525-c. 1606)", license: "CC0",

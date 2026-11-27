@@ -393,7 +393,7 @@ export async function searchClevelandMuseumArtworks(
   const limit = boundedInt(limitInput, "limit", 6, 1, 8);
   const url = new URL(CLEVELAND_API);
   url.searchParams.set("q", query);
-  url.searchParams.set("cc0", "");
+  url.searchParams.set("cc0", "1");
   url.searchParams.set("has_image", "1");
   url.searchParams.set("skip", "0");
   url.searchParams.set("limit", String(limit));
@@ -411,7 +411,7 @@ export async function searchClevelandMuseumArtworks(
     const images = record.images && typeof record.images === "object" && !Array.isArray(record.images) ? record.images as Obj : {};
     const webImage = images.web && typeof images.web === "object" && !Array.isArray(images.web) ? images.web as Obj : {};
     const imageUrl = safeHttpUrl(webImage.url, CLEVELAND_IMAGE_HOST);
-    const sourceUrl = safeHttpUrl(record.url, CLEVELAND_SOURCE_HOST);
+    const sourceUrl = safeHttpUrl(record.url, CLEVELAND_SOURCE_HOST) || safeHttpUrl(record.url, "www.clevelandart.org");
     if (!imageUrl || !sourceUrl) continue;
     const imagePath = new URL(imageUrl).pathname.split("/").filter(Boolean);
     const imageFilename = imagePath[1] || "";

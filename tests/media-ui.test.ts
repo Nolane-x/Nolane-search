@@ -182,7 +182,7 @@ describe("Media Portal media discovery experience", () => {
     const html = await response.text();
     expect(html).toContain('<option value="cleveland">Cleveland Museum of Art · ảnh CC0</option>');
     expect(response.headers.get("content-security-policy")).toContain("https://openaccess-cdn.clevelandart.org");
-    expect(html).toContain("item.provider==='Cleveland Museum of Art'?safeUrl(item.sourceUrl,['clevelandart.org'])");
+    expect(html).toContain("item.provider==='Cleveland Museum of Art'?safeUrl(item.sourceUrl,['clevelandart.org','www.clevelandart.org'])");
     expect(html).toContain("Cleveland Museum of Art bổ sung các tác phẩm có trạng thái public domain/CC0");
   });
 
