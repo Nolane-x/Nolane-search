@@ -3,7 +3,22 @@
 Last verified: 2026-11-27. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
-## Latest production release — Wave 72 (2026-11-26)
+## Latest production release — Wave 74 (2026-11-27)
+
+- [PR #151](https://github.com/Nolane-x/Nolane-search/pull/151) merged into `main` as `3bcadb6dc860fdfdf0ff040d5cfa445153928a0e`. Wave 74 preserves `discoveredBy` provenance when federated search results collide on the same normalized URL: the winning result keeps its content and primary provider while retaining a bounded, deduplicated list of up to eight providers that also discovered it.
+- Provider provenance survives the post-TinyFish enrichment rerank and is displayed in the Web UI, Telegram Search and Deep Search. Browser Ask, Telegram Ask and Deep Search receive the retrieval trail in their evidence context. Synthesis prompts explicitly state that provider overlap is retrieval metadata, not independent publisher corroboration or proof of accuracy.
+- Main CI [#45953948895](https://github.com/Nolane-x/Nolane-search/actions/runs/45953948895) passed. Cloudflare deploy [#45953948881](https://github.com/Nolane-x/Nolane-search/actions/runs/45953948881) and Worker export [#45953948885](https://github.com/Nolane-x/Nolane-search/actions/runs/45953948885) succeeded. The feature is also included in the later current-main deployment recorded under Wave 47 below.
+- The release adds no search provider, API key, secret, database table, paid dependency or migration. Provider overlap must not be described as independent source verification; the feature does not cluster syndicated copies on different URLs.
+
+## Media discovery sources — Wave 73 (2026-11-27)
+
+- [PR #150](https://github.com/Nolane-x/Nolane-search/pull/150) merged into `main` as `c919893a69ac8a2cef278e37045cb02238c69a72`. Adds image discovery from The Met Open Access, Art Institute of Chicago, Cleveland Museum of Art Open Access and Library of Congress Prints & Photographs.
+- The Met, Art Institute and Cleveland Museum providers are limited to institution-confirmed public-domain/CC0 records. Library of Congress results preserve item-specific rights advisories, skip records marked access-restricted and use validated official image hosts; LOC records are not automatically treated as public domain. Users must review the original item page and applicable rights before reuse.
+- Wave 73 adds three callable AI Agent tools for The Met, Cleveland Museum of Art and Library of Congress search. Together with the previous 56, the current Agent catalogue has **59 function tools**. The fourth provider, Art Institute of Chicago, uses the existing museum search tool.
+- PR validation [CI #45944758936](https://github.com/Nolane-x/Nolane-search/actions/runs/45944758936), Chromium HLS/DASH E2E [#45944758983](https://github.com/Nolane-x/Nolane-search/actions/runs/45944758983) and Safari native-HLS [#45944758961](https://github.com/Nolane-x/Nolane-search/actions/runs/45944758961) passed. Main deployment/export for the integrated search provenance commit are recorded under Wave 74; the later current-main deployment is recorded under Wave 47 below.
+- No API keys, new secrets, proxy copies, binary mirroring or recurring hosted service are required. LOC's rights fields are item-specific guidance, not a blanket reuse license.
+
+## Previous production release — Wave 72 (2026-11-26)
 
 - [PR #148](https://github.com/Nolane-x/Nolane-search/pull/148) merged into `main` as `039514d03dfb1fa9f7fa2c6fbae9d8136812b051`. Wave 72 adds `search_inaturalist_observations` and a licensed iNaturalist image source to Media Studio and `/api/media/search`; it also adds the AI-callable `search_places_in_city` tool. The Agent catalogue now exposes **56 callable tools**.
 - iNaturalist returns only research-grade observations with recognized CC0/Creative Commons licenses, a non-empty attribution string and images on the iNaturalist Open Data host. It returns the source observation page and license/credit metadata, omits exact observation coordinates and is limited to image search. The Media Studio CSP explicitly allows that Open Data image host.
