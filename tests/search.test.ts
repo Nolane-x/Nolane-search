@@ -173,6 +173,53 @@ describe("multi-signal search ranking", () => {
     expect(ranked[0]?.domain).toBe("new.example");
   });
 
+  it("marks high-confidence cross-site duplicate coverage without collapsing links", () => {
+    const snippet = [
+      "Scientists released a detailed report after the lunar mission captured new images from the far side of the moon.",
+      "The images reveal several previously unseen craters near the landing zone and provide new surface measurements for future missions.",
+      "Researchers said the findings will help plan future robotic and crewed exploration of the lunar surface.",
+    ].join(" ");
+    const title = "Lunar mission captures new images from the far side of the moon";
+    const ranked = rankAndDeduplicate("lunar mission images", [
+      { title, snippet, url: "https://news-a.example/science/lunar-images", domain: "news-a.example", provider: "Tavily", score: 0.9, publishedAt: "2026-11-25T10:00:00.000Z" },
+      { title: title + "!", snippet, url: "https://news-b.example/world/lunar-images", domain: "news-b.example", provider: "Exa", score: 0.85, publishedAt: "2026-11-26T08:00:00.000Z" },
+    ], "news");
+    expect(ranked).toHaveLength(2);
+    expect(ranked.every(item => item.possibleDuplicateCoverage?.groupSize === 2)).toBe(true);
+    expect(ranked[0]?.possibleDuplicateCoverage?.hostnames).toEqual(["news-a.example", "news-b.example"]);
+  });
+
+  it("does not group similar headlines when excerpts are materially different", () => {
+    const title = "Lunar mission captures new images from the far side of the moon";
+    const common = { title, domain: "a.example", provider: "Test", score: 0.8, publishedAt: "2026-11-25T10:00:00.000Z" };
+    const ranked = rankAndDeduplicate("lunar mission images", [
+      { ...common, url: "https://a.example/a", snippet: "The spacecraft captured new images of the far side of the moon and mapped the surface in detail." },
+      { ...common, url: "https://b.example/b", domain: "b.example", snippet: "The mission team announced a new launch schedule after completing a budget review and selecting an alternate landing site." },
+    ], "news");
+    expect(ranked.every(item => !item.possibleDuplicateCoverage)).toBe(true);
+  });
+
+  it("does not group similar text without close publication dates or across one site's subdomains", () => {
+    const title = "Lunar mission captures new images from the far side of the moon";
+    const snippet = [
+      "Scientists released a detailed report after the lunar mission captured new images from the far side of the moon.",
+      "The images reveal several previously unseen craters near the landing zone and provide new surface measurements for future missions.",
+      "Researchers said the findings will help plan future robotic and crewed exploration of the lunar surface.",
+    ].join(" ");
+    const common = { title, snippet, provider: "Test", score: 0.8 };
+    const farApart = rankAndDeduplicate("lunar mission images", [
+      { ...common, url: "https://a.example/a", domain: "a.example", publishedAt: "2026-11-01T10:00:00.000Z" },
+      { ...common, url: "https://b.example/b", domain: "b.example", publishedAt: "2026-11-20T10:00:00.000Z" },
+    ], "news");
+    expect(farApart.every(item => !item.possibleDuplicateCoverage)).toBe(true);
+
+    const subdomains = rankAndDeduplicate("lunar mission images", [
+      { ...common, url: "https://news.example.com/a", domain: "news.example.com", publishedAt: "2026-11-25T10:00:00.000Z" },
+      { ...common, url: "https://www.example.com/b", domain: "www.example.com", publishedAt: "2026-11-25T10:30:00.000Z" },
+    ], "news");
+    expect(subdomains.every(item => !item.possibleDuplicateCoverage)).toBe(true);
+  });
+
   it("queries independent fallbacks when a full primary result set is lexically weak", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
