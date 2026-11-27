@@ -830,7 +830,7 @@ describe("Wave 52 media and product discovery", () => {
           image_url: ["https://evil.example/private/photo.jpg"],
         },
         {
-          id: "https://www.loc.gov/item/2017650002/",
+          id: "https://evil.example/item/2017650002/",
           title: "Unsupported source host",
           access_restricted: false,
           image_url: ["https://cdn.loc.gov/service/pnp/example/0000/0003_150px.jpg"],
