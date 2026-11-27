@@ -6,7 +6,7 @@ Zero-cost downloader PR: https://github.com/Nolane-x/Nolane-search/pull/149
 Museum branch: `feat/wave-73-met-open-access-media`  
 Downloader branch: `feat/wave-73-container-media-downloader`
 
-## Museum image discovery candidate
+## Museum image discovery — merged and deployed
 
 - The Met Open Access: current paginated `/public/collection/v1.1/search`, explicit `isPublicDomain === true`, exact official image/source hosts, CC0 metadata.
 - Art Institute of Chicago: reuses the existing museum artwork search and its request throttle; only API-confirmed public-domain objects and verified museum image/object paths are shown.
@@ -19,7 +19,7 @@ Downloader branch: `feat/wave-73-container-media-downloader`
 
 ## Zero-cost video download and sharing
 
-Use PR #149 as the separate implementation candidate for user-confirmed single-item downloads:
+The owner-operated Media Node implementation was integrated and merged through [PR #152](https://github.com/Nolane-x/Nolane-search/pull/152) as `d1b7eef1f12e1e0ae02e656382d48e3bb9db9005`. Its Worker gateway is deployed, but the public media feature remains disabled until the owner completes local installation and HTTPS configuration:
 - Existing Cloudflare Worker Free remains the authenticated gateway and streams responses.
 - yt-dlp/yt-dlp-ejs and FFmpeg run on an operator-owned Windows machine through the isolated Media Node.
 - SQLite and temporary media remain on that machine; expiring share tokens and HTTP Range/HEAD support provide seekable playback.
@@ -36,8 +36,8 @@ GitHub's Additional Product Terms explicitly prohibit using Actions as a CDN or 
 ## Verification and operator boundary
 
 - CI is the authority for code/test/build status. A green run does not mean the local Media Node is installed or live.
-- PR #149 remains a draft until local Windows install, network hardening and a real HTTPS share/Range smoke test are completed.
-- PR #150 remains a draft until its current CI run passes and the UI/API behavior is reviewed.
+- PR #150 merged as `c919893a69ac8a2cef278e37045cb02238c69a72`; its provider changes passed CI and the integrated main deployment/export.
+- PR #152 merged as `d1b7eef1f12e1e0ae02e656382d48e3bb9db9005`; its gateway is deployed but gated until local node setup, Funnel HTTPS, repository secrets and a real share/expiry/revocation/Range smoke test pass.
 - Do not deploy or claim a working public download endpoint until the owner completes the local node setup and supplies its URL/token through repository secrets.
 
 
@@ -50,7 +50,7 @@ GitHub's Additional Product Terms explicitly prohibit using Actions as a CDN or 
 Date: 2026-11-26
 Branch: feat/wave-73-container-media-downloader
 PR: https://github.com/Nolane-x/Nolane-search/pull/149
-State: Draft / open / unmerged / undeployed. No paid feature, cloud resource, tunnel or storage bucket has been enabled.
+State: merged through PR #152 and included in the current Worker deployment. Feature flagging-by-configuration remains fail-closed: without `MEDIA_NODE_URL` and `MEDIA_NODE_TOKEN`, the Media Node routes stay unavailable. No paid feature, cloud resource, tunnel or storage bucket has been enabled.
 
 ## What changed
 
@@ -98,7 +98,7 @@ The original Cloudflare Container and Durable Object snapshot prototype is being
 4. Copy only the HTTPS Funnel URL and generated 64-character local token to GitHub Actions secrets MEDIA_NODE_URL and MEDIA_NODE_TOKEN. Never commit or message the token.
 5. After PR merge is explicitly authorized, run the normal deploy workflow. Until these secrets are configured, the feature stays disabled.
 
-No files were installed on the user's computer; no secrets were read or written; no account setting, billing plan, Funnel endpoint or deployment was changed by this work.
+No files were installed on the owner's computer; no secrets were read or written, and no Funnel endpoint or local node was configured in this work. Repository code is merged and deployed, but the live local-node flow has not been end-to-end verified.
 
 ## Verification
 
