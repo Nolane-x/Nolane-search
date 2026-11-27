@@ -38,6 +38,9 @@ class Wave47Tests(unittest.TestCase):
   r=wave47.ics_calendar_maker(self.request("a",{"events":[{"title":"Holiday","all_day":True,"start":"2026-12-01","end":"2026-12-03"}]})); b=Path(r["output_path"]).read_bytes().decode()
   self.assertIn("DTEND;VALUE=DATE:20261203",b)
   with self.assertRaisesRegex(RuntimeError,"end is exclusive"): wave47.ics_calendar_maker(self.request("bad",{"events":[{"title":"Bad","all_day":True,"start":"2026-12-03","end":"2026-12-03"}]}))
+ def test_ics_rejects_noncanonical_all_day_date(self):
+  with self.assertRaisesRegex(RuntimeError,"YYYY-MM-DD"):
+   wave47.ics_calendar_maker(self.request("compact",{"events":[{"title":"Compact","all_day":True,"start":"20261201","end":"20261202"}]}))
  def test_ics_requires_timezone(self):
   with self.assertRaisesRegex(RuntimeError,"explicit timezone offset"): wave47.ics_calendar_maker(self.request("n",{"events":[{"title":"Meeting","start":"2026-11-27T10:00:00","end":"2026-11-27T11:00:00"}]}))
  def test_electricity_tier_bill(self):
@@ -51,6 +54,11 @@ class Wave47Tests(unittest.TestCase):
  def test_mobile_plan_comparison(self):
   _,b=self.report(wave47.mobile_data_plan_comparator,"m",{"currency":"VND","monthly_usage_gb":10,"months":2,"plans":[{"name":"Small","monthly_fee":100000,"included_gb":5,"overage_per_gb":30000},{"name":"Unlimited","monthly_fee":180000,"included_gb":None,"overage_per_gb":0}]})
   self.assertLess(b.index("1. Unlimited"),b.index("2. Small")); self.assertIn("360000 VND over 2 month(s)",b); self.assertIn("user supplied",b)
+ def test_mobile_plan_requires_explicit_allowance_and_overage(self):
+  with self.assertRaisesRegex(RuntimeError,"included_gb must be supplied"):
+   wave47.mobile_data_plan_comparator(self.request("no-cap",{"currency":"VND","monthly_usage_gb":1,"plans":[{"name":"A","monthly_fee":1,"overage_per_gb":0},{"name":"B","monthly_fee":2,"included_gb":None,"overage_per_gb":0}]}))
+  with self.assertRaisesRegex(RuntimeError,"overage_per_gb must be supplied"):
+   wave47.mobile_data_plan_comparator(self.request("no-overage",{"currency":"VND","monthly_usage_gb":1,"plans":[{"name":"A","monthly_fee":1,"included_gb":1},{"name":"B","monthly_fee":2,"included_gb":None,"overage_per_gb":0}]}))
  def test_internet_plan_comparison(self):
   _,b=self.report(wave47.home_internet_plan_comparator,"i",{"currency":"USD","monthly_usage_gb":400,"months":12,"plans":[{"name":"Cheap headline","monthly_fee":20,"included_gb":200,"overage_per_gb":1,"installation_fee":50,"advertised_download_mbps":100},{"name":"Unlimited","monthly_fee":45,"included_gb":None,"installation_fee":0,"router_monthly_fee":3,"advertised_download_mbps":500}]})
   self.assertLess(b.index("1. Unlimited"),b.index("2. Cheap headline")); self.assertIn("576 USD over 12 month(s)",b); self.assertIn("Advertised speed is not a measured speed test",b)
