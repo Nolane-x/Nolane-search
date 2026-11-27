@@ -90,7 +90,12 @@ from wave46 import (
     vehicle_fuel_log_analyzer, vehicle_ownership_cost_report, appliance_repair_replace_comparator,
     home_repair_quote_comparator, rental_move_in_inspection_report, rental_move_out_condition_report,
     rental_offer_cost_comparator, appliance_service_history_report,
+)from wave47 import (
+    qr_code_maker, wifi_qr_code_maker, vcard_contact_card_maker, ics_calendar_maker,
+    electricity_tier_bill_calculator, water_tier_bill_calculator,
+    mobile_data_plan_comparator, home_internet_plan_comparator,
 )
+
 
 WORKER_URL = os.environ.get("NOLANE_WORKER_URL", "https://nolane-search.nolane-file.workers.dev").rstrip("/")
 MAX_INPUT = 20 * 1024 * 1024
@@ -259,6 +264,9 @@ RUNNERS = {
     "moving-box-label-maker", "return-deadline-tracker", "gift-budget-planner", "household-emergency-kit-planner",
     "vehicle-fuel-log-analyzer", "vehicle-ownership-cost-report", "appliance-repair-replace-comparator", "home-repair-quote-comparator",
     "rental-move-in-inspection-report", "rental-move-out-condition-report", "rental-offer-cost-comparator", "appliance-service-history-report",
+    "qr-code-maker", "wifi-qr-code-maker", "vcard-contact-card-maker", "ics-calendar-maker",
+    "electricity-tier-bill-calculator", "water-tier-bill-calculator", "mobile-data-plan-comparator", "home-internet-plan-comparator",
+
 }
 
 GITHUB_SOURCE_PROCESSORS = {
@@ -697,11 +705,19 @@ PIPELINE_TRANSITIONS = {
     "mlflow-model-audit":{"text-clean","text-stats"},
     "dvc-pipeline-audit":{"text-clean","text-stats"},
     "helm-chart-audit":{"text-clean","text-stats"},
+    "qr-code-maker": {"image-info","image-compress","image-ocr","qr-read","image-to-pdf"},
+    "wifi-qr-code-maker": {"image-info","image-compress","image-ocr","qr-read","image-to-pdf"},
+    "vcard-contact-card-maker": {"archive-inspect","archive-safe-extract"},
+    "ics-calendar-maker": {"ics-calendar-audit"},
+    "electricity-tier-bill-calculator": {"text-clean","text-stats"},
+    "water-tier-bill-calculator": {"text-clean","text-stats"},
+    "mobile-data-plan-comparator": {"text-clean","text-stats"},
+    "home-internet-plan-comparator": {"text-clean","text-stats"},
 }
 
 MULTI_INPUT_TOOLS = {"text-join"}
 MAX_DAG_PARENTS = 3
-TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-structured-data-audit","css-quality-audit","gcode-audit","midi-audit","musicxml-audit","bibtex-audit","nmea-track-audit","ansible-playbook-audit","prometheus-rules-audit","grafana-dashboard-audit","hdf5-audit","avro-schema-audit","graphql-schema-audit","protobuf-schema-audit","odf-package-audit","xliff-audit","mbox-audit","geopackage-audit","mbtiles-audit","openraster-audit","krita-project-audit","gltf-audit","drawio-audit","n8n-workflow-audit","design-token-audit","warc-archive-audit","wasm-module-audit","sarif-report-audit","sbom-audit","junit-xml-audit","coverage-xml-audit","fits-audit","step-cad-audit","otel-collector-audit","godot-project-audit","unity-package-audit","unreal-project-audit","fasta-sequence-audit","fastq-quality-audit","vcf-variant-audit","sam-alignment-audit","gff3-annotation-audit","bed-interval-audit","genbank-record-audit","pdb-structure-audit","gfa-assembly-audit","newick-tree-audit","sequence-alignment-audit","bagit-archive-audit","frictionless-package-audit","ro-crate-audit","iiif-manifest-audit","datacite-metadata-audit","mets-package-audit","premis-event-audit","stac-catalog-audit","tei-document-audit","ocfl-object-audit","zarr-store-audit","nifti-header-audit","dicom-privacy-audit","las-pointcloud-audit","jp2-box-audit","netcdf-classic-audit","nwb-structure-audit","ome-ngff-audit","parquet-metadata-audit","cog-geotiff-audit","file-format-identify","rdf-graph-audit","shacl-validate","cron-schedule-audit","web-article-extract","rego-policy-check","k8s-schema-validate","cosign-verify-blob","mcap-recording-audit","iceberg-metadata-audit","onnx-model-audit","otel-trace-audit","safetensors-audit","gguf-model-audit","hf-model-card-audit","chat-dataset-audit","promptfoo-config-audit","three-mf-package-audit","ollama-modelfile-audit","hf-tokenizer-audit","hf-dataset-card-audit","mlflow-model-audit","dvc-pipeline-audit","helm-chart-audit"}
+TEXT_OUTPUT_TOOLS = {"image-ocr","qr-read","pdf-text","office-text","html-text","subtitle-text","audio-transcribe","epub-text","pdf-outline","sqlite-integrity","audio-silence-report","video-silence-report","code-size-report","text-stats","log-insights","json-diff","markdown-outline","code-imports","code-todos","code-secret-scan","log-timeline","repo-inventory","repo-dependencies","repo-license-report","repo-secret-scan","repo-todo-scan","repo-code-stats","repo-config-audit","repo-test-map","repo-test-quality","repo-complexity-report","repo-api-surface","repo-docs-audit","repo-migration-audit","repo-runtime-risk","repo-i18n-audit","repo-env-contract","repo-architecture-cycles","repo-change-impact","repo-api-spec-audit","repo-container-audit","repo-ci-reliability","docx-audit","pptx-audit","csv-privacy-audit","archive-security-audit","xlsx-privacy-audit","pdf-privacy-audit","office-active-content-audit","pdf-active-content-audit","email-security-audit","jwt-security-audit","har-privacy-audit","ics-calendar-audit","vcard-privacy-audit","gpx-track-report","geojson-audit","font-inspect","openapi-contract-audit","color-convert","pcap-network-audit","audio-tag-audit","json-schema-validate","epub-structure-audit","markdown-quality-audit","dns-zone-audit","x509-certificate-audit","rss-atom-audit","sitemap-xml-audit","robots-txt-audit","jsonl-profile","image-privacy-audit","svg-safety-audit","wcag-contrast-audit","ssh-public-key-audit","sqlfluff-lint","python-security-audit","mesh-inspect","dxf-audit","shapefile-audit","gettext-catalog-audit","notebook-audit","html-structured-data-audit","css-quality-audit","gcode-audit","midi-audit","musicxml-audit","bibtex-audit","nmea-track-audit","ansible-playbook-audit","prometheus-rules-audit","grafana-dashboard-audit","hdf5-audit","avro-schema-audit","graphql-schema-audit","protobuf-schema-audit","odf-package-audit","xliff-audit","mbox-audit","geopackage-audit","mbtiles-audit","openraster-audit","krita-project-audit","gltf-audit","drawio-audit","n8n-workflow-audit","design-token-audit","warc-archive-audit","wasm-module-audit","sarif-report-audit","sbom-audit","junit-xml-audit","coverage-xml-audit","fits-audit","step-cad-audit","otel-collector-audit","godot-project-audit","unity-package-audit","unreal-project-audit","fasta-sequence-audit","fastq-quality-audit","vcf-variant-audit","sam-alignment-audit","gff3-annotation-audit","bed-interval-audit","genbank-record-audit","pdb-structure-audit","gfa-assembly-audit","newick-tree-audit","sequence-alignment-audit","bagit-archive-audit","frictionless-package-audit","ro-crate-audit","iiif-manifest-audit","datacite-metadata-audit","mets-package-audit","premis-event-audit","stac-catalog-audit","tei-document-audit","ocfl-object-audit","zarr-store-audit","nifti-header-audit","dicom-privacy-audit","las-pointcloud-audit","jp2-box-audit","netcdf-classic-audit","nwb-structure-audit","ome-ngff-audit","parquet-metadata-audit","cog-geotiff-audit","file-format-identify","rdf-graph-audit","shacl-validate","cron-schedule-audit","web-article-extract","rego-policy-check","k8s-schema-validate","cosign-verify-blob","mcap-recording-audit","iceberg-metadata-audit","onnx-model-audit","otel-trace-audit","safetensors-audit","gguf-model-audit","hf-model-card-audit","chat-dataset-audit","promptfoo-config-audit","three-mf-package-audit","ollama-modelfile-audit","hf-tokenizer-audit","hf-dataset-card-audit","mlflow-model-audit","dvc-pipeline-audit","helm-chart-audit"},"electricity-tier-bill-calculator","water-tier-bill-calculator","mobile-data-plan-comparator","home-internet-plan-comparator"
 MAX_PIPELINE_STEPS = len(RUNNERS)
 MAX_PIPELINE_OUTPUT = 45 * 1024 * 1024
 
@@ -12590,6 +12606,15 @@ TOOLS={
  "rental-move-out-condition-report":rental_move_out_condition_report,
  "rental-offer-cost-comparator":rental_offer_cost_comparator,
  "appliance-service-history-report":appliance_service_history_report,
+
+ "qr-code-maker":qr_code_maker,
+ "wifi-qr-code-maker":wifi_qr_code_maker,
+ "vcard-contact-card-maker":vcard_contact_card_maker,
+ "ics-calendar-maker":ics_calendar_maker,
+ "electricity-tier-bill-calculator":electricity_tier_bill_calculator,
+ "water-tier-bill-calculator":water_tier_bill_calculator,
+ "mobile-data-plan-comparator":mobile_data_plan_comparator,
+ "home-internet-plan-comparator":home_internet_plan_comparator,
 
 }
 
