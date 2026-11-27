@@ -184,7 +184,7 @@ def _utc(v,label):
     if not isinstance(v,str): raise RuntimeError(f"{label} must be an ISO datetime with an explicit timezone offset.")
     try: dt=datetime.fromisoformat(v.replace("Z","+00:00"))
     except ValueError: raise RuntimeError(f"{label} must be an ISO datetime with an explicit timezone offset.") from None
-    if dt.tzinfo is None or dt.utcoffset() is None: raise RuntimeError(f"{label} must include Z or an explicit UTC offset.")
+    if dt.tzinfo is None or dt.utcoffset() is None: raise RuntimeError(f"{label} must include Z or an explicit timezone offset (UTC offset).")
     return dt.astimezone(timezone.utc)
 
 def ics_calendar_maker(path):
