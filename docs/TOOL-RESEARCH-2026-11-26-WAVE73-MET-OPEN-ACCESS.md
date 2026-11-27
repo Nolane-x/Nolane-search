@@ -59,3 +59,21 @@ The museum publishes more than 64,000 artwork records and image assets for over 
 Only records whose API rights field explicitly says CC0 are returned. The integration sends the documented `cc0=1` and `has_image=1` filters, then independently checks the canonical artwork path on `clevelandart.org` or `www.clevelandart.org` and the official web-image CDN host/path against the accession number. Creator, date, technique, culture, department, type and measurements are retained when present. The browser CSP only permits the museum image CDN; images are loaded directly and are not copied or proxied. This source is image-only and unavailable for video/audio filters.
 
 Official docs: https://openaccess-api.clevelandart.org/ (CC0 policy, filters and response schema); https://www.clevelandart.org/open-access (reuse terms).
+
+
+## Library of Congress Prints & Photographs API
+
+Official documentation:
+- https://www.loc.gov/apis/json-and-yaml/
+- https://www.loc.gov/apis/json-and-yaml/requests/
+- https://www.loc.gov/apis/json-and-yaml/responses/search-results/
+- https://www.loc.gov/apis/json-and-yaml/responses/item-and-resource/
+- https://www.loc.gov/apis/json-and-yaml/working-with-limits/
+
+The integration makes one bounded request per search to `https://www.loc.gov/photos/` with `q`, `fo=json`, `at=results` and a maximum of 8 results. It does not fetch a second item-detail endpoint for every result. The public JSON/YAML API requires no API key; its published rate limit is 20 requests per minute and may be reduced during heavy traffic.
+
+Only records with a validated official Library of Congress item URL and a supported image URL on the exact `tile.loc.gov` or `cdn.loc.gov` hosts are shown. Image URLs are restricted to the documented service/storage paths and browser-renderable image formats. Records explicitly marked `access_restricted: true` are omitted.
+
+The adapter preserves the record's title, contributor/creator, date, medium, description, subjects, and `rights_advisory` / `rights` metadata. It does not infer public-domain status from being hosted by the Library of Congress, from `access_restricted: false`, or from the presence of a downloadable image. A missing rights field is displayed as a prompt to check the item page. Rights statements vary by item and must be reviewed before reuse. Media Studio loads the image directly from the official image host.
+
+This source is image-only; it is disabled in video/audio filters. The request is single-call and result-bounded to respect the provider's public capacity limits.

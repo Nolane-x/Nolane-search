@@ -10,11 +10,12 @@ Downloader branch: `feat/wave-73-container-media-downloader`
 
 - The Met Open Access: current paginated `/public/collection/v1.1/search`, explicit `isPublicDomain === true`, exact official image/source hosts, CC0 metadata.
 - Art Institute of Chicago: reuses the existing museum artwork search and its request throttle; only API-confirmed public-domain objects and verified museum image/object paths are shown.
-- Cleveland Museum of Art Open Access: uses its public no-key API with the `cc0` and `has_image=1` filters; independently requires `share_license_status === "CC0"`, a canonical accession-number artwork page and a matching official web-image CDN path. Creator and artwork metadata are preserved.
-- All three museum providers are image-only, selectable in Media Studio, and unavailable for video/audio filters.
-- The AI Agent can query The Met and Cleveland Museum directly; Chicago remains available through the existing museum artwork tool.
-- AI Agent exposes The Met as a dedicated callable tool; Chicago remains available through the existing museum search tool.
-- No API key, new secret, storage bucket, media proxy or binary copy is required for any museum image integration.
+- Cleveland Museum of Art Open Access: uses its public no-key API with the `cc0=1` and `has_image=1` filters; independently requires `share_license_status === "CC0"`, a canonical accession-number artwork page and a matching official web-image CDN path. Creator and artwork metadata are preserved.
+- Library of Congress Prints & Photographs: one bounded public `/photos/` JSON request with no API key; only exact official item/image hosts are accepted and records with `access_restricted: true` are omitted. Item-specific `rights_advisory` / `rights` labels are retained verbatim where present; the integration does not assume all LOC images are public domain or CC0.
+- All four collection providers are image-only, selectable in Media Studio, and unavailable for video/audio filters.
+- The AI Agent can query The Met, Cleveland Museum and Library of Congress directly; Chicago remains available through the existing museum artwork tool.
+- AI Agent exposes The Met, Cleveland Museum and Library of Congress as dedicated callable tools; Chicago remains available through the existing museum search tool.
+- No API key, new secret, storage bucket, media proxy or binary copy is required for any collection image integration.
 
 ## Zero-cost video download and sharing
 
