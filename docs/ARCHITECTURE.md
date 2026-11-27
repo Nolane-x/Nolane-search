@@ -81,9 +81,9 @@ The `/search` command accepts Google-style operators: `site:domain`, `filetype:p
 
 ## Ranking
 
-Current ranking is a transparent heuristic using provider scores, whole-token title/snippet overlap, exact-query title boost, freshness/domain adjustments, normalized URL deduplication and a two-results-per-domain first-pass diversity limit. It retains up to 12 candidates for Telegram pagination.
+Current ranking is a transparent heuristic using provider scores, whole-token title/snippet overlap, exact-query title boost, freshness/domain adjustments, normalized URL deduplication and a two-results-per-domain first-pass diversity limit. It retains up to 12 candidates for Telegram pagination. When normalized URLs collide, the selected result retains a bounded `discoveredBy` list showing which retrieval providers returned that URL; the UI and AI evidence prompt label these as search-provider paths, not publishers or independent verification.
 
-It is not a learned ranking model, does not rigorously assess source reliability and does not identify syndicated copies at different URLs. Telegram displays five results per page with inline Previous/Next controls. The D1 session is bound to the requesting user and chat and expires after 15 minutes.
+It is not a learned ranking model, does not rigorously assess source reliability and does not identify syndicated copies at different URLs. Multiple search providers returning the same URL do not establish that the page is accurate or independently corroborated. Telegram displays five results per page with inline Previous/Next controls. The D1 session is bound to the requesting user and chat and expires after 15 minutes.
 
 ## Data placement
 
