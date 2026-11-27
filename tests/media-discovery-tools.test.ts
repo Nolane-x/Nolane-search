@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, lookupFoodProduct, lookupConsumerProduct, compareFoodProducts, searchMetMuseumArtworks, searchAicMuseumImages, searchClevelandMuseumArtworks } from "../src/media-discovery-tools";
+import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, lookupFoodProduct, lookupConsumerProduct, compareFoodProducts, searchMetMuseumArtworks, searchAicMuseumImages, searchClevelandMuseumArtworks, searchLibraryOfCongressPhotos } from "../src/media-discovery-tools";
 import { executeAgentTool, AGENT_TOOL_DEFINITIONS } from "../src/agent-tools";
 import type { Env } from "../src/types";
 
@@ -791,6 +791,99 @@ describe("Wave 52 media and product discovery", () => {
     }));
     const result = JSON.parse(await executeAgentTool(env, "search_cleveland_museum_open_access_artworks", { query: "Baoyang Lake" }));
     expect(result.items[0]).toMatchObject({ provider: "Cleveland Museum of Art", title: "Baoyang Lake", license: "CC0" });
+  });
+
+
+  it("searches the Library of Congress photo endpoint and preserves item-specific rights metadata", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.origin).toBe("https://www.loc.gov");
+      expect(url.pathname).toBe("/photos/");
+      expect(url.searchParams.get("q")).toBe("Hanoi street");
+      expect(url.searchParams.get("fo")).toBe("json");
+      expect(url.searchParams.get("at")).toBe("results");
+      expect(url.searchParams.get("c")).toBe("3");
+      expect(new Headers(init?.headers).get("user-agent")).toContain("NolaneSearch");
+      return json({ results: [
+        {
+          id: "http://www.loc.gov/item/2017649999/",
+          title: "Street in Hanoi",
+          contributor: ["Harris & Ewing"],
+          date: "1920",
+          medium: "1 photographic print",
+          description: ["A street scene in Hanoi."],
+          subject: ["Hanoi", "Vietnam"],
+          rights_advisory: ["No known restrictions on publication."],
+          access_restricted: false,
+          image_url: ["//tile.loc.gov/storage-services/service/pnp/example/0000/0001_150px.jpg"],
+        },
+        {
+          id: "https://www.loc.gov/item/2017650000/",
+          title: "Restricted photograph",
+          access_restricted: true,
+          image_url: ["//tile.loc.gov/storage-services/service/pnp/example/0000/0002_150px.jpg"],
+        },
+        {
+          id: "https://www.loc.gov/item/2017650001/",
+          title: "Untrusted image host",
+          access_restricted: false,
+          image_url: ["https://evil.example/private/photo.jpg"],
+        },
+        {
+          id: "https://www.loc.gov/item/2017650002/",
+          title: "Unsupported source host",
+          access_restricted: false,
+          image_url: ["https://cdn.loc.gov/service/pnp/example/0000/0003_150px.jpg"],
+        },
+      ] });
+    }));
+    const result = await searchLibraryOfCongressPhotos("Hanoi street", 3);
+    expect(result.status).toBe("ok");
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: "loc-2017649999",
+      title: "Street in Hanoi",
+      provider: "Library of Congress",
+      mediaType: "image",
+      sourceUrl: "https://www.loc.gov/item/2017649999/",
+      previewUrl: "https://tile.loc.gov/storage-services/service/pnp/example/0000/0001_150px.jpg",
+      mediaUrl: "https://tile.loc.gov/storage-services/service/pnp/example/0000/0001_150px.jpg",
+      credit: "Harris & Ewing",
+      license: "No known restrictions on publication.",
+      licenseUrl: null,
+      dateCreated: "1920",
+    });
+    expect(result.items[0].description).toContain("A street scene in Hanoi.");
+    expect(result.note).toContain("not a blanket reuse license");
+  });
+
+  it("validates Library of Congress query and bounded result count before network access", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    await expect(searchLibraryOfCongressPhotos("x")).rejects.toThrow("2 to 140 characters");
+    await expect(searchLibraryOfCongressPhotos("history", 9)).rejects.toThrow("1 to 8");
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("routes the Library of Congress image search through the AI tool interface", async () => {
+    expect(AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name)).toContain("search_library_of_congress_photos");
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/photos/") return json({ results: [{
+        id: "http://www.loc.gov/item/2017649999/",
+        title: "Street in Hanoi",
+        access_restricted: false,
+        image_url: ["//cdn.loc.gov/service/pnp/example/0000/0001_150px.jpg"],
+        rights_advisory: ["Rights advisory: see item page."],
+      }] });
+      throw new Error("Unexpected URL");
+    }));
+    const result = JSON.parse(await executeAgentTool(env, "search_library_of_congress_photos", { query: "Hanoi" }));
+    expect(result.items[0]).toMatchObject({
+      provider: "Library of Congress",
+      title: "Street in Hanoi",
+      license: "Rights advisory: see item page.",
+    });
   });
 
   it("reuses the throttled Art Institute discovery and returns only safe public-domain museum images", async () => {

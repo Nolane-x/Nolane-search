@@ -186,6 +186,20 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("Cleveland Museum of Art bổ sung các tác phẩm có trạng thái public domain/CC0");
   });
 
+
+  it("offers Library of Congress as an image-only source with exact image and item origins", async () => {
+    const response = mediaAppResponse();
+    const html = await response.text();
+    expect(html).toContain('<option value="loc">Library of Congress · ảnh tư liệu</option>');
+    expect(response.headers.get("content-security-policy")).toContain("https://tile.loc.gov");
+    expect(response.headers.get("content-security-policy")).toContain("https://cdn.loc.gov");
+    expect(html).toContain("item.provider==='Library of Congress'?safeUrl(item.sourceUrl,['www.loc.gov'])");
+    expect(html).toContain("Library of Congress bổ sung ảnh tư liệu cùng rights advisory theo từng mục");
+    expect(html).toContain("không tự động đồng nghĩa ảnh được tự do tái sử dụng");
+    expect(html).toContain("kind==='audio'?['commons','nasa','openverse','peertube','inaturalist','met','aic','cleveland','loc']");
+    expect(html).toContain("kind==='video'?['commons','openverse','inaturalist','met','aic','cleveland','loc']");
+  });
+
   it("offers PeerTube as a video-only provider and links to the exact origin host", async () => {
     const html = await (await mediaAppResponse()).text();
     expect(html).toContain('<option value="peertube">PeerTube · video liên mạng</option>');
