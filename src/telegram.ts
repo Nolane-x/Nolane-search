@@ -344,6 +344,9 @@ export function formatSearchResults(
       `<b>${resultNumber}. <a href="${htmlEscape(item.url)}">${safeHtmlText(item.title, 150)}</a></b>`,
       safeHtmlText(item.snippet, 230),
       `<code>${safeHtmlText(item.domain, 90)}</code> · ${safeHtmlText(item.provider, 50)}`,
+      ...(Array.isArray(item.discoveredBy) && item.discoveredBy.length > 1
+        ? [`<i>Công cụ tìm: ${item.discoveredBy.slice(0, 5).map(value => safeHtmlText(value, 48)).join(" · ")}</i>`]
+        : []),
     ].join("\n");
     const next = appendBlock(output, block, footer);
     if (next === output) break;
@@ -369,6 +372,9 @@ export function formatDeepReport(query: string, results: SearchResult[], summary
       `<b>${index + 1}. <a href="${htmlEscape(item.url)}">${safeHtmlText(item.title, 145)}</a></b>`,
       safeHtmlText(item.snippet, 190),
       `<code>${safeHtmlText(item.domain, 90)}</code> · ${safeHtmlText(item.provider, 45)}`,
+      ...(Array.isArray(item.discoveredBy) && item.discoveredBy.length > 1
+        ? [`<i>Công cụ tìm: ${item.discoveredBy.slice(0, 5).map(value => safeHtmlText(value, 48)).join(" · ")}</i>`]
+        : []),
     ].join("\n");
     const next = appendBlock(output, block, footer);
     if (next === output) break;
