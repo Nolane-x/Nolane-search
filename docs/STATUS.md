@@ -24,7 +24,7 @@ Last verified: 2026-11-27. Production deployment evidence is separated from owne
 
 - [PR #152](https://github.com/Nolane-x/Nolane-search/pull/152) merged as `d1b7eef1f12e1e0ae02e656382d48e3bb9db9005`, integrating the owner-operated Windows Media Node on top of the museum image providers and search-provider provenance. Its worker/session gateway is included in the current deployed Worker version above.
 - The Media Node feature intentionally remains **disabled until owner setup**. The owner must install and verify the local Windows node, configure Tailscale HTTPS/Funnel and set repository secrets `MEDIA_NODE_URL` and `MEDIA_NODE_TOKEN`, then pass a real HTTPS share/expiry/revocation/HTTP Range smoke test. The repository CI tests do not establish that the owner's machine or public tunnel is online.
-- The stale pre-rebase [PR #149](https://github.com/Nolane-x/Nolane-search/pull/149) was closed as superseded by #152. No paid media storage or GitHub Actions media CDN was introduced.
+- The original [PR #149](https://github.com/Nolane-x/Nolane-search/pull/149) implementation was incorporated as the second parent of the #152 integration merge; GitHub records it as merged through that integration. There is one deployed implementation, not two separate download services. No paid media storage or GitHub Actions media CDN was introduced.
 
 ## Latest production release — Wave 71 (2026-11-26)
 

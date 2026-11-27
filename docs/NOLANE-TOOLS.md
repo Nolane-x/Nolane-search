@@ -16,7 +16,7 @@ Nolane Tools hiện có **542 công cụ đã được đăng ký và triển kh
 | /tool mobile-data-plan-comparator | So sánh gói data di động | So tổng chi phí theo mức sử dụng, hạn mức và phí vượt |
 | /tool home-internet-plan-comparator | So sánh gói Internet gia đình | So chi phí kỳ hạn gồm cước, thiết bị, lắp đặt và dữ liệu vượt |
 
-**Boundary:** tariff and provider-plan values are user supplied; this candidate does not fetch current provider prices or verify real coverage/speed. Wi-Fi QR and contact outputs may contain sensitive data. These are file processors, not extra AI Agent function tools.
+**Boundary:** tariff and provider-plan values are user supplied; these tools do not fetch current provider prices or verify real coverage/speed. Wi-Fi QR and contact outputs may contain sensitive data. These are file processors, not extra AI Agent function tools.
 
 ## Wave 46 — home, vehicle and rental tools — deployed to production
 
