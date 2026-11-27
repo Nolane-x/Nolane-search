@@ -451,14 +451,22 @@ class MediaNodePolicyTests(unittest.TestCase):
         try:
             with socket.create_connection(proxy.server_address, timeout=2) as client:
                 client.settimeout(2)
+                # Send the first TLS bytes in the same TCP write as the CONNECT
+                # headers. The HTTP parser must not read them into a private
+                # buffer before the raw-socket tunnel starts relaying.
                 client.sendall(
                     b"CONNECT example.org:443 HTTP/1.1\r\n"
                     b"Host: example.org:443\r\n\r\n"
+                    b"tls-client-data"
                 )
-                handshake = client.recv(1024)
-                self.assertIn(b"200 Connection Established", handshake)
-                client.sendall(b"tls-client-data")
-                self.assertEqual(client.recv(1024), b"tls-response")
+                response = b""
+                while b"\r\n\r\n" not in response:
+                    response += client.recv(1024)
+                headers, tunneled = response.split(b"\r\n\r\n", 1)
+                self.assertIn(b"200 Connection Established", headers)
+                while len(tunneled) < len(b"tls-response"):
+                    tunneled += client.recv(1024)
+                self.assertEqual(tunneled, b"tls-response")
             upstream_thread.join(timeout=2)
             self.assertEqual(received_from_client, [b"tls-client-data"])
             self.assertEqual(connect_calls[0][0], ("93.184.216.34", 443))
