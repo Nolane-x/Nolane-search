@@ -802,7 +802,7 @@ describe("Wave 52 media and product discovery", () => {
       expect(url.searchParams.get("q")).toBe("Hanoi street");
       expect(url.searchParams.get("fo")).toBe("json");
       expect(url.searchParams.get("at")).toBe("results");
-      expect(url.searchParams.get("c")).toBe("3");
+      expect(url.searchParams.get("c")).toBe("4");
       expect(new Headers(init?.headers).get("user-agent")).toContain("NolaneSearch");
       return json({ results: [
         {
@@ -837,7 +837,7 @@ describe("Wave 52 media and product discovery", () => {
         },
       ] });
     }));
-    const result = await searchLibraryOfCongressPhotos("Hanoi street", 3);
+    const result = await searchLibraryOfCongressPhotos("Hanoi street", 4);
     expect(result.status).toBe("ok");
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toMatchObject({
