@@ -90,7 +90,8 @@ from wave46 import (
     vehicle_fuel_log_analyzer, vehicle_ownership_cost_report, appliance_repair_replace_comparator,
     home_repair_quote_comparator, rental_move_in_inspection_report, rental_move_out_condition_report,
     rental_offer_cost_comparator, appliance_service_history_report,
-)from wave47 import (
+)
+from wave47 import (
     qr_code_maker, wifi_qr_code_maker, vcard_contact_card_maker, ics_calendar_maker,
     electricity_tier_bill_calculator, water_tier_bill_calculator,
     mobile_data_plan_comparator, home_internet_plan_comparator,
