@@ -165,6 +165,20 @@ describe("Telegram HTML formatting", () => {
     expect(output).toContain("a=1&amp;b=2");
   });
 
+  it("labels possible duplicate coverage as a similarity hint in search and deep reports", () => {
+    const marked: SearchResult = {
+      ...result,
+      possibleDuplicateCoverage: {
+        groupId: "coverage-1",
+        groupSize: 2,
+        hostnames: ["a.example", "b.example"],
+        basis: "high-title-and-excerpt-similarity-within-seven-days",
+      },
+    };
+    expect(formatSearchResults("topic", "web", [marked])).toContain("không phải xác nhận độc lập");
+    expect(formatDeepReport("topic", [marked], null)).toContain("Có thể trùng nội dung: 2 trang");
+  });
+
   it("shows provider discovery paths separately and escapes their labels", () => {
     const output = formatSearchResults("topic", "web", [{
       ...result, discoveredBy: ["Tavily", "Exa & research"],
