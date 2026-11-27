@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, lookupFoodProduct, lookupConsumerProduct, compareFoodProducts } from "../src/media-discovery-tools";
+import { runMediaDiscoveryTool, searchNasaMedia, searchWikimediaImages, searchOpenverseImages, searchINaturalistObservations, searchInternetArchiveVideos, searchInternetArchiveAudio, lookupFoodProduct, lookupConsumerProduct, compareFoodProducts, searchMetMuseumArtworks, searchAicMuseumImages, searchClevelandMuseumArtworks, searchLibraryOfCongressPhotos } from "../src/media-discovery-tools";
 import { executeAgentTool, AGENT_TOOL_DEFINITIONS } from "../src/agent-tools";
 import type { Env } from "../src/types";
 
@@ -649,4 +649,269 @@ describe("Wave 52 media and product discovery", () => {
     const result = JSON.parse(await executeAgentTool(env, "search_wikimedia_images", { query: "sample image" }));
     expect(result.items[0].title).toBe("Dispatch.jpg");
   });
+
+  it("searches The Met's current paginated API and keeps only trusted public-domain images", async () => {
+    const paths: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      paths.push(url.pathname);
+      if (url.pathname === "/public/collection/v1.1/search") {
+        expect(url.searchParams.get("q")).toBe("water lilies");
+        expect(url.searchParams.get("hasImages")).toBe("true");
+        expect(url.searchParams.get("offset")).toBe("0");
+        expect(url.searchParams.get("limit")).toBe("4");
+        return json({ total: 4, objectIDs: [101, 102, 103, 104] });
+      }
+      const id = Number(url.pathname.split("/").pop());
+      const common = {
+        objectID: id, title: "Artwork " + id, artistDisplayName: "Example Artist",
+        objectDate: "1890", medium: "Oil on canvas", department: "European Paintings",
+        country: "France", creditLine: "Example Collection",
+        objectURL: "https://www.metmuseum.org/art/collection/search/" + id,
+      };
+      if (id === 101) return json({ ...common, isPublicDomain: true,
+        primaryImage: "https://images.metmuseum.org/CRDImages/ep/original/101.jpg",
+        primaryImageSmall: "https://images.metmuseum.org/CRDImages/ep/web-large/101.jpg" });
+      if (id === 102) return json({ ...common, isPublicDomain: false,
+        primaryImageSmall: "https://images.metmuseum.org/CRDImages/ep/web-large/102.jpg" });
+      if (id === 103) return json({ ...common, isPublicDomain: true,
+        primaryImageSmall: "https://evil.example/103.jpg" });
+      return json({ ...common, isPublicDomain: true, primaryImageSmall: "" });
+    }));
+
+    const result = await searchMetMuseumArtworks("water lilies", 4);
+    expect(result.status).toBe("ok");
+    expect(result.source).toContain("Metropolitan Museum");
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: "met-101", provider: "The Met", mediaType: "image", title: "Artwork 101",
+      sourceUrl: "https://www.metmuseum.org/art/collection/search/101",
+      previewUrl: "https://images.metmuseum.org/CRDImages/ep/web-large/101.jpg",
+      mediaUrl: "https://images.metmuseum.org/CRDImages/ep/original/101.jpg",
+      credit: "Example Artist · Example Collection", license: "CC0",
+      licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+    });
+    expect(result.items[0].description).toContain("Oil on canvas");
+    expect(paths).toHaveLength(5);
+    expect(paths).toContain("/public/collection/v1.1/search");
+    expect(paths).not.toContain("/public/collection/v1/search");
+  });
+
+  it("validates The Met query and result bounds before network access", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    await expect(searchMetMuseumArtworks("x")).rejects.toThrow("2 to 140 characters");
+    await expect(searchMetMuseumArtworks("portrait", 9)).rejects.toThrow("1 to 8");
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("exposes The Met public-domain image search through the AI tool interface", async () => {
+    expect(AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name)).toContain("search_met_open_access_artworks");
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/search")) return json({ total: 1, objectIDs: [501] });
+      return json({
+        objectID: 501, isPublicDomain: true, title: "Test Artwork",
+        artistDisplayName: "Test Artist", objectDate: "1900", medium: "Etching",
+        department: "Drawings", creditLine: "Test Collection",
+        primaryImage: "https://images.metmuseum.org/CRDImages/dp/original/501.jpg",
+        primaryImageSmall: "https://images.metmuseum.org/CRDImages/dp/web-large/501.jpg",
+        objectURL: "https://www.metmuseum.org/art/collection/search/501",
+      });
+    }));
+    const result = JSON.parse(await executeAgentTool(env, "search_met_open_access_artworks", { query: "test artwork" }));
+    expect(result.items[0]).toMatchObject({ provider: "The Met", title: "Test Artwork", license: "CC0" });
+  });
+
+
+
+  it("searches Cleveland Museum Open Access and keeps only CC0 records with matching official image paths", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("openaccess-api.clevelandart.org");
+      expect(url.pathname).toBe("/api/artworks/");
+      expect(url.searchParams.get("q")).toBe("water lilies");
+      expect(url.searchParams.get("cc0")).toBe("1");
+      expect(url.searchParams.get("has_image")).toBe("1");
+      expect(url.searchParams.get("skip")).toBe("0");
+      expect(url.searchParams.get("limit")).toBe("4");
+      const base = {
+        accession_number: "1998.78.14", title: "Baoyang Lake",
+        creators: [{ description: "Song Xu (Chinese, 1525-c. 1606)" }],
+        creation_date: "1500s", technique: "ink and color on silk",
+        culture: ["China, Jiaxing, 16th century"], department: "Chinese Art",
+        type: "Painting", measurements: "26.4 x 28.4 cm",
+        url: "https://www.clevelandart.org/art/1998.78.14",
+        images: { web: { url: "https://openaccess-cdn.clevelandart.org/1998.78.14/1998.78.14_web.jpg" } },
+      };
+      return json({ data: [
+        { ...base, id: 160729, share_license_status: "CC0" },
+        { ...base, id: 160733, accession_number: "1998.78.16", url: "https://clevelandart.org/art/1998.78.16", images: { web: { url: "https://openaccess-cdn.clevelandart.org/1998.78.16/1998.78.16_web.jpg" } }, share_license_status: "CC0" },
+        { ...base, id: 160730, accession_number: "1998.78.15", share_license_status: "Copyrighted" },
+        { ...base, id: 160731, share_license_status: "CC0", images: { web: { url: "https://evil.example/1998.78.14_web.jpg" } } },
+        { ...base, id: 160732, share_license_status: "CC0", images: { web: { url: "https://openaccess-cdn.clevelandart.org/1998.78.99/1998.78.99_web.jpg" } } },
+      ] });
+    }));
+    const result = await searchClevelandMuseumArtworks("water lilies", 4);
+    expect(result.status).toBe("ok");
+    expect(result.source).toContain("Cleveland Museum of Art");
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toMatchObject({
+      id: "cleveland-160729", provider: "Cleveland Museum of Art",
+      mediaType: "image", title: "Baoyang Lake",
+      sourceUrl: "https://www.clevelandart.org/art/1998.78.14",
+      previewUrl: "https://openaccess-cdn.clevelandart.org/1998.78.14/1998.78.14_web.jpg",
+      mediaUrl: "https://openaccess-cdn.clevelandart.org/1998.78.14/1998.78.14_web.jpg",
+      credit: "Song Xu (Chinese, 1525-c. 1606)", license: "CC0",
+      licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+    });
+    expect(result.items[0].description).toContain("ink and color on silk");
+    expect(result.note).toContain("share_license_status=CC0");
+  });
+
+  it("validates Cleveland Museum query and result limits before network access", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    await expect(searchClevelandMuseumArtworks("x")).rejects.toThrow("2 to 140 characters");
+    await expect(searchClevelandMuseumArtworks("painting", 9)).rejects.toThrow("1 to 8");
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("exposes Cleveland Museum CC0 discovery through the AI tool interface", async () => {
+    expect(AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name)).toContain("search_cleveland_museum_open_access_artworks");
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.hostname === "openaccess-api.clevelandart.org") return json({ data: [{
+        id: 160729, accession_number: "1998.78.14", share_license_status: "CC0",
+        title: "Baoyang Lake", creators: [], creation_date: "1500s",
+        url: "https://clevelandart.org/art/1998.78.14",
+        images: { web: { url: "https://openaccess-cdn.clevelandart.org/1998.78.14/1998.78.14_web.jpg" } },
+      }] });
+      throw new Error("Unexpected URL");
+    }));
+    const result = JSON.parse(await executeAgentTool(env, "search_cleveland_museum_open_access_artworks", { query: "Baoyang Lake" }));
+    expect(result.items[0]).toMatchObject({ provider: "Cleveland Museum of Art", title: "Baoyang Lake", license: "CC0" });
+  });
+
+
+  it("searches the Library of Congress photo endpoint and preserves item-specific rights metadata", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.origin).toBe("https://www.loc.gov");
+      expect(url.pathname).toBe("/photos/");
+      expect(url.searchParams.get("q")).toBe("Hanoi street");
+      expect(url.searchParams.get("fo")).toBe("json");
+      expect(url.searchParams.get("at")).toBe("results");
+      expect(url.searchParams.get("c")).toBe("4");
+      expect(new Headers(init?.headers).get("user-agent")).toContain("NolaneSearch");
+      return json({ results: [
+        {
+          id: "http://www.loc.gov/item/2017649999/",
+          title: "Street in Hanoi",
+          contributor: ["Harris & Ewing"],
+          date: "1920",
+          medium: "1 photographic print",
+          description: ["A street scene in Hanoi."],
+          subject: ["Hanoi", "Vietnam"],
+          rights_advisory: ["No known restrictions on publication."],
+          access_restricted: false,
+          image_url: ["//tile.loc.gov/storage-services/service/pnp/example/0000/0001_150px.jpg"],
+        },
+        {
+          id: "https://www.loc.gov/item/2017650000/",
+          title: "Restricted photograph",
+          access_restricted: true,
+          image_url: ["//tile.loc.gov/storage-services/service/pnp/example/0000/0002_150px.jpg"],
+        },
+        {
+          id: "https://www.loc.gov/item/2017650001/",
+          title: "Untrusted image host",
+          access_restricted: false,
+          image_url: ["https://evil.example/private/photo.jpg"],
+        },
+        {
+          id: "https://evil.example/item/2017650002/",
+          title: "Unsupported source host",
+          access_restricted: false,
+          image_url: ["https://cdn.loc.gov/service/pnp/example/0000/0003_150px.jpg"],
+        },
+      ] });
+    }));
+    const result = await searchLibraryOfCongressPhotos("Hanoi street", 4);
+    expect(result.status).toBe("ok");
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: "loc-2017649999",
+      title: "Street in Hanoi",
+      provider: "Library of Congress",
+      mediaType: "image",
+      sourceUrl: "https://www.loc.gov/item/2017649999/",
+      previewUrl: "https://tile.loc.gov/storage-services/service/pnp/example/0000/0001_150px.jpg",
+      mediaUrl: "https://tile.loc.gov/storage-services/service/pnp/example/0000/0001_150px.jpg",
+      credit: "Harris & Ewing",
+      license: "No known restrictions on publication.",
+      licenseUrl: null,
+      dateCreated: "1920",
+    });
+    expect(result.items[0].description).toContain("A street scene in Hanoi.");
+    expect(result.note).toContain("not a blanket reuse license");
+  });
+
+  it("validates Library of Congress query and bounded result count before network access", async () => {
+    const mock = vi.fn();
+    vi.stubGlobal("fetch", mock);
+    await expect(searchLibraryOfCongressPhotos("x")).rejects.toThrow("2 to 140 characters");
+    await expect(searchLibraryOfCongressPhotos("history", 9)).rejects.toThrow("1 to 8");
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("routes the Library of Congress image search through the AI tool interface", async () => {
+    expect(AGENT_TOOL_DEFINITIONS.map(tool => tool.function.name)).toContain("search_library_of_congress_photos");
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/photos/") return json({ results: [{
+        id: "http://www.loc.gov/item/2017649999/",
+        title: "Street in Hanoi",
+        access_restricted: false,
+        image_url: ["//cdn.loc.gov/service/pnp/example/0000/0001_150px.jpg"],
+        rights_advisory: ["Rights advisory: see item page."],
+      }] });
+      throw new Error("Unexpected URL");
+    }));
+    const result = JSON.parse(await executeAgentTool(env, "search_library_of_congress_photos", { query: "Hanoi" }));
+    expect(result.items[0]).toMatchObject({
+      provider: "Library of Congress",
+      title: "Street in Hanoi",
+      license: "Rights advisory: see item page.",
+    });
+  });
+
+  it("reuses the throttled Art Institute discovery and returns only safe public-domain museum images", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.hostname).toBe("api.artic.edu");
+      const params = JSON.parse(url.searchParams.get("params") || "{}");
+      expect(params.query.term.is_public_domain).toBe(true);
+      expect(params.limit).toBe(3);
+      expect(new Headers(init?.headers).get("AIC-User-Agent")).toContain("NolaneSearch");
+      return json({ pagination: { total: 2 }, data: [
+        { id: 129884, title: "Public Artwork", artist_title: "Artist A",
+          date_display: "1900", medium_display: "Oil", image_id: "aabbccdd-1122-3344-5566-778899001122",
+          is_public_domain: true, web_url: "https://www.artic.edu/artworks/129884" },
+        { id: 129885, title: "Private Artwork", artist_title: "Artist B",
+          image_id: "bbccddaa-1122-3344-5566-778899001122", is_public_domain: false,
+          web_url: "https://www.artic.edu/artworks/129885" },
+      ] });
+    }));
+    const result = await searchAicMuseumImages("Monet", 3);
+    expect(result.status).toBe("ok");
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: "aic-129884", provider: "Art Institute of Chicago", mediaType: "image",
+      sourceUrl: "https://www.artic.edu/artworks/129884",
+      previewUrl: "https://www.artic.edu/iiif/2/aabbccdd-1122-3344-5566-778899001122/full/843,/0/default.jpg",
+      license: "Public domain", credit: "Artist A",
+    });
+  });
+
 });

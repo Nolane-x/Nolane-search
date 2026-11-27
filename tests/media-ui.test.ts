@@ -16,8 +16,8 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("document.createElement('audio')");
     expect(html).toContain("Mở / tải audio gốc");
     expect(html).toContain("Mở / tải video gốc");
-    expect(html).toContain("Hiện chưa có downloader đa website hoặc kho chia sẻ file riêng tư.");
-    expect(html).toContain("R2 được kích hoạt trước");
+    expect(html).toContain("Tải media dung lượng lớn và chia sẻ link riêng tư chưa được bật trên production");
+    expect(html).toContain("phương án Media Node miễn phí chạy trên máy cá nhân đang được review tại PR #149");
     expect(html).toContain("document.createElement('iframe')");
     expect(html).toContain("safeMediaEmbedUrl(item)");
     expect(html).toContain("Nhúng player '+item.provider");
@@ -153,9 +153,51 @@ describe("Media Portal media discovery experience", () => {
 
   it("disables incompatible providers for image, video and audio filters", async () => {
     const html = await (await mediaAppResponse()).text();
-    expect(html).toContain("kind==='audio'?['commons','nasa','openverse','peertube','inaturalist']");
-    expect(html).toContain("kind==='video'?['commons','openverse','inaturalist']");
+    expect(html).toContain("kind==='audio'?['commons','nasa','openverse','peertube','inaturalist','met','aic','cleveland','loc']");
+    expect(html).toContain("kind==='video'?['commons','openverse','inaturalist','met','aic','cleveland','loc']");
     expect(html).toContain("kind==='image'?['archive','peertube']");
+  });
+
+  it("offers The Met Open Access as a trusted image-only source", async () => {
+    const response = mediaAppResponse();
+    const html = await response.text();
+    expect(html).toContain('<option value="met">The Met · ảnh bảo tàng CC0</option>');
+    expect(html).toContain("images.metmuseum.org");
+    expect(html).toContain("item.provider==='The Met'?safeUrl(item.sourceUrl,['www.metmuseum.org'])");
+    expect(html).toContain("The Met Open Access");
+    expect(html).toContain("CC0");
+  });
+
+  it("offers Art Institute of Chicago as a trusted public-domain image source", async () => {
+    const html = await (await mediaAppResponse()).text();
+    expect(html).toContain('<option value="aic">Art Institute of Chicago · ảnh public domain</option>');
+    expect(html).toContain("www.artic.edu");
+    expect(html).toContain("item.provider==='Art Institute of Chicago'?safeUrl(item.sourceUrl,['www.artic.edu'])");
+    expect(html).toContain("Art Institute of Chicago và Cleveland Museum of Art bổ sung các tác phẩm có trạng thái public domain/CC0");
+  });
+
+
+  it("offers Cleveland Museum Open Access as a trusted CC0 image-only source", async () => {
+    const response = mediaAppResponse();
+    const html = await response.text();
+    expect(html).toContain('<option value="cleveland">Cleveland Museum of Art · ảnh CC0</option>');
+    expect(response.headers.get("content-security-policy")).toContain("https://openaccess-cdn.clevelandart.org");
+    expect(html).toContain("item.provider==='Cleveland Museum of Art'?safeUrl(item.sourceUrl,['clevelandart.org','www.clevelandart.org'])");
+    expect(html).toContain("Cleveland Museum of Art bổ sung các tác phẩm có trạng thái public domain/CC0");
+  });
+
+
+  it("offers Library of Congress as an image-only source with exact image and item origins", async () => {
+    const response = mediaAppResponse();
+    const html = await response.text();
+    expect(html).toContain('<option value="loc">Library of Congress · ảnh tư liệu</option>');
+    expect(response.headers.get("content-security-policy")).toContain("https://tile.loc.gov");
+    expect(response.headers.get("content-security-policy")).toContain("https://cdn.loc.gov");
+    expect(html).toContain("item.provider==='Library of Congress'?safeUrl(item.sourceUrl,['www.loc.gov'])");
+    expect(html).toContain("Library of Congress bổ sung ảnh tư liệu cùng rights advisory theo từng mục");
+    expect(html).toContain("không tự động đồng nghĩa ảnh được tự do tái sử dụng");
+    expect(html).toContain("kind==='audio'?['commons','nasa','openverse','peertube','inaturalist','met','aic','cleveland','loc']");
+    expect(html).toContain("kind==='video'?['commons','openverse','inaturalist','met','aic','cleveland','loc']");
   });
 
   it("offers PeerTube as a video-only provider and links to the exact origin host", async () => {
