@@ -67,8 +67,8 @@ function safeLocItemUrl(value: unknown): string | null {
     if ((url.protocol !== "https:" && url.protocol !== "http:") ||
         !["www.loc.gov", "loc.gov"].includes(url.hostname) ||
         url.port || url.username || url.password) return null;
-    const path = url.pathname.replace(/\\/+$/, "");
-    if (!/^\\/(?:item|pictures\\/item)\\/[A-Za-z0-9._/-]{1,240}$/.test(path) ||
+    const path = url.pathname.replace(/\/+$/, "");
+    if (!/^\/(?:item|pictures\/item)\/[A-Za-z0-9._/-]{1,240}$/.test(path) ||
         path.slice(1).split("/").some(part => part === "." || part === ".." || !part)) return null;
     return new URL(path + "/", "https://www.loc.gov").toString();
   } catch { return null; }
@@ -80,8 +80,8 @@ function safeLocImageUrl(value: unknown): string | null {
     const url = new URL(candidate);
     if ((url.protocol !== "https:" && url.protocol !== "http:") ||
         !LOC_IMAGE_HOSTS.has(url.hostname) || url.port || url.username || url.password ||
-        url.hash || !/^\\/(?:service|storage-services)\\//.test(url.pathname) ||
-        !/\\.(?:jpe?g|png|gif)$/i.test(url.pathname)) return null;
+        url.hash || !/^\/(?:service|storage-services)\//.test(url.pathname) ||
+        !/\.(?:jpe?g|png|gif)$/i.test(url.pathname)) return null;
     url.protocol = "https:";
     return url.toString();
   } catch { return null; }
@@ -510,7 +510,7 @@ export async function searchLibraryOfCongressPhotos(
     const imageUrl = rawImages.map(safeLocImageUrl).find((value): value is string => Boolean(value));
     if (!sourceUrl || !imageUrl) continue;
 
-    const pathId = new URL(sourceUrl).pathname.replace(/\\/+$/, "").split("/").slice(2).join("-");
+    const pathId = new URL(sourceUrl).pathname.replace(/\/+$/, "").split("/").slice(2).join("-");
     const title = metadataText(record.title, 220) || "Library of Congress photograph";
     const contributor = metadataText(record.contributor, 220) ||
       metadataText(record.contributor_names, 220) ||
