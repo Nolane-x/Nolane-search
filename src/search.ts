@@ -72,6 +72,102 @@ function domainFor(item: SearchResult): string {
   catch { return ""; }
 }
 
+const COVERAGE_STOP_WORDS = new Set([
+  "the","a","an","and","or","of","to","for","in","on","at","by","with","from","is","are","was","were","that","this","it","as","after","before",
+  "là","của","và","các","những","một","cho","với","trong","trên","tại","từ","đến","như","nào","có","được","này","đó","về","hay","thì","cũng","đã","sẽ","khi",
+]);
+
+function coverageTokens(value: string): Set<string> {
+  return new Set(tokens(value).filter(token => token.length >= 2 && !COVERAGE_STOP_WORDS.has(token)));
+}
+
+function jaccardSimilarity(left: Set<string>, right: Set<string>): number {
+  if (!left.size || !right.size) return 0;
+  let intersection = 0;
+  for (const token of left) if (right.has(token)) intersection += 1;
+  return intersection / (left.size + right.size - intersection);
+}
+
+const COMMON_COMPOUND_SUFFIXES = new Set([
+  "co.uk","org.uk","gov.uk","ac.uk","com.au","net.au","org.au","edu.au",
+  "co.nz","co.jp","ne.jp","or.jp","com.br","com.vn","com.sg","com.mx",
+  "co.in","firm.in","net.in","org.in","com.tr","com.cn","net.cn","org.cn",
+  "co.kr","com.tw",
+]);
+
+function publisherSiteKey(host: string): string {
+  const parts = host.toLowerCase().replace(/^www\\./, "").replace(/\\.$/, "").split(".");
+  if (parts.length <= 2) return parts.join(".");
+  const suffix = parts.slice(-2).join(".");
+  return COMMON_COMPOUND_SUFFIXES.has(suffix) ? parts.slice(-3).join(".") : suffix;
+}
+
+function isDifferentPublisherSite(left: string, right: string): boolean {
+  const a = publisherSiteKey(left);
+  const b = publisherSiteKey(right);
+  return Boolean(a && b && a !== b);
+}
+
+function isPossibleDuplicateCoverage(left: SearchResult, right: SearchResult): boolean {
+  if (!isDifferentPublisherSite(domainFor(left), domainFor(right))) return false;
+
+  const leftDate = left.publishedAt ? Date.parse(left.publishedAt) : NaN;
+  const rightDate = right.publishedAt ? Date.parse(right.publishedAt) : NaN;
+  if (!Number.isFinite(leftDate) || !Number.isFinite(rightDate) ||
+      Math.abs(leftDate - rightDate) > 7 * 86_400_000) return false;
+
+  const leftTitle = coverageTokens(left.title);
+  const rightTitle = coverageTokens(right.title);
+  if (Math.min(leftTitle.size, rightTitle.size) < 5 ||
+      jaccardSimilarity(leftTitle, rightTitle) < 0.90) return false;
+
+  const leftExcerpt = coverageTokens(left.snippet);
+  const rightExcerpt = coverageTokens(right.snippet);
+  if (Math.min(leftExcerpt.size, rightExcerpt.size) < 18) return false;
+  let shared = 0;
+  for (const token of leftExcerpt) if (rightExcerpt.has(token)) shared += 1;
+  const containment = shared / Math.min(leftExcerpt.size, rightExcerpt.size);
+  return containment >= 0.88 && jaccardSimilarity(leftExcerpt, rightExcerpt) >= 0.72;
+}
+
+/**
+ * Add an informational marker to highly similar cross-site results. Complete-link
+ * grouping applies strict title/excerpt/date thresholds. This is a retrieval aid,
+ * not a factual or legal determination of syndication; no result is collapsed.
+ */
+export function annotatePossibleDuplicateCoverage(items: SearchResult[]): SearchResult[] {
+  const groups: number[][] = [];
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index]!;
+    const group = groups.find(candidate => candidate.every(member =>
+      isPossibleDuplicateCoverage(item, items[member]!),
+    ));
+    if (group) group.push(index);
+    else groups.push([index]);
+  }
+
+  const annotations = new Map<number, SearchResult["possibleDuplicateCoverage"]>();
+  let groupNumber = 0;
+  for (const group of groups) {
+    if (group.length < 2) continue;
+    groupNumber += 1;
+    const hostnames = [...new Set(group.map(index => domainFor(items[index]!)))].sort().slice(0, 8);
+    const annotation = {
+      groupId: "coverage-" + groupNumber,
+      groupSize: group.length,
+      hostnames,
+      basis: "high-title-and-excerpt-similarity-within-seven-days" as const,
+    };
+    for (const index of group) annotations.set(index, annotation);
+  }
+
+  return items.map((item, index) => {
+    const { possibleDuplicateCoverage: _previous, ...clean } = item;
+    const annotation = annotations.get(index);
+    return annotation ? { ...clean, possibleDuplicateCoverage: annotation } : clean;
+  });
+}
+
 /**
  * Transparent multi-signal reranking:
  * - provider relevance as a weak prior (provider scores are not calibrated consistently)
@@ -168,7 +264,7 @@ export function rankAndDeduplicate(query: string, items: SearchResult[], mode: S
     diversified.push(item);
     selectedUrls.add(key);
   }
-  return diversified;
+  return annotatePossibleDuplicateCoverage(diversified);
 }
 
 export function buildLocalFtsQuery(query: string): string {
