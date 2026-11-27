@@ -347,6 +347,9 @@ export function formatSearchResults(
       ...(Array.isArray(item.discoveredBy) && item.discoveredBy.length > 1
         ? [`<i>Công cụ tìm: ${item.discoveredBy.slice(0, 5).map(value => safeHtmlText(value, 48)).join(" · ")}</i>`]
         : []),
+      ...(item.possibleDuplicateCoverage
+        ? [`<i>Có thể trùng nội dung: ${item.possibleDuplicateCoverage.groupSize} trang; so khớp tiêu đề và trích đoạn, không phải xác nhận độc lập.</i>`]
+        : []),
     ].join("\n");
     const next = appendBlock(output, block, footer);
     if (next === output) break;
@@ -374,6 +377,9 @@ export function formatDeepReport(query: string, results: SearchResult[], summary
       `<code>${safeHtmlText(item.domain, 90)}</code> · ${safeHtmlText(item.provider, 45)}`,
       ...(Array.isArray(item.discoveredBy) && item.discoveredBy.length > 1
         ? [`<i>Công cụ tìm: ${item.discoveredBy.slice(0, 5).map(value => safeHtmlText(value, 48)).join(" · ")}</i>`]
+        : []),
+      ...(item.possibleDuplicateCoverage
+        ? [`<i>Có thể trùng nội dung: ${item.possibleDuplicateCoverage.groupSize} trang; so khớp tiêu đề và trích đoạn, không phải xác nhận độc lập.</i>`]
         : []),
     ].join("\n");
     const next = appendBlock(output, block, footer);
