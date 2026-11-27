@@ -1,8 +1,52 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchTinyFishPages, parseOpenRouterModels, searchBrave, searchTinyFish, searchWikipedia, wikipediaLanguageForQuery } from "../src/providers";
+import { fetchOpenRouterSummary, fetchTinyFishPages, parseOpenRouterModels, searchBrave, searchTinyFish, searchWikipedia, wikipediaLanguageForQuery } from "../src/providers";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("Deep Search evidence summary", () => {
+  it("warns the synthesis model about likely duplicate coverage clusters", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.messages[0].content).toContain("never count grouped URLs as independent corroboration");
+      expect(body.messages[1].content).toContain("Potential duplicate-content group: 2 URLs");
+      expect(body.messages[1].content).toContain("news-a.example, news-b.example");
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: "Các liên kết có khả năng là bản sao của cùng nội dung." } }],
+        usage: { prompt_tokens: 60, completion_tokens: 20 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const answer = await fetchOpenRouterSummary({
+      AI_ROUTER_CONFIG: JSON.stringify({
+        strategy: "priority",
+        providers: [{
+          id: "research-route",
+          protocol: "openai-compatible",
+          baseUrl: "https://api.example.ai/v1",
+          apiKey: "test-research-key",
+          models: ["research-model"],
+        }],
+      }),
+    } as never, "lunar mission images", [{
+      title: "Lunar mission captures new images from the far side of the moon",
+      url: "https://news-a.example/science/lunar-images",
+      domain: "news-a.example",
+      snippet: "Scientists released a detailed report with new lunar images and surface measurements.",
+      provider: "Tavily",
+      score: 0.9,
+      publishedAt: "2026-11-25T10:00:00.000Z",
+      possibleDuplicateCoverage: {
+        groupId: "coverage-1",
+        groupSize: 2,
+        hostnames: ["news-a.example", "news-b.example"],
+        basis: "high-title-and-excerpt-similarity-within-seven-days",
+      },
+    }]);
+    expect(answer).toContain("bản sao");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("OpenRouter model routing", () => {

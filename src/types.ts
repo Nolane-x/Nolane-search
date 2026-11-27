@@ -8,6 +8,13 @@ export interface SearchResult {
   provider: string;
   /** Search/retrieval providers that returned this normalized URL; not source corroboration. */
   discoveredBy?: string[];
+  /** Conservative heuristic grouping for near-identical cross-site copies; never proof of independent or syndicated reporting. */
+  possibleDuplicateCoverage?: {
+    groupId: string;
+    groupSize: number;
+    hostnames: string[];
+    basis: "high-title-and-excerpt-similarity-within-seven-days";
+  };
   score: number;
   publishedAt?: string;
 }
