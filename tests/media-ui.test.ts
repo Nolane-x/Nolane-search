@@ -16,8 +16,12 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("document.createElement('audio')");
     expect(html).toContain("Mở / tải audio gốc");
     expect(html).toContain("Mở / tải video gốc");
-    expect(html).toContain("Tải media dung lượng lớn và chia sẻ link riêng tư chưa được bật trên production");
-    expect(html).toContain("phương án Media Node miễn phí chạy trên máy cá nhân đang được review tại PR #149");
+    expect(html).toContain("MEDIA DOWNLOADER · PRIVATE TEMPORARY SHARE");
+    expect(html).toContain("Không hỗ trợ cookie, đăng nhập, vượt paywall hoặc DRM.");
+    expect(html).toContain("tổng kho tạm tối đa 6 GB");
+    expect(html).toContain("Tệp lưu trên ổ đĩa máy chủ và tự xóa sau 12 giờ");
+    expect(html).toContain("Media Downloader cần Media Node tự host");
+    expect(html).toContain("không tải lên GitHub Actions hay kho media trên mạng");
     expect(html).toContain("document.createElement('iframe')");
     expect(html).toContain("safeMediaEmbedUrl(item)");
     expect(html).toContain("Nhúng player '+item.provider");
@@ -41,6 +45,16 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("select.className='stream-rate'");
     expect(html).toContain("video.playbackRate=rate");
     expect(html).toContain("Nguồn thử do bên thứ ba lưu trữ");
+  });
+
+  it("enables the downloader UI only when its feature flag is true", async () => {
+    const disabled = await (await mediaAppResponse(false, false)).text();
+    expect(disabled).toContain('data-media-downloader-enabled="false"');
+    expect(disabled).toContain("if(!downloaderEnabled)");
+    const enabled = await (await mediaAppResponse(false, true)).text();
+    expect(enabled).toContain('data-media-downloader-enabled="true"');
+    expect(enabled).toContain("navigator.clipboard.writeText(activeShareUrl)");
+    expect(enabled).toContain("/api/media/downloads/'+encodeURIComponent(activeDownloadId)+'/share");
   });
 
   it("serves syntactically valid inline browser JavaScript", async () => {
@@ -207,5 +221,16 @@ describe("Media Portal media discovery experience", () => {
     expect(html).toContain("item.provider==='PeerTube'?'Xem trên PeerTube':item.provider==='YouTube'?'Mở trên YouTube'");
     expect(html).toContain("Mở trang PeerTube gốc để xem video");
     expect(html).toContain("PeerTube dùng chỉ mục liên mạng SepiaSearch");
+  });
+});
+
+// The owner-facing downloader copy must no longer refer to the retired paid Container snapshot design.
+describe("self-hosted Media Node copy", () => {
+  it("contains no retired Container or snapshot messages", async () => {
+    const html = await (await mediaAppResponse(false, true)).text();
+    expect(html).toContain("Media Node bắt đầu tải");
+    expect(html).toContain("Tệp cục bộ sẽ được xóa theo thời hạn lưu trữ.");
+    expect(html).not.toContain("container bắt đầu tải");
+    expect(html).not.toContain("Snapshot vật lý");
   });
 });
