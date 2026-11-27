@@ -1,5 +1,23 @@
 Nolane Tools hiện có **534 công cụ đã được đăng ký và triển khai trên production** sau Wave 46, phát hành ngày 2026-11-24 trên Cloudflare Worker `nolane-search`. **Đây là số file processor** cho luồng `/tool` và `/ai_file`, không phải số AI Agent function tools. Tách riêng, sau Wave 72 AI Agent có **56 function tools** có thể tự gọi để tra cứu dữ liệu, khám phá media, địa điểm và tiện ích. [PR #99](https://github.com/Nolane-x/Nolane-search/pull/99) đã merge vào `main` bằng commit `b80eee059281932193106b5c90f21ce306dea9e2`. Main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609), Worker export và live health smoke [45332866447](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866447), Cloudflare deployment [45332866563](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866563) đều thành công. Latest Worker Version ID: `2b7c15c7-ca12-4721-a248-1cb47b921f2a`; Telegram webhook và command menu đã được xác minh. D1 migration được skip vì không có thay đổi schema; tệp tiếp tục được xử lý trên GitHub-hosted runner dùng một lần.
 
+
+## Wave 47 — everyday-life utilities — PR candidate, not yet deployed
+
+PR [#153](https://github.com/Nolane-x/Nolane-search/pull/153) proposes eight additional file processors. The production baseline remains **534 deployed processors** until the PR passes CI, merges and the Worker deployment succeeds. Candidate catalog size: **542**.
+
+| ID / command | Công cụ | Chức năng |
+|---|---|---|
+| /tool qr-code-maker | Tạo mã QR | Tạo QR PNG từ nội dung văn bản hoặc URL người dùng nhập |
+| /tool wifi-qr-code-maker | Tạo QR Wi-Fi | Tạo QR kết nối mạng WPA/WEP hoặc mạng mở; tệp có thể chứa mật khẩu |
+| /tool vcard-contact-card-maker | Tạo danh thiếp QR / vCard | Xuất ZIP gồm danh thiếp vCard và QR tương ứng |
+| /tool ics-calendar-maker | Tạo lịch iCalendar | Xuất sự kiện sang .ics, yêu cầu múi giờ rõ ràng cho sự kiện có giờ |
+| /tool electricity-tier-bill-calculator | Tính hóa đơn điện theo bậc | Tính theo biểu giá bậc thang do người dùng cung cấp |
+| /tool water-tier-bill-calculator | Tính hóa đơn nước theo bậc | Tính theo m³ và các mức giá do người dùng cung cấp |
+| /tool mobile-data-plan-comparator | So sánh gói data di động | So tổng chi phí theo mức sử dụng, hạn mức và phí vượt |
+| /tool home-internet-plan-comparator | So sánh gói Internet gia đình | So chi phí kỳ hạn gồm cước, thiết bị, lắp đặt và dữ liệu vượt |
+
+**Boundary:** tariff and provider-plan values are user supplied; this candidate does not fetch current provider prices or verify real coverage/speed. Wi-Fi QR and contact outputs may contain sensitive data. These are file processors, not extra AI Agent function tools.
+
 ## Wave 46 — home, vehicle and rental tools — deployed to production
 
 Wave 46 tăng catalog production từ **534 lên 534 công cụ** (+8). Tất cả 8 công cụ được nối vào direct AI JSON interface và GitHub Actions runner. PR CI [45332648456](https://github.com/Nolane-x/Nolane-search/actions/runs/45332648456), main CI [45332866609](https://github.com/Nolane-x/Nolane-search/actions/runs/45332866609), Worker export/health smoke và Cloudflare deployment đều hoàn thành thành công.

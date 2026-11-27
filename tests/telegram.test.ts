@@ -87,7 +87,7 @@ describe("Telegram interactive workspace UI", () => {
 describe("Telegram Tool Center UI", () => {
   it("keeps the native Tool Center compact and opens the catalog inside Telegram", () => {
     const home = formatToolCenterHome(TOOL_CATALOG, true);
-    expect(home).toContain("534 processor");
+    expect(home).toContain("542 processor");
     expect(home).toContain("được gom vào <b>Workspace</b>");
     expect(home).not.toContain("Lập trình &amp; văn bản");
     const miniAppUrl = "https://search.example.test/telegram?ticket=" + "a".repeat(64) + "#tools";

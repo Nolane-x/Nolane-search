@@ -569,6 +569,15 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   { id: "rental-move-out-condition-report", name: "Đối chiếu hiện trạng nhà khi trả", category: "utility", description: "So sánh nhãn tình trạng và ghi chú lúc nhận/trả nhà, tổng hợp khoản khấu trừ tiền cọc do người dùng nhập; không kết luận trách nhiệm hay tính hợp pháp.", accepts: ["application/json", "text/json", ".json"], output: "Báo cáo đối chiếu trả nhà TXT", ready: true },
   { id: "rental-offer-cost-comparator", name: "So sánh tổng chi phí thuê nhà", category: "utility", description: "So sánh tiền thuê, phí định kỳ, tiện ích, phí đầu kỳ và tiền cọc hoàn lại; tách tiền mặt cần chuẩn bị khỏi chi phí thuê trong toàn kỳ.", accepts: ["application/json", "text/json", ".json"], output: "Bảng so sánh chi phí thuê TXT", ready: true },
   { id: "appliance-service-history-report", name: "Lịch sử sửa chữa thiết bị gia đình", category: "utility", description: "Tổng hợp lần sửa, loại sự cố, chi phí, số ngày ngừng sử dụng, lần gần nhất và hạn bảo hành ước tính từ thông tin người dùng nhập.", accepts: ["application/json", "text/json", ".json"], output: "Báo cáo lịch sử thiết bị TXT", ready: true },
+
+  { id: "qr-code-maker", name: "Tạo mã QR", category: "image", description: "Tạo ảnh QR PNG từ văn bản hoặc URL do bạn nhập; giữ nguyên nội dung, không gửi lên dịch vụ QR bên ngoài.", accepts: ["application/json", "text/json", ".json"], output: "Ảnh QR PNG", ready: true },
+  { id: "wifi-qr-code-maker", name: "Tạo QR kết nối Wi-Fi", category: "image", description: "Tạo QR Wi-Fi cho mạng WPA/WEP hoặc mạng mở; ảnh QR chứa thông tin đăng nhập nên phải chia sẻ cẩn thận.", accepts: ["application/json", "text/json", ".json"], output: "Ảnh QR Wi-Fi PNG", ready: true },
+  { id: "vcard-contact-card-maker", name: "Tạo danh thiếp QR / vCard", category: "utility", description: "Đóng gói thẻ liên hệ vCard 3.0 và QR tương ứng trong ZIP; dữ liệu liên hệ do bạn nhập và cần được bảo vệ như thông tin cá nhân.", accepts: ["application/json", "text/json", ".json"], output: "ZIP vCard + QR PNG", ready: true },
+  { id: "ics-calendar-maker", name: "Tạo lịch sự kiện iCalendar", category: "utility", description: "Tạo tệp .ics từ sự kiện cả ngày hoặc thời gian có múi giờ rõ ràng; thời gian có offset được quy đổi sang UTC.", accepts: ["application/json", "text/json", ".json"], output: "Tệp lịch iCalendar (.ics)", ready: true },
+  { id: "electricity-tier-bill-calculator", name: "Tính hóa đơn điện theo bậc", category: "utility", description: "Tính tiền điện theo sản lượng, ngưỡng bậc, đơn giá, phí cố định và thuế do bạn nhập; không tra cứu biểu giá hiện hành.", accepts: ["application/json", "text/json", ".json"], output: "Báo cáo hóa đơn điện TXT", ready: true },
+  { id: "water-tier-bill-calculator", name: "Tính hóa đơn nước theo bậc", category: "utility", description: "Tính hóa đơn nước theo m³ và biểu giá bậc thang do bạn nhập; không tự giả định giá địa phương hoặc phí ngoài biểu.", accepts: ["application/json", "text/json", ".json"], output: "Báo cáo hóa đơn nước TXT", ready: true },
+  { id: "mobile-data-plan-comparator", name: "So sánh gói data di động", category: "utility", description: "So tổng chi phí nhiều tháng theo dung lượng dùng, data bao gồm, phí vượt mức, phí tháng và phí kích hoạt do bạn nhập.", accepts: ["application/json", "text/json", ".json"], output: "Bảng so sánh gói di động TXT", ready: true },
+  { id: "home-internet-plan-comparator", name: "So sánh gói Internet gia đình", category: "utility", description: "So tổng tiền Internet trong kỳ gồm cước, modem, lắp đặt, hạn mức dữ liệu và đơn giá vượt mức; tốc độ là con số quảng cáo do bạn nhập, không phải speed test.", accepts: ["application/json", "text/json", ".json"], output: "Bảng so sánh Internet TXT", ready: true },
 ];
 
 
@@ -1016,6 +1025,14 @@ export const TOOL_PIPELINE_TRANSITIONS: Readonly<Record<string, readonly string[
   "dvc-pipeline-audit": ["text-clean", "text-stats"],
   "helm-chart-audit": ["text-clean", "text-stats"],
 
+  "qr-code-maker": ["image-info", "image-compress", "image-ocr", "qr-read", "image-to-pdf"],
+  "wifi-qr-code-maker": ["image-info", "image-compress", "image-ocr", "qr-read", "image-to-pdf"],
+  "vcard-contact-card-maker": ["archive-inspect", "archive-safe-extract"],
+  "ics-calendar-maker": ["ics-calendar-audit"],
+  "electricity-tier-bill-calculator": ["text-clean", "text-stats"],
+  "water-tier-bill-calculator": ["text-clean", "text-stats"],
+  "mobile-data-plan-comparator": ["text-clean", "text-stats"],
+  "home-internet-plan-comparator": ["text-clean", "text-stats"],
 };
 
 export type ToolPipelineValidation =
