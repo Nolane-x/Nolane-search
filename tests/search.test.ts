@@ -218,6 +218,41 @@ describe("multi-signal search ranking", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it("retains provider provenance through URL deduplication and enrichment reranking", () => {
+    const firstPass = rankAndDeduplicate("Cloudflare Workers Durable Objects", [
+      {
+        title: "Cloudflare Workers Durable Objects",
+        url: "https://docs.example/workers?utm_source=tavily",
+        snippet: "Documentation about Cloudflare Workers Durable Objects.",
+        domain: "docs.example", provider: "Tavily", score: 0.75,
+      },
+      {
+        title: "Cloudflare Workers Durable Objects",
+        url: "https://docs.example/workers",
+        snippet: "Technical guide for Cloudflare Workers Durable Objects.",
+        domain: "docs.example", provider: "Exa", score: 0.95,
+      },
+      {
+        title: "Cloudflare Workers Durable Objects",
+        url: "https://docs.example/workers#overview",
+        snippet: "Another matching provider lookup.",
+        domain: "docs.example", provider: "Tavily", score: 0.70,
+      },
+    ], "web");
+
+    expect(firstPass).toHaveLength(1);
+    expect(firstPass[0]?.provider).toBe("Exa");
+    expect(firstPass[0]?.discoveredBy).toEqual(["Tavily", "Exa"]);
+
+    const enriched = firstPass.map(item => ({
+      ...item,
+      provider: item.provider + " + TinyFish Fetch",
+      snippet: item.snippet + " Full-page extraction added context.",
+    }));
+    const secondPass = rankAndDeduplicate("Cloudflare Workers Durable Objects", enriched, "research");
+    expect(secondPass[0]?.discoveredBy).toEqual(["Tavily", "Exa"]);
+  });
+
   it("returns up to twenty unique results with domain diversification", () => {
     const items = Array.from({ length: 28 }, (_, index) => ({
       title: "Search engine result " + index,

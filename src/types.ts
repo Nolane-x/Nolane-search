@@ -6,6 +6,8 @@ export interface SearchResult {
   snippet: string;
   domain: string;
   provider: string;
+  /** Search/retrieval providers that returned this normalized URL; not source corroboration. */
+  discoveredBy?: string[];
   score: number;
   publishedAt?: string;
 }

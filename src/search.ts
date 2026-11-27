@@ -56,6 +56,15 @@ function weightedCoverage(terms: string[], fields: Set<string>[], weights: numbe
   return total > 0 ? clamp(matched / total) : 0;
 }
 
+function providerTrail(item: SearchResult): string[] {
+  const candidates: unknown[] = Array.isArray(item.discoveredBy) ? item.discoveredBy : [item.provider];
+  const cleaned = candidates
+    .filter((value): value is string => typeof value === "string")
+    .map(value => value.trim())
+    .filter(value => value.length > 0 && value.length <= 80);
+  return [...new Set(cleaned)].slice(0, 8);
+}
+
 function domainFor(item: SearchResult): string {
   const supplied = item.domain.toLowerCase().replace(/^www\./, "").replace(/\.$/, "");
   if (supplied) return supplied;
@@ -68,7 +77,8 @@ function domainFor(item: SearchResult): string {
  * - provider relevance as a weak prior (provider scores are not calibrated consistently)
  * - inverse-document-frequency weighted query coverage in title, snippet and URL
  * - exact phrase, snippet quality, freshness intent and a small source-type prior
- * - URL deduplication followed by domain diversity.
+ * - URL deduplication with retained provider-discovery provenance, followed by domain diversity.
+ * Provider overlap describes retrieval paths only; it is not independent source verification.
  * This is a heuristic, not a learned search-ranking model or a probability of truth.
  */
 export function rankAndDeduplicate(query: string, items: SearchResult[], mode: SearchMode): SearchResult[] {
@@ -125,9 +135,16 @@ export function rankAndDeduplicate(query: string, items: SearchResult[], mode: S
       0,
       1.5,
     );
-    const normalized = { ...item, domain, score };
+    const discoveredBy = providerTrail(item);
+    const normalized = { ...item, domain, score, discoveredBy };
     const previous = byUrl.get(key);
-    if (!previous || normalized.score > previous.score) byUrl.set(key, normalized);
+    if (!previous) {
+      byUrl.set(key, normalized);
+    } else {
+      const mergedProviders = [...new Set([...providerTrail(previous), ...discoveredBy])].slice(0, 8);
+      const preferred = normalized.score > previous.score ? normalized : previous;
+      byUrl.set(key, { ...preferred, discoveredBy: mergedProviders });
+    }
   }
 
   const results = [...byUrl.values()].sort((a, b) => b.score - a.score);
