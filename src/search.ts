@@ -96,7 +96,7 @@ const COMMON_COMPOUND_SUFFIXES = new Set([
 ]);
 
 function publisherSiteKey(host: string): string {
-  const parts = host.toLowerCase().replace(/^www\\./, "").replace(/\\.$/, "").split(".");
+  const parts = host.toLowerCase().replace(/^www\./, "").replace(/\.$/, "").split(".");
   if (parts.length <= 2) return parts.join(".");
   const suffix = parts.slice(-2).join(".");
   return COMMON_COMPOUND_SUFFIXES.has(suffix) ? parts.slice(-3).join(".") : suffix;
