@@ -3,7 +3,15 @@
 Last verified: 2026-11-27. Production deployment evidence is separated from owner-level Telegram upload/retry checks.
 
 
-## Latest production release — Wave 74 (2026-11-27)
+## Latest production release — Wave 75 (2026-11-27)
+
+- [PR #154](https://github.com/Nolane-x/Nolane-search/pull/154) merged into `main` as `437d62becb092de5d81638034bc30eedc6e2fc67`. Wave 75 adds conservative `possibleDuplicateCoverage` hints for near-identical article excerpts published on distinct publisher-site keys within seven days. Matching requires strict title-token and excerpt-overlap thresholds and complete-link grouping. Every URL remains visible and in its original rank; no result is collapsed or removed.
+- The hint appears in Web Search, Telegram Search and Deep Search. Browser Ask, Telegram Ask and Deep Search synthesis receive the similarity context and are instructed not to count grouped URLs as independent corroboration. This is a heuristic, not proof of syndication, copied text, common ownership, factual accuracy or editorial independence. Publisher-site detection uses a short common compound-suffix list, not the complete Public Suffix List.
+- Main CI [#46009764458](https://github.com/Nolane-x/Nolane-search/actions/runs/46009764458) passed: **43 Vitest files / 470 tests**, **466 Python tool-runner tests**, **24 Media Node tests**, deployment-script checks, Windows Media Node policy/storage/HTTP tests, PowerShell installer syntax validation and Worker build.
+- Cloudflare deploy [#46009764277](https://github.com/Nolane-x/Nolane-search/actions/runs/46009764277) succeeded and uploaded Worker Version ID `6752ae70-2a0a-490e-865d-4f33fe44fadf`. Worker export [#46009764427](https://github.com/Nolane-x/Nolane-search/actions/runs/46009764427) succeeded. Telegram webhook (message + callback_query), bot command registration and Telegram Workspace production smoke all passed. No D1 migration was required.
+- No new provider, AI Agent function, file processor, API key, secret, paid dependency, hosted service or recurring charge was added. Existing counts remain **59 AI Agent function tools** and **542 file processors**.
+
+## Previous production release — Wave 74 (2026-11-27)
 
 - [PR #151](https://github.com/Nolane-x/Nolane-search/pull/151) merged into `main` as `3bcadb6dc860fdfdf0ff040d5cfa445153928a0e`. Wave 74 preserves `discoveredBy` provenance when federated search results collide on the same normalized URL: the winning result keeps its content and primary provider while retaining a bounded, deduplicated list of up to eight providers that also discovered it.
 - Provider provenance survives the post-TinyFish enrichment rerank and is displayed in the Web UI, Telegram Search and Deep Search. Browser Ask, Telegram Ask and Deep Search receive the retrieval trail in their evidence context. Synthesis prompts explicitly state that provider overlap is retrieval metadata, not independent publisher corroboration or proof of accuracy.
