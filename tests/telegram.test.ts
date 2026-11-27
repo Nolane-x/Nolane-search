@@ -165,6 +165,18 @@ describe("Telegram HTML formatting", () => {
     expect(output).toContain("a=1&amp;b=2");
   });
 
+  it("shows provider discovery paths separately and escapes their labels", () => {
+    const output = formatSearchResults("topic", "web", [{
+      ...result, discoveredBy: ["Tavily", "Exa & research"],
+    }]);
+    expect(output).toContain("Công cụ tìm: Tavily · Exa &amp; research");
+    expect(output).not.toContain("Exa & research");
+    const deep = formatDeepReport("topic", [{
+      ...result, discoveredBy: ["Tavily", "Exa"],
+    }], null);
+    expect(deep).toContain("Công cụ tìm: Tavily · Exa");
+  });
+
   it("does not cut HTML tags when input is very long", () => {
     const huge: SearchResult = {
       ...result, title: "&".repeat(5000), snippet: "<".repeat(8000), domain: "&".repeat(500),
