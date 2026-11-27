@@ -29,6 +29,8 @@ export default defineConfig({
       OPENROUTER_MODELS: bindings.secret(),
       AI_ROUTER_CONFIG: bindings.secret(),
       MEDIA_ALLOW_NSFW: bindings.secret(),
+      MEDIA_NODE_URL: bindings.secret(),
+      MEDIA_NODE_TOKEN: bindings.secret(),
     },
     triggers: [
       triggers.queue({ name: "nolane-search-jobs", deadLetterQueue: "nolane-search-dlq", maxBatchSize: 3, maxRetries: 3, retryDelay: 30, maxConcurrency: 1 }),

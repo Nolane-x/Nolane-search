@@ -96,12 +96,12 @@ async function startHarness() {
   return { server, origin: "http://127.0.0.1:" + address.port };
 }
 
-async function webdriver(method, path, body) {
+async function webdriver(method, path, body, requestTimeoutMs = 15_000) {
   const response = await fetch(driverOrigin + path, {
     method,
     headers: body === undefined ? undefined : { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(requestTimeoutMs),
   });
   const text = await response.text();
   let value;
@@ -173,6 +173,7 @@ async function main() {
       20_000,
     );
 
+    report.phase = "create Safari WebDriver session";
     const created = await webdriver("POST", "/session", {
       capabilities: {
         alwaysMatch: {
@@ -180,16 +181,18 @@ async function main() {
           pageLoadStrategy: "eager",
         },
       },
-    });
+    }, 30_000);
     sessionId = created.sessionId || created.value?.sessionId;
     report.safariCapabilities = created.capabilities || null;
     if (!sessionId) throw new Error("Safari WebDriver created no session ID");
+    report.phase = "configure Safari timeouts";
     await webdriver("POST", "/session/" + sessionId + "/timeouts", {
       script: 15_000,
       pageLoad: 25_000,
       implicit: 0,
     });
 
+    report.phase = "load local Media Portal";
     await webdriver("POST", "/session/" + sessionId + "/url", { url: harness.origin + "/media" });
     await waitFor(
       () => execute(sessionId, "return document.querySelector('#status')?.textContent || ''"),
@@ -198,6 +201,7 @@ async function main() {
       15_000,
     );
 
+    report.phase = "verify Safari native HLS capability";
     const capability = await execute(sessionId, `return {
       userAgent: navigator.userAgent,
       vendor: navigator.vendor,
@@ -212,6 +216,7 @@ async function main() {
       throw new Error("Safari did not report Apple WebKit native-HLS support: " + JSON.stringify(capability));
     }
 
+    report.phase = "resolve HLS test source";
     await execute(sessionId, `document.querySelector('#q').value = arguments[0];
       document.querySelector('#search').requestSubmit();
       return true;`, [sampleUrl]);
@@ -256,6 +261,7 @@ async function main() {
       else done({ ok: true });`, [], true);
     if (!playResult?.ok) throw new Error("Safari video.play() failed: " + (playResult?.error || JSON.stringify(playResult)));
 
+    report.phase = "verify native HLS decode and playback advancement";
     const playback = await waitFor(
       () => execute(sessionId, `const v = document.querySelector('video.stream-video');
         return {
@@ -284,7 +290,7 @@ async function main() {
     report.passed = true;
     console.log("PASS Safari native HLS · played=" + playback.currentTime.toFixed(1) + "s · readyState=" + playback.readyState);
   } catch (error) {
-    report.errors.push(error instanceof Error ? error.message : String(error));
+    report.errors.push((report.phase ? "[" + report.phase + "] " : "") + (error instanceof Error ? error.message : String(error)));
     if (sessionId) {
       try {
         const screenshot = await webdriver("GET", "/session/" + sessionId + "/screenshot");
