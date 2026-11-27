@@ -169,6 +169,17 @@ def _fold_ical(v):
         else: current+=c; used+=size
     chunks.append(current); return "\r\n".join(chunks)
 
+def _calendar_date(value, label):
+    raw = _text(value, label, 10)
+    try:
+        parsed = date.fromisoformat(raw)
+    except ValueError:
+        raise RuntimeError(f"{label} must use YYYY-MM-DD.") from None
+    if parsed.isoformat() != raw:
+        raise RuntimeError(f"{label} must use YYYY-MM-DD.")
+    return parsed
+
+
 def _utc(v,label):
     if not isinstance(v,str): raise RuntimeError(f"{label} must be an ISO datetime with an explicit timezone offset.")
     try: dt=datetime.fromisoformat(v.replace("Z","+00:00"))
@@ -184,8 +195,8 @@ def ics_calendar_maker(path):
         e=_row(raw,f"event {i}"); title=_text(e.get("title"),f"event {i} title",180); all_day=e.get("all_day",False)
         if not isinstance(all_day,bool): raise RuntimeError(f"event {i}: all_day must be true or false.")
         if all_day:
-            try: start=date.fromisoformat(_text(e.get("start"),f"event {i} start",10)); end=date.fromisoformat(_text(e.get("end"),f"event {i} end",10))
-            except ValueError: raise RuntimeError(f"event {i}: all-day dates must use YYYY-MM-DD.") from None
+            start=_calendar_date(e.get("start"),f"event {i} start")
+            end=_calendar_date(e.get("end"),f"event {i} end")
             if end<=start: raise RuntimeError(f"event {i}: all-day end is exclusive and must be after start.")
             lines.extend(["BEGIN:VEVENT","UID:"+str(uuid.uuid4())+"@nolane-search","DTSTAMP:"+datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),"DTSTART;VALUE=DATE:"+start.strftime("%Y%m%d"),"DTEND;VALUE=DATE:"+end.strftime("%Y%m%d")])
         else:
@@ -232,8 +243,10 @@ def mobile_data_plan_comparator(path):
     for i,raw in enumerate(plans,1):
         p=_row(raw,f"plan {i}"); name=_text(p.get("name"),f"plan {i} name",100)
         fee=_money(p.get("monthly_fee"),f"{name} monthly_fee"); addon=_money(p.get("monthly_addons",0),f"{name} monthly_addons"); activation=_money(p.get("activation_fee",0),f"{name} activation_fee")
+        if "included_gb" not in p: raise RuntimeError(f"{name} included_gb must be supplied; use null to indicate unlimited data.")
         included=None if p.get("included_gb") is None else _number(p["included_gb"],f"{name} included_gb",0,100000)
-        overage=_money(p.get("overage_per_gb",0),f"{name} overage_per_gb"); extra=Decimal(0) if included is None else max(Decimal(0),usage-included)
+        if "overage_per_gb" not in p: raise RuntimeError(f"{name} overage_per_gb must be supplied; use 0 when there is no overage charge.")
+        overage=_money(p.get("overage_per_gb"),f"{name} overage_per_gb"); extra=Decimal(0) if included is None else max(Decimal(0),usage-included)
         monthly=fee+addon+extra*overage; total=monthly*months+activation; effective=total/(usage*months) if usage>0 else None
         rows.append({"name":name,"monthly":monthly,"activation":activation,"total":total,"effective":effective,"included":included,"extra":extra})
     rows.sort(key=lambda x:(x["total"],x["name"].casefold()))
@@ -252,8 +265,10 @@ def home_internet_plan_comparator(path):
         fee=_money(p.get("monthly_fee"),f"{name} monthly_fee"); router=_money(p.get("router_monthly_fee",0),f"{name} router_monthly_fee")
         install=_money(p.get("installation_fee",0),f"{name} installation_fee"); equipment=_money(p.get("equipment_purchase_fee",0),f"{name} equipment_purchase_fee")
         speed=_number(p.get("advertised_download_mbps"),f"{name} advertised_download_mbps",Decimal("0.001"),10000000)
+        if "included_gb" not in p: raise RuntimeError(f"{name} included_gb must be supplied; use null to indicate unlimited data.")
         cap=None if p.get("included_gb") is None else _number(p["included_gb"],f"{name} included_gb",0,100000)
-        overage=_money(p.get("overage_per_gb",0),f"{name} overage_per_gb"); extra=Decimal(0) if cap is None else max(Decimal(0),usage-cap)
+        if "overage_per_gb" not in p: raise RuntimeError(f"{name} overage_per_gb must be supplied; use 0 when there is no overage charge.")
+        overage=_money(p.get("overage_per_gb"),f"{name} overage_per_gb"); extra=Decimal(0) if cap is None else max(Decimal(0),usage-cap)
         monthly=fee+router+extra*overage; total=monthly*months+install+equipment; unit_cost=total/(speed*months)
         rows.append({"name":name,"monthly":monthly,"total":total,"speed":speed,"unit_cost":unit_cost,"extra":extra,"setup":install+equipment,"cap":cap})
     rows.sort(key=lambda x:(x["total"],x["name"].casefold()))
